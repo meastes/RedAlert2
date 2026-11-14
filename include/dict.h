@@ -28,15 +28,15 @@ class Dictionary
 					~Dictionary(void);
 
 	void			clear(void);
-	char			add(K &key,V &value);
-	char			getValue(K &key, V &value);
-	char			getPointer(K &key, V **value);
+	char			add(K const &key,V &value); // RA2: keys by const reference
+	char			getValue(K const &key, V &value); // RA2: keys by const reference
+	char			getPointer(K const &key, V **value); // RA2: keys by const reference
 	unsigned int	getSize(void) const;
 	unsigned int	getEntries(void) const;
-	char			contains(K &key);
-	char			updateValue(K &key,V &value);
-	char			remove(K &key,V &value);
-	char			remove(K &key);
+	char			contains(K const &key); // RA2: keys by const reference
+	char			updateValue(K const &key,V &value); // RA2: keys by const reference
+	char			remove(K const &key,V &value); // RA2: keys by const reference
+	char			remove(K const &key); // RA2: keys by const reference
 	char			removeAny(K &key,V &value);
 	char			iterate(int &index,int &offset, V &value) const;
 
@@ -53,7 +53,7 @@ private:
 	char			keepSize;
 
 	unsigned int	(*hashFunc)(K & key);
-	unsigned int	keyHash(K & key);
+	unsigned int	keyHash(K const &key); // RA2: keys by const reference
 
 	const double	SHRINK_THRESHOLD;
 	const double	EXPAND_THRESHOLD;
@@ -117,9 +117,9 @@ void Dictionary<K,V>::clear(void)
 }
 
 template <class K,class V>
-unsigned int Dictionary<K,V>::keyHash(K &key)
+unsigned int Dictionary<K,V>::keyHash(K const &key) // RA2: keys by const reference
 {
-	unsigned int retval=hashFunc(key);
+	unsigned int retval=hashFunc((K &)key); // RA2: the hash function still takes K &
 	retval &= ((1<<tableBits)-1);
 	assert(retval<getSize());
 	return(retval);
@@ -178,7 +178,7 @@ unsigned int Dictionary<K,V>::getEntries(void) const
 }
 
 template <class K,class V>
-char Dictionary<K,V>::contains(K &key)
+char Dictionary<K,V>::contains(K const &key) // RA2: keys by const reference
 {
 	int offset;
 	DNode<K,V> *node;
@@ -200,7 +200,7 @@ char Dictionary<K,V>::contains(K &key)
 }
 
 template <class K,class V>
-char Dictionary<K,V>::updateValue(K &key,V &value)
+char Dictionary<K,V>::updateValue(K const &key,V &value) // RA2: keys by const reference
 {
 	int retval;
 
@@ -213,7 +213,7 @@ char Dictionary<K,V>::updateValue(K &key,V &value)
 }
 
 template <class K, class V>
-char Dictionary<K,V>::add(K &key,V &value)
+char Dictionary<K,V>::add(K const &key,V &value) // RA2: keys by const reference
 {
 	int offset;
 	DNode<K,V> *node,*item,*temp;
@@ -259,7 +259,7 @@ char Dictionary<K,V>::add(K &key,V &value)
 }
 
 template <class K,class V>
-char Dictionary<K,V>::remove(K &key,V &value)
+char Dictionary<K,V>::remove(K const &key,V &value) // RA2: keys by const reference
 {
 	int offset;
 	DNode<K,V> *node,*last,*temp;
@@ -329,7 +329,7 @@ char Dictionary<K,V>::remove(K &key,V &value)
 }
 
 template <class K,class V>
-char Dictionary<K,V>::remove(K &key)
+char Dictionary<K,V>::remove(K const &key) // RA2: keys by const reference
 {
 	int offset;
 	DNode<K,V> *node,*last,*temp;
@@ -429,7 +429,7 @@ char Dictionary<K,V>::removeAny(K &key,V &value)
 }
 
 template <class K,class V>
-char Dictionary<K,V>::getValue(K &key,V &value)
+char Dictionary<K,V>::getValue(K const &key,V &value) // RA2: keys by const reference
 {
 	V *valptr=NULL;
 	char retval=getPointer(key,&valptr);
@@ -445,7 +445,7 @@ char Dictionary<K,V>::getValue(K &key,V &value)
 }
 
 template <class K,class V>
-char Dictionary<K,V>::getPointer(K &key, V **valptr)
+char Dictionary<K,V>::getPointer(K const &key, V **valptr) // RA2: keys by const reference
 {
 	int offset;
 	DNode<K,V> *node;
