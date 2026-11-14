@@ -1250,19 +1250,21 @@ int BuildingClass::Set_Turret_Frame(void)
 /// <param name="index">The turret variant to display, or -1 to leave the turret down.</param>
 void BuildingClass::Set_Turret_Index(int index)
 {
-	char buffer[64];
 	if (index != TurretIndex && !Class->IsTurretAnimAVoxel) {
 		End_Anim(BANIM_TURRET);
 		if (index != -1) {
+			char buffer[64]; // RA2: RA2's form
 			strcpy(buffer, Class->GraphicName);
 			strcat(buffer, "_");
-			int len = strlen(buffer);
-			buffer[len] = index + 'B';
+			unsigned int len = strlen(buffer); // RA2: as above
+			buffer[len] = (char)(index + 'B'); // RA2: as above
 			buffer[len + 1] = '\0';
-			TurretIndex = index; // RA2: no IsTurretAnimExclusive (not in RA2's layout)
+			Create_Anim(buffer, BANIM_TURRET, false, false, 0); // RA2: as above
+			TurretIndex = index; // RA2: as above
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3550,25 +3552,18 @@ void BuildingClass::Repair(int control)
 			IsRepairing = (IsRepairing == false);
 			break;
 
-		case 1:
-			if (IsRepairing) return;
-			IsRepairing = true;
-			break;
-
 		case 0:
 			if (!IsRepairing) return;
 			IsRepairing = false;
 			break;
 
-		default:
+		case 1:
+			if (IsRepairing) return;
+			IsRepairing = true;
 			break;
 	}
 
-	/*
-	**	At this point, we know that the repair state has changed. Perform
-	**	appropriate action.
-	*/
-	VocType soundid = VOC_NONE;
+	VocType soundid; // RA2: RA2's form
 	if (IsRepairing) {
 		if (Strength == Class->MaxStrength) {
 			soundid = Rule->ScoldSound;
@@ -3578,14 +3573,18 @@ void BuildingClass::Repair(int control)
 				Clicked_As_Target();
 			}
 			IsWrenchVisible = true;
+			if (House->Is_Player_Control()) {
+				Queue_Speech("EVA_Repairing", -1, -1); // RA2: as above
+			}
 		}
 	} else {
 		soundid = Rule->GenericClick;
 	}
 	if (House->Is_Player_Control()) {
-		Sound_Effect(soundid, PositionCoord);
+		VocClass::PlayAt(soundid, PositionCoord); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3610,49 +3609,35 @@ void BuildingClass::Sell_Back(int control)
 		bool decon = false;
 		switch (control) {
 			case -1:
-				decon = (Mission != MISSION_DECONSTRUCTION);
-				break;
-
-			case 1:
-				if (Mission == MISSION_DECONSTRUCTION) return;
-				if (IsGoingToBlow) return;
-				decon = true;
+				decon = (Get_Mission() != MISSION_DECONSTRUCTION); // RA2: RA2's form
 				break;
 
 			case 0:
-				if (Mission != MISSION_DECONSTRUCTION) return;
-				decon = false;
+				if (Get_Mission() != MISSION_DECONSTRUCTION) return; // RA2: as above
 				break;
 
-			default:
+			case 1:
+				if (Get_Mission() == MISSION_DECONSTRUCTION) return; // RA2: as above
+				if (IsGoingToBlow) return;
+				decon = true;
 				break;
 		}
 
-		/*
-		**	At this point, we know that the repair state has changed. Perform
-		**	appropriate action.
-		*/
 		if (decon) {
-			Assign_Mission(MISSION_DECONSTRUCTION);
+			QueueMission(MISSION_DECONSTRUCTION, false); // RA2: as above
 			Commence();
-			//if (House->Is_Player_Control()) {
-			//	Clicked_As_Target(PlayerPtr->Class->House);
-			//}
 		}
 		if (House->Is_Player_Control()) {
-			Sound_Effect(Rule->GenericClick);
+			VocClass::PlayGlobal(Rule->GenericClick, 1.0f, 0x2000, 0); // RA2: as above
 		}
-	} else {
-		if (Class->IsFirestormWall) {
-			/// The results of these two calls are discarded.
-			Class->Cost_Of(House);
-			House->Is_Human_Player();
-			//
-			Limbo();
-			Delete_Me();
-		}
+	} else if (Class->IsFirestormWall) { // RA2: as above
+		Class->Cost_Of(House); // RA2: as above
+		House->Is_Human_Player(); // RA2: as above
+		Limbo(); // RA2: as above
+		Delete_Me(); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -4018,28 +4003,29 @@ FireErrorType BuildingClass::Can_Fire(AbstractClass * target, int which, bool) c
  *=============================================================================================*/
 bool BuildingClass::Toggle_Primary(void)
 {
-	if (Class->ToBuild == RTTI_NONE) {
-		return(IsLeader);
-	}
-
-	if (IsLeader) {
-		IsLeader = false;
-	} else {
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * building = Buildings[index];
-
-			if (!building->IsInLimbo && building->House == House && building->Class->ToBuild == Class->ToBuild) {
-				building->IsLeader = false;
+	if (Class->ToBuild != RTTI_NONE) { // RA2: RA2's form
+		if (IsLeader) { // RA2: as above
+			IsLeader = false; // RA2: as above
+		} else { // RA2: as above
+			int count = House->Buildings.Count(); // RA2: as above
+			for (int index = 0; index < count; ++index) { // RA2: as above
+				BuildingClass * building = House->Buildings[index]; // RA2: as above
+				if (!building->IsInLimbo && building->Class->ToBuild == Class->ToBuild) { // RA2: as above
+					if ((Class->Naval && building->Class->Naval) || (!Class->Naval && !building->Class->Naval)) { // RA2: as above
+						building->IsLeader = false; // RA2: as above
+					}
+				}
+			}
+			IsLeader = true; // RA2: as above
+			if (House->Is_Player_Control()) { // RA2: as above
+				Queue_Speech("EVA_PrimaryBuildingSelected", -1, -1); // RA2: as above
 			}
 		}
-		IsLeader = true;
-		if (House->Is_Player_Control()) {
-			Speak(VOX_PRIMARY_SELECTED);
-		}
+		Mark(MARK_CHANGE); // RA2: as above
 	}
-	Mark(MARK_CHANGE);
 	return(IsLeader);
 }
+
 
 
 /***********************************************************************************************
@@ -4335,10 +4321,11 @@ bool BuildingClass::Clear_Weapons_Factory_Bib(void)
 {
 	if (Class->IsWeaponsFactory) {
 
-		Cell exit = Class->ExitList[8];
-		Cell cell = exit + PositionCell;
+		Cell exit = Class->ExitList[10]; // RA2: RA2's form
+		Cell cell = PositionCell + exit; // RA2: as above
+		cell = cell + Cell(-1, 0); // RA2: as above
 		Cell cell2 = cell;
-		Coord coord = cell.As_Coord();
+		Coord coord = cell2.As_Coord(); // RA2: as above
 		CellClass * cellptr = &Map[cell2];
 
 		TechnoClass * tech = cellptr->Cell_Techno(Point2D(0,0), false, this);
@@ -4346,9 +4333,6 @@ bool BuildingClass::Clear_Weapons_Factory_Bib(void)
 			DebugString("Weapons factory clearing %s from bib\n", (const char *)tech->TClass->IniName);
 			cellptr->Incoming(COORD_NONE, true, true);
 
-			/*
-			**	Scatter everything around the weapon's factory door.
-			*/
 			for (FacingType f = FACING_FIRST; f < FACING_COUNT; f++) {
 				CellClass * cptr = &cellptr->Adjacent_Cell(f);
 				TechnoClass * tech = cptr->Cell_Techno(Point2D(0,0), false, this);
@@ -4362,6 +4346,7 @@ bool BuildingClass::Clear_Weapons_Factory_Bib(void)
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
