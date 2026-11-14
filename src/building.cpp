@@ -180,6 +180,8 @@
 
 #include "color.hh"
 #include "ftimer.h"
+
+void Record_Event_Cell(Cell const & cell); // RA2: 0x63C6C0, the ring of recent event cells
 #include "side.h" // RA2: SideClass::From_Name for the garrison owner
 
 void Queue_Speech(char const * name, int priority, int expire); // RA2: 0x715B40, an EVA line by name
@@ -5908,10 +5910,10 @@ int BuildingClass::Pip_Count(void) const
 void BuildingClass::Death_Announcement(TechnoClass const * source) const
 {
 	if (source != NULL && House->Is_Player_Control()) {
-		LastRadarEventCell = Destination_Coord().As_Cell();
-		Speak(VOX_STRUCTURE_DESTROYED);
+		Record_Event_Cell(Destination_Coord().As_Cell()); // RA2: the ring of recent event cells, no speech
 	}
 }
+
 
 
 /***********************************************************************************************
