@@ -319,6 +319,8 @@ namespace OwnerDraw {
 
 int OD_Draw_Text_Remap(Surface & surface, const char * string, Rect const & rect, char const * name, COLORREF color, int flags, int char_spacing);
 int OD_Draw_Text(COLORREF color, HFONT font, Rect const & rect, const char * text, int len, int x_alignment, int y_alignment, Surface * surface);
+class BitFont;
+int OD_Draw_Text(unsigned color, BitFont * font, Rect const & rect, wchar_t const * text, int len, int x_alignment, int y_alignment, Surface * surface, int unused); // RA2: wide text with a BitFont (0x5FE1B0)
 void OD_Draw_Rect(Surface & surf, Rect const & rect, int offset, int color);
 
 void On_WM_NCDESTROY(HWND window);

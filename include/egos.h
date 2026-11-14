@@ -46,7 +46,7 @@ class EgoClass {
 
 	public:
 
-		EgoClass (int x, int y, char *text, TextPrintType flags);
+		EgoClass (int x, int y, unsigned short *text, TextPrintType flags); // RA2: wide text
 		~EgoClass (void);
 
 		bool Scroll (int distance);
@@ -54,7 +54,7 @@ class EgoClass {
 		void Wipe (Surface *background);
 
 
-		char				*Text;
+		unsigned short		*Text; // RA2: wide (0x4B3620 copies it with wcscpy)
 		int				XPos;
 		int				YPos;
 		TextPrintType 	Flags;

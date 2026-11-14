@@ -38,6 +38,7 @@
 #include "always.h"
 
 #include "egos.h"
+#include "bitfont.h" // RA2: Wipe measures with BitFont
 
 #include "_keyboar.h"
 #include "_palette.h"
@@ -67,6 +68,8 @@
 
 #include <cstring>
 
+
+
 /*
 **	List of Ego Class instances
 **	There will be one instance for each line of text.
@@ -95,6 +98,9 @@ DynamicVectorClass<EgoClass *> EgoList;
 Surface *BackgroundSurface;
 
 
+Surface * CreditsSurface; // RA2: the credits' surface (0x853118), set by Show_Who_Was_Responsible
+
+
 /***********************************************************************************************
  * EC::EgoClass -- EgoClass constructor                                                        *
  *                                                                                             *
@@ -113,13 +119,13 @@ Surface *BackgroundSurface;
  * HISTORY:                                                                                    *
  *    9/9/96 11:53PM ST : Created                                                              *
  *=============================================================================================*/
-EgoClass::EgoClass (int x, int y, char *text, TextPrintType flags)
+EgoClass::EgoClass (int x, int y, unsigned short *text, TextPrintType flags) // RA2: wide text
 {
 	XPos = x;
 	YPos = y;
 	Flags= flags;
-	Text = new char [strlen (text)+1];
-	strcpy (Text, text);
+	Text = new unsigned short [wcslen ((wchar_t *)text)+1]; // RA2: wide
+	wcscpy ((wchar_t *)Text, (wchar_t *)text); // RA2: wide
 }
 
 
@@ -185,29 +191,23 @@ bool EgoClass::Scroll(int distance)
 void EgoClass::Render(bool fresh)
 {
 	if ((YPos < LogicalSurface->Get_Height() && YPos > LogicalSurface->Get_Height() - 52) || YPos >= -16 && YPos <= 32 || fresh) {
-		static HFONT font;
-		if (font == NULL) {
-			HDC dc = GetDC(MainWindow);
-			font = WS_Get_Font(dc, "Arial", 0, 16, 1);
-			ReleaseDC(MainWindow, dc);
-		}
-
-		Rect textrect;
-		textrect.X = XPos;
-		textrect.Width = VideoModeWidth;
+		Rect textrect; // RA2: Render at 0x4B3690 has no HFONT, HDC, GetDC and 2 more
+		textrect.X = (VideoModeWidth - 520) / 2; // RA2: a 520-wide column centred on the screen
+		textrect.Width = 520; // RA2: as above
 		textrect.Y = YPos;
+		textrect.Height = VideoModeHeight; // RA2: the screen height
 
 		int alignment = 0;
 		if (Flags & TPF_CENTER) {
-			alignment = OD_TEXT_ALIGN_CENTER;
+			alignment = 1; // RA2: the wide text call's centre value
 		}else{
 			if (Flags & TPF_RIGHT){
-				alignment = OD_TEXT_ALIGN_MAX;
+				alignment = 4; // RA2: its right value
 			}
 		}
 
 		if (GameInFocus) {
-			OD_Draw_Text(RGB(255, 255, 128), font, textrect, Text, strlen(Text), alignment, 0, BackgroundSurface);
+			OD_Draw_Text(0x80FFFF, NULL, textrect, (wchar_t *)Text, wcslen((wchar_t *)Text), alignment, 0, CreditsSurface, 0); // RA2: wide, BitFont, the credits surface
 		}
 	}
 }
@@ -229,16 +229,8 @@ void EgoClass::Render(bool fresh)
  *=============================================================================================*/
 void EgoClass::Wipe (Surface *background)
 {
-	int width = Font_From_TPF(Flags)->String_Pixel_Width (Text);
-	int x = XPos;
-
-	if (Flags & TPF_RIGHT) {
-		x -= width;
-	}else{
-		if (Flags & TPF_CENTER){
-			x -= width/2;
-		}
-	}
+	BitFont * font = Font_From_TPF(Flags); // RA2: Wipe at 0x4B3760 matches only so
+	font->String_Pixel_Width(Text, 0); // RA2: as above
 
 	Rect r(0, YPos, VideoModeWidth, 18);
 	LogicalSurface->Blit_From(r, *background, r);
@@ -444,7 +436,9 @@ void Show_Who_Was_Responsible (void)
 				/*
 				**	Create the new class and add it to our list.
 				*/
-				ego = new EgoClass (x, y, strstart, flags);
+				wchar_t wide[256]; // RA2: EgoClass holds wide text
+				MultiByteToWideChar(CP_ACP, 0, strstart, -1, wide, 256); // RA2: as above
+				ego = new EgoClass (x, y, (unsigned short *)wide, flags); // RA2: as above
 
 				EgoList.Add (ego);
 
@@ -714,3 +708,4 @@ void Show_Who_Was_Responsible (void)
 	}
 	EgoList.Clear();
 }
+
