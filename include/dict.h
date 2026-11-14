@@ -329,55 +329,10 @@ char Dictionary<K,V>::remove(K const &key,V &value) // RA2: keys by const refere
 }
 
 template <class K,class V>
-char Dictionary<K,V>::remove(K const &key) // RA2: keys by const reference
+char Dictionary<K,V>::remove(K const &key) // RA2: keys by const reference; through remove(key, value)
 {
-	int offset;
-	DNode<K,V> *node,*last,*temp;
-	float percent;
-
-	if (entries==0)
-		return(FALSE);
-
-	percent=(float)(entries-1);
-	percent/=(float)getSize();
-
-	offset=keyHash(key);
-	node=table[offset];
-
-	last=node;
-	if (node==NULL) return(FALSE);
-
-	if ((node->key)==key)
-	{
-		temp=table[offset]->hashNext;
-		delete(table[offset]);
-		table[offset]=temp;
-		entries--;
-		if (percent <= SHRINK_THRESHOLD)
-			shrink();
-		return(TRUE);
-	}
-	node=node->hashNext;
-
-	char retval=FALSE;
-
-	while (node!=NULL)
-	{
-		if (node->key==key)
-		{
-			last->hashNext=node->hashNext;
-			entries--;
-			delete(node);
-			retval=TRUE;
-			break;
-		}
-		last=node;
-		node=node->hashNext;
-	}
-
-	if (percent <= SHRINK_THRESHOLD)
-		shrink();
-	return(retval);
+	V value; // RA2: as above
+	return(remove(key,value)); // RA2: as above
 }
 
 template <class K,class V>
