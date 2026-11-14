@@ -42,4 +42,4 @@ class GameOptionsClass : public OptionsClass {
 };
 
 int Abort_Dialog(void);
-void Game_Options_Dialog(void);
+int Game_Options_Dialog(void); // RA2: returns the choice

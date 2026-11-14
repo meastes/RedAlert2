@@ -50,10 +50,25 @@
 
 #include "special.hh"
 
-void Game_Options_On_INITDIALOG(HWND window);
-BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
-BOOL CALLBACK Abort_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
-void Abort_Dialog_On_COMMAND(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+#include "house.h" // RA2: the live human count
+#include "stringtable.h" // RA2: button captions
+
+
+#define RA2_SOURCE "D:\\Ra2\\GOptions.CPP" // RA2: the source name LoadString records
+
+/*
+**	RA2's game options dialog controls (resource IDs; names chosen here).
+*/
+#define IDC_GOPTIONS_LEAVE		1737	// RA2: Leave / Observe
+#define IDC_GOPTIONS_RESTART	1810	// RA2: Restart / Observe
+#define IDC_GOPTIONS_RESUME		1670	// RA2: Resume
+
+static int LeaveResult; // RA2: what the Leave button returns (0xA40E1C)
+static int RestartResult; // RA2: what the Restart button returns (0xA40E20)
+
+
+BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: defined after the dialog
+
 
 /// <summary>
 /// Displays the in game options dialog.
@@ -62,56 +77,22 @@ void Abort_Dialog_On_COMMAND(HWND window, UINT message, WPARAM wparam, LPARAM lp
 /// locked out for as long as the dialog is up, and if the player asked for the mission
 /// briefing it is restated on the way out.
 /// </summary>
-void Game_Options_Dialog(void)
+int Game_Options_Dialog(void) // RA2: at 0x4DDF20, returns the choice
 {
-	int rc = 0;
-
-	HWND dialog;
-	if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
-		dialog = OwnerDraw::Begin_Dialog(IDD_OPT_CTRL_SP, (DLGPROC)Game_Options_Dialog_Proc);
-	} else if (Session.Type == GAME_INTERNET) {
-		dialog = OwnerDraw::Begin_Dialog(IDD_OPT_CTRL_WOL, (DLGPROC)Game_Options_Dialog_Proc);
-	} else {
-		dialog = OwnerDraw::Begin_Dialog(IDD_OPT_CTRL_MP, (DLGPROC)Game_Options_Dialog_Proc);
-	}
-
-	IgnoreInput = true;
-	Keyboard->Clear();
-
+	int result = 0; // RA2: Game_Options_Dialog at 0x4DDF20 matches only so
+	HWND dialog = OwnerDraw::Begin_Dialog(IDD_MISSION_ABORT, Game_Options_Dialog_Proc, 0); // RA2: as above
 	if (dialog) {
-
-		SetWindowLong(dialog, DWL_USER, (LONG)&rc);
-
+		SetWindowLong(dialog, DWL_USER, (LONG)&result); // RA2: as above
 		OwnerDraw::Display_Dialog(dialog);
-
-		while (rc == 0) {
+		while (result == 0) { // RA2: as above
 			if (OwnerDraw::Dialog_Message_Handler() == true) {
-				rc = IDOK;
+				result = 1; // RA2: as above
 			}
 		}
 		OwnerDraw::End_Dialog(dialog);
 	}
-
-	Keyboard->Clear();
-
-	if (rc == IDC_BRIEFING) {
-		Restate_Mission(Scen);
-	}
-
-	IgnoreInput = Scen->IsInputLocked;
-
-	if (rc == IDC_LOAD_GAME) {
-		if (IDC_LOAD_GAME) {
-			if (MouseCursor->Is_Hidden() == false && Scen->IsInputLocked == 1) {
-				Hide_Mouse();
-			} else if (MouseCursor->Is_Hidden() == true && Scen->IsInputLocked == 0) {
-				Show_Mouse();
-			}
-		}
-	}
-
-	Map.Flag_To_Redraw(GS_REDRAW_ALL);
-}
+	return(result); // RA2: as above
+} // RA2: Game_Options_Dialog at 0x4DDF20 has no IgnoreInput, Scen, IsInputLocked and 2 more
 
 
 /// <summary>
@@ -123,305 +104,67 @@ void Game_Options_Dialog(void)
 /// connection quality slider updates the label beside it.
 /// </summary>
 /// <returns>Returns with TRUE if the owner draw system consumed the message.</returns>
-BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: at 0x4DDF90
 {
-	static int GameConnectionQualityNames[] = {
-		TXT_WORST_CONNECTION,
-		TXT_POOR_CONNECTION,
-		TXT_GOOD_CONNECTION,
-		TXT_BEST_CONNECTION
-	};
-
-	BOOL rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-
-	HWND handle;
-
-	if (rc) {
-		return(rc);
+	int result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam); // RA2: as above
+	if (result) { // RA2: as above
+		return(result); // RA2: as above
 	}
 
 	switch (message) {
+		case WM_COMMAND: { // RA2: as above
+			int * retval = (int *)GetWindowLong(window, DWL_USER); // RA2: as above
+			if (HIWORD(wparam) == 0) { // RA2: as above
+				switch (LOWORD(wparam)) { // RA2: as above
+					case IDC_GOPTIONS_LEAVE: // RA2: as above
+						*retval = LeaveResult;
+						return(FALSE); // RA2: as above
 
-		case WM_INITDIALOG:
-			Game_Options_On_INITDIALOG(window);
-			break;
+					case IDOK: // RA2: as above
+					case IDC_GOPTIONS_RESUME: // RA2: as above
+						*retval = 1;
+						return(FALSE); // RA2: as above
 
-		case WM_COMMAND: {
-			int code = HIWORD(wparam);
-			int* retval = (int *)GetWindowLong(window, DWL_USER);
-
-			switch (LOWORD(wparam)) {
-
-				case IDC_SAVE_GAME:
-					if (!code) {
-						if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
-							ShowWindow(window, SW_HIDE);
-							UpdateWindow(MainWindow);
-							char description[512];
-							strcpy(description, Scen->Description);
-							LoadOptionsClass().Save(description);
-							Game_Options_On_INITDIALOG(window);
-							ShowWindow(window, SW_SHOW);
-							UpdateWindow(window);
-						} else {
-							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::SAVEGAME));
-							*retval = IDC_SAVE_GAME;
-						}
-					}
-					break;
-
-				case IDC_LOAD_GAME:
-					if (!code) {
-						ShowWindow(window, SW_HIDE);
-						UpdateWindow(MainWindow);
-						if (LoadOptionsClass().Load()) {
-							*retval = IDC_LOAD_GAME;
-						} else {
-							ShowWindow(window, SW_SHOW);
-							UpdateWindow(window);
-						}
-					}
-					break;
-
-				case IDC_BRIEFING:
-					if (!code) {
-						*retval = IDC_BRIEFING;
-					}
-					break;
-
-				case IDC_DELETE_GAME:
-					if (!code) {
-						ShowWindow(window, SW_HIDE);
-						UpdateWindow(MainWindow);
-						LoadOptionsClass().Delete();
-						Game_Options_On_INITDIALOG(window);
-						ShowWindow(window, SW_SHOW);
-						UpdateWindow(window);
-					}
-					break;
-
-				case IDC_RESUME_MISSION:
-					if (!code) {
-						if (Session.Type == GAME_INTERNET) {
-							handle = GetDlgItem(window, IDC_CTRLWOL_CONNECTION);
-							if (handle) {
-								int fudge = 3 - SendMessage(handle, TBM_GETPOS, 0, 0);
-								if (fudge != Session.LatencyFudge) {
-									OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::LATENCYFUDGE, fudge));
-									DebugString("LATENCYFUDGE event created - %d\n", fudge);
-								}
-							}
-							handle = GetDlgItem(window, IDC_GAME_SPEED_SLIDER);
-							if (handle) {
-								int speed = (OptionsClass::MAX_SPEED_SETTING-1) - SendMessage(handle, TBM_GETPOS, 0, 0);
-								if (Options.GameSpeed != speed) {
-									OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::GAMESPEED, speed));
-								}
-							}
-						}
-						*retval = IDOK;
-					}
-					break;
-
-				case IDC_ABORT_MISSION:
-					if (!code) {
-						if (Session.Type == GAME_INTERNET) {
-							SpecialDialog = SDLG_SURRENDER;
-							if (!WestwoodOnline_Tournament) {
-								SpecialDialog = SDLG_ABORT;
-							}
-						} else {
-							SpecialDialog = SDLG_ABORT;
-						}
-						*retval = IDCANCEL;
-					}
-					break;
-
-				case IDC_GAME_CONTROLS:
-					if (!code) {
-						SpecialDialog = SDLG_SETTINGS;
-						*retval = IDOK;
-					}
-					break;
-
-				default:
-					break;
+					case IDC_GOPTIONS_RESTART: // RA2: as above
+						*retval = RestartResult;
+						break;
+				} // RA2: no HIWORD, GetWindowLong, LOWORD and 30 more (TibSun's use does not compile against RA2's declaration)
 			}
 			break;
 		}
 
-		case WM_HSCROLL: {
-			if (LOWORD(wparam) == SB_THUMBTRACK) {
-				int pos = HIWORD(wparam);
-				int textid;
+		case OD_SUBCLASSED: { // RA2: as above
+			HWND leave = GetDlgItem(window, IDC_GOPTIONS_LEAVE); // RA2: as above
+			SendMessage(leave, OD_SETTEXTW, 0, (LPARAM)StringTable::LoadString("GUI:Leave", NULL, RA2_SOURCE, 543)); // RA2: as above
+			LeaveResult = 2; // RA2: as above
 
-				if ((HWND)lparam == GetDlgItem(window, IDC_GAME_SPEED_SLIDER)) {
-					textid = GameSpeedNames[pos];
-					handle = GetDlgItem(window, IDC_GAME_SPEED_LABEL);
-				} else if ((HWND)lparam == GetDlgItem(window, IDC_CTRLWOL_CONNECTION)) {
-					textid = GameConnectionQualityNames[pos];
-					handle = GetDlgItem(window, IDC_SCROLL_SPEED_LABEL);
+			HWND restart = GetDlgItem(window, IDC_GOPTIONS_RESTART); // RA2: as above
+			RestartResult = 0; // RA2: as above
+			if (Session.Type == GAME_NORMAL) { // RA2: as above
+				SendMessage(restart, OD_SETTEXTW, 0, (LPARAM)StringTable::LoadString("GUI:Restart", NULL, RA2_SOURCE, 554)); // RA2: as above
+				RestartResult = 5; // RA2: as above
+			} else if (Session.Type == GAME_SKIRMISH) { // RA2: as above
+				ShowWindow(restart, SW_HIDE); // RA2: as above
+			} else if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) { // RA2: as above
+				int humans = 0; // RA2: as above
+				for (int index = 0; index < Houses.Count(); index++) { // RA2: as above
+					if (Houses[index]->IsHuman && !Houses[index]->IsDefeated) { // RA2: as above
+						humans++; // RA2: as above
+					}
+				}
+				if (humans >= 2 && !PlayerPtr->IsDefeated) { // RA2: as above
+					LeaveResult = 3; // RA2: as above
+					SendMessage(restart, OD_SETTEXTW, 0, (LPARAM)StringTable::LoadString("GUI:Observe", NULL, RA2_SOURCE, 582)); // RA2: as above
+					RestartResult = 4; // RA2: as above
 				} else {
-					break;
-				}
-
-				if (handle) {
-					Static_SetText(handle, Fetch_String(textid));
+					ShowWindow(restart, SW_HIDE); // RA2: as above
 				}
 			}
-			break;
+			OwnerDraw::Set_Control_Result(leave, LeaveResult); // RA2: as above
+			OwnerDraw::Set_Control_Result(restart, RestartResult); // RA2: as above
+			return(FALSE); // RA2: as above
 		}
-
-		default:
-			break;
 	}
 
 	return(FALSE);
-}
-
-
-/// <summary>
-/// Prepares the controls of the game options dialog.
-/// This routine is called when the dialog is created, and again whenever a save or delete
-/// has changed what is on disk. It decides which buttons the current game type allows the
-/// player to use and primes the game speed and connection quality sliders.
-/// </summary>
-void Game_Options_On_INITDIALOG(HWND window)
-{
-	HWND handle;
-
-	if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
-		bool present = LoadOptionsClass().Files_Present();
-
-		handle = GetDlgItem(window, IDC_LOAD_GAME);
-		if (handle) {
-			EnableWindow(handle, present);
-		}
-
-		handle = GetDlgItem(window, IDC_DELETE_GAME);
-		if (handle) {
-			EnableWindow(handle, present);
-		}
-	}
-
-	if (Session.Type == GAME_INTERNET) {
-
-		handle = GetDlgItem(window, IDC_CTRLWOL_CONNECTION);
-		if (handle) {
-			SetSliderRangeAndPos(handle, 0, 3, 3 - Session.LatencyFudge);
-		}
-
-		handle = GetDlgItem(window, IDC_GAME_SPEED_SLIDER);
-		if (handle) {
-			Slider_SetRange(handle, 0, OptionsClass::MAX_SPEED_SETTING-1);
-			Slider_SetPos(handle, (OptionsClass::MAX_SPEED_SETTING-1) - Options.GameSpeed);
-		}
-	}
-
-	if (Session.Type == GAME_SKIRMISH) {
-		handle = GetDlgItem(window, IDC_BRIEFING);
-		if (handle) {
-			EnableWindow(handle, FALSE);
-		}
-	}
-
-}
-
-
-/// <summary>
-/// Displays the abort mission dialog and waits for an answer.
-/// This routine is used by the special dialog handler when the player asks to abandon or
-/// surrender the mission. It does not return until the player has settled on one of the
-/// choices offered.
-/// </summary>
-/// <returns>Returns with IDOK to quit the mission, IDABORT to restart or surrender it, or
-/// IDCANCEL to carry on playing.</returns>
-int Abort_Dialog(void)
-{
-	int rc = 0;
-
-	HWND dialog = OwnerDraw::Begin_Dialog(IDD_MISSION_ABORT, (DLGPROC)Abort_Dialog_Proc);
-
-	if (dialog) {
-
-		SetWindowLong(dialog, DWL_USER, (LONG)&rc);
-
-		OwnerDraw::Display_Dialog(dialog);
-
-		while (rc == 0) {
-			if (OwnerDraw::Dialog_Message_Handler() == true) {
-				rc = IDOK;
-			}
-		}
-		OwnerDraw::End_Dialog(dialog);
-	}
-	return(rc);
-}
-
-
-/// <summary>
-/// Handles messages for the abort mission dialog.
-/// This routine offers every message to the owner draw system first. What is left it uses
-/// to relabel the restart button as a surrender for a multiplayer game, and to pass button
-/// presses along to Abort_Dialog_On_COMMAND.
-/// </summary>
-/// <returns>Returns with the result of the owner draw default dialog handler.</returns>
-BOOL CALLBACK Abort_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
-{
-	HWND handle;
-
-	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-	if (rc == 0) {
-		switch (message) {
-			case WM_INITDIALOG:
-				handle = GetDlgItem(window, IDC_RESTART_MISSION);
-				if (Session.Type != GAME_NORMAL) {
-					SetWindowText(handle, Fetch_String(TXT_SURRENDER));
-					if (PlayerPtr->IsDefeated || PlayerPtr->IsToWin || PlayerPtr->IsToLose || PlayerPtr->IsToDie) {
-						EnableWindow(handle, FALSE);
-					}
-				}
-				break;
-
-			case WM_COMMAND:
-				Abort_Dialog_On_COMMAND(window, LOWORD(wparam), 0, HIWORD(wparam));
-				break;
-		}
-		rc = 0;
-	}
-	return(rc);
-}
-
-
-/// <summary>
-/// Handles a button press in the abort mission dialog.
-/// This routine records the player's choice in the result variable that Abort_Dialog
-/// attached to the dialog window, which is what ends the dialog's message pump.
-/// </summary>
-/// <param name="message">The control identifier of the button that was pressed.</param>
-/// <param name="lparam">The notification code that came with the button press.</param>
-void Abort_Dialog_On_COMMAND(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
-{
-	int* retval = (int *)GetWindowLong(window, DWL_USER);
-
-	switch ((int)message) {
-		case IDC_ABORT_MISSION:
-			if (lparam == 0) {
-				*retval = IDOK;
-			}
-			break;
-
-		case IDC_RESTART_MISSION:
-			if (lparam == 0) {
-				*retval = IDABORT;
-			}
-			break;
-
-		case IDOK:
-		case IDCANCEL:
-			if (lparam == 0) {
-				*retval = IDCANCEL;
-			}
-			break;
-	}
 }

@@ -301,6 +301,7 @@ namespace OwnerDraw {
 
 	int Default_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 	bool Dialog_Message_Handler(void);
+	void Set_Control_Result(HWND control, int value); // RA2: what an owner-draw button returns (0x5E2040)
 
 	bool Start_Tooltip(Rect const & rect, char const * text, HWND window);
 	bool Show_Tooltip(bool save_background);
@@ -506,6 +507,7 @@ inline unsigned short OD_Blend_Color(unsigned short pixel, unsigned short color,
  * Used by: scrollbar.  Input: lParam = BOOL.  Output: none.
  */
 #define OD_SETKEEPCAPTURE			(WM_USER + 177)
+#define OD_SETTEXTW					(WM_USER + 178)	// RA2: sets a control's wide caption (goptions 0x4DE01B)
 
 /*
  * Initialize a combo-box dropdown window; seeds its highlighted selection from the owner combo.
