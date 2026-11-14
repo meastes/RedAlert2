@@ -8193,22 +8193,21 @@ int TechnoClass::Refund_Amount(void) const
 int TechnoClass::Anti_Air(void) const
 {
 	if (Is_Weapon_Equipped()) {
+		WeaponTypeClass const * weapon = GetTurretWeapon()->Weapon; // RA2: the turret slot's weapon
 
-		WeaponTypeClass const * weapon = PrimaryWeapon;
-		BulletTypeClass const * bullet = weapon->Bullet;
-		WarheadTypeClass const * warhead = weapon->WarheadPtr;
-
-		if (bullet->IsAntiAircraft) {
-			int value = ((weapon->Attack * warhead->Modifier[ARMOR_LIGHT]) * weapon->Range) / weapon->ROF; // RA2: ARMOR_LIGHT
+		if (weapon->Bullet->IsAntiAircraft) { // RA2: as above
+			double damage = weapon->Attack * weapon->WarheadPtr->Modifier[ARMOR_LIGHT]; // RA2: in floating point
+			int value = (int)(damage * weapon->Range / weapon->ROF); // RA2: as above
 
 			if (TClass->Is_Two_Shooter()) {
-				value *= 2;
+				value += value; // RA2: as above
 			}
 			return(value/50);
 		}
 	}
 	return(0);
 }
+
 
 
 /***********************************************************************************************
@@ -8229,17 +8228,18 @@ int TechnoClass::Anti_Air(void) const
  *=============================================================================================*/
 int TechnoClass::Anti_Armor(void) const
 {
-	if (Is_Weapon_Equipped()) {
-		if (!PrimaryWeapon->Bullet->IsAntiGround) return(0);
-
-		WeaponTypeClass const * weapon = PrimaryWeapon;
+	if (Is_Weapon_Equipped() && GetTurretWeapon()->Weapon->Bullet->IsAntiGround) { // RA2: the turret slot's weapon
+		WeaponTypeClass const * weapon = GetTurretWeapon()->Weapon; // RA2: as above
+		int range = weapon->Range; // RA2: as above
 		BulletTypeClass const * bullet = weapon->Bullet;
 		WarheadTypeClass const * warhead = weapon->WarheadPtr;
-		int mrange = MIN(weapon->Range, 4 * CELL_LEPTON);
-
-		int value = ((weapon->Attack * warhead->Modifier[ARMOR_MEDIUM]) * mrange * warhead->SpreadFactor) / weapon->ROF; // RA2: ARMOR_MEDIUM
+		if (range >= 4 * CELL_LEPTON) { // RA2: as above
+			range = 4 * CELL_LEPTON; // RA2: as above
+		}
+		double damage = weapon->Attack * warhead->Modifier[ARMOR_MEDIUM]; // RA2: in floating point, no spread factor
+		int value = (int)(damage * range / weapon->ROF); // RA2: as above
 		if (TClass->Is_Two_Shooter()) {
-			value *= 2;
+			value += value; // RA2: as above
 		}
 		if (bullet->IsInaccurate) {
 			value /= 2;
@@ -8248,6 +8248,7 @@ int TechnoClass::Anti_Armor(void) const
 	}
 	return(0);
 }
+
 
 
 /***********************************************************************************************
@@ -8268,17 +8269,18 @@ int TechnoClass::Anti_Armor(void) const
  *=============================================================================================*/
 int TechnoClass::Anti_Infantry(void) const
 {
-	if (Is_Weapon_Equipped()) {
-		if (!PrimaryWeapon->Bullet->IsAntiGround) return(0);
-
-		WeaponTypeClass const * weapon = PrimaryWeapon;
+	if (Is_Weapon_Equipped() && GetTurretWeapon()->Weapon->Bullet->IsAntiGround) { // RA2: the turret slot's weapon
+		WeaponTypeClass const * weapon = GetTurretWeapon()->Weapon; // RA2: as above
+		int range = weapon->Range; // RA2: as above
 		BulletTypeClass const * bullet = weapon->Bullet;
 		WarheadTypeClass const * warhead = weapon->WarheadPtr;
-		int mrange = MIN(weapon->Range, 4 * CELL_LEPTON);
-
-		int value = ((weapon->Attack * warhead->Modifier[ARMOR_NONE]) * mrange * warhead->SpreadFactor) / weapon->ROF;
+		if (range >= 4 * CELL_LEPTON) { // RA2: as above
+			range = 4 * CELL_LEPTON; // RA2: as above
+		}
+		double damage = weapon->Attack * warhead->Modifier[ARMOR_NONE]; // RA2: in floating point, no spread factor
+		int value = (int)(damage * range / weapon->ROF); // RA2: as above
 		if (TClass->Is_Two_Shooter()) {
-			value *= 2;
+			value += value; // RA2: as above
 		}
 		if (bullet->IsInaccurate) {
 			value /= 2;
@@ -8287,6 +8289,7 @@ int TechnoClass::Anti_Infantry(void) const
 	}
 	return(0);
 }
+
 
 
 /***********************************************************************************************
