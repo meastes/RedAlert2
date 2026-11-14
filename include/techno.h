@@ -705,7 +705,6 @@ class TechnoClass :	public RadioClass,
 		virtual void Rocking_AI(void);
 		void Become_Untargetable(void); // RA2: 0x6D7C80
 		virtual Coord GetAttackCoordinates(void) const; // RA2
-		void Draw_Action_Line(Coord start, Coord end, RGBClass color, unsigned char dashed, unsigned char shadow) const; // RA2: 0x6D0510
 		void Draw_Link_Line(Coord start, Coord end, RGBClass color) const; // RA2: 0x6D0990
 		void Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool shadow) const; // RA2: 0x6D0DC0
 		int Elevation_Bonus(void); // RA2: 0x6CD6F0
@@ -721,6 +720,7 @@ class TechnoClass :	public RadioClass,
 		virtual void * GetRemapColour(void) const override; // RA2: 0x6D1480
 		virtual bool IsNotWarpingIn(void) const; // RA2
 		virtual void Draw_Action_Line(bool force, int unknown) const; // RA2: two arguments
+		void Draw_Action_Line(Coord start, Coord end, RGBClass color, unsigned char dashed, unsigned char shadow) const; // RA2: 0x6D0510; declared after the virtual (vtable order)
 		virtual unsigned GetDisguiseFlags(unsigned flags) const; // RA2
 		virtual bool IsClearlyVisibleTo(HouseClass * house) const; // RA2
 		virtual void Draw_Voxel(VoxelDataStruct const & voxeldata, int frame, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, int brightness, ShapeFlags_Type negflags) const;

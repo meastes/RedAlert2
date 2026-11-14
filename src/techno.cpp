@@ -4678,11 +4678,21 @@ ActionType TechnoClass::What_Action(Cell const & cell, bool check_fog, bool disa
  *=============================================================================================*/
 bool TechnoClass::Can_Player_Move(void) const
 {
-	if (House->Is_Player_Control() && !Is_Immobilized()) {
-		return(true);
+	if (!House->Is_Player_Control()) { // RA2: as above
+		return(false); // RA2: as above
 	}
-	return(false);
+	if (IsUnderEMP()) { // RA2: the virtual (slot 201)
+		return(false); // RA2: as above
+	}
+	if (TClass->Spawned) { // RA2: a spawned unit is not moved by the player
+		return(false); // RA2: as above
+	}
+	if (IsParalyzed()) { // RA2: nor a paralyzed one
+		return(false); // RA2: as above
+	}
+	return(IsNotWarping() ? true : false); // RA2: nor one warping
 }
+
 
 
 /// <summary>
@@ -4780,11 +4790,15 @@ bool TechnoClass::Can_Deploy_Now(void) const
  *=============================================================================================*/
 bool TechnoClass::Can_Player_Fire(void) const
 {
-	if (House->Is_Player_Control() && PrimaryWeapon != NULL && !Is_Immobilized()) {
-		return(true);
+	if (House->Is_Player_Control()) { // RA2: as above
+		WeaponDataStruct const * weapon = GetTurretWeapon(); // RA2: the turret slot's weapon
+		if (weapon != NULL && weapon->Weapon != NULL && !IsUnderEMP()) { // RA2: the virtual (slot 201)
+			return(true); // RA2: as above
+		}
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -7915,8 +7929,12 @@ void TechnoClass::Assign_Destination(AbstractClass *, bool)
  *=============================================================================================*/
 bool TechnoClass::Enter_Idle_Mode(bool, bool)
 {
+	if (!RefreshMegaMission() && IsNotWarpingIn()) { // RA2: an idle unit takes its next planning token node
+		TryNextPlanningTokenNode(); // RA2: as above
+	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
