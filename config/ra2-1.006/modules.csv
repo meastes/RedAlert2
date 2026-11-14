@@ -250,7 +250,9 @@ unk_004D0C80,0x004D0C80,0x004D2940,unknown,code not assigned to a module
 getcd,0x004D2940,0x004D2A10,tibsun,"functions compiled from src/getcd.cpp, matched, without gaps; ??1GetCDClass@@QAE@XZ not placed"
 unk_004D2A10,0x004D2A10,0x004D2A20,unknown,code not assigned to a module
 getcpu,0x004D2A20,0x004D2A60,tibsun,"functions compiled from src/getcpu.cpp, matched, without gaps"
-unk_004D2A60,0x004D2A60,0x004DE260,unknown,code not assigned to a module
+unk_004D2A60,0x004D2A60,0x004DDF20,unknown,code not assigned to a module
+goptions,0x004DDF20,0x004DE180,tibsun,"functions compiled from src/goptions.cpp, matched, without gaps"
+unk_004DE180,0x004DE180,0x004DE260,unknown,code not assigned to a module
 grphmenu,0x004DE260,0x004DEEF0,tibsun,"functions compiled from src/grphmenu.cpp, without gaps; matched except ?_Graphic_Menu@@YIPAVGraphicMenu@@AAVINIClass@@ABVWstring@@@Z and ?Presentation@GraphicMenu@@QAEHXZ"
 unk_004DEEF0,0x004DEEF0,0x004DF350,unknown,code not assigned to a module
 grphmenu2,0x004DF350,0x004DF7B0,source,"functions compiled from src/grphmenu2.cpp, matched, without gaps"
