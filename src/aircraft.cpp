@@ -3372,15 +3372,19 @@ int AircraftClass::Do_MISSION_GUARD(void)
 int AircraftClass::Do_MISSION_GUARD_AREA(void)
 {
 	if (HeightAGL == Class->Flight_Level()) {
-		if (Team == NULL) Enter_Idle_Mode();
+		if (Team == NULL) Enter_Idle_Mode(false, true); // RA2: RA2's form
 		return(1);
 	}
+	if (Ammo == 0 && Is_Weapon_Equipped() && !HasAnyLink()) { // RA2
+		Enter_Idle_Mode(false, true); // RA2: as above
+	}
 	if (TarCom != NULL) {
-		Assign_Mission(MISSION_ATTACK);
+		QueueMission(MISSION_ATTACK, false); // RA2
 		return(1);
 	}
 	return(BASECLASS::Do_MISSION_GUARD_AREA());
 }
+
 
 
 /***********************************************************************************************
@@ -3913,11 +3917,12 @@ void AircraftClass::Debug_Dump(MonoClass * mono) const
 /// <returns>bool; Is the aircraft ready to commence?</returns>
 bool AircraftClass::Ready_To_Commence(void)
 {
-	if (CurrentMission != MISSION_STICKY && CurrentMission != MISSION_RESCUE && !IsLockedStraight) {
-		return(false); // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+	if (CurrentMission == MISSION_STICKY || CurrentMission == MISSION_RESCUE || IsLockedStraight) { // RA2: RA2's form
+		return(false); // RA2: as above
 	}
-	return(false);
+	return(IsCarryallNotLanding ? true : false); // RA2: as above
 }
+
 
 
 
@@ -3933,9 +3938,11 @@ void AircraftClass::Compute_CRC(CRCEngine & crc) const
 {
 	BASECLASS::Compute_CRC(crc);
 	crc(Passenger);
-	crc(IsKamikaze);
-	crc((int)SightTimer); // RA2: no field_35B (a local of the dropped code)
-} // RA2: no AttacksRemaining (TibSun's use does not compile against RA2's declaration)
+	crc(Unused_5B8); // RA2: RA2's form
+	crc(Unused_5B9); // RA2: as above
+	crc((long)NumParadropsLeft); // RA2: as above
+}
+ // RA2: no AttacksRemaining (TibSun's use does not compile against RA2's declaration)
 
 
 /// <summary>
@@ -3966,23 +3973,21 @@ void AircraftClass::Detach(AbstractClass const * target, bool all)
 /// <returns>Returns with the height above ground level to settle at.</returns>
 LONG STDMETHODCALLTYPE AircraftClass::Landing_Altitude(void)
 {
-	if (Class->IsCarryall && !Cargo.Is_Something_Attached() && In_Radio_Contact()) {
-		BuildingClass * bptr = (BuildingClass *)Contact_With_Whom();
-		if (Mission == MISSION_ENTER) {
-			if (bptr != NULL) {
-				if (bptr->Class->IsCanUnitRepair || bptr->Class->IsHelipad) {
-					return(0);
-				}
+	if (Class->IsCarryall && !Cargo.Is_Something_Attached() && HasAnyLink()) { // RA2: RA2's form
+		TechnoClass * tptr = Radio_Link(0); // RA2: as above
+		if (Get_Mission() == MISSION_ENTER && tptr != NULL && tptr->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+			BuildingTypeClass const * btype = ((BuildingClass *)tptr)->Class; // RA2: as above
+			if (btype->IsCanUnitRepair || btype->IsHelipad) { // RA2: as above
+				return(0); // RA2: as above
 			}
 		}
 	}
-
-	if ((In_Radio_Contact() && Class->IsCarryall) || (Cargo.Is_Something_Attached() && Class->IsCarryall)) {
+	if ((HasAnyLink() && Class->IsCarryall) || (Cargo.Is_Something_Attached() && Class->IsCarryall)) { // RA2: as above
 		return(100);
 	}
-
 	return(0);
 }
+
 
 
 /// <summary>
@@ -3994,8 +3999,8 @@ LONG STDMETHODCALLTYPE AircraftClass::Landing_Altitude(void)
 /// <returns>Returns with the facing to land at.</returns>
 LONG STDMETHODCALLTYPE AircraftClass::Landing_Direction(void)
 {
-	TechnoClass * tptr = Contact_With_Whom();
-	if (tptr != NULL) {
+	if (HasAnyLink()) { // RA2: RA2's form
+		TechnoClass * tptr = Radio_Link(0); // RA2: as above
 		return(tptr->PrimaryFacing.Current().As_Dir8());
 	}
 	if (Cargo.Is_Something_Attached()) {
@@ -4003,6 +4008,7 @@ LONG STDMETHODCALLTYPE AircraftClass::Landing_Direction(void)
 	}
 	return(Rule->PoseDir);
 }
+
 
 
 /// <summary>
@@ -4146,18 +4152,22 @@ bool AircraftClass::IsNotWarpingIn(void) const // RA2: not in TibSun, at 0x41B11
 
 void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0x41B120
 {
-	if ((Mission != MISSION_RETREAT && (Mission < MISSION_PARADROP_APPROACH || Mission > MISSION_PARADROP_OVERFLY)) || mission == MISSION_RETREAT || (mission >= MISSION_PARADROP_APPROACH && mission <= MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
-		BASECLASS::Set_Mission(mission);
+	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
+		return; // RA2: as above
 	}
+	BASECLASS::Set_Mission(mission); // RA2: as above
 }
+
 
 
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
-	if ((Mission != MISSION_RETREAT && (Mission < MISSION_PARADROP_APPROACH || Mission > MISSION_PARADROP_OVERFLY)) || mission == MISSION_RETREAT || (mission >= MISSION_PARADROP_APPROACH && mission <= MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
-		BASECLASS::QueueMission(mission, start);
+	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
+		return; // RA2: as above
 	}
+	BASECLASS::QueueMission(mission, start); // RA2: as above
 }
+
 
 
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
