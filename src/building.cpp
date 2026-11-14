@@ -1222,17 +1222,11 @@ int BuildingClass::Set_Turret_Frame(void)
 {
 	int stage = 0;
 	int reset_step = false;
-
-	if (Is_Turret_Equipped() || Class->IsHasChargeAnim) {
+	if (Is_Turret_Equipped()) { // RA2: no charge animation stage
 		if (Anims[BANIM_TURRET] != NULL) {
-			if (Class->IsHasChargeAnim) {
-				stage = BuildingStage.Fetch_Stage();
-			} else {
-				DirType dir = PrimaryFacing.Current();
-				stage = BASECLASS::BodyShape[dir.As_Dir32()];
-				reset_step = true;
-			}
-
+			DirType dir = PrimaryFacing.Current(); // RA2: as above
+			stage = BASECLASS::BodyShape[dir.As_Dir32()]; // RA2: as above
+			reset_step = true; // RA2: as above
 			AnimClass * anim = Anims[BANIM_TURRET];
 			if (anim != NULL) {
 				anim->Set_Stage(stage);
@@ -1244,6 +1238,7 @@ int BuildingClass::Set_Turret_Frame(void)
 	}
 	return(stage);
 }
+
 
 
 /// <summary>
@@ -2358,8 +2353,12 @@ void BuildingClass::Init(void)
 		House->Tracking_Add(this);
 	}
 	if (Class != NULL) {
-		Strength = Class->MaxStrength;
-		Ammo = Class->MaxAmmo;
+		EstimatedHealth = Strength = Class->MaxStrength; // RA2: the estimate starts full too
+		if (Class->InitialAmmo == -1) { // RA2: InitialAmmo, MaxAmmo when unset
+			Ammo = Class->MaxAmmo; // RA2: as above
+		} else {
+			Ammo = Class->InitialAmmo; // RA2: as above
+		}
 		PrimaryFacing.Set_ROT(Class->ROT);
 
 		/*
@@ -2368,12 +2367,124 @@ void BuildingClass::Init(void)
 		*/
 		if (Class->Get_Buildup_Data() == NULL) {
 			IsAllowedToSell = false;
-		} else {
-			Class->Free_Buildup_Data();
-			HasBuildupData  = true;
+			return; // RA2: returns here
+		}
+		Class->Free_Buildup_Data(); // RA2: as above
+		HasBuildupData = true; // RA2: as above
+	}
+}
+
+
+/***********************************************************************************************
+ * BuildingClass::Drop_Debris -- Drops rubble when building is destroyed.                      *
+ *                                                                                             *
+ *    This routine is called when a building is destroyed. It handles                          *
+ *    placing the rubble down.                                                                 *
+ *                                                                                             *
+ * INPUT:   none                                                                               *
+ *                                                                                             *
+ * OUTPUT:  none                                                                               *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   05/14/1994 JLB : Created.                                                                 *
+ *   06/13/1995 JLB : Added smoke and normal infantry survivor possibility.                    *
+ *   07/16/1995 JLB : Survival rate depends on if captured or sabotaged.                       *
+ *=============================================================================================*/
+void BuildingClass::Drop_Debris(AbstractClass * source)
+{
+	Cell const * offset;
+	Cell cell;
+
+	/*
+	**	Generate random survivors from the destroyed building.
+	*/
+	cell = PositionCell;
+	offset = Occupy_List();
+	int odds = 2;
+	if (WhomToRepay != NULL) odds -= 1;
+	if (IsCaptured) odds += 6;
+	int count = How_Many_Survivors();
+	if (count == 0) return;
+	while (*offset != REFRESH_EOL) {
+		Cell	newcell;
+
+		newcell = cell + *offset++;
+		CellClass const * cellptr = &Map[newcell];
+
+		/*
+		**	Infantry could run out of a destroyed building.
+		*/
+		if (!House->IsToDie && count > 0) {
+			InfantryClass * i = NULL;
+
+			if (Random_Pick(0, odds) == 1) {
+				i = NULL;
+				const InfantryTypeClass * typ = Crew_Type();
+				if (typ != NULL) i = new InfantryClass(typ, House);
+				DebugString("Creating survivor type '%s' from building type '%s'\n", (char *)i->Class->GivenName, (char *)Class->GivenName);
+				if (i != NULL) {
+					if (HasBuildupData && i->Class->IsNominal) i->IsTechnician = true;
+					ScenarioInit++;
+					Coord newcoord = Coord(newcell) + Coord(0, 36, 0);
+					newcoord = Map[newcoord].Closest_Free_Spot(newcoord);
+
+					if (newcoord != COORD_NONE && i->Unlimbo(newcoord, DIR_N)) {
+						DebugString("Survivor unlimbo OK\n");
+						count--;
+						i->Strength = Random_Pick(5, (int)i->Class->MaxStrength);
+						i->Scatter(COORD_NONE, true);
+						if (source != NULL && !House->Is_Ally(source)) {
+							i->Assign_Mission(MISSION_ATTACK);
+							i->Assign_Target(source);
+						} else {
+							if (House->Is_Human_Player()) {
+								i->Assign_Mission(MISSION_MOVE);
+							} else {
+								i->Assign_Mission(MISSION_HUNT);
+							}
+						}
+					} else {
+						delete i;
+					}
+					ScenarioInit--;
+				}
+			}
+		}
+
+		/*
+		**	Smoke and fire only appear on terrestrail cells. They should not appear on
+		**	rivers, clifs, or water cells.
+		*/
+		if (cellptr->Is_Clear_To_Move(SPEED_TRACK, true, true)) {
+
+			/*
+			**	Possibly add some smoke rising from the ashes of the building.
+			*/
+			/*switch (Random_Pick(0, 5)) {
+				case 0:
+				case 1:
+				case 2:
+					new AnimClass(ANIM_SMOKE_M, Coord_Scatter(newcell.As_Coord(), 5 * CELL_LEPTON / 16, false), Random_Pick(0, 5), Random_Pick(1, 2));
+					break;
+
+				default:
+					break;
+			}*/
+
+			/*
+			**	The building always scars the ground in some fashion.
+			*/
+			if (Percent_Chance(50)) {
+				SmudgeTypeClass::Scorch_The_Ground(Coord_Scatter(newcell, CELL_LEPTON / 2, false).As_Cell());
+			} else {
+				SmudgeTypeClass::Crater_The_Ground(Coord_Scatter(newcell, CELL_LEPTON / 2, false).As_Cell());
+			}
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3803,13 +3914,17 @@ Coord BuildingClass::Docking_Coord(TechnoClass *) const // RA2: the docking obje
 /// center.
 /// </summary>
 /// <returns>Returns with the coordinate to move to.</returns>
-Coord BuildingClass::Destination_Coord(TechnoClass *) const // RA2: the docking object
+Coord BuildingClass::Destination_Coord(TechnoClass * docker) const // RA2: the docking object
 {
 	if (Class->IsHelipad) {
-		return(Docking_Coord(NULL)); // RA2: Docking_Coord and Exit_Coord take an argument
+		return(Docking_Coord(docker)); // RA2: the docker's spot, on a helipad
+	}
+	if (Class->IsCanUnitRepair) { // RA2: as above
+		return(Docking_Coord(docker)); // RA2: and on a repair depot
 	}
 	return(Center_Coord());
 }
+
 
 
 /***********************************************************************************************
@@ -4453,25 +4568,22 @@ int BuildingClass::Do_MISSION_CONSTRUCTION(void)
 /// </summary>
 bool BuildingClass::Can_Be_Undeployed(void)
 {
-	if (Class->UndeploysInto != NULL) {
-
-		if (Class->Is_Mobile_Deployer()) {
-			return(true);
-		}
-
-		if (Class->Can_Always_Undeploy()) {
-			return(true);
-		}
-
-		if (Session.Type != GAME_NORMAL && ArchiveTarget != NULL && House->Is_Human_Player()) {
-			if (Session.Type == GAME_NORMAL || Session.Options.MCVRedeploy) {
-				return(true);
-			}
-		}
+	BuildingTypeClass const * type = Class; // RA2: RA2's undeploying types
+	if (type->UndeploysInto == NULL) { // RA2: as above
+		return(false); // RA2: as above
 	}
-
+	if (type->IsSensorArray || type->IsTickTank || type->IsICBMLauncher || type->IsArtillary) { // RA2: as above
+		return(true); // RA2: as above
+	}
+	if (Session.Type == GAME_NORMAL) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (ArchivedTarget != NULL && House->Is_Human_Player() && (Session.Type == GAME_NORMAL || Session.Options.MCVRedeploy)) { // RA2: as above
+		return(true); // RA2: as above
+	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -6111,6 +6223,12 @@ int BuildingClass::Do_MISSION_OPEN(void)
 int BuildingClass::Power_Output(void) const
 {
 	int power = Class->Power;
+	if (IsBeingWarpedOut()) { // RA2: none while warped out
+		return(0); // RA2: as above
+	}
+	if (HasExtraPowerBonus) { // RA2: the extra power bonus
+		power += Class->ExtraPower; // RA2: as above
+	}
 	if (UpgradeLevel != 0) {
 		for (int i = 0; i < BUILDING_UPGRADE_MAX; i++) {
 			if (Upgrades[i] != NULL) {
@@ -6118,12 +6236,12 @@ int BuildingClass::Power_Output(void) const
 			}
 		}
 	}
-
 	if (power > 0 && IsOn) {
-		return(int(power * HealthRatio));
+		return(int(Get_Health_Ratio() * power)); // RA2: the ratio first
 	}
 	return(0);
 }
+
 
 
 /// <summary>
@@ -6425,13 +6543,15 @@ bool BuildingClass::Can_Player_Move(void) const
 	if (StunDuration > 0) {
 		return(false);
 	}
-
+	if (Is_Move_Override()) { // RA2: factories, cloning vats and repair depots can always be moved to
+		return(true); // RA2: as above
+	}
 	if (Class->IsConstructionYard && (Session.Type == GAME_NORMAL || !Session.Options.MCVRedeploy || !House->Is_Human_Player())) {
 		return(false);
 	}
-
 	return(Class->UndeploysInto != NULL);
 }
+
 
 
 /***********************************************************************************************
@@ -6451,16 +6571,14 @@ bool BuildingClass::Can_Player_Move(void) const
  *=============================================================================================*/
 Coord BuildingClass::Exit_Coord(int) const // RA2: an index
 {
-	if (Class->IsWeaponsFactory) {
-		return(PositionCoord + Coord(98, 188, 0));
-	}
-
-	if (Class->ExitCoordinate != COORD_NONE) {
-		return(Class->ExitCoordinate + PositionCoord);
+	if (Class->ExitCoordinate != COORD_NONE) { // RA2: no weapons factory exit
+		Coord coord = PositionCoord; // RA2: as above
+		return(coord + Class->ExitCoordinate); // RA2: as above
 	}
 
 	return(Center_Coord());
 }
+
 
 
 /***********************************************************************************************
@@ -7232,11 +7350,12 @@ int BuildingClass::How_Many_Survivors(void) const
  *=============================================================================================*/
 void const * BuildingClass::Get_Image_Data(void) const
 {
-	if (BState == BSTATE_CONSTRUCTION) {
-		return(Class->Get_Buildup_Data());
+	if (BState != BSTATE_CONSTRUCTION && HasOpened) { // RA2: the image only once the building has opened
+		return(Class->Get_Image_Data()); // RA2: as above
 	}
-	return(Class->Get_Image_Data());
+	return(Class->Get_Buildup_Data()); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -7351,13 +7470,15 @@ void BuildingClass::Begin_Anim(BAnimType anim, bool damaged, int delay)
 void BuildingClass::Set_Anim_Coords(void)
 {
 	Coord render = Render_Coord();
-	for (int i = 0; i < BANIM_COUNT; i++) {
-		AnimClass * anim = Anims[i];
+	for (int i = 0; i < 18; i++) { // RA2: eighteen animations
+		ObjectClass * anim = Anims[i]; // RA2: an object
 		if (anim != NULL) {
-			anim->Set_Coord(render + TacticalMap->Pixel_To_Coord_Absolute(Class->AnimData[i].Location));
+			Coord coord = TacticalMap->Pixel_To_Coord_Absolute(Class->AnimData[i].Location) + render; // RA2: the offset first
+			anim->Set_Coord(coord); // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -7763,12 +7884,17 @@ bool BuildingClass::Can_Repair(void) const
 		return(false);
 	}
 
+	if (!Class->ClickRepairable) { // RA2: a type flag says whether a click can repair it
+		return(false);
+	}
+
 	if (Considered_Vehicle()) {
 		return(false);
 	}
 
 	return(BASECLASS::Can_Repair());
 }
+
 
 
 /// <summary>
@@ -8947,7 +9073,7 @@ void BuildingClass::Cloaking_AI(bool fast)
 /// <returns>bool; Is the building powered on and able to perform its function?</returns>
 bool BuildingClass::IsPowerOnline(void) const // RA2: Is_Powered_On is the IsPowerOnline virtual
 {
-	if (!IsOn) {
+	if (!IsOn && Overpowerers.Count() < 2) { // RA2: two overpowering units keep it running
 		return(false);
 	}
 	if (StunDuration > 0) {
@@ -8956,15 +9082,17 @@ bool BuildingClass::IsPowerOnline(void) const // RA2: Is_Powered_On is the IsPow
 	if (Strength == 0) {
 		return(false);
 	}
-	if (Class->IsPowered && Class->Drain > 0) {
-		if (Class->IsCanTogglePower) {
-			if (House->Power_Fraction() < 1.0) {
-				return(false);
-			}
+	if (Class->IsPowered && Class->Drain > 0 && Class->IsCanTogglePower) { // RA2: as above
+		if (House->Power_Fraction() < 1.0 && Overpowerers.Count() < 2) { // RA2: as above
+			return(false); // RA2: as above
 		}
+	}
+	if (Class->NeedsEngineer && !HasEngineer) { // RA2: a building that needs an engineer
+		return(false);
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -9236,11 +9364,13 @@ void BuildingClass::Assign_Destination(AbstractClass * target, bool immediate)
 /// <returns>bool; Does a movement order to this building mean a rally point?</returns>
 bool BuildingClass::Is_Move_Override(void) const
 {
-	if (Class->ToBuild != RTTI_UNITTYPE && Class->ToBuild != RTTI_INFANTRYTYPE && Class->ToBuild != RTTI_AIRCRAFTTYPE) {
-		return(false);
+	RTTIType type = Class->ToBuild; // RA2: a factory of units, infantry or aircraft, a cloning vat or a repair depot
+	if (type == RTTI_UNITTYPE || type == RTTI_INFANTRYTYPE || type == RTTI_AIRCRAFTTYPE || Class->Cloning || Class->IsCanUnitRepair) { // RA2: as above
+		return(true); // RA2: as above
 	}
-	return(true);
+	return(false); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -10261,8 +10391,10 @@ void BuildingClass::Produce_Cash(void) // RA2: not in TibSun, at 0x453850
 /// </summary>
 bool BuildingClass::Exit_New_Object(ObjectTypeClass const * type) // RA2: not in TibSun, at 0x4538D0
 {
-	return(Exit_Object((TechnoClass *)type->Create_One_Of(House)) != 0);
+	TechnoClass * object = (TechnoClass *)type->Create_One_Of(House); // RA2: the new object in a local
+	return(Exit_Object(object) != 0 ? true : false); // RA2: as above
 }
+
 
 
 
@@ -10656,115 +10788,6 @@ void BuildingClass::Draw_Overlays(Point2D const & point, Rect const & cliprect) 
 }
 
 
-/***********************************************************************************************
- * BuildingClass::Drop_Debris -- Drops rubble when building is destroyed.                      *
- *                                                                                             *
- *    This routine is called when a building is destroyed. It handles                          *
- *    placing the rubble down.                                                                 *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   05/14/1994 JLB : Created.                                                                 *
- *   06/13/1995 JLB : Added smoke and normal infantry survivor possibility.                    *
- *   07/16/1995 JLB : Survival rate depends on if captured or sabotaged.                       *
- *=============================================================================================*/
-void BuildingClass::Drop_Debris(AbstractClass * source)
-{
-	Cell const * offset;
-	Cell cell;
-
-	/*
-	**	Generate random survivors from the destroyed building.
-	*/
-	cell = PositionCell;
-	offset = Occupy_List();
-	int odds = 2;
-	if (WhomToRepay != NULL) odds -= 1;
-	if (IsCaptured) odds += 6;
-	int count = How_Many_Survivors();
-	if (count == 0) return;
-	while (*offset != REFRESH_EOL) {
-		Cell	newcell;
-
-		newcell = cell + *offset++;
-		CellClass const * cellptr = &Map[newcell];
-
-		/*
-		**	Infantry could run out of a destroyed building.
-		*/
-		if (!House->IsToDie && count > 0) {
-			InfantryClass * i = NULL;
-
-			if (Random_Pick(0, odds) == 1) {
-				i = NULL;
-				const InfantryTypeClass * typ = Crew_Type();
-				if (typ != NULL) i = new InfantryClass(typ, House);
-				DebugString("Creating survivor type '%s' from building type '%s'\n", (char *)i->Class->GivenName, (char *)Class->GivenName);
-				if (i != NULL) {
-					if (HasBuildupData && i->Class->IsNominal) i->IsTechnician = true;
-					ScenarioInit++;
-					Coord newcoord = Coord(newcell) + Coord(0, 36, 0);
-					newcoord = Map[newcoord].Closest_Free_Spot(newcoord);
-
-					if (newcoord != COORD_NONE && i->Unlimbo(newcoord, DIR_N)) {
-						DebugString("Survivor unlimbo OK\n");
-						count--;
-						i->Strength = Random_Pick(5, (int)i->Class->MaxStrength);
-						i->Scatter(COORD_NONE, true);
-						if (source != NULL && !House->Is_Ally(source)) {
-							i->Assign_Mission(MISSION_ATTACK);
-							i->Assign_Target(source);
-						} else {
-							if (House->Is_Human_Player()) {
-								i->Assign_Mission(MISSION_MOVE);
-							} else {
-								i->Assign_Mission(MISSION_HUNT);
-							}
-						}
-					} else {
-						delete i;
-					}
-					ScenarioInit--;
-				}
-			}
-		}
-
-		/*
-		**	Smoke and fire only appear on terrestrail cells. They should not appear on
-		**	rivers, clifs, or water cells.
-		*/
-		if (cellptr->Is_Clear_To_Move(SPEED_TRACK, true, true)) {
-
-			/*
-			**	Possibly add some smoke rising from the ashes of the building.
-			*/
-			/*switch (Random_Pick(0, 5)) {
-				case 0:
-				case 1:
-				case 2:
-					new AnimClass(ANIM_SMOKE_M, Coord_Scatter(newcell.As_Coord(), 5 * CELL_LEPTON / 16, false), Random_Pick(0, 5), Random_Pick(1, 2));
-					break;
-
-				default:
-					break;
-			}*/
-
-			/*
-			**	The building always scars the ground in some fashion.
-			*/
-			if (Percent_Chance(50)) {
-				SmudgeTypeClass::Scorch_The_Ground(Coord_Scatter(newcell, CELL_LEPTON / 2, false).As_Cell());
-			} else {
-				SmudgeTypeClass::Crater_The_Ground(Coord_Scatter(newcell, CELL_LEPTON / 2, false).As_Cell());
-			}
-		}
-	}
-}
 
 
 /***********************************************************************************************
