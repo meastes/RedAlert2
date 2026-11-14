@@ -205,9 +205,9 @@ unk_004B1340,0x004B1340,0x004B2970,unknown,code not assigned to a module
 edit,0x004B2970,0x004B2F50,tibsun,"functions compiled from src/edit.cpp, matched, without gaps"
 unk_004B2F50,0x004B2F50,0x004B3160,unknown,code not assigned to a module
 effects,0x004B3160,0x004B3580,tibsun,"functions compiled from src/effects.cpp, matched, without gaps"
-unk_004B3580,0x004B3580,0x004B3670,unknown,code not assigned to a module
-unk_004B3670,0x004B3670,0x004B3690,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_004B3690,0x004B3690,0x004B4860,unknown,code not assigned to a module
+unk_004B3580,0x004B3580,0x004B3620,unknown,code not assigned to a module
+egos,0x004B3620,0x004B37C0,tibsun,"functions compiled from src/egos.cpp, without gaps; matched except ?Show_Who_Was_Responsible@@YIXXZ; ?Show_Who_Was_Responsible@@YIXXZ not placed"
+unk_004B37C0,0x004B37C0,0x004B4860,unknown,code not assigned to a module
 emember,0x004B4860,0x004B4970,tibsun,"functions compiled from src/emember.cpp, matched, without gaps"
 unk_004B4970,0x004B4970,0x004B4C00,unknown,code not assigned to a module
 empulse,0x004B4C00,0x004B5410,tibsun,"functions compiled from src/empulse.cpp, matched, without gaps; five placed by the gap"
