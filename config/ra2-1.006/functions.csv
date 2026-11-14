@@ -831,6 +831,7 @@ address,size,evidence
 0x0044C520,128,"code of src/building.cpp, matched"
 0x0044C5A0,48,"code of src/building.cpp, matched"
 0x0044C860,192,"code of src/building.cpp, matched"
+0x0044C920,128,"code of src/building.cpp, matched"
 0x0044C9A0,192,"code of src/building.cpp, matched"
 0x0044CA60,,"inferred: target of the call at 0x0043BE02 in matched src/building.cpp; size not known"
 0x0044CFD0,,"inferred: target of the call at 0x0044C89E in matched src/building.cpp; size not known"
