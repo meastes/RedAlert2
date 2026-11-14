@@ -606,7 +606,7 @@ class BuildingClass : public TechnoClass
 
 		int Get_Firestorm_Wall_Frame(void);
 
-		void Begin_Anim(BAnimType anim, bool damaged, int delay = 0);
+		void Begin_Anim(BAnimType anim, bool damaged, bool garrisoned = false, int delay = 0); // RA2: garrisoned
 		void Set_Anim_Coords(void);
 		void Create_Anim(char const * name, BAnimType anim, bool damaged, bool garrisoned, int delay); // RA2: garrisoned
 		void Detach_Anim(AnimClass * anim);

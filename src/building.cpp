@@ -3413,7 +3413,7 @@ void BuildingClass::Grand_Opening(bool captured)
 {
 	if (!HasOpened || captured) {
 		if (!HasOpened) {
-			Begin_Anim(BANIM_ACTIVE_ONE, HealthRatio <= Rule->ConditionYellow, Class->IsSensorArray ? 30 : 0);
+			Begin_Anim(BANIM_ACTIVE_ONE, HealthRatio <= Rule->ConditionYellow, false, Class->IsSensorArray ? 30 : 0); // RA2: not garrisoned
 			Begin_Anim(BANIM_ACTIVE_TWO, HealthRatio <= Rule->ConditionYellow);
 			Begin_Anim(BANIM_ACTIVE_THREE, HealthRatio <= Rule->ConditionYellow);
 			Begin_Anim(BANIM_ACTIVE_FOUR, HealthRatio <= Rule->ConditionYellow);
@@ -7432,18 +7432,21 @@ bool BuildingClass::Remove_Upgrade(void)
 /// <param name="anim">The animation slot to start.</param>
 /// <param name="damaged">Should the damaged form of the animation be used?</param>
 /// <param name="delay">The delay in game frames before the animation begins.</param>
-void BuildingClass::Begin_Anim(BAnimType anim, bool damaged, int delay)
+void BuildingClass::Begin_Anim(BAnimType anim, bool damaged, bool garrisoned, int delay) // RA2: the garrisoned animation too
 {
-	char const * name = NULL;
+	char const * name; // RA2: as above
 	if (damaged) {
-		name = Class->AnimData[anim].AnimDamaged ;
+		name = Class->AnimData[anim].AnimDamaged; // RA2: as above
+	} else if (garrisoned) { // RA2: as above
+		name = Class->AnimData[anim].AnimGarrisoned; // RA2: as above
 	} else {
 		name = Class->AnimData[anim].Anim;
 	}
 	if (name != NULL && name[0] != '\0') {
-		Create_Anim(name, anim, damaged, false, delay); // RA2: not garrisoned
+		Create_Anim(name, anim, damaged, garrisoned, delay); // RA2: as above
 	}
 }
+
 
 
 
