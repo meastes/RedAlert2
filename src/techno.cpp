@@ -2988,8 +2988,11 @@ HouseClass * TechnoClass::Owner_HouseClass(void) const
  *=============================================================================================*/
 void TechnoClass::Clicked_As_Target(int count)
 {
-	FlashCount = count;
+	if (!IsDisguisedAs(PlayerPtr) || GetDisguiseHouse(true)) { // RA2: a disguised unit does not flash for the player
+		FlashCount = count; // RA2: as above
+	}
 }
+
 
 
 /// <summary>
@@ -4801,8 +4804,10 @@ bool TechnoClass::Can_Player_Fire(void) const
  *=============================================================================================*/
 bool TechnoClass::Is_Weapon_Equipped(void) const
 {
-	return(PrimaryWeapon != NULL);
+	WeaponDataStruct const * weapon = GetTurretWeapon(); // RA2: the weapon of the turret's slot
+	return(weapon != NULL && weapon->Weapon != NULL); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -5647,10 +5652,11 @@ void TechnoClass::Do_Cloak(bool silent)
 		CloakingDevice.Set_Rate(TClass->CloakingSpeed);
 		CloakingDevice.Set_Step(1);
 		if (!silent) {
-			Sound_Effect(Rule->CloakSound, PositionCoord);
+			VocClass::PlayAt(Rule->CloakSound, PositionCoord); // RA2: the sound at the unit
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -7512,11 +7518,16 @@ int TechnoClass::Risk(void) const
 {
 	TechnoTypeClass const *ttptr = TClass;
 	if (ttptr != NULL) {
+		if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)this)->GetOccupantCount() > 0) { // RA2: a garrisoned building, by its occupants
+			int value = Rule->ThreatPerOccupant; // RA2: as above
+			return(value * ((BuildingClass *)this)->GetOccupantCount()); // RA2: as above
+		}
 		return(ttptr->Risk);
 	}
 
 	return(0);
 }
+
 
 
 /***********************************************************************************************
@@ -7668,10 +7679,15 @@ DirType TechnoClass::Fire_Direction(void) const
  *=============================================================================================*/
 void TechnoClass::Response_Select(void)
 {
-	if (AllowVoice && TClass->VoiceSelect.Count()) {
-		Sound_Effect((VocType)TClass->VoiceSelect.Pick(NonCriticalRandomNumber));
+	if (AllowVoice) { // RA2: as above
+		if (TClass->VoiceSelect.Count()) { // RA2: as above
+			TypeList<int> const & sounds = TClass->VoiceSelect; // RA2: a random pick of the list
+			unsigned random = NonCriticalRandomNumber(); // RA2: as above
+			VocClass::PlayGlobal(sounds[random % sounds.Count()], 1.0f, 0x2000, 0); // RA2: as above
+		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -7691,10 +7707,15 @@ void TechnoClass::Response_Select(void)
  *=============================================================================================*/
 void TechnoClass::Response_Move(void)
 {
-	if (AllowVoice && TClass->VoiceMove.Count()) {
-		Sound_Effect((VocType)TClass->VoiceMove.Pick(NonCriticalRandomNumber));
+	if (AllowVoice) { // RA2: as above
+		if (TClass->VoiceMove.Count()) { // RA2: as above
+			TypeList<int> const & sounds = TClass->VoiceMove; // RA2: a random pick of the list
+			unsigned random = NonCriticalRandomNumber(); // RA2: as above
+			VocClass::PlayGlobal(sounds[random % sounds.Count()], 1.0f, 0x2000, 0); // RA2: as above
+		}
 	}
 }
+
 
 
 
@@ -7720,10 +7741,15 @@ void TechnoClass::Response_Move(void)
  *=============================================================================================*/
 void TechnoClass::Response_Attack(void)
 {
-	if (AllowVoice && TClass->VoiceAttack.Count()) {
-		Sound_Effect((VocType)TClass->VoiceAttack.Pick(NonCriticalRandomNumber));
+	if (AllowVoice) { // RA2: as above
+		if (TClass->VoiceAttack.Count()) { // RA2: as above
+			TypeList<int> const & sounds = TClass->VoiceAttack; // RA2: a random pick of the list
+			unsigned random = NonCriticalRandomNumber(); // RA2: as above
+			VocClass::PlayGlobal(sounds[random % sounds.Count()], 1.0f, 0x2000, 0); // RA2: as above
+		}
 	}
 }
+
 
 
 
@@ -8120,10 +8146,11 @@ void TechnoClass::Draw_Text_Overlay(Point2D const & point1, Point2D const & poin
  * HISTORY:                                                                                    *
  *   08/12/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-Cell TechnoClass::Find_Exit_Cell(TechnoClass const *) const
+Cell TechnoClass::Find_Exit_Cell(TechnoClass const * techno) const // RA2: as above
 {
-	return(Docking_Coord(NULL).As_Cell()); // RA2: Docking_Coord takes the docking object
+	return(Docking_Coord((TechnoClass *)techno).As_Cell()); // RA2: Docking_Coord takes the docking object
 }
+
 
 
 /***********************************************************************************************
