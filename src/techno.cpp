@@ -135,6 +135,7 @@
 #include "capmgr.h" // RA2: Init makes the managers
 #include "parasite.h" // RA2: as above
 #include "planning.h" // RA2: the planning token
+#include "planmgr.h" // RA2: ClickedEvent asks planning mode
 #include "scheme.h" // RA2: GetRemapColour
 #include "spawnmgr.h" // RA2: as above
 #include "temporal.h" // RA2: as above
@@ -213,6 +214,8 @@
 #include "tube.hh"
 #include "ftimer.h"
 #include "trajhelp.h" // RA2
+#include "ebolt.h" // RA2: Electric_Zap
+#include "radbeam.h" // RA2: Rad_Zap, Rad_Eruption
 
 namespace FileSystem { extern ConvertClass * PALETTE_PAL; }
 namespace Unsorted { extern bool ArmageddonMode; }
@@ -3527,6 +3530,126 @@ void TechnoClass::AI(void)
 
 
 /// <summary>
+/// Adds one round once the reload timer has run out and the object is short of its full ammunition, then
+/// starts the timer for the next one.
+/// </summary>
+void TechnoClass::Reload(void) // RA2: not in TibSun, at 0x6C8290
+{
+	TechnoTypeClass const * type = Techno_Type_Class();
+	if (type->MaxAmmo != -1 && Ammo < type->MaxAmmo && ReloadTimer == 0) {
+		Ammo++;
+		Mark(MARK_CHANGE);
+		Start_Reload_Timer();
+	}
+}
+
+/// <summary>
+/// Starts the reload timer when the object is short of its full ammunition: EmptyReload when it has none
+/// left (and the type gives one), else Reload plus ReloadIncrement times the square of the full pip groups.
+/// </summary>
+void TechnoClass::Start_Reload_Timer(void) // RA2: not in TibSun, at 0x6C8300
+{
+	int maxammo = Techno_Type_Class()->MaxAmmo;
+	if (Ammo < maxammo) {
+		if (Ammo == 0 && Techno_Type_Class()->EmptyReload != -1) {
+			ReloadTimer = Techno_Type_Class()->EmptyReload;
+		} else {
+			int groups = Techno_Type_Class()->PipWrap == 0 ? 1 : Ammo / Techno_Type_Class()->PipWrap;
+			int delay = Techno_Type_Class()->ReloadIncrement * groups * groups;
+			ReloadTimer = Techno_Type_Class()->Reload + delay;
+		}
+	}
+}
+
+/// <summary>
+/// Starts this gap generator: shrouds the cells within its radius for everyone but the player's side and
+/// counts the gap on each of them.
+/// </summary>
+void TechnoClass::CreateGap(void) // RA2: not in TibSun; does not match (RA2 sums the cell's X before its Y)
+{
+	if (PlayerPtr != NULL && !GeneratingGap && IsPowerOnline()) {
+		if (GapRadius == 0) {
+			GapRadius = Techno_Type_Class()->GapRadiusInCells;
+		}
+		GeneratingGap = true;
+		Coord projected = Position;
+		projected.X += (Tactical::Z_Lepton_To_Pixel(projected.Z) / -30) * 256;
+		projected.Y += (Tactical::Z_Lepton_To_Pixel(projected.Z) / -30) * 256;
+		Cell center(projected);
+		int radius = GapRadius;
+		for (int x = -radius - 2; x < radius + 2; x++) {
+			for (int y = -radius - 2; y < radius + 2; y++) {
+				if (x * x + y * y < (radius + 1) * (radius + 1)) {
+					Cell cell = Cell(center.X + x, center.Y + y);
+					if (!Owner_HouseClass()->Is_Player_Control() && !House->Is_Ally(PlayerPtr) && !PlayerPtr->IsDefeated) {
+						if (Map[cell].ShroudCounter != 1 && Map[cell].ShroudCounter >= 0) {
+							Map[cell].ShroudCounter++;
+						}
+						Map[cell].GapsCoveringThisCell++;
+						if (Map[cell].ShroudCounter >= 1) {
+							Map[cell].IsVisible = false;
+							Map[cell].IsMapped = false;
+						}
+					}
+					if (Owner_HouseClass()->Is_Player_Control() || House->Is_Ally(PlayerPtr) || PlayerPtr->IsDefeated) {
+						Map[cell].AlliedGapsCoveringThisCell++;
+					}
+				}
+			}
+		}
+		if (PlayerPtr != NULL) {
+			PlayerPtr->IsVisionary = false;
+		}
+		Map.Complete_Radar_Refresh();
+		Map.Flag_To_Redraw(GS_REDRAW_ALL);
+	}
+}
+
+/// <summary>
+/// Stops this gap generator: takes its count off the cells within its radius and reveals the ones no gap
+/// covers any more when the player's spy satellite is up.
+/// </summary>
+void TechnoClass::DestroyGap(void) // RA2: not in TibSun; does not match (RA2 sums the cell's X before its Y)
+{
+	if (PlayerPtr != NULL && GeneratingGap) {
+		if (GapRadius == 0) {
+			GapRadius = Techno_Type_Class()->GapRadiusInCells;
+		}
+		GeneratingGap = false;
+		Coord projected = Position;
+		projected.X += (Tactical::Z_Lepton_To_Pixel(projected.Z) / -30) * 256;
+		projected.Y += (Tactical::Z_Lepton_To_Pixel(projected.Z) / -30) * 256;
+		Cell center(projected);
+		int radius = GapRadius;
+		for (int x = -radius - 2; x < radius + 2; x++) {
+			for (int y = -radius - 2; y < radius + 2; y++) {
+				if (x * x + y * y < (radius + 1) * (radius + 1)) {
+					Cell cell = Cell(center.X + x, center.Y + y);
+					if (!Owner_HouseClass()->Is_Player_Control() && !House->Is_Ally(PlayerPtr) && !PlayerPtr->IsDefeated) {
+						Map[cell].GapsCoveringThisCell--;
+						if (PlayerPtr->SpySatActive && Map[cell].GapsCoveringThisCell <= 0) {
+							Map[cell].ShroudCounter--;
+							if (Map[cell].ShroudCounter <= 0) {
+								Map[cell].IsMapped = true;
+								Map[cell].IsVisible = true;
+							}
+						}
+					}
+					if (Owner_HouseClass()->Is_Player_Control() || House->Is_Ally(PlayerPtr) || PlayerPtr->IsDefeated) {
+						Map[cell].AlliedGapsCoveringThisCell--;
+					}
+				}
+			}
+		}
+		if (PlayerPtr != NULL) {
+			PlayerPtr->IsVisionary = false;
+		}
+		Map.Complete_Radar_Refresh();
+		Map.Flag_To_Redraw(GS_REDRAW_ALL);
+	}
+}
+
+/// <summary>
 /// RA2
 /// </summary>
 static inline Rect Moved_Rect(Rect const & rect, Point2D const & point)
@@ -4219,6 +4342,144 @@ void TechnoClass::Laser_Zap(AbstractClass * target, int which, WeaponTypeClass c
 }
 
 
+/// <summary>
+/// Fires an electric bolt from the source coordinate at the target. A building's bolt is drawn no lower
+/// than the point it starts from.
+/// </summary>
+EBolt * TechnoClass::Electric_Zap(AbstractClass * target, WeaponTypeClass const * weapon, Coord const & source_coord) // RA2: not in TibSun, at 0x6CA020
+{
+	int zadjust = 0;
+	EBolt * bolt = new EBolt;
+	if (bolt == NULL) {
+		return(NULL);
+	}
+
+	if (RTTI == RTTI_BUILDING) {
+		Point2D p1 = TacticalMap->Coord_To_Pixel_Absolute(source_coord);
+		Point2D p2 = TacticalMap->Coord_To_Pixel_Absolute(Render_Coord());
+		zadjust = p1.Y - p2.Y;
+		if (zadjust > 0) {
+			zadjust = 0;
+		}
+	}
+
+	Coord dest;
+	if (target != NULL && (target->AbstractFlags & 2)) {
+		dest = ((ObjectClass *)target)->Target_Coord();
+	} else {
+		dest = target->As_Coord();
+	}
+
+	if (weapon != NULL) {
+		bolt->AlternateColor = weapon->IsAlternateColor;
+	}
+	bolt->Fire(source_coord, dest, zadjust);
+	return(bolt);
+}
+
+
+/// <summary>
+/// Fires an electric bolt from the weapon this object would use against the target. An active unit
+/// without a bolt keeps this one as its own.
+/// </summary>
+EBolt * TechnoClass::Electric_Zap(AbstractClass * target) // RA2: not in TibSun, at 0x6CA130
+{
+	int which = What_Weapon_Should_I_Use(target);
+	WeaponTypeClass * weapon = Get_Class_Weapon_Data(which)->Weapon;
+	Coord source = Fire_Coord(which);
+	EBolt * bolt = Electric_Zap(target, weapon, source);
+	if (bolt != NULL && RTTI == RTTI_UNIT && IsActive && ((UnitClass *)this)->ElectricBolt == NULL) {
+		((UnitClass *)this)->ElectricBolt = bolt;
+		bolt->Set_Owner(this, which);
+	}
+	return(bolt);
+}
+
+
+/// <summary>
+/// Draws a rad beam (or, for the chrono kind, a chrono beam) from the primary weapon's firing point to
+/// the target.
+/// </summary>
+void TechnoClass::Rad_Zap(AbstractClass * target, int kind) // RA2: not in TibSun, at 0x6CA1D0
+{
+	RadBeam * beam = RadBeam::Allocate(1);
+	int zadjust = 0;
+	Coord source = Fire_Coord(0);
+	Coord render = Render_Coord();
+	if (source.Y != render.Y) {
+		Point2D p1 = TacticalMap->Coord_To_Pixel_Absolute(source);
+		Point2D p2 = TacticalMap->Coord_To_Pixel_Absolute(render);
+		zadjust = p1.Y - p2.Y;
+	}
+
+	Coord dest;
+	bool object = target != NULL && (target->AbstractFlags & 2);
+	if (!object) {
+		dest = target->As_Coord();
+	} else {
+		dest = ((ObjectClass *)target)->Target_Coord();
+	}
+
+	RGBClass color;
+	switch (kind) {
+		case 1:
+			color = Rule->ChronoBeamColor;
+			break;
+		default:
+			color = Rule->RadColor;
+			break;
+	}
+	beam->Set_Source(source);
+	beam->Set_Target(dest);
+	beam->Set_Period(15);
+	beam->Set_Amplitude(40.0);
+	beam->Set_Color(color);
+	beam->Set_Depth(zadjust);
+}
+
+
+/// <summary>
+/// Throws rad beams from this object's center to random points in the eight cells around it, the given
+/// number of cells away.
+/// </summary>
+void TechnoClass::Rad_Eruption(int spread) // RA2: not in TibSun, at 0x6CA340
+{
+	Coord center = Center_Coord();
+	int longest = 0;
+	Cell cell = center.As_Cell();
+	RGBClass color = Rule->RadColor;
+	for (int x = -1; x <= 1; x++) {
+		for (int y = -1; y <= 1; y++) {
+			if (x != 0 || y != 0) {
+				int ox = spread * x;
+				Cell offset(ox, spread);
+				offset.Y *= y; // RA2: this spelling (not Cell(ox, spread * y)) keeps both multiplies the original has
+				Cell spot = offset + cell;
+				Coord to = Map[spot].Cell_Coord();
+				int dx = NonCriticalRandomNumber(-128, 128);
+				int dy = NonCriticalRandomNumber(-128, 128);
+				to.X += dx;
+				to.Y += dy;
+				RadBeam * beam = RadBeam::Allocate(2);
+				beam->Set_Color(color);
+				int period = NonCriticalRandomNumber(5, 20);
+				int amplitude = NonCriticalRandomNumber(100, 500);
+				int delay = NonCriticalRandomNumber(0, 20);
+				beam->Set_Source(center);
+				beam->Set_Target(to);
+				beam->Set_Period(period);
+				beam->Set_Amplitude(amplitude);
+				beam->Set_Phase(0.0);
+				beam->Set_Start_Delay(delay);
+				if (longest <= period) {
+					longest = period; // RA2: computed, never used
+				}
+			}
+		}
+	}
+}
+
+
 
 
 
@@ -4259,6 +4520,46 @@ DirType TechnoClass::Barrel_Pitch(AbstractClass * target) const
 		}
 	}
 	return(pitch);
+}
+
+
+/// <summary>
+/// The damage the weapon would do to the target: the attack scaled by both houses' and both objects'
+/// biases and veterancy, then by the target's armor. Sonic and fire-particle weapons count as none.
+/// </summary>
+int TechnoClass::Expected_Damage(TechnoClass * target, WeaponTypeClass const * weapon) // RA2: not in TibSun, at 0x6CA6C0
+{
+	if (target == NULL) {
+		return(0);
+	}
+	int damage = weapon->Attack;
+	if (weapon->IsSonic || weapon->UseFireParticles) {
+		return(0);
+	}
+	if (damage > 0) {
+		damage = House->FirepowerBias * FirepowerBias * damage;
+		if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) {
+			TechnoTypeClass const * type = Techno_Type_Class();
+			if ((Veterancy.Is_Veteran() && type->VeteranAbilities[ABILITY_FIREPOWER])
+				|| (Veterancy.Is_Elite() && (type->VeteranAbilities[ABILITY_FIREPOWER] || type->EliteAbilities[ABILITY_FIREPOWER]))) {
+				damage = damage * Rule->VeteranCombat;
+			}
+		}
+		double value = damage;
+		damage = value / (target->House->Armor_Multiplier(Techno_Type_Class()) * ArmorBias);
+		if (target->Veterancy.Is_Veteran() || target->Veterancy.Is_Elite()) {
+			TechnoTypeClass const * type = target->Techno_Type_Class();
+			if ((target->Veterancy.Is_Veteran() && type->VeteranAbilities[ABILITY_STRONGER])
+				|| (target->Veterancy.Is_Elite() && (type->VeteranAbilities[ABILITY_STRONGER] || type->EliteAbilities[ABILITY_STRONGER]))) {
+				damage = damage / Rule->VeteranArmor;
+			}
+		}
+		if (damage < 1) {
+			damage = 1;
+		}
+		damage = Modify_Damage(damage, weapon->WarheadPtr, target->Class_Of()->Armor, 0);
+	}
+	return(damage);
 }
 
 
@@ -4673,6 +4974,21 @@ bool TechnoClass::Player_Assign_Mission(MissionType order, AbstractClass * targe
 		TargetClass targ(target);
 		Queue_Mission(TargetClass(this), order, targ, dest);
 	}
+	return(true);
+}
+
+
+/// <summary>
+/// Sends the player's event of the given type for this object, unless planning mode refuses it.
+/// </summary>
+bool TechnoClass::ClickedEvent(int event) // RA2: not in TibSun, at 0x6CC510
+{
+	EventClass packet(PlayerPtr->HeapID, event, TargetClass(this));
+	if (Planning_Is_Active()) {
+		Planning_Refuse_Event(&packet);
+		return(false);
+	}
+	OutList.Add(packet);
 	return(true);
 }
 
@@ -8877,6 +9193,71 @@ void TechnoClass::Look(bool incremental, bool dontmap)
 		if (sight_range) {
 			HouseClass * house = House;
 			Map.Sight_From(PositionCoord, sight_range, house, incremental, dontmap); // RA2: no LimpetType (not in RA2's layout)
+		}
+	}
+}
+
+
+/// <summary>
+/// Reveals the map around this object, as Look does, and remembers where and how far it saw so that
+/// RemoveSight can take the same area back. Once revealed, it only reveals again for the given house.
+/// </summary>
+void TechnoClass::UpdateSight(bool incremental, bool dontmap, bool for_house, HouseClass * house) // RA2: not in TibSun, at 0x6D5C30
+{
+	if (!IsLocked || House->Class->IsMultiplayPassive) {
+		return;
+	}
+
+	int sight_increase = Get_Coord().Z / Rule->LeptonsPerSightIncrease * 10;
+	if (sight_increase > SightIncrease) {
+		incremental = false;
+	}
+	SightIncrease = sight_increase;
+
+	int sight_range = (int)(Techno_Type_Class()->SightRange * (SightIncrease * 0.01 + 1.0));
+	if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) {
+		TechnoTypeClass const * type = Techno_Type_Class();
+		if ((Veterancy.Is_Veteran() && type->VeteranAbilities[ABILITY_SIGHT])
+			|| (Veterancy.Is_Elite() && (type->VeteranAbilities[ABILITY_SIGHT] || type->EliteAbilities[ABILITY_SIGHT]))) {
+			if (Rule->VeteranSight != 0.0) {
+				sight_range = (int)(sight_range * Rule->VeteranSight);
+			}
+		}
+	}
+
+	if (!IsSightRevealed) {
+		IsSightRevealed = true;
+		LastSightCoords = PositionCoord;
+		LastSightRange = sight_range;
+		if (sight_range != 0) {
+			if (for_house && house != NULL) {
+				Map.Sight_From(Get_Coord(), sight_range, house, incremental, dontmap, false, true, false);
+			} else {
+				Map.Sight_From(Get_Coord(), sight_range, House, incremental, dontmap, false, true, false);
+			}
+		}
+	} else if (for_house && sight_range != 0 && house != NULL) {
+		Map.Sight_From(Get_Coord(), sight_range, house, incremental, dontmap, false, true, false);
+	}
+}
+
+
+/// <summary>
+/// Takes back the sight UpdateSight revealed at LastSightCoords; once taken back, only again for the
+/// given house.
+/// </summary>
+void TechnoClass::RemoveSight(bool incremental, bool dontmap, bool for_house, HouseClass * house) // RA2: not in TibSun, at 0x6D5E90
+{
+	if (IsLocked && !House->Class->IsMultiplayPassive) {
+		if (IsSightRevealed) {
+			IsSightRevealed = false;
+			if (LastSightRange != 0 && for_house && house != NULL) {
+				Map.Sight_From(LastSightCoords, LastSightRange, house, incremental, dontmap, false, true, true);
+			} else if (LastSightRange != 0) {
+				Map.Sight_From(LastSightCoords, LastSightRange, House, incremental, dontmap, false, true, true);
+			}
+		} else if (for_house && LastSightRange != 0 && house != NULL) {
+			Map.Sight_From(LastSightCoords, LastSightRange, house, incremental, dontmap, false, true, true);
 		}
 	}
 }

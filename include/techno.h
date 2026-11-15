@@ -705,6 +705,7 @@ class TechnoClass :	public RadioClass,
 		virtual void Try_To_Cloak(void);
 		virtual void Sensed(void); // RA2
 		virtual void Reload(void); // RA2
+		void Start_Reload_Timer(void); // RA2: 0x6C8300
 		virtual void Rocking_AI(void);
 		void Become_Untargetable(void); // RA2: 0x6D7C80
 		virtual Coord GetAttackCoordinates(void) const; // RA2
@@ -754,7 +755,7 @@ class TechnoClass :	public RadioClass,
 		virtual void Assign_Destination(AbstractClass * target, bool = true);
 		virtual bool Enter_Idle_Mode(bool initial=false, bool = true);
 		virtual void UpdateSight(bool, bool, bool, HouseClass *); // RA2: four arguments
-		virtual void Unknown_Virtual_41C(bool, bool, bool, HouseClass *); // RA2
+		virtual void RemoveSight(bool, bool, bool, HouseClass *); // RA2: takes back what UpdateSight revealed
 		virtual void Radar_Track(void);
 		virtual void Radar_Untrack(void);
 		virtual void Plot_On_Radar(void) const;
@@ -836,6 +837,10 @@ class TechnoClass :	public RadioClass,
 		void Set_Owner(HouseClass * newowner);
 		void Laser_Zap(AbstractClass * target, int which, WeaponTypeClass const * weapon, Coord const & source_coord); // RA2: not a virtual
 		EBolt * Electric_Zap(AbstractClass * target, WeaponTypeClass const * weapon, Coord const & source_coord); // RA2: 0x6CA020
+		EBolt * Electric_Zap(AbstractClass * target); // RA2: 0x6CA130
+		void Rad_Zap(AbstractClass * target, int kind); // RA2: 0x6CA1D0
+		void Rad_Eruption(int spread); // RA2: 0x6CA340
+		int Expected_Damage(TechnoClass * target, WeaponTypeClass const * weapon); // RA2: 0x6CA6C0
 		int Get_Sight_Bonus(Coord const & coord);
 		bool Can_Scan_For_Target(void); // RA2: 0x6D40C0
 		bool Should_Scan_For_Target(void); // RA2: 0x6D4180

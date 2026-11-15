@@ -104,7 +104,7 @@ class MapClass: public GScreenClass
 		**	as it relates to the map - not what the cell contains.
 		*/
 		void Fresh_Map(void);
-		void Sight_From(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true);
+		void Sight_From(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true, bool=false); // RA2: 0x54A110, eight arguments
 		void Shroud_Gap_Area(Coord const & coord, int radius); // RA2: 0x54A720
 		void Refresh_Shroud(void); // RA2: 0x55A300, re-flags the shrouded cells
 		bool In_Radar(Cell const & cell) const;

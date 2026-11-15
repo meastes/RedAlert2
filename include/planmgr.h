@@ -6,6 +6,7 @@
 #pragma once
 
 class Point2D;
+class EventClass;
 
 /*
 **	RA2: planning mode takes the mouse over the tactical view while it is active. Each
@@ -17,3 +18,10 @@ bool __stdcall Planning_Left_Release(Point2D point);
 void __stdcall Planning_Right_Press(int x, int y);
 void __stdcall Planning_Right_Release(int x, int y);
 bool __stdcall Planning_Mouse_AI(int x, int y);
+
+/*
+**	RA2: whether planning mode is on, and the scold (message and sound) for an event planning mode
+**	cannot queue (deploy, stop, scatter).
+*/
+bool Planning_Is_Active(void); // RA2: 0x614840
+void Planning_Refuse_Event(EventClass * event); // RA2: 0x616D70
