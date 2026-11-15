@@ -1095,39 +1095,50 @@ LayerType AnimClass::In_Which_Layer(void) const
 void AnimClass::Start(void)
 {
 	Mark(MARK_CHANGE);
-
+	if (!IsInert && Class->StartSound != -1) { // RA2: RA2's form
+		VocClass::PlayAt(Class->StartSound, Center_Coord(), &StartSoundAudioController); // RA2: as above
+	} else { // RA2: as above
+		StartSoundAudioController.Stop(); // RA2: as above
+	}
+	StopSoundAudioController.Stop(); // RA2: as above
 
 	/*
 	**	If the stage where collateral effects occur is the first stage of the animation, then
 	**	perform this action now. Subsequent checks against this stage value starts with the
 	**	second frame of the animation.
 	*/
-	if (!Class->Biggest) { // RA2: no Sound (not in RA2's layout)
+	if (Class->Biggest == 0) { // RA2: as above
 		Middle();
 	}
 
 	if (!IsInert && Class->IsTiberiumChainReaction) {
-		CellClass *cptr = &Map[Center_Coord()];
-		TiberiumType tib = cptr->Tiberium_Type_Here();
+		CellClass *cptr = (CellClass *)&Map[Center_Coord()]; // RA2: as above
+		int tib = cptr->Tiberium_Type_Here(); // RA2: as above
 
 		if (tib != TIBERIUM_NONE) {
-			TiberiumClass * tiberium = Tiberiums[tib];
+			TiberiumClass *tiberium = Tiberiums[tib]; // RA2: as above
 			cptr->Reduce_Tiberium(cptr->OverlayData + 1);
 
 			if (tiberium->Debris.Count() > 0 && (abs(Scen->RandomNumber) % 3) == 0) {
-				AnimClass * debris = new AnimClass(tiberium->Debris[Random_Pick(0, tiberium->Debris.Count()-1)], Center_Coord() + Coord(0, 0, 10));
+				AnimClass *debris = new AnimClass( // RA2: as above
+					tiberium->Debris[Random_Pick(0, tiberium->Debris.Count() - 1)], // RA2: as above
+					Center_Coord() + Coord(0, 0, 10), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
 				debris->AlternativeDrawer = ColorSchemes[tiberium->Color]->Converter;
 				debris->AlternativeBrightness = cptr->Brightness;
 			}
 
-			Explosion_Damage(PositionCoord, Rule->TiberiumExplosionDamage, NULL, Rule->C4Warhead, false);
+			{
+				Coord coord = PositionCoord; // RA2: as above
+				Explosion_Damage(coord, Rule->TiberiumExplosionDamage, 0, Rule->C4Warhead, 0); // RA2: as above
+			}
 
-			cptr->Recalc_Attributes();
+			cptr->Recalc_Attributes(-1); // RA2: as above
 			Map.Update_Cell_Zone(cptr->CellID);
 			Map.Update_Cell_Subzones(cptr->CellID);
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
