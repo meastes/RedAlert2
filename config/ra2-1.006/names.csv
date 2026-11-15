@@ -4704,7 +4704,6 @@ address,symbol,evidence
 0x006A06E0,??0TabClass@@QAE@XZ,"inferred: referenced by matched src/scroll.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x006A0F30,?AI@TabClass@@UAEXAAW4KeyNumType@@ABVPoint2D@@@Z,"inferred: referenced by matched src/scroll.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x006A1710,?Draw_Credits_Tab@TabClass@@QAEXXZ,"inferred: referenced by matched src/credits.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x006A20B0,?Help_Text@SidebarClass@@UAEPBDH@Z,"inferred: referenced by matched src/cctooltip.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x006A26C0,??0Tactical@@QAE@ABVNoInitClass@@@Z,"compiled from src/tactical.cpp, matched"
 0x006A2710,??1Tactical@@UAE@XZ,"compiled from src/tactical.cpp, matched"
 0x006A2740,?Rectangular_To_Isometric@Tactical@@SI?AVPoint2D@@V2@@Z,"compiled from src/tactical.cpp, matched"
