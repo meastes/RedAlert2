@@ -728,6 +728,16 @@ static bool _Pop_Group_Out_Of_Object(FootClass * group, TechnoClass * object)
 	return(quantity != 0);
 }
 
+/// <summary>
+/// RA2: refuses whatever it is asked. Nothing in RA2 calls it; its three arguments are known only from its stack
+/// cleanup.
+/// </summary>
+bool __stdcall Reinforcement_Refused(int, int, int) // RA2: not in TibSun, at 0x63A680
+{
+	return(false);
+}
+
+
 
 /***********************************************************************************************
  * Create_Air_Reinforcement -- Creates air strike reinforcement                                *
