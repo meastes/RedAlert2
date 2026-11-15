@@ -47,7 +47,7 @@ anim,0x00420110,0x00423ED0,tibsun,"functions compiled from src/anim.cpp, without
 unk_00423ED0,0x00423ED0,0x00423F90,unknown,code not assigned to a module
 animfile,0x00423F90,0x00424B90,tibsun,"functions compiled from src/animfile.cpp, matched, without gaps"
 unk_00424B90,0x00424B90,0x00424E30,unknown,code not assigned to a module
-animtype,0x00424E30,0x00426760,tibsun,"functions compiled from src/animtype.cpp, without gaps; matched except ?Init@AnimTypeClass@@SIXW4TheaterType@@@Z and ?Init_Theater@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Load_Image@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Read_INI@AnimTypeClass@@UAE_NABVCCINIClass@@@Z and ?Get_Image_Data@AnimTypeClass@@UBEPBXXZ; ?Get_Image_Data@AnimTypeClass@@UBEPBXXZ and ?Init@AnimTypeClass@@SIXW4TheaterType@@@Z and ?Init_Theater@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Load_Image@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Read_INI@AnimTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts"
+animtype,0x00424E30,0x00426760,tibsun,"functions compiled from src/animtype.cpp, without gaps; matched except ?Load_Image@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Read_INI@AnimTypeClass@@UAE_NABVCCINIClass@@@Z and ?Get_Image_Data@AnimTypeClass@@UBEPBXXZ; ?Get_Image_Data@AnimTypeClass@@UBEPBXXZ and ?Load_Image@AnimTypeClass@@UAEXW4TheaterType@@@Z and ?Read_INI@AnimTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts"
 unk_00426760,0x00426760,0x00426B70,unknown,code not assigned to a module
 app,0x00426B70,0x00426E70,tibsun,"functions compiled from src/app.cpp, matched, without gaps; seven placed by the gap; ?QueryInterface@TiberianSunClassFactory@@UAGJABU_GUID@@PAPAX@Z not placed"
 unk_00426E70,0x00426E70,0x00427060,unknown,code not assigned to a module

@@ -541,6 +541,8 @@ address,size,evidence
 0x00424E30,784,"code of src/animtype.cpp, matched"
 0x00425140,48,"code of src/animtype.cpp, matched: too few unmasked bytes for the match rule"
 0x00425170,192,"code of src/animtype.cpp, matched"
+0x00425230,400,"code of src/animtype.cpp, matched"
+0x004253C0,208,"code of src/animtype.cpp, matched"
 0x00425490,,"inferred: target of the call at 0x004250FF in matched src/animtype.cpp; size not known"
 0x00425620,32,"code of src/animtype.cpp, matched"
 0x00425640,80,"code of src/animtype.cpp, matched"
