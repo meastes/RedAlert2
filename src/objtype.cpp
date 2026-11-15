@@ -870,53 +870,63 @@ void ObjectTypeClass::Fetch_Normal_Image(void)
 /// <returns>bool; Was the object type's section found and read?</returns>
 bool ObjectTypeClass::Read_INI(CCINIClass const & ini)
 {
-	char namebuffer[25];
-	char path[_MAX_PATH];
-
-	if (BASECLASS::Read_INI(ini)) {
-
-		strcpy(namebuffer, GraphicName);
-		ini.Get_String(IniName, "Image", namebuffer, GraphicName, sizeof(namebuffer));
-
-		strcpy(namebuffer, AlphaGraphicName);
-		ini.Get_String(IniName, "AlphaImage", namebuffer, AlphaGraphicName, sizeof(namebuffer));
-
-		CrushSound = ini.Get_VocType(IniName, "CrushSound", CrushSound);
-
+	if (AbstractTypeClass::Read_INI(ini)) { // RA2: RA2's form
+		char buffer[25]; // RA2: as above
+		strcpy(buffer, GraphicName); // RA2: as above
+		ini.Get_String(IniName, "Image", buffer, GraphicName, sizeof(GraphicName)); // RA2: as above
+		strcpy(buffer, AlphaGraphicName); // RA2: as above
+		ini.Get_String(IniName, "AlphaImage", buffer, AlphaGraphicName, sizeof(AlphaGraphicName)); // RA2: as above
+		char name[128]; // RA2: as above
+		int sound = CrushSound; // RA2: as above
+		if (ini.Get_String(IniName, "CrushSound", "", name, sizeof(name))) { // RA2: as above
+			int found = VocClass::From_Name(name); // RA2: as above
+			if (found != -1) { // RA2: as above
+				sound = found; // RA2: as above
+			}
+		}
+		CrushSound = (VocType)sound; // RA2: as above
+		sound = AmbientSound; // RA2: as above
+		int found; // RA2: as above
+		if (!ini.Get_String(IniName, "AmbientSound", "", name, sizeof(name)) || (found = VocClass::From_Name(name)) == -1) { // RA2: as above
+			found = sound; // RA2: as above
+		}
+		AmbientSound = (VocType)found; // RA2: as above
 		IsCrushable = ini.Get_Bool(IniName, "Crushable", IsCrushable);
+		IsBombable = ini.Get_Bool(IniName, "Bombable", IsBombable); // RA2: as above
+		NoSpawnAlt = ini.Get_Bool(IniName, "NoSpawnAlt", NoSpawnAlt); // RA2: as above
+		AlternateArcticArt = ini.Get_Bool(IniName, "AlternateArcticArt", AlternateArcticArt); // RA2: as above
 		IsStealthy = ini.Get_Bool(IniName, "RadarInvisible", IsStealthy);
 		IsSelectable = ini.Get_Bool(IniName, "Selectable", IsSelectable);
 		IsLegalTarget = ini.Get_Bool(IniName, "LegalTarget", IsLegalTarget);
-		Armor = ini.Get_ArmorType(IniName, "Armor", Armor);
+		Armor = ini.Get_ArmorType(IniName, "Armor", (ArmorType)Armor); // RA2: as above
 		MaxStrength = ini.Get_Int(IniName, "Strength", MaxStrength);
 		IsImmune = ini.Get_Bool(IniName, "Immune", IsImmune);
 		IsInsignificant = ini.Get_Bool(IniName, "Insignificant", IsInsignificant);
 		IsHasRadialIndicator = ini.Get_Bool(IniName, "HasRadialIndicator", IsHasRadialIndicator);
-
 		RadialColor = ini.Get_RGBClass(IniName, "RadialColor", RadialColor);
-
 		IsIgnoresFirestorm = ini.Get_Bool(IniName, "IgnoresFirestorm", IsIgnoresFirestorm);
+
+		UseLineTrail = ArtINI.Get_Bool(GraphicName, "UseLineTrail", UseLineTrail); // RA2: as above
+		LineTrailColor = ArtINI.Get_RGBClass(GraphicName, "LineTrailColor", LineTrailColor); // RA2: as above
+		LineTrailColorDecrement = ArtINI.Get_Int(GraphicName, "LineTrailColorDecrement", LineTrailColorDecrement); // RA2: as above
 		IsTheater = ArtINI.Get_Bool(GraphicName, "Theater", IsTheater);
 		IsNewTheater = ArtINI.Get_Bool(GraphicName, "NewTheater", IsNewTheater);
-
-		if (!stricmp(IniName, "HMEC")) {
-			MaxStrength = 1200;
-		}
-
 		IsVoxel = ArtINI.Get_Bool(GraphicName, "Voxel", IsVoxel);
 		if (!IsVoxel) {
 			Fetch_Normal_Image();
 		}
 
-		if (AlphaGraphicName[0] != '\0') {
-			_makepath(path, NULL, NULL, AlphaGraphicName, ".SHP");
-			AlphaImageData = MixFileClass::Retrieve(path);
+		if (AlphaGraphicName[0] != 0) { // RA2: as above
+			char filename[260]; // RA2: as above
+			_makepath(filename, 0, 0, AlphaGraphicName, ".SHP"); // RA2: as above
+			AlphaImageData = (const void *)MixFileClass::Retrieve(filename); // RA2: as above
 		}
-
 		return(true);
 	}
 	return(false);
 }
+
+
 
 
 /// <summary>
@@ -928,18 +938,21 @@ bool ObjectTypeClass::Read_INI(CCINIClass const & ini)
 /// <param name="name">The artwork name to adjust in place.</param>
 void Theater_Name_Fixup(char * name, TheaterType theater) // RA2: not in TibSun, at 0x005D7BD0
 {
-	if (theater != THEATER_NONE) {
+	if (theater != -1) { // RA2: as above
 		char first = name[0];
 		char second = name[1];
-		if (first >= 'A' && first <= 'Z') first += 32;
-		if (second >= 'A' && second <= 'Z') second += 32;
-		if (first == 'g' || first == 'n' || first == 'c' || first == 'y') {
-			if (second == 'a' || second == 't') {
-				name[1] = Theaters[theater].Letter[0];
-			}
+		if (first >= 'A' && first <= 'Z') { // RA2: as above
+			first += 'a' - 'A'; // RA2: as above
+		}
+		if (second >= 'A' && second <= 'Z') { // RA2: as above
+			second += 'a' - 'A'; // RA2: as above
+		}
+		if ((first == 'g' || first == 'n' || first == 'c') && (second == 'a' || second == 't')) { // RA2: as above
+			name[1] = Theaters[theater].Letter[0]; // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
