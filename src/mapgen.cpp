@@ -919,46 +919,52 @@ void MapRegionClass::Clear_Cells(int new_id, int cell_height)
 /// <param name="region_id">The region id stamped onto each cell taken.</param>
 void MapRegionClass::Reassign_Border_Cells(int rings, unsigned int region_id)
 {
-	DynamicVectorClass<Cell> * cells = Build_Border_Cell_List();
+	DynamicVectorClass<Cell> *ring = Build_Border_Cell_List(); // RA2: RA2's form
 	if (rings > 1) {
-		CellData::Reset_Spreads(false);
-	}
-
-	for (int i = 0; i < rings; i++) {
-
-		for (int j = cells->Count() - 1; j >= 0; j--) {
-			Cell c = (*cells)[j];
-			CellData::Set_Region(c, region_id);
+		int total = MapCellStride * MapCellStride; // RA2: as above
+		for (int i = 0; i < total; i++) { // RA2: as above
+			RMGCellData[i].SpreadID = -1; // RA2: as above
 		}
-
-		if (i < rings - 1) {
-			DynamicVectorClass<Cell> * ncells = new DynamicVectorClass<Cell>;
-			ncells->Set_Growth_Step(cells->Count());
-
-			for (int k = cells->Count() - 1; k >= 0; k--) {
-				Cell cell = (*cells)[k];
-				for (int dir = 0; dir < FACING_COUNT; dir++) {
-					Cell ncell = Adjacent_Cell(cell, (FacingType)dir);
-					if (My_In_Radar(ncell)) {
-						MapRegionClass::CellData * data = &MapRegionClass::Get_Cell_Data(ncell);
-						if (data->RegionID == ID && data->SpreadID != i + 1) {
-							ncells->Add(ncell);
-							data->SpreadID = i + 1;
+	}
+	for (int step = 0; step < rings; step++) { // RA2: as above
+		int index; // RA2: as above
+		for (index = ring->Count() - 1; index >= 0; index--) { // RA2: as above
+			Cell cell = (*ring)[index]; // RA2: as above
+			if (RMGCellData) { // RA2: as above
+				RMGCellData[cell.Y * MapCellStride + cell.X].RegionID = region_id; // RA2: as above
+			}
+		}
+		if (step < rings - 1) { // RA2: as above
+			DynamicVectorClass<Cell> *next = new DynamicVectorClass<Cell>; // RA2: as above
+			next->Set_Growth_Step(ring->Count()); // RA2: as above
+			for (index = ring->Count() - 1; index >= 0; index--) { // RA2: as above
+				Cell cell = (*ring)[index]; // RA2: as above
+				for (int direction = 0; direction < 8; direction++) { // RA2: as above
+					Cell const &offset = AdjacentCell[direction & 7]; // RA2: as above
+					Cell adjacent = cell + offset; // RA2: as above
+					if (adjacent.Y + adjacent.X > MapStartDiagonal && adjacent.X - adjacent.Y < MapStartDiagonal && // RA2: as above
+						adjacent.Y - adjacent.X < MapStartDiagonal && adjacent.Y + adjacent.X <= MapEndDiagonal) { // RA2: as above
+						MapRegionClass::CellData &data = RMGCellData[adjacent.Y * MapCellStride + adjacent.X]; // RA2: as above
+						if (data.RegionID == ID && data.SpreadID != step + 1) { // RA2: as above
+							next->Add(adjacent); // RA2: as above
+							data.SpreadID = step + 1; // RA2: as above
 						}
 					}
 				}
 			}
-			delete cells;
-			cells = ncells;
+			delete ring; // RA2: as above
+			ring = next; // RA2: as above
 		}
 	}
-
-	delete cells;
-
+	delete ring; // RA2: as above
 	if (rings > 1) {
-		CellData::Reset_Spreads(false);
+		int total = MapCellStride * MapCellStride; // RA2: as above
+		for (int i = 0; i < total; i++) { // RA2: as above
+			RMGCellData[i].SpreadID = -1; // RA2: as above
+		}
 	}
 }
+
 
 
 /// <summary>
@@ -1556,36 +1562,44 @@ bool MapRegionClass::Make_Regions(void)
 void MapRegionClass::Build_Neighbor_Regions(void)
 {
 	NeighborRegions = new DynamicVectorClass<int>;
-	bool * adjacent = new bool[MapRegionClass::TotalCount];
-	for (int i = 0; i < MapRegionClass::TotalCount; ++i) {
-		adjacent[i] = false;
+	unsigned char * seen = new unsigned char[TotalCount]; // RA2: RA2's form
+	int index; // RA2: as above
+	for (index = 0; index < TotalCount; index++) { // RA2: as above
+		seen[index] = 0; // RA2: as above
 	}
-	DynamicVectorClass<Cell> * cells = Build_Border_Cell_List();
-
-	for (int j = 0; j < cells->Count(); j++) {
-		Cell cell = (*cells)[j];
-		for (int facing = 0; facing < FACING_COUNT; facing++) {
-			Cell ncell = Adjacent_Cell(cell, (FacingType)facing);
-			if (My_In_Radar(ncell)) {
-				int id = CellData::Get_Region(ncell);
-				if (id >= 0) {
-					adjacent[id] = true;
+	DynamicVectorClass<Cell> * boundary = Build_Border_Cell_List(); // RA2: as above
+	for (index = 0; index < boundary->Count(); index++) { // RA2: as above
+		Cell cell = (*boundary)[index]; // RA2: as above
+		for (int direction = 0; direction < 8; direction++) { // RA2: as above
+			Cell next = cell + AdjacentCell[direction & 7]; // RA2: as above
+			if (next.Y + next.X > MapStartDiagonal && next.X - next.Y < MapStartDiagonal && // RA2: as above
+			    next.Y - next.X < MapStartDiagonal && next.Y + next.X <= MapEndDiagonal) { // RA2: as above
+				if (RMGCellData) { // RA2: as above
+					int regionIndex = RMGCellData[next.Y * MapCellStride + next.X].RegionID; // RA2: as above
+					if (regionIndex >= 0) { // RA2: as above
+						seen[regionIndex] = 1; // RA2: as above
+					}
 				}
 			}
 		}
 	}
-
-	for (int k = 0; k < MapRegionClass::TotalCount; k++) {
-		if (adjacent[k] && k != ID) {
-			NeighborRegions->Add(k);
+	for (index = 0; index < TotalCount; index++) { // RA2: as above
+		if (seen[index] && index != ID) { // RA2: as above
+			NeighborRegions->Add(index); // RA2: as above
 		}
 	}
-
-	Recount_Cells();
-
-	delete cells;
-	delete[] adjacent;
+	CellCount = 0; // RA2: as above
+	int totalCells = MapCellStride * MapCellStride; // RA2: as above
+	for (index = 0; index < totalCells; index++) { // RA2: as above
+		if (RMGCellData[index].RegionID == ID && // RA2: as above
+		    RMGCellData[index].CellID != Cell(0, 0)) { // RA2: as above
+			CellCount++; // RA2: as above
+		}
+	}
+	delete boundary; // RA2: as above
+	delete[] seen; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2235,8 +2249,8 @@ bool MapRegionClass::Build_South_Ramp(Cell const & cell1, Cell const & cell2, in
 	/*
 	 * Compute a bounding rect around the ramp area and validate it.
 	 */
-	Rect rect(cell1.X - 5, MIN(cell1.Y, cell2.Y) - 3, cell2.X - cell1.X + 9, MAX(cell1.Y, cell2.Y) - MIN(cell1.Y, cell2.Y) + 11);
-	if (!Is_Ramp_Area_Clear(rect, region_id)) {
+	Rect area(cell1.X - 5, (cell1.Y < cell2.Y ? cell1.Y : cell2.Y) - 3, cell2.X - cell1.X + 9, (cell1.Y > cell2.Y ? cell1.Y : cell2.Y) - (cell1.Y < cell2.Y ? cell1.Y : cell2.Y) + 11); // RA2: RA2's form
+	if (!Is_Ramp_Area_Clear(area, region_id)) { // RA2: as above
 		return(false);
 	}
 
@@ -2244,23 +2258,18 @@ bool MapRegionClass::Build_South_Ramp(Cell const & cell1, Cell const & cell2, in
 	 * The ramp body drifts sideways as it runs; reject if the drift is too
 	 * large to fit within the horizontal span.
 	 */
-	int dy = cell2.Y - cell1.Y;
-	int abs_dy = abs(dy);
-	int dx = cell2.X - cell1.X;
-	if (abs_dy > dx - 5) {
+	int drift = cell2.Y - cell1.Y; // RA2: as above
+	int span = abs(drift); // RA2: as above
+	int width = cell2.X - cell1.X; // RA2: as above
+	if (span > width - 5) { // RA2: as above
 		return(false);
 	}
 
-	int half = (dx + 1) / 2 + 3;
-
-	/*
-	 * Level the left and right halves on either side of the ramp, the far
-	 * side to the target region's height and the near side to ours.
-	 */
-	Flatten_Area(Rect(rect.X, cell1.Y + 1, half + 2, rect.Height - cell1.Y + rect.Y + 1), region_id);
-	Flatten_Area(Rect(cell2.X - (dx + 1) / 2, cell2.Y + 1, half + 2, rect.Height - cell2.Y + rect.Y + 1), region_id);
-	Flatten_Area(Rect(rect.X + 4, rect.Y + 2, half - 2, cell1.Y - rect.Y - 1));
-	Flatten_Area(Rect(cell2.X - half + 2, rect.Y + 2, half - 1, cell2.Y - rect.Y - 1));
+	int half = (width + 1) / 2 + 3; // RA2: as above
+	Flatten_Area(Rect(area.X, cell1.Y + 1, half + 2, area.Y + area.Height - cell1.Y + 1), region_id); // RA2: as above
+	Flatten_Area(Rect(cell2.X - half + 3, cell2.Y + 1, half + 2, area.Y + area.Height - cell2.Y + 1), region_id); // RA2: as above
+	Flatten_Area(Rect(area.X + 4, area.Y + 2, half - 2, cell1.Y - area.Y - 1)); // RA2: as above
+	Flatten_Area(Rect(cell2.X - half + 2, area.Y + 2, half - 1, cell2.Y - area.Y - 1)); // RA2: as above
 
 	/*
 	 * Place the two slope set pieces at the ramp ends.
@@ -2268,76 +2277,48 @@ bool MapRegionClass::Build_South_Ramp(Cell const & cell1, Cell const & cell2, in
 	MapGeneratorClass::Place_Tile(IsometricTileTypeClass::SlopeSetPieces, cell1, region_id, CellHeight);
 	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 1), cell2 - Cell(2, 0), region_id, CellHeight);
 
-	/*
-	 * Carve the diagonal jog that absorbs the vertical drift between the two
-	 * endpoints. A random pick decides whether the jog sits at the near or the
-	 * far end of the ramp; the straight remainder is offset accordingly.
-	 */
-	Cell cell;
 	Cell tail(0, 0);
-
-	if (dy != 0) {
-		int rsel = Pick_Random_UInt(0, 1);
-
+	if (drift != 0) { // RA2: as above
+		int pick = Pick_Random_UInt(0, 1); // RA2: as above
 		Cell bias;
 		bias.X = 0;
-		int down = dy > 0;
-		bias.Y = (dy >= 0) - 1;
-
-		if (rsel == 1) {
-			tail.X = abs_dy;
-			tail.Y = dy;
+		int down = drift > 0; // RA2: as above
+		bias.Y = drift < 0 ? -1 : 0; // RA2: as above
+		if (pick == 1) { // RA2: as above
+			tail += Cell(span, drift); // RA2: as above
 		} else {
-			bias.X = cell2.X - abs_dy - cell1.X - 5;
+			bias.X = (cell2 - Cell(span, 0)).X - cell1.X - 5; // RA2: as above
 		}
-
-		int forward = 0;
-		if (abs_dy > 0) {
-			int backward = 0;
-			do {
-				static int _heights[] = {3, 2, 1, 0, 0};
-				static int _ramps[] = {11, 15, 15, 15, 7, 12, 16, 16, 16, 8};
-
-				for (int row = 0; row < 5; row++) {
-					int add_y = down ? forward : backward;
-
-					Cell pos = Cell(cell1.X + 3, cell1.Y) + Cell(forward, row) + bias;
-					cell = Cell(pos.X, pos.Y + add_y);
-
-					CellClass * cellptr = &Map[cell];
-
-					unsigned char height = (unsigned char)_heights[row];
-					cellptr->Height = CellHeight + height - 4;
-
-					unsigned char ramp = (unsigned char)_ramps[5 * down + row];
-					cellptr->Ramp = ramp;
-					cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + ramp - 1);
-					cellptr->SubTile = 0;
-				}
-
-				forward++;
-				backward--;
-			} while (forward < abs_dy);
+		static int _heights[] = {3, 2, 1, 0, 0}; // RA2: as above
+		static int _ramps[] = {11, 15, 15, 15, 7, 12, 16, 16, 16, 8}; // RA2: as above
+		for (int forward = 0; forward < span; forward++) { // RA2: as above
+			for (int row = 0; row < 5; row++) { // RA2: as above
+				short offset = down ? forward : -forward; // RA2: as above
+				Cell position = Cell(cell1.X + 3, cell1.Y) + Cell(forward, row) + bias; // RA2: as above
+				position = Cell(position.X, position.Y + offset); // RA2: as above
+				CellClass &target = Map[position]; // RA2: as above
+				target.Height = (char)(CellHeight + _heights[row] - 4); // RA2: as above
+				target.Ramp = (unsigned char)_ramps[5 * down + row]; // RA2: as above
+				target.ITType = (IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + target.Ramp - 1); // RA2: as above
+				target.SubTile = 0; // RA2: as above
+			}
 		}
 	}
 
-	/*
-	 * Extend the straight ramp over whatever horizontal span the jog didn't use.
-	 */
-	for (int x = 0; x < cell2.X - cell1.X - abs_dy - 5; x++) {
-		for (int i = 0; i < 4; i++) {
-			cell = Cell(cell1.X + 3, cell1.Y) + Cell(x, i) + tail;
-			CellData::Set_Region(cell, region_id);
-			CellClass * cellptr = &Map[cell];
-			cellptr->Height = CellHeight - i - 1;
-			cellptr->Ramp = 4;
-			cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 3);
-			cellptr->SubTile = 0;
+	for (int column = 0; column < cell2.X - cell1.X - span - 5; column++) { // RA2: as above
+		for (int row = 0; row < 4; row++) { // RA2: as above
+			Cell position = Cell(cell1.X + 3, cell1.Y) + Cell(column, row) + tail; // RA2: as above
+			CellData::Set_Region(position, region_id); // RA2: as above
+			CellClass &target = Map[position]; // RA2: as above
+			target.Height = (char)(CellHeight - (char)row - 1); // RA2: as above
+			target.Ramp = 4; // RA2: as above
+			target.ITType = (IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 3u); // RA2: as above
+			target.SubTile = 0; // RA2: as above
 		}
 	}
-
 	return(true);
 }
+
 
 
 /// <summary>
@@ -8964,11 +8945,11 @@ double MapGeneratorClass::Get_Urban_Score(const Cell & cell1, const Cell & cell2
 /// <param name="cells">The cells of the urban area the road grid is fitted to.</param>
 void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & cells)
 {
+	Cell start; // RA2: RA2's form
 	Rect bounds = Get_Cell_Bounding_Rect(cells);
 
 	/// Horizontal east-west road bands
 	if (bounds.Height > 5) {
-		Cell start;
 		start.Y = bounds.Y + 2;
 		start.X = bounds.X;
 		int remaining = bounds.Height - 2;
@@ -8978,7 +8959,15 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 			Cell junction = Plan_Paved_Road_Junction(start, bounds, FACING_E);
 			Cell end = Plan_Paved_Road(junction, bounds, FACING_E);
 
-			if (end != Cell(0, 0) && start != Cell(0, 0) && (end.X - start.X) >= 6) {
+			bool valid = false; // RA2: as above
+			int first; // RA2: as above
+
+			if (end != Cell(0, 0) && start != Cell(0, 0)) { // RA2: as above
+				first = start.X; // RA2: as above
+				valid = true; // RA2: as above
+			}
+
+			if (valid && end.X - first >= 6) { // RA2: as above
 
 				/// Left road cap / start piece
 				if (Can_Place_Paved_Road(Rect(junction.X - 4, junction.Y, 4, 3), false, false) && Pick_Random_UInt(0, 1)) {
@@ -9010,17 +8999,15 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 
 	/// Vertical north-south road bands
 	if (bounds.Width > 8) {
-
 		int remaining = bounds.Height - 5;
-		Cell start(bounds.X + 5, bounds.Y);
+		start.X = bounds.X + 5; // RA2: as above
+		start.Y = bounds.Y; // RA2: as above
 
 		while (remaining > 3) {
-
 			Cell cursor = Plan_Paved_Road_Junction(start, bounds, FACING_S);
 			Cell end = Plan_Paved_Road(cursor, bounds, FACING_S);
 
-			if (end != Cell(0, 0) && start != Cell(0, 0) && (end.Y - start.Y) >= 6) {
-
+			if (end != Cell(0, 0) && start != Cell(0, 0) && end.Y - start.Y >= 6) { // RA2: as above
 				bool in_segment = false;
 				bool initial = true;
 				bool median_pending = false;
@@ -9028,21 +9015,13 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 				bool skip_tail = false;
 
 				while (cursor.Y < end.Y) {
-
 					if (!in_segment) {
 						Rect road_rect;
 						Rect junction_rect;
+						road_rect = Rect(cursor.X, cursor.Y, 3, 2); // RA2: as above
+						junction_rect = Rect(cursor.X, cursor.Y - 3, 3, 4); // RA2: as above
 
-						road_rect.Height = 2;
-						junction_rect.Width = 3;
-						road_rect.Width = 3;
-						road_rect.X = cursor.X;
-						road_rect.Y = cursor.Y;
-						junction_rect.X = cursor.X;
-						junction_rect.Y = cursor.Y - 3;
-						junction_rect.Height = 4;
-
-						if ((end.Y - cursor.Y) < 2) {
+						if (end.Y - cursor.Y < 2) { // RA2: as above
 							skip_tail = true;
 							break;
 						}
@@ -9062,7 +9041,6 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 
 						/// Straight vertical road segment
 						if (Can_Place_Paved_Road(Rect(cursor.X, cursor.Y, 3, 1), false, false)) {
-
 							Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 1), cursor);
 
 							if (median_pending) {
@@ -9074,7 +9052,6 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 								}
 							}
 						} else {
-
 							Rect junction_rect(cursor.X, cursor.Y, 3, 4);
 
 							if (median_pending) {
@@ -9083,17 +9060,16 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 							}
 
 							if (Can_Place_Paved_Road_Junction(junction_rect)) {
-
 								int bottom = end.Y;
 
-								if ((bottom - cursor.Y) < 4) {
+								if (bottom - cursor.Y < 4) { // RA2: as above
 									Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 7), cursor);
 									skip_tail = true;
 									break;
 								}
 
 								if (Can_Place_Paved_Road(Rect(cursor.X, cursor.Y + 3, 3, 2), false, false)) {
-									if ((bottom - cursor.Y) > 5) {
+									if (bottom - cursor.Y > 5) { // RA2: as above
 										median_pending = true;
 										median_flip = true;
 									}
@@ -9111,7 +9087,6 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 
 								cursor.Y += 2;
 							} else {
-
 								Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoadEnds + 3), cursor - Cell(0, 1));
 
 								CellClass * cellptr = &Map[cursor + Cell(1, -2)];
@@ -9157,6 +9132,7 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 }
 
 
+
 /// <summary>
 /// Places civilian buildings across an urban area.
 /// This routine fills the pavement laid down by Generate_Urban_Roads with city blocks, giving
@@ -9166,35 +9142,15 @@ void MapGeneratorClass::Generate_Urban_Roads(const DynamicVectorClass<Cell> & ce
 /// <param name="cells">The cells of the urban area available to build on.</param>
 void MapGeneratorClass::Generate_Urban_Buildings(const DynamicVectorClass<Cell> & cells)
 {
-	static char const * _names[] = {
-		"CITY01",
-		"CITY02",
-		"CITY03",
-		"CITY04",
-		"CITY05",
-		"CITY06",
-		"CITY07",
-		"CITY08",
-		"CITY09",
-		"CITY10",
-		"CITY11",
-		"CITY12",
-		"CITY13",
-		"CITY14",
-		"CITY15",
-		"CITY16",
-		"CITY17",
-		"CITY18",
-		"CAHOSP"
-	};
+	static char * building_names[18] = {"CITY01", "CITY02", "CITY03", "CITY04", "CITY05", "CITY06", "CITY07", "CITY08", "CITY09", "CITY10", "CITY11", "CITY12", "CITY13", "CITY14", "CITY15", "CITY16", "CITY17", "CITY18"}; // RA2: RA2's form
 
 	int count = Pick_Random_UInt(cells.Count() / 20, cells.Count() / 10) / 2;
 	int tries = 0;
 	int placed = 0;
 
 	DynamicVectorClass<char *> names;
-	for (int i = 0; i < ARRAY_SIZE(_names); i++) {
-		names.Add((char *&)_names[i]);
+	for (int index = 0; index < 18; ++index) { // RA2: as above
+		names.Add(building_names[index]); // RA2: as above
 	}
 
 	HouseClass * neutral = House_From_HousesType(HouseTypeClass::From_Name("Neutral"));
@@ -9204,67 +9160,59 @@ void MapGeneratorClass::Generate_Urban_Buildings(const DynamicVectorClass<Cell> 
 			if (tries >= 2 * count || names.Count() <= 1) {
 				break;
 			}
-			int name_index = Pick_Random_UInt(0, names.Count() - 1);
-			StructType bindex = BuildingTypeClass::From_Name(names[name_index]);
-			BuildingClass * building = new BuildingClass(BuildingTypes[bindex], neutral);
+			int nameIndex = Pick_Random_UInt(0, names.Count() - 1); // RA2: as above
+			StructType typeIndex = BuildingTypeClass::From_Name(names[nameIndex]); // RA2: as above
+			{
+				BuildingClass * building = new BuildingClass(BuildingTypes[typeIndex], neutral); // RA2: as above
 
-			int tries_here = 0;
-			bool was_placed = false;
-			while (!was_placed) {
-				if (tries_here >= 60) {
-					break;
-				}
-
-				Cell building_cell = cells[Pick_Random_UInt(0, cells.Count() - 1)];
-
-				Cell const * list = building->Class->Occupy_List(true);
-				bool ok = true;
-				while (*list != REFRESH_EOL) {
-					CellClass * cellptr = &Map[building_cell + *list];
-					if (!cellptr->Is_Tile_Pavement() && !cellptr->Is_Tile_Misc_Pavement() || cellptr->Cell_Occupier() != NULL || cellptr->Land_Type() == LAND_ROCK || !Map.In_Local_Radar(cellptr)) {
-						ok = false;
+				int attempts = 0; // RA2: as above
+				bool wasPlaced = false; // RA2: as above
+				while (!wasPlaced) { // RA2: as above
+					if (attempts >= 60) { // RA2: as above
+						break; // RA2: as above
 					}
-					list++;
-					if (!ok) break;
-				}
-
-				if (ok) {
-					if (building->Unlimbo(Coord(building_cell, 0))) {
-
-						double condition_red_chance = ConditionRedChances[SeedData.Biome];
-						double condition_yellow_chance = ConditionYellowChances[SeedData.Biome];
-
-						double health_ratio = 1.0;
-						if (Random_Fraction() < condition_red_chance) {
-							health_ratio = Rule->ConditionRed;
-						} else if (Random_Fraction() < condition_yellow_chance) {
-							health_ratio = Rule->ConditionYellow;
+					Cell position = cells[Pick_Random_UInt(0, cells.Count() - 1)]; // RA2: as above
+					Cell const * list = building->Class->Occupy_List(1); // RA2: as above
+					bool clear = true; // RA2: as above
+					while (list->X != 0x7fff || list->Y != 0x7fff) { // RA2: as above
+						Cell next = (position + *list); // RA2: as above
+						CellClass * cell = &Map[next]; // RA2: as above
+						if ((!cell->Is_Tile_Pavement() && !cell->Is_Tile_Misc_Pavement()) || cell->Cell_Occupier() != NULL || cell->Land_Type() == LAND_ROCK || !Map.In_Local_Radar(cell, true)) { // RA2: as above
+							clear = false; // RA2: as above
 						}
-						building->Strength = building->Class->MaxStrength * health_ratio;
-
-						building->Mark(MARK_CHANGE);
-
-						was_placed = true;
-						placed++;
-						if (name_index > 17) {
-							names.Delete_Index(name_index);
+						++list; // RA2: as above
+						if (!clear) { // RA2: as above
+							break; // RA2: as above
 						}
 					}
+					if (clear) { // RA2: as above
+						Coord point(position.X * 256 + 128, position.Y * 256 + 128, 0); // RA2: as above
+						if (building->Unlimbo(point, DIR_N)) { // RA2: as above
+							int strength = building->Class->MaxStrength; // RA2: as above
+							building->Strength = strength; // RA2: as above
+							building->EstimatedHealth = strength; // RA2: as above
+							building->Mark(MARK_CHANGE); // RA2: as above
+							wasPlaced = true; // RA2: as above
+							++placed; // RA2: as above
+							if (nameIndex > 17) { // RA2: as above
+								names.Delete_Index((int)nameIndex); // RA2: as above
+							}
+						}
+					}
+					++attempts; // RA2: as above
 				}
-				tries_here++;
+				if (!wasPlaced) { // RA2: as above
+					delete building; // RA2: as above
+				}
+				++tries; // RA2: as above
 			}
-
-			if (!was_placed) {
-				delete building;
-			}
-
-			tries++;
 			if (placed >= count) {
 				break;
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9276,7 +9224,7 @@ void MapGeneratorClass::Generate_Urban_Buildings(const DynamicVectorClass<Cell> 
 /// <param name="cells">The cells of the urban area the civilians may occupy.</param>
 void MapGeneratorClass::Generate_Urban_Units(const DynamicVectorClass<Cell> & cells)
 {
-	static char const * _names[] = {
+	static char const * names[7] = { // RA2: RA2's form
 		"CIV1",
 		"CIV2",
 		"CIV3",
@@ -9286,16 +9234,8 @@ void MapGeneratorClass::Generate_Urban_Units(const DynamicVectorClass<Cell> & ce
 		"CAR"
 	};
 
-	static int _max_counts[BIOME_COUNT] = {
-		4, /// Tundra
-		6, /// Taiga
-		6, /// Temperate
-		3, /// Desert
-		2  /// Mutated
-	};
-
 	HouseClass * neutral = House_From_HousesType(HouseTypeClass::From_Name("Neutral"));
-	int count = Pick_Random_UInt(1, _max_counts[SeedData.Biome]);
+	int count = Pick_Random_UInt(1, 5); // RA2: as above
 
 	int tries = 0;
 	int placed = 0;
@@ -9306,12 +9246,12 @@ void MapGeneratorClass::Generate_Urban_Units(const DynamicVectorClass<Cell> & ce
 				break;
 			}
 
-			int unit_index = Pick_Random_UInt(0, ARRAY_SIZE(_names) - 1);
-			FootClass * foot = NULL;
+			int unit_index = Pick_Random_UInt(0, 6); // RA2: as above
+			FootClass * foot; // RA2: as above
 			if (unit_index <= 2) {
-				foot = new InfantryClass(InfantryTypes[InfantryTypeClass::From_Name(_names[unit_index])], neutral);
+				foot = new InfantryClass(InfantryTypes[InfantryTypeClass::From_Name(names[unit_index])], neutral); // RA2: as above
 			} else {
-				foot = new UnitClass(UnitTypes[UnitTypeClass::From_Name(_names[unit_index])], neutral);
+				foot = new UnitClass(UnitTypes[UnitTypeClass::From_Name(names[unit_index])], neutral); // RA2: as above
 			}
 
 			int tries_here = 0;
@@ -9321,20 +9261,11 @@ void MapGeneratorClass::Generate_Urban_Units(const DynamicVectorClass<Cell> & ce
 					break;
 				}
 				Cell unit_cell = cells[Pick_Random_UInt(0, cells.Count() - 1)];
-				if (Map.In_Local_Radar(unit_cell) && Map[unit_cell].Cell_Occupier() == NULL) {
-					if (foot->Unlimbo(Coord(unit_cell), (Dir256)(Pick_Random_UInt(FACING_FIRST, FACING_COUNT - 1) * DIR_STEP_8))) {
-
-						double condition_red_chance = ConditionRedChances[SeedData.Biome];
-						double condition_yellow_chance = ConditionYellowChances[SeedData.Biome];
-
-						double health_ratio = 1.0;
-						if (Random_Fraction() < condition_red_chance) {
-							health_ratio = Rule->ConditionRed;
-						} else if (Random_Fraction() < condition_yellow_chance) {
-							health_ratio = Rule->ConditionYellow;
-						}
-						foot->Strength = foot->TClass->MaxStrength * health_ratio;
-
+				if (Map.In_Local_Radar(unit_cell, true) && Map[unit_cell].Cell_Occupier() == NULL) { // RA2: as above
+					if (foot->Unlimbo(Coord(unit_cell), (Dir256)(Pick_Random_UInt(0, 7) * 32))) { // RA2: as above
+						int strength = foot->TClass->MaxStrength; // RA2: as above
+						foot->Strength = strength; // RA2: as above
+						foot->EstimatedHealth = strength; // RA2: as above
 						foot->Mark(MARK_CHANGE);
 						was_placed = true;
 						placed++;
@@ -9354,6 +9285,7 @@ void MapGeneratorClass::Generate_Urban_Units(const DynamicVectorClass<Cell> & ce
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -10352,30 +10284,27 @@ bool MapGeneratorClass::Find_Dirt_Road_Tile(FacingType facing, Cell const & targ
 {
 	int current_conn_count;
 	int initial_conn_count;
-
 	initial_conn_count = current_conn_count = 1;
-
 	if (max_connections > 1) {
 		double roll = Sample_Truncated_Normal(2.0, 0.5, 2.0, max_connections);
-		initial_conn_count = current_conn_count = roll;
+		current_conn_count = roll; // RA2: RA2's form
+		initial_conn_count = current_conn_count; // RA2: as above
 	}
-
 	while (true) {
 		int tile_count = RoadTileCounts[facing][current_conn_count - 1];
 		int * tile_list = RoadTileLibrary[facing][current_conn_count - 1];
-
 		int start_index;
-		if (current_conn_count == 2 && Random_Fraction() < 0.7) {
+		if (current_conn_count == 2 && (unsigned)RMGRandom()* (1.0 / 4294967296.0) < 0.7) { // RA2: as above
 			start_index = Pick_Random_UInt(7, tile_count - 1);
 		} else {
 			start_index = Pick_Random_UInt(0, tile_count - 1);
 		}
-
 		for (int i = 0; i < tile_count; i++) {
 			DirtRoadTile & tile = DirtRoadTiles[tile_list[(i + start_index) % tile_count]];
 			int link_index;
 			for (link_index = 0; link_index < tile.Count; link_index++) {
-				if (tile.Links[link_index].Facing == facing) {
+				DirtRoadLink connection = tile.Links[link_index]; // RA2: as above
+				if (connection.Facing == facing) { // RA2: as above
 					break;
 				}
 			}
@@ -10391,12 +10320,10 @@ bool MapGeneratorClass::Find_Dirt_Road_Tile(FacingType facing, Cell const & targ
 				return(true);
 			}
 		}
-
 		current_conn_count = (current_conn_count + 1) % (max_connections + 1);
 		if (current_conn_count == 0) {
 			current_conn_count = 1;
 		}
-
 		if (current_conn_count == initial_conn_count) {
 			out_ittype = ISOTILE_NONE;
 			out_origin = Cell(0, 0);
@@ -10405,6 +10332,7 @@ bool MapGeneratorClass::Find_Dirt_Road_Tile(FacingType facing, Cell const & targ
 		}
 	}
 }
+
 
 
 /// <summary>
