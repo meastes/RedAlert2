@@ -6292,6 +6292,18 @@ char const * UnitClass::Full_Name(void) const
 	return(Class->GivenName);
 }
 
+
+/// <summary>
+/// Is this unit unable to move?
+/// A vehicle that is playing out its death throes is immobilized on top of all the usual
+/// reasons that apply to any foot object.
+/// </summary>
+/// <returns>bool; Is the unit prevented from moving?</returns>
+bool UnitClass::Is_Immobilized(void) const // RA2: at 0x70A240 (vtable slot 201)
+{
+	return(DeathCounter != -1 || BASECLASS::Is_Immobilized());
+}
+
 /// <summary>
 /// RA2: TechnoClass's.
 /// </summary>
@@ -6735,16 +6747,4 @@ int UnitClass::Get_Max_Speed(void) const
 void UnitClass::EMPulse_Blast(void)
 {
 } // RA2: no MaxCharge, ProjectileRange (not in RA2's layout)
-
-
-/// <summary>
-/// Is this unit unable to move?
-/// A vehicle that is playing out its death throes is immobilized on top of all the usual
-/// reasons that apply to any foot object.
-/// </summary>
-/// <returns>bool; Is the unit prevented from moving?</returns>
-bool UnitClass::Is_Immobilized(void) const
-{
-	return(DeathCounter != -1 || BASECLASS::Is_Immobilized());
-}
 
