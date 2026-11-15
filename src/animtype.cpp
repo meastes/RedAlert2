@@ -63,6 +63,7 @@
 #include "warhead.h"
 
 void Generic_Theater_Name(char * name); // RA2: 0x5D7C20 (objtype.cpp)
+void Theater_Name_Fixup(char * name, TheaterType theater); // RA2: 0x5D7BD0 (objtype.cpp)
 
 namespace Unsorted { extern bool ArmageddonMode; }
 
@@ -628,37 +629,34 @@ void AnimTypeClass::Detach(AbstractClass const * target, bool all)
 /// </returns>
 void const * AnimTypeClass::Get_Image_Data(void) const
 {
-	void const * data = ImageData;
-	if (data == NULL && IsDemandLoad) {
-		DebugString("Demand loading image for %s\n", Full_Name());
-
-		char fullname[_MAX_FNAME + _MAX_EXT];
-		_makepath(fullname, NULL, NULL, GraphicName[0] != '\0' ? Graphic_Name() : Name(), ".SHP");
-
+	AnimTypeClass *self = (AnimTypeClass *)this; // RA2: RA2's form
+	if (ImageData == 0 && IsDemandLoad) { // RA2: as above
+		DebugString("Demand loading image for %s\n", (char const *)Full_Name()); // RA2: as above
+		char fullname[512]; // RA2: as above
+		_makepath(fullname, 0, 0, GraphicName[0] != 0 ? (char const *)GraphicName : (char const *)Name(), ".SHP"); // RA2: as above
 		if (IsTheater) {
-			_makepath(fullname, NULL, NULL, Name(), Theaters[Scen->Theater].Suffix);
+			_makepath(fullname, 0, 0, Name(), Theaters[Scen->Theater].Suffix); // RA2: as above
 		} else if (IsNewTheater) {
-			Theater_Naming_Convention(fullname, Scen->Theater);
+			Theater_Name_Fixup(fullname, Scen->Theater); // RA2: as above
 		}
-
 		CCFileClass file(fullname);
-		((void const *&)ImageData) = Load_Alloc_Data(file);
-		if (ImageData == NULL) { // RA2: a missing theater image is retried under the generic theater name
-			Generic_Theater_Name(fullname); // RA2: as above
-			CCFileClass file2(fullname); // RA2: as above
-			((void const *&)ImageData) = Load_Alloc_Data(file2); // RA2: as above
-			if (ImageData != NULL) { // RA2: as above
-				(bool &)ImageAllocated = true; // RA2: as above
-			} // RA2: as above
+		self->ImageData = Load_Alloc_Data(file); // RA2: as above
+		if (ImageData != 0) { // RA2: as above
+			self->ImageAllocated = true; // RA2: as above
 		} else { // RA2: as above
-			(bool &)ImageAllocated = true; // RA2: as above
-		} // RA2: as above
-		((AnimTypeClass*)this)->Load_Image(Scen->Theater);
-
-		data = ImageData;
+			Generic_Theater_Name(fullname); // RA2: as above
+			CCFileClass generic(fullname); // RA2: as above
+			self->ImageData = Load_Alloc_Data(generic); // RA2: as above
+			if (ImageData != 0) { // RA2: as above
+				self->ImageAllocated = true; // RA2: as above
+			}
+		}
+		self->Load_Image(Scen->Theater); // RA2: as above
+		return ImageData; // RA2: as above
 	}
-	return(data);
+	return ImageData; // RA2: as above
 }
+
 
 
 /// <summary>
