@@ -315,16 +315,6 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	CurAircraft(0),
 	Credits(0),
 	Capacity(0),
-	AircraftTotals(NULL),
-	InfantryTotals(NULL),
-	UnitTotals(NULL),
-	BuildingTotals(NULL),
-	DestroyedAircraft(NULL),
-	DestroyedInfantry(NULL),
-	DestroyedUnits(NULL),
-	DestroyedBuildings(NULL),
-	CapturedBuildings(NULL),
-	TotalCrates(NULL),
 	AircraftFactories(0),
 	InfantryFactories(0),
 	UnitFactories(0),
@@ -446,18 +436,18 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	Attack.InitialAttack = attack;
 
 	if (Session.Type == GAME_INTERNET) {
-		AircraftTotals = new UnitTrackerClass(AircraftTypes.Count());
-		InfantryTotals = new UnitTrackerClass(InfantryTypes.Count());
-		UnitTotals = new UnitTrackerClass(UnitTypes.Count());
-		BuildingTotals = new UnitTrackerClass(BuildingTypes.Count());
+		AircraftTotals.Populate_Unit_Count(AircraftTypes.Count()); // RA2: the totals are held inline
+		InfantryTotals.Populate_Unit_Count(InfantryTypes.Count()); // RA2: the totals are held inline
+		UnitTotals.Populate_Unit_Count(UnitTypes.Count()); // RA2: the totals are held inline
+		BuildingTotals.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
 
-		DestroyedAircraft = new UnitTrackerClass(AircraftTypes.Count());
-		DestroyedInfantry = new UnitTrackerClass(InfantryTypes.Count());
-		DestroyedUnits = new UnitTrackerClass(UnitTypes.Count());
-		DestroyedBuildings =new UnitTrackerClass(BuildingTypes.Count());
+		DestroyedAircraft.Populate_Unit_Count(AircraftTypes.Count()); // RA2: the totals are held inline
+		DestroyedInfantry.Populate_Unit_Count(InfantryTypes.Count()); // RA2: the totals are held inline
+		DestroyedUnits.Populate_Unit_Count(UnitTypes.Count()); // RA2: the totals are held inline
+		DestroyedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
 
-		CapturedBuildings = new UnitTrackerClass (BuildingTypes.Count());
-		TotalCrates = new UnitTrackerClass (CRATE_COUNT);
+		CapturedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
+		TotalCrates.Populate_Unit_Count(CRATE_COUNT); // RA2: the totals are held inline
 	}
 
 	for (index = 0; index < ARRAY_SIZE(Paths); index++) {
@@ -941,16 +931,6 @@ HouseClass::~HouseClass (void)
 	}
 
 	if (Session.Type == GAME_INTERNET) {
-		delete AircraftTotals;
-		delete InfantryTotals;
-		delete UnitTotals;
-		delete BuildingTotals;
-		delete DestroyedAircraft;
-		delete DestroyedInfantry;
-		delete DestroyedUnits;
-		delete DestroyedBuildings;
-		delete CapturedBuildings;
-		delete TotalCrates;
 	}
 
 	for (index = 0; index < SuperWeapon.Count(); index++) {
@@ -1264,29 +1244,9 @@ int HouseClass::Can_Build(ObjectTypeClass const * type, bool forced, bool includ
 				}
 				break;
 
-				case STRUCT_G_GDIFACTORY: {
-					bool found = false;
-					for (int j = 0; j < Rule->PrerequisiteGDIFactory.Count(); j++) {
-						if (ABQuantity.Value(Rule->PrerequisiteGDIFactory[j]) > 0) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) return(0);
-				}
-				break;
+				// RA2: no GDI factory prerequisite group
 
-				case STRUCT_G_NODFACTORY: {
-					bool found = false;
-					for (int j = 0; j < Rule->PrerequisiteNodFactory.Count(); j++) {
-						if (ABQuantity.Value(Rule->PrerequisiteNodFactory[j]) > 0) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) return(0);
-				}
-				break;
+				// RA2: no Nod factory prerequisite group
 
 				default: {
 					BuildingTypeClass * btype = BuildingTypes[pre[i]];
@@ -1736,7 +1696,7 @@ void HouseClass::AI(void)
 				Speak(VOX_LOW_POWER);
 				SpeakPowerDelay = Options.Normalize_Delay(int(TICKS_PER_MINUTE * Rule->SpeakDelay));
 //				Map.Flash_Power();
-				Session.Messages.Add_Message(NULL, 0, Fetch_String(TXT_LOW_POWER), Scheme, TextPrintType(TPF_6PT_GRAD|TPF_USE_GRAD_PAL|TPF_FULLSHADOW), int(Rule->MessageDelay * TICKS_PER_MINUTE));
+// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
 			}
 		}
 	}
@@ -1781,7 +1741,7 @@ void HouseClass::AI(void)
 	if (Session.Type != GAME_NORMAL && !IsDefeated && Frame > 0 && !Class->IsMultiplayPassive) {
 		bool defeated = false;
 		if (Session.Options.ShortGame) {
-			if (!CurBuildings && !UQuantity.Value(Rule->BaseUnit->HeapID)) {
+			if (!CurBuildings && !(UQuantity.Value(Rule->BaseUnit[0]->HeapID) + UQuantity.Value(Rule->BaseUnit[1]->HeapID))) { // RA2: BaseUnit is a list of two
 				defeated = true;
 			}
 		} else {
@@ -2015,14 +1975,7 @@ void HouseClass::Super_Weapon_Handler(void)
 				if (this == PlayerPtr) Map.Column[1].Flag_To_Redraw();
 			}
 
-			if (super->Class->Type == SUPER_CHEM_MISSILE) {
-				if (Weed.Get_Total_Amount() && ((double)Weed.Get_Total_Amount() / (double)Rule->WeedCapacity) == 1.0) {
-					if (!super->Is_Ready()) {
-						super->Recharge(this == PlayerPtr);
-						Weed.Decrease_Amount(Weed.Get_Amount(0), 0);
-					}
-				}
-			}
+			// RA2: no chem missile
 		}
 	}
 }
@@ -2115,6 +2068,32 @@ void HouseClass::Harvested(int tiberium, TiberiumType slot)
 
 		Silo_Redraw_Check(oldtib, oldcap);
 	}
+}
+
+
+/// <summary>
+/// Finds the building of this house that has the most room left for tiberium.
+/// </summary>
+/// <returns>Returns with the building, or NULL if the house has no building that can store tiberium.</returns>
+BuildingClass * HouseClass::Emptiest_Storage_Building(void) // RA2: 0x4E5160; not in TibSun
+{
+	BuildingClass * best = NULL; // RA2: as above
+	float best_room = 0; // RA2: as above
+	int count = Buildings.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		BuildingClass * building = Buildings[index]; // RA2: as above
+		if (building != NULL && building->IsDown) { // RA2: as above
+			int capacity = building->Class->Capacity; // RA2: as above
+			if (capacity > 0) { // RA2: as above
+				float room = (float)capacity - building->Storage.Get_Total_Amount(); // RA2: as above
+				if (best == NULL || room > best_room) { // RA2: as above
+					best_room = room; // RA2: as above
+					best = building; // RA2: as above
+				}
+			}
+		}
+	}
+	return(best); // RA2: as above
 }
 
 
@@ -2463,7 +2442,7 @@ void HouseClass::Make_Ally(HouseClass * house)
 
 			if (Is_Human_Player() && Session.Type != GAME_NORMAL && !house->Class->IsMultiplayPassive) {
 				wsprintf(buffer, Fetch_String(TXT_HAS_ALLIED), (char const *)IniName, (char const *)house->IniName);
-				Session.Messages.Add_Message(NULL, 0, buffer, Class->Scheme, TextPrintType(TPF_6PT_GRAD|TPF_USE_GRAD_PAL|TPF_FULLSHADOW), int(TICKS_PER_MINUTE * Rule->MessageDelay));
+// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
 
 				if (Is_Player_Control()) {
 					Speak(VOX_ALLIANCE_FORMED);
@@ -2536,7 +2515,7 @@ void HouseClass::Make_Enemy(HouseClass * house)
 				char buffer[80];
 
 				wsprintf(buffer, Fetch_String(TXT_AT_WAR), (char const *)IniName, (char const *)house->IniName);
-				Session.Messages.Add_Message(NULL, 0, buffer, Class->Scheme, TextPrintType(TPF_6PT_GRAD|TPF_USE_GRAD_PAL|TPF_FULLSHADOW), int(TICKS_PER_MINUTE * Rule->MessageDelay));
+// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
 				Map.Flag_To_Redraw();
 				if (Is_Player_Control()) {
 					Speak(VOX_ALLIANCE_BROKEN);
@@ -2638,7 +2617,7 @@ void HouseClass::Adjust_Threat(int region, int threat)
  *   05/08/1995 JLB : Created.                                                                 *
  *   10/21/1996 JLB : Handles max object case.                                                 *
  *=============================================================================================*/
-ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool resume)
+ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, bool resume) // RA2: naval
 {
 	int result = true;
 	FactoryClass * fptr;
@@ -2795,7 +2774,7 @@ ProdFailType HouseClass::Suspend_Production(RTTIType type)
  * HISTORY:                                                                                    *
  *   05/08/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-ProdFailType HouseClass::Abandon_Production(RTTIType type, int id)
+ProdFailType HouseClass::Abandon_Production(RTTIType type, int id, bool naval) // RA2: naval
 {
 	FactoryClass * fptr = Fetch_Factory(type);
 
@@ -3563,7 +3542,7 @@ void HouseClass::MPlayer_Defeated(void)
 	**	- Add my defeat message
 	*/
 	if (PlayerPtr == this) {
-		Session.ObiWan = 1;
+		// RA2: no Session.ObiWan
 		Map.Reveal_The_Map();
 		HiddenSurface->Fill(TBLACK);
 		Map.Flag_To_Redraw(GS_REDRAW_ALL);
@@ -3572,8 +3551,7 @@ void HouseClass::MPlayer_Defeated(void)
 		**	Pop up a message showing that I was defeated
 		*/
 		wsprintf(txt, Fetch_String(TXT_PLAYER_DEFEATED), (char const *)IniName);
-		Session.Messages.Add_Message(NULL, 0, txt, Session.ColorIdx,
-		TextPrintType(TPF_6PT_GRAD|TPF_USE_GRAD_PAL|TPF_FULLSHADOW), int(Rule->MessageDelay * TICKS_PER_MINUTE));
+// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
 
 		Speak(VOX_YOU_HAVE_LOST);
 		Map.Flag_To_Redraw();
@@ -3587,8 +3565,7 @@ void HouseClass::MPlayer_Defeated(void)
 		if (!Class->IsMultiplayPassive) {
 			wsprintf(txt, Fetch_String(TXT_PLAYER_DEFEATED), (char const *)IniName);
 
-			Session.Messages.Add_Message(NULL, 0, txt, Scheme,
-				TextPrintType(TPF_6PT_GRAD | TPF_USE_GRAD_PAL | TPF_FULLSHADOW), int(Rule->MessageDelay * TICKS_PER_MINUTE));
+// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
 			Speak(VOX_PLAYER_WAS_DEFEATED);
 			Map.Flag_To_Redraw();
 		}
@@ -3851,11 +3828,11 @@ bool HouseClass::Flag_To_Win(bool silent)
 		}
 		if (Session.Type == GAME_NORMAL && Is_Player_Control()) {
 			Lock_Scenario_Input();
-			TacticalMap->Set_Caption_Text(TXT_SCENARIO_WON);
+// RA2: no Set_Caption_Text (the text is a wide string and a frame)
 			Speak(VOX_ACCOMPLISHED);
 			Map.Flag_To_Redraw();
 		} else if (Is_Player_Control()) {
-			TacticalMap->Set_Caption_Text(TXT_VICTORIOUS);
+// RA2: no Set_Caption_Text (the text is a wide string and a frame)
 			Speak(VOX_YOU_ARE_VICTORIOUS);
 			Map.Flag_To_Redraw();
 		}
@@ -3895,11 +3872,11 @@ bool HouseClass::Flag_To_Lose(bool silent)
 		}
 		if (Session.Type == GAME_NORMAL && Is_Player_Control()) {
 			Lock_Scenario_Input();
-			TacticalMap->Set_Caption_Text(TXT_SCENARIO_LOST);
+// RA2: no Set_Caption_Text (the text is a wide string and a frame)
 			Speak(VOX_FAIL);
 			Map.Flag_To_Redraw();
 		} else if (Is_Player_Control()) {
-			TacticalMap->Set_Caption_Text(TXT_LOST);
+// RA2: no Set_Caption_Text (the text is a wide string and a frame)
 			Speak(VOX_YOU_HAVE_LOST);
 			Map.Flag_To_Redraw();
 		}
@@ -5272,7 +5249,7 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
 			building = (StructType)techno->TClass->Fetch_Heap_ID();
 			BQuantity.Increment(building);
 			if (Session.Type == GAME_INTERNET) {
-				BuildingTotals->Increment_Unit_Total(building);
+				BuildingTotals.Increment_Unit_Total(building); // RA2: the totals are held inline
 			}
 			break;
 
@@ -5281,7 +5258,7 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
 			aircraft = (AircraftType)techno->TClass->Fetch_Heap_ID();
 			AQuantity.Increment(aircraft);
 			if (Session.Type == GAME_INTERNET) {
-				AircraftTotals->Increment_Unit_Total(aircraft);
+				AircraftTotals.Increment_Unit_Total(aircraft); // RA2: the totals are held inline
 			}
 			break;
 
@@ -5290,7 +5267,7 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
 			CurInfantry++;
 			IQuantity.Increment(infantry);
 			if (Session.Type == GAME_INTERNET) {
-				InfantryTotals->Increment_Unit_Total(infantry);
+				InfantryTotals.Increment_Unit_Total(infantry); // RA2: the totals are held inline
 			}
 			break;
 
@@ -5299,7 +5276,7 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
 			unit = (UnitType)techno->TClass->Fetch_Heap_ID();
 			UQuantity.Increment(unit);
 			if (Session.Type == GAME_INTERNET) {
-				UnitTotals->Increment_Unit_Total(unit);
+				UnitTotals.Increment_Unit_Total(unit); // RA2: the totals are held inline
 			}
 			break;
 
@@ -5616,37 +5593,230 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
  * HISTORY:                                                                                    *
  *   07/09/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
-FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti) const
+/// <summary>
+/// Fetches the build category of an object type; only buildings have one.
+/// </summary>
+/// <param name="type">The kind of object type.</param>
+/// <param name="id">The heap ID of the object type.</param>
+/// <returns>Returns with the category (5 is the defense category), or 0 for any other type.</returns>
+int HouseClass::Build_Category(RTTIType type, int id) // RA2: 0x4EB550; not in TibSun
 {
-	FactoryClass * factory;
-
-	switch (rtti) {
-		case RTTI_INFANTRY:
-		case RTTI_INFANTRYTYPE:
-			factory = InfantryFactory;
-			break;
-
-		case RTTI_UNIT:
-		case RTTI_UNITTYPE:
-			factory = UnitFactory;
-			break;
-
-		case RTTI_BUILDING:
-		case RTTI_BUILDINGTYPE:
-			factory = BuildingFactory;
-			break;
-
-		case RTTI_AIRCRAFT:
-		case RTTI_AIRCRAFTTYPE:
-			factory = AircraftFactory;
-			break;
-
-		default:
-			factory = NULL;
-			break;
+	if (id < 0) { // RA2: as above
+		return(0); // RA2: as above
 	}
-	return(factory);
+	TechnoTypeClass const * ttype = Fetch_Techno_Type(type, id); // RA2: as above
+	if (type == RTTI_BUILDING || type == RTTI_BUILDINGTYPE) { // RA2: as above
+		return(((BuildingTypeClass const *)ttype)->BuildCat); // RA2: as above
+	}
+	return(0); // RA2: as above
 }
+
+
+/// <summary>
+/// Fetches the factory that makes an object of the given kind.
+/// </summary>
+/// <param name="rtti">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+/// <returns>Returns with the factory, or NULL if there is none.</returns>
+FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti, bool naval, int category) const // RA2: 0x4EB580; the naval and defense factories apart
+{
+	FactoryClass * factory; // RA2: as above
+
+	switch (rtti) { // RA2: as above
+		case RTTI_INFANTRY: // RA2: as above
+		case RTTI_INFANTRYTYPE: // RA2: as above
+			factory = InfantryFactory; // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_UNIT: // RA2: as above
+		case RTTI_UNITTYPE: // RA2: as above
+			if (naval) { // RA2: as above
+				factory = Primary_ForShips; // RA2: as above
+			} else { // RA2: as above
+				factory = UnitFactory; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_BUILDING: // RA2: as above
+		case RTTI_BUILDINGTYPE: // RA2: as above
+			if (category == 5) { // RA2: as above
+				factory = Primary_ForDefenses; // RA2: as above
+			} else { // RA2: as above
+				factory = BuildingFactory; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_AIRCRAFT: // RA2: as above
+		case RTTI_AIRCRAFTTYPE: // RA2: as above
+			factory = AircraftFactory; // RA2: as above
+			break; // RA2: as above
+
+		default: // RA2: as above
+			factory = NULL; // RA2: as above
+			break; // RA2: as above
+	}
+	return(factory); // RA2: as above
+}
+
+
+/// <summary>
+/// Marks the production of an object kind as pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+void HouseClass::Set_Production_Pending(RTTIType type, bool naval, int category) // RA2: 0x4EB620; not in TibSun
+{
+	switch (type) { // RA2: as above
+		case RTTI_INFANTRY: // RA2: as above
+		case RTTI_INFANTRYTYPE: // RA2: as above
+			InfantryProductionPending = true; // RA2: as above
+			// fall through // RA2: as above
+		case RTTI_UNIT: // RA2: as above
+		case RTTI_UNITTYPE: // RA2: as above
+			if (naval) { // RA2: as above
+				ShipProductionPending = true; // RA2: as above
+			} else { // RA2: as above
+				UnitProductionPending = true; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_BUILDING: // RA2: as above
+		case RTTI_BUILDINGTYPE: // RA2: as above
+			if (category == 5) { // RA2: as above
+				DefenseProductionPending = true; // RA2: as above
+			} else { // RA2: as above
+				BuildingProductionPending = true; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_AIRCRAFT: // RA2: as above
+		case RTTI_AIRCRAFTTYPE: // RA2: as above
+			AircraftProductionPending = true; // RA2: as above
+			break; // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Marks the production of an object kind as no longer pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+void HouseClass::Clear_Production_Pending(RTTIType type, bool naval, int category) // RA2: 0x4EB6D0; not in TibSun
+{
+	switch (type) { // RA2: as above
+		case RTTI_INFANTRY: // RA2: as above
+		case RTTI_INFANTRYTYPE: // RA2: as above
+			InfantryProductionPending = false; // RA2: as above
+			// fall through // RA2: as above
+		case RTTI_UNIT: // RA2: as above
+		case RTTI_UNITTYPE: // RA2: as above
+			if (naval) { // RA2: as above
+				ShipProductionPending = false; // RA2: as above
+			} else { // RA2: as above
+				UnitProductionPending = false; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_BUILDING: // RA2: as above
+		case RTTI_BUILDINGTYPE: // RA2: as above
+			if (category == 5) { // RA2: as above
+				DefenseProductionPending = false; // RA2: as above
+			} else { // RA2: as above
+				BuildingProductionPending = false; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_AIRCRAFT: // RA2: as above
+		case RTTI_AIRCRAFTTYPE: // RA2: as above
+			AircraftProductionPending = false; // RA2: as above
+			break; // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Checks whether the production of an object kind is pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+bool HouseClass::Is_Production_Pending(RTTIType type, bool naval, int category) // RA2: 0x4EB770; not in TibSun
+{
+	switch (type) { // RA2: as above
+		case RTTI_INFANTRY: // RA2: as above
+		case RTTI_INFANTRYTYPE: // RA2: as above
+			return(InfantryProductionPending); // RA2: as above
+			// fall through // RA2: as above
+		case RTTI_UNIT: // RA2: as above
+		case RTTI_UNITTYPE: // RA2: as above
+			if (naval) { // RA2: as above
+				return(ShipProductionPending); // RA2: as above
+			} else { // RA2: as above
+				return(UnitProductionPending); // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_BUILDING: // RA2: as above
+		case RTTI_BUILDINGTYPE: // RA2: as above
+			if (category == 5) { // RA2: as above
+				return(DefenseProductionPending); // RA2: as above
+			} else { // RA2: as above
+				return(BuildingProductionPending); // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_AIRCRAFT: // RA2: as above
+		case RTTI_AIRCRAFTTYPE: // RA2: as above
+			return(AircraftProductionPending); // RA2: as above
+			break; // RA2: as above
+	}
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// Sets whether the production of an object kind is pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+/// <param name="value">The new state.</param>
+void HouseClass::Assign_Production_Pending(RTTIType type, bool naval, int category, bool value) // RA2: 0x4EB810; not in TibSun
+{
+	switch (type) { // RA2: as above
+		case RTTI_INFANTRY: // RA2: as above
+		case RTTI_INFANTRYTYPE: // RA2: as above
+			InfantryProductionPending = value; // RA2: as above
+			// fall through // RA2: as above
+		case RTTI_UNIT: // RA2: as above
+		case RTTI_UNITTYPE: // RA2: as above
+			if (naval) { // RA2: as above
+				ShipProductionPending = value; // RA2: as above
+			} else { // RA2: as above
+				UnitProductionPending = value; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_BUILDING: // RA2: as above
+		case RTTI_BUILDINGTYPE: // RA2: as above
+			if (category == 5) { // RA2: as above
+				DefenseProductionPending = value; // RA2: as above
+			} else { // RA2: as above
+				BuildingProductionPending = value; // RA2: as above
+			} // RA2: as above
+			break; // RA2: as above
+
+		case RTTI_AIRCRAFT: // RA2: as above
+		case RTTI_AIRCRAFTTYPE: // RA2: as above
+			AircraftProductionPending = value; // RA2: as above
+			break; // RA2: as above
+	}
+}
+
 
 
 /***********************************************************************************************
@@ -7050,7 +7220,7 @@ HRESULT STDMETHODCALLTYPE HouseClass::GetClassID(CLSID * retval)
 /// house occupies.
 /// </summary>
 /// <returns>Returns with the size of the house object in bytes.</returns>
-int HouseClass::Fetch_Object_Size(bool) const
+int HouseClass::Fetch_Object_Size(void) const // RA2: no argument
 {
 	return(sizeof(*this));
 }
@@ -7131,22 +7301,7 @@ void HouseClass::Deactivate_Firestorm(void)
 /// wall cannot be raised again until a generator is rebuilt and the weapon recharged.
 /// </summary>
 void HouseClass::Lost_Firestorm_Generator(void)
-{
-	if (FirestormDefenseActivated) {
-		for (int i = Buildings.Count() - 1; i >= 0; i--) {
-			BuildingClass * b = Buildings[i];
-			if (b->Class == Rule->GDIFirestormGenerator && b->House == this && b->IsOn && !b->IsInLimbo &&
-				b->Mission != MISSION_DECONSTRUCTION && b->Mission != MISSION_CONSTRUCTION) {
-
-				return;
-			}
-		}
-		for (int super = 0; super < SuperWeapon.Count(); super++) {
-			if (SuperWeapon[super]->Class->Type == SUPER_FIRESTORM) {
-				SuperWeapon[super]->Discharged(this == PlayerPtr, Cell(0, 0));
-			}
-		}
-	}
+{ // RA2: the body is one ret (0x4EEB90); the firestorm super weapon is TibSun's
 }
 
 
@@ -8743,21 +8898,7 @@ void HouseClass::AI_Super_Weapons(void)
 						AI_Multi_Missile(super);
 						break;
 
-					case SUPER_ION_CANNON:
-						AI_Ion_Cannon(super);
-						break;
-
-					case SUPER_HUNTER_SEEKER:
-						AI_Hunter_Seeker(super);
-						break;
-
-					case SUPER_CHEM_MISSILE:
-						AI_Chem_Missile(super);
-						break;
-
-					case SUPER_DROP_PODS:
-						AI_Drop_Pods(super);
-						break;
+					// RA2: the super weapon types are RA2's; no ion cannon, hunter seeker, chem missile or drop pods case
 
 					default:
 						break;
@@ -9581,3 +9722,55 @@ int HouseClass::Fetch_Heap_ID(void) const
 #undef DEFINE_GUID
 #include <basetyps.h>
 #include "ihouse_i.c"
+
+
+
+
+/***********************************************************************************************
+ * HouseClass::Fetch_Factory -- Finds the factory associated with the object type specified.   *
+ *                                                                                             *
+ *    This is the counterpart to the Set_Factory function. It will return with a factory       *
+ *    pointer that is associated with the object type specified.                               *
+ *                                                                                             *
+ * INPUT:   rtti  -- The RTTI of the object type to find the factory for.                      *
+ *                                                                                             *
+ * OUTPUT:  Returns with a pointer to the factory (if present) that can manufacture the        *
+ *          object type specified.                                                             *
+ *                                                                                             *
+ * WARNINGS:   If this returns a non-NULL pointer, then the factory is probably already busy   *
+ *             producing another unit of that category.                                        *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   07/09/1996 JLB : Created.                                                                 *
+ *=============================================================================================*/
+FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti) const // RA2: no such function; the one-argument form is TibSun's, so it sits unplaced at the end
+{
+	FactoryClass * factory;
+
+	switch (rtti) {
+		case RTTI_INFANTRY:
+		case RTTI_INFANTRYTYPE:
+			factory = InfantryFactory;
+			break;
+
+		case RTTI_UNIT:
+		case RTTI_UNITTYPE:
+			factory = UnitFactory;
+			break;
+
+		case RTTI_BUILDING:
+		case RTTI_BUILDINGTYPE:
+			factory = BuildingFactory;
+			break;
+
+		case RTTI_AIRCRAFT:
+		case RTTI_AIRCRAFTTYPE:
+			factory = AircraftFactory;
+			break;
+
+		default:
+			factory = NULL;
+			break;
+	}
+	return(factory);
+}

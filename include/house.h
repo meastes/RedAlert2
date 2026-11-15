@@ -799,6 +799,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		int Factory_Count(RTTIType rtti) const;
 		DiffType Assign_Handicap(DiffType handicap);
 		AbstractClass * Find_Juicy_Target(Coord const & coord) const;
+		static int Build_Category(RTTIType type, int id); // RA2: 0x4EB550; the build category (5: defenses) of a building type, else 0
 		Cell Where_To_Go(FootClass const * object) const;
 		Cell Zone_Cell(ZoneType zone) const;
 		ZoneType Which_Zone(Coord const & coord) const;
@@ -891,6 +892,10 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		// Factory controls.
 		FactoryClass * Fetch_Factory(RTTIType rtti) const;
 		FactoryClass * Fetch_Factory(RTTIType rtti, bool naval, int category) const; // RA2: 0x4EB580; the naval and defense factories apart
+		void Set_Production_Pending(RTTIType type, bool naval, int category); // RA2: 0x4EB620; production of the kind is pending
+		void Clear_Production_Pending(RTTIType type, bool naval, int category); // RA2: 0x4EB6D0; production of the kind is no longer pending
+		bool Is_Production_Pending(RTTIType type, bool naval, int category); // RA2: 0x4EB770; production of the kind is pending
+		void Assign_Production_Pending(RTTIType type, bool naval, int category, bool value); // RA2: 0x4EB810; sets the pending state of the kind
 		void Set_Factory(RTTIType rtti, FactoryClass * factory);
 		void Update_Production_Mode(RTTIType type);
 		void Production_Status_Changed(void) {IsRecalcNeeded = true;}
@@ -903,6 +908,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		void Recalc_Center(void);
 		bool Does_Enemy_Building_Exist(StructType) const;
 		void Harvested(int tiberium, TiberiumType slot);
+		BuildingClass * Emptiest_Storage_Building(void); // RA2: 0x4E5160; the house's building with the most room for tiberium
 		void Harvested_Weed(int weed, int slot);
 		void Spend_Money(int money);
 		void Refund_Money(int money);
