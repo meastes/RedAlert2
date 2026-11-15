@@ -2221,20 +2221,17 @@ void UnitClass::Per_Cell_Process(PCPType why)
 bool UnitClass::Render(Rect & rect, bool forced, bool extras_only) const
 {
 	if (IsTethered) {
-		TechnoClass * radio = Contact_With_Whom();
-		if (radio->RTTI == RTTI_BUILDING) {
-			if (radio->Mission == MISSION_UNLOAD || radio->MissionQueue == MISSION_UNLOAD) {
-				if (!radio->Door.Is_Ready_To_Close()) {
-					return(false);
-				}
+		TechnoClass *contact = Radio_Link(0); // RA2: RA2's form
+		if (contact->Fetch_RTTI() == RTTI_BUILDING && (contact->Get_Mission() == MISSION_UNLOAD || contact->MissionQueue == 16)) { // RA2: as above
+			DelayTimerClass *state = &contact->Door; // RA2: as above
+			if (state->Is_Count_Up_Active() || state->Is_Count_Down_Active() || state->Is_Count_Up_Complete() || state->Is_Count_Down_Complete()) { // RA2: as above
+				return(false); // RA2: as above
 			}
 		}
 	}
-	/*
-	 * Units have no extras pass (only buildings do), so always render the body.
-	 */
-	return(BASECLASS::Render(rect, forced, false));
+	return ObjectClass::Render(rect, forced, false); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -4157,8 +4154,16 @@ bool UnitClass::Flag_Remove(void)
  *=============================================================================================*/
 int UnitClass::Pip_Count(void) const
 {
-	return(BASECLASS::Pip_Count()); // RA2: no Class, PipScale, Storage and 3 more (TibSun's use does not compile against RA2's declaration)
+	switch (Class->PipScale) { // RA2: RA2's form
+	case 2: // RA2: as above
+	{
+		double ratio = Storage.Get_Total_Amount() / Class->Capacity; // RA2: as above
+		return (int)(Class->Max_Pips() * ratio + 0.5); // RA2: as above
+	}
+	}
+	return TechnoClass::Pip_Count(); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4380,37 +4385,46 @@ FireErrorType UnitClass::Can_Fire(AbstractClass * target, int which, bool ignore
  *=============================================================================================*/
 BulletClass * UnitClass::Fire_At(AbstractClass * target, int which)
 {
-	BulletClass * bullet = NULL;
-	WeaponTypeClass const * weap = Get_Class_Weapon_Data(which)->Weapon;
-	if (weap == NULL) return(NULL);
-
-	bool sync = false;
-	if (which != 1) {
-		int burst = BurstIndex % weap->Burst;
-		int frame = burst < 2 ? Class->FiringSyncFrame[burst] : -1;
-		sync = FiringSyncDelay != -1 && frame != -1;
+	BulletClass *bullet = 0; // RA2: RA2's form
+	WeaponTypeClass *weapon = Get_Class_Weapon_Data(which)->Weapon; // RA2: as above
+	if (!weapon) { // RA2: as above
+		return(0); // RA2: as above
 	}
-
-	if (Can_Fire(target, which) == FIRE_OK) {
-		bullet = BASECLASS::Fire_At(target, which);
-
-		if (bullet != NULL) {
-
-			/*
-			**	Possible reload timer set.
-			*/
-			if (Class->MaxAmmo > 0 && !Class->IsManualReload && ReloadTimer == 0) { // RA2: TechnoClass's ReloadTimer
-				ReloadTimer = TICKS_PER_SECOND * 30; // RA2: as above
+	bool synchronized = false; // RA2: as above
+	if (which == 0) { // RA2: as above
+		int burst = BurstIndex % weapon->Burst; // RA2: as above
+		int frame; // RA2: as above
+		if (burst < 2) { // RA2: as above
+			frame = Class->FiringSyncFrame[burst]; // RA2: as above
+		} else { // RA2: as above
+			frame = -1; // RA2: as above
+		}
+		if (FiringSyncDelay != -1 && frame != -1) { // RA2: as above
+			synchronized = true; // RA2: as above
+		} else { // RA2: as above
+			synchronized = false; // RA2: as above
+		}
+	}
+	if (!Can_Fire(target, which, 1)) { // RA2: as above
+		bullet = TechnoClass::Fire_At(target, which); // RA2: as above
+		if (bullet) { // RA2: as above
+			if (Class->MaxAmmo > 0 && Ammo < Class->MaxAmmo && !Class->IsManualReload) { // RA2: as above
+				Start_Reload_Timer(); // RA2: as above
 			}
-
-			if (!sync && Class->FiringFrames > 0) {
-				FiringSyncDelay = 2 * Class->FiringFrames - 1;
+			if (!synchronized && Class->FiringFrames > 0) { // RA2: as above
+				FiringSyncDelay = Class->FiringFrames * 2 - 1; // RA2: as above
+			}
+			if (bullet->Class->Scalable) { // RA2: as above
+				bullet->InitScalable(); // RA2: as above
+			}
+			if (Class->DisguiseWhenStill) { // RA2: as above
+				DisguiseBlinkTimer = CDTimerClass<FrameTimerClass>(weapon->DisguiseFakeBlinkTime); // RA2: as above
 			}
 		}
 	}
-
-	return(bullet);
+	return bullet; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4449,11 +4463,12 @@ ObjectTypeClass const * UnitClass::Class_Of(void) const
  *=============================================================================================*/
 double UnitClass::Tiberium_Load(void) const
 {
-	if (Class->IsToHarvest) {
-		return(Storage.Get_Total_Amount() / (double)Class->Capacity);
+	if (!Class->IsToHarvest && !Class->IsToVeinHarvest) { // RA2: RA2's form
+		return 0.0; // RA2: as above
 	}
-	return(0.0);
+	return Storage.Get_Total_Amount() / Class->Capacity; // RA2: as above
 }
+
 
 
 /// <summary>
