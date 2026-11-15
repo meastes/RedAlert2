@@ -7863,22 +7863,23 @@ void BuildingClass::Detach_Anim(AnimClass * anim)
 /// <param name="anim">The animation slot to stop, or BANIM_ALL for all of them.</param>
 void BuildingClass::End_Anim(BAnimType anim)
 {
-	if (anim == BANIM_ALL) {
-		for (int i = 0; i < BANIM_COUNT; i++) {
-			AnimClass * animation = Anims[i];
-			if (animation != NULL) {
-				Anims[i] = NULL;
-				delete animation;
+	if (anim == -2) { // RA2: RA2's form
+		for (int i = 0; i < 18; i++) { // RA2: as above
+			AbstractClass *object = Anims[i]; // RA2: as above
+			if (object) { // RA2: as above
+				Anims[i] = 0; // RA2: as above
+				delete object; // RA2: as above
 			}
 		}
 	} else {
-		AnimClass * animation = Anims[anim];
-		if (animation != NULL) {
-			Anims[anim] = NULL;
-			delete animation;
+		AbstractClass *object = Anims[anim]; // RA2: as above
+		if (object) { // RA2: as above
+			Anims[anim] = 0; // RA2: as above
+			delete object; // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9030,22 +9031,23 @@ bool BuildingClass::Ready_To_Commence(void)
 /// <param name="crc">The checksum engine to submit the building's state to.</param>
 void BuildingClass::Compute_CRC(CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
-	crc((int)CountDown);
-	crc(BState);
-	crc(QueueBState);
-	crc(WhoLastHurtMe);
-	if (WhomToRepay != NULL) {
+	TechnoClass::Compute_CRC(crc); // RA2: RA2's form
+	crc(CountDown.Value()); // RA2: as above
+	crc(CashProductionTimer.Value()); // RA2: as above
+	crc((long)BState); // RA2: as above
+	crc((long)QueueBState); // RA2: as above
+	crc((long)WhoLastHurtMe); // RA2: as above
+	if (WhomToRepay != 0) { // RA2: as above
 		crc(WhomToRepay->Fetch_ID());
 	}
-	crc(LastStrength);
-	if (AnimToTrack != NULL) {
+	crc((long)LastStrength); // RA2: as above
+	if (AnimToTrack != 0) { // RA2: as above
 		crc(AnimToTrack->Fetch_ID());
 	}
-	crc((int)PlacementDelay);
-	crc(TurretIndex);
-	crc(LaserFenceFrame);
-	crc(FirestormWallFrame);
+	crc(PlacementDelay.Value()); // RA2: as above
+	crc((long)TurretIndex); // RA2: as above
+	crc((long)LaserFenceFrame); // RA2: as above
+	crc((long)FirestormWallFrame); // RA2: as above
 	crc(IsOn);
 	crc(IsPoweredOn);
 	crc(IsToRebuild);
@@ -9060,11 +9062,13 @@ void BuildingClass::Compute_CRC(CRCEngine & crc) const
 	crc(IsCharged);
 	crc(IsCaptured);
 	crc(HasOpened);
+	crc(HasEngineer); // RA2: as above
 	crc(UnusedBuildingBool1);
 	crc(IsDamagedAnims);
-	crc(Brightness);
+	crc((long)(unsigned short)Brightness); // RA2: as above
 	crc(UpgradeLevel);
 }
+
 
 
 /// <summary>
