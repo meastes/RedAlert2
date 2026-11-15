@@ -89,6 +89,9 @@ struct RecoilData
 	int State;
 	int TravelFramesLeft;
 
+	void Fire(void); // RA2: 0x6D8B90
+	void Update(void); // RA2: 0x6D8BC0
+
 	RecoilData(void)
 	{
 		Turret.Travel = 2;
@@ -709,8 +712,17 @@ class TechnoClass :	public RadioClass,
 		void Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool shadow) const; // RA2: 0x6D0DC0
 		int Elevation_Bonus(void); // RA2: 0x6CD6F0
 		int FireDeathWeapon(int additional_damage); // RA2: 0x6D7E20
+		bool Has_Turret_Tooltips(void); // RA2: 0x6D83D0
+		bool Has_Turret_Weapons(void); // RA2: 0x6D83E0
 		void Set_Current_Weapon(int which); // RA2: 0x6D83F0
+		bool Has_Current_Turret(void) const; // RA2: 0x6D8460
+		int Get_Current_Turret_Number(void) const; // RA2: 0x6D8470
+		int Turret_Changed(void); // RA2: 0x6D8480
+		int Get_Current_Weapon_Number(void); // RA2: 0x6D84A0
+		int Is_Valid_Weapon_Index(int which); // RA2: 0x6D85E0
+		int Has_Turret_Weapon(void) const; // RA2: 0x6D8660
 		int GetEffectTintIntensity(int brightness) const; // RA2: 0x6D86F0
+		void Update_Iron_Tint(void); // RA2: 0x6D8820
 		void UpdateThreatInCell(CellClass * cell); // RA2: 0x6D9610
 		void Set_Planning_Token(PlanningTokenClass * token); // RA2: 0x6D1420
 		PlanningTokenClass * Get_Planning_Token(void); // RA2: 0x6D1430
@@ -744,6 +756,7 @@ class TechnoClass :	public RadioClass,
 		virtual void Radar_Track(void);
 		virtual void Radar_Untrack(void);
 		virtual void Plot_On_Radar(void) const;
+		virtual void IronCurtain(int duration) override; // RA2: 0x6D86B0
 		virtual void Update_Radar_Position(bool force_update=false);
 		virtual int RespondMegaEventMission(void * event); // RA2
 		virtual void ClearMegaMissionData(void); // RA2
@@ -955,16 +968,6 @@ inline bool TechnoClass::Is_Ready_To_Move(void) const { return(true); }
 inline DirType TechnoClass::Turret_Facing(void) const
 {
 	return(PrimaryFacing.Current());
-}
-
-
-inline WeaponDataStruct const * TechnoClass::Get_Class_Weapon_Data(int which) const
-{
-	if (Veterancy.Is_Elite() && which == 0) {
-		return(TClass->Get_Weapon(2));
-	}
-
-	return(TClass->Get_Weapon(which));
 }
 
 

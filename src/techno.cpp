@@ -9822,31 +9822,25 @@ void TechnoClass::Update_Radar_Position(bool force_update)
 	bool visible = Is_Radar_Visible(detected);
 	Rect radar_rect = Map.RadarSurface->Get_Rect();
 
-	if (detected != DETECTED_NONE) {
-		if (visible && (!Is_Foot() || ((FootClass *)this)->CurrentTube < TUBE_FIRST)) {
-			if (Submit_Radar_Event(RADAREVENT_ENEMY_SENSED, Get_Coord().As_Cell())) {
-				if (detected == DETECTED_CLOAKED) {
-					Speak(VOX_CLOAKED_DETECTED);
-				} else if (detected == DETECTED_SUBTERRANEAN) {
-					Speak(VOX_SUBTERRANEAN_DETECTED);
-				}
-			}
+	if (detected != DETECTED_NONE && visible) { // RA2
+		bool foot;
+		if (this != NULL) {
+			foot = (AbstractFlags & 4) != 0; // RA2
+		}
+		if (this == NULL || !foot || ((FootClass *)this)->CurrentTube < TUBE_FIRST) { // RA2
+			Submit_Radar_Event(RADAREVENT_ENEMY_SENSED, Get_Coord().As_Cell()); // RA2: no speech
 		}
 	}
 
-	if (!radar_rect.Is_Point_Within(point)) {
+	if (!radar_rect.Is_Point_Within(point) && visible) { // RA2
+		visible = Map.In_Local_Radar(Get_Target_Cell_Ptr());
 		if (visible) {
-			visible = Map.In_Local_Radar(Get_Target_Cell_Ptr());
-			if (visible) {
-				point = Map.Coord_To_Radar_Pixel(Get_Coord(), true);
-			}
+			point = Map.Coord_To_Radar_Pixel(Get_Coord(), true);
 		}
 	}
 
-	if (IsRadarTracked) {
-		if (point != RadarPos || !visible) {
-			Radar_Untrack();
-		}
+	if (IsRadarTracked && (point != RadarPos || !visible)) { // RA2
+		Radar_Untrack();
 	}
 
 	RadarPos = point;
@@ -9855,108 +9849,271 @@ void TechnoClass::Update_Radar_Position(bool force_update)
 		Radar_Track();
 	}
 
-	if (House == PlayerPtr && RadarFlashTimer > 0) {
-		if (((int)RadarFlashTimer) % Rule->FlashFrameTime == 0) {
-			Plot_On_Radar();
+	if (House == PlayerPtr && RadarFlashTimer.Value() > 0 && RadarFlashTimer.Value() % Rule->FlashFrameTime == 0) { // RA2
+		Plot_On_Radar();
+	}
+}
+
+/// <summary>
+/// Whether the type shows turret tooltips.
+/// </summary>
+bool TechnoClass::Has_Turret_Tooltips(void) // RA2: not in TibSun, at 0x6D83D0
+{
+	return(Techno_Type_Class()->HasTurretTooltips);
+}
+
+
+/// <summary>
+/// Whether the type has turret weapons to choose from.
+/// </summary>
+bool TechnoClass::Has_Turret_Weapons(void) // RA2: not in TibSun, at 0x6D83E0
+{
+	return(Techno_Type_Class()->Has_Turret_Weapons());
+}
+
+
+/// <summary>
+/// Picks the turret weapon (and so the turret) at the index, or the first one when the index is out of
+/// range; a charge turret keeps its own.
+/// </summary>
+void TechnoClass::Set_Current_Weapon(int which) // RA2: not in TibSun, at 0x6D83F0
+{
+	if (!Techno_Type_Class()->IsChargeTurret) {
+		if (which >= 0 && which < 15) {
+			CurrentTurretNumber = Techno_Type_Class()->Get_Turret_Weapon(which);
+			CurrentWeaponNumber = which;
+		} else {
+			CurrentTurretNumber = Techno_Type_Class()->Get_Turret_Weapon(0);
+			CurrentWeaponNumber = 0;
 		}
 	}
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// <summary>
+/// Whether a turret has been picked.
+/// </summary>
+bool TechnoClass::Has_Current_Turret(void) const // RA2: not in TibSun, at 0x6D8460
+{
+	return(CurrentTurretNumber != -1);
+}
+
+
+/// <summary>
+/// The turret picked last.
+/// </summary>
+int TechnoClass::Get_Current_Turret_Number(void) const // RA2: not in TibSun, at 0x6D8470
+{
+	return(CurrentTurretNumber);
+}
+
+
+/// <summary>
+/// Whether the turret changed since the last check, which this records.
+/// </summary>
+int TechnoClass::Turret_Changed(void) // RA2: not in TibSun, at 0x6D8480
+{
+	int changed = CurrentTurretNumber != LastTurretNumber;
+	LastTurretNumber = CurrentTurretNumber;
+	return(changed);
+}
+
+
+/// <summary>
+/// The weapon index of the picked turret, or 0 for a type without turret weapons.
+/// </summary>
+int TechnoClass::Get_Current_Weapon_Number(void) // RA2: not in TibSun, at 0x6D84A0
+{
+	if (Techno_Type_Class()->Has_Turret_Weapons()) {
+		return(CurrentWeaponNumber);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Whether the deploy weapon fires on an area.
+/// </summary>
+bool TechnoClass::IsAreaFire(void) const // RA2: not in TibSun, at 0x6D84D0
+{
+	WeaponDataStruct const * wdata = GetDeployWeapon();
+	if (wdata != NULL && wdata->Weapon != NULL) {
+		return(wdata->Weapon->AreaFire);
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// The weapon index used for spray attacks: the secondary one.
+/// </summary>
+int TechnoClass::IsNotSprayAttack(void) const // RA2: not in TibSun, at 0x6D84F0
+{
+	return(1);
+}
+
+
+/// <summary>
+/// The index of the secondary weapon.
+/// </summary>
+int TechnoClass::GetSecondaryWeaponIndex(void) const // RA2: not in TibSun, at 0x6D8500
+{
+	return(1);
+}
+
+
+/// <summary>
+/// The weapon index used for spray attacks, the second query.
+/// </summary>
+int TechnoClass::IsNotSprayAttack2(void) const // RA2: not in TibSun, at 0x6D8510
+{
+	return(1);
+}
+
+
+/// <summary>
+/// The weapon fired when deployed.
+/// </summary>
+WeaponDataStruct const * TechnoClass::GetDeployWeapon(void) const // RA2: not in TibSun, at 0x6D8520
+{
+	return(Get_Class_Weapon_Data(IsNotSprayAttack()));
+}
+
+
+/// <summary>
+/// The weapon at the index: the elite one when this object is elite and has one there.
+/// </summary>
+WeaponDataStruct const * TechnoClass::Get_Class_Weapon_Data(int which) const // RA2: out of line, at 0x6D8540
+{
+	if (which == -1) {
+		return(NULL);
+	}
+	if (Veterancy.Is_Elite()) {
+		WeaponDataStruct const * wdata = Techno_Type_Class()->Get_Elite_Weapon(which);
+		if (wdata != NULL && wdata->Weapon != NULL) {
+			return(wdata);
+		}
+	}
+	return(Techno_Type_Class()->Get_Weapon(which));
+}
+
+
+/// <summary>
+/// The weapon of the picked turret.
+/// </summary>
+WeaponDataStruct const * TechnoClass::GetTurretWeapon(void) const // RA2: not in TibSun, at 0x6D85A0
+{
+	return(Get_Class_Weapon_Data(((TechnoClass *)this)->Get_Current_Weapon_Number()));
+}
+
+
+/// <summary>
+/// Whether the index names a weapon: -1, the primary or secondary one, or a turret weapon of the type.
+/// </summary>
+int TechnoClass::Is_Valid_Weapon_Index(int which) // RA2: not in TibSun, at 0x6D85E0
+{
+	bool basic = which < 2;
+	bool turret = Techno_Type_Class()->Has_Turret_Weapons() && which < Techno_Type_Class()->WeaponCount;
+	if (which >= -1 && (basic || turret)) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Whether the weapon slot holds a weapon.
+/// </summary>
+int __stdcall Is_Weapon_Present(WeaponDataStruct const * wdata) // RA2: not in TibSun, at 0x6D8640
+{
+	if (wdata != NULL && wdata->Weapon != NULL) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Whether the picked turret has a weapon.
+/// </summary>
+int TechnoClass::Has_Turret_Weapon(void) const // RA2: not in TibSun, at 0x6D8660
+{
+	WeaponDataStruct const * wdata = GetTurretWeapon();
+	if (wdata != NULL && wdata->Weapon != NULL) {
+		return(1);
+	}
+	return(0);
+}
+
+
+#pragma warning(push)
+#pragma warning(disable: 4716)
+/// <summary>
+/// Disguises the object as the target; a disguise records when it was put on.
+/// </summary>
+unsigned TechnoClass::DisguiseAs(AbstractClass * target) // RA2: not in TibSun, at 0x6D8680
+{
+	if (target != NULL) {
+		Disguised = true;
+		DisguiseCreationFrame = Frame;
+	}
+	Plot_On_Radar(); // RA2: no return value (the slot returns whatever Plot_On_Radar left)
+}
+#pragma warning(pop)
+
+
+/// <summary>
+/// Puts the object under the Iron Curtain for the duration.
+/// </summary>
+void TechnoClass::IronCurtain(int duration) // RA2: not in TibSun, at 0x6D86B0
+{
+	IronCurtainTimer = duration;
+	IronTintStage = 0;
+}
+
+
+/// <summary>
+/// Scales a brightness by the Iron Curtain tint stage, at most 2000.
+/// </summary>
+int TechnoClass::GetEffectTintIntensity(int brightness) const // RA2: not in TibSun, at 0x6D86F0
+{
+	int time = IronTintTimer.Value();
+	int factor;
+	switch (IronTintStage) {
+		case 1:
+			factor = ((12 - time) << 8) / 6;
+			break;
+		case 2:
+		case 8:
+			factor = 512;
+			break;
+		case 3:
+			factor = (461 * time + 1020) / 20;
+			break;
+		case 4:
+			factor = (1024 - 77 * time) / 8;
+			break;
+		case 5:
+			factor = (77 * time + 816) / 16;
+			break;
+		case 6:
+			factor = 51;
+			break;
+		case 7:
+			factor = (3072 - 461 * time) / 6;
+			break;
+		case 9:
+			factor = ((time + 20) << 8) / 20;
+			break;
+		default:
+			return(brightness);
+	}
+	brightness = (factor * brightness) >> 8;
+	if (brightness > 2000) {
+		brightness = 2000;
+	}
+	return(brightness);
+}
 
 
 /// <summary>
@@ -9966,6 +10123,317 @@ static inline int Timer_Left(CDTimerClass<FrameTimerClass> const & timer)
 {
 	return timer();
 }
+
+
+/// <summary>
+/// Steps the Iron Curtain tint through its pulse while the curtain holds, and resets it otherwise.
+/// </summary>
+void TechnoClass::Update_Iron_Tint(void) // RA2: not in TibSun, at 0x6D8820
+{
+	if (Unknown_Virtual_32C()) {
+		switch (IronTintStage) {
+			case 0:
+				IronTintStage = 1;
+				IronTintTimer = 6;
+				break;
+			case 1:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 2;
+					IronTintTimer = 4;
+				}
+				break;
+			case 2:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 3;
+					IronTintTimer = 20;
+				}
+				break;
+			case 3:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 4;
+					IronTintTimer = 8;
+				}
+				break;
+			case 4:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 5;
+					IronTintTimer = 16;
+				}
+				break;
+			case 5:
+				if (IronTintTimer.Value() == 0) {
+					if (Timer_Left(IronCurtainTimer) < 54) {
+						IronTintStage = 6;
+					} else {
+						IronTintStage = 4;
+						IronTintTimer = 8;
+					}
+				}
+				break;
+			case 6:
+				if (Timer_Left(IronCurtainTimer) <= 30) {
+					IronTintStage = 7;
+					IronTintTimer = 6;
+				}
+				break;
+			case 7:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 8;
+					IronTintTimer = 4;
+				}
+				break;
+			case 8:
+				if (IronTintTimer.Value() == 0) {
+					IronTintStage = 9;
+					IronTintTimer = 20;
+				}
+				break;
+			case 9:
+				if (IronTintTimer.Value() != 0) {
+					break;
+				}
+			default:
+				IronTintStage = 10;
+				break;
+		}
+	} else {
+		IronTintStage = 0;
+	}
+}
+
+
+/// <summary>
+/// Starts a recoil: the barrel travels back over the compress frames.
+/// </summary>
+void RecoilData::Fire(void) // RA2: not in TibSun, at 0x6D8B90
+{
+	if (Turret.Travel != 0) {
+		State = 1;
+		TravelFramesLeft = Turret.CompressFrames;
+		if (Turret.CompressFrames < 1) {
+			TravelFramesLeft = 1;
+		}
+		TravelPerFrame = (float)Turret.Travel / TravelFramesLeft;
+	}
+}
+
+
+/// <summary>
+/// One frame of recoil: travel, then hold, then recover, then rest.
+/// </summary>
+void RecoilData::Update(void) // RA2: not in TibSun, at 0x6D8BC0
+{
+	if (State != 0) {
+		TravelSoFar = TravelPerFrame + TravelSoFar;
+		if (--TravelFramesLeft <= 0) {
+			switch (State) {
+				case 1:
+					State = 2;
+					TravelFramesLeft = Turret.HoldFrames;
+					TravelPerFrame = 0;
+					if (Turret.HoldFrames > 1) {
+						break;
+					}
+				case 2:
+					State = 3;
+					TravelFramesLeft = Turret.RecoverFrames;
+					if (TravelFramesLeft < 1) {
+						TravelFramesLeft = 1;
+					}
+					TravelPerFrame = -((float)Turret.Travel / TravelFramesLeft);
+					break;
+				case 3:
+					State = 0;
+					TravelSoFar = 0;
+					break;
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Adds the blink flags of a disguised object's pulse for its own player (or while the blink timer is
+/// idle) to the drawing flags.
+/// </summary>
+unsigned TechnoClass::GetDisguiseFlags(unsigned flags) const // RA2: not in TibSun, at 0x6D8C30
+{
+	unsigned result = flags;
+	if (DisguiseBlinkTimer.Value() != 0 && !House->Is_Player_Control()) {
+		return(result);
+	}
+	int phase = (int)(Frame - DisguiseCreationFrame + 64) % 256;
+	if (phase >= 64) {
+		if (phase < 68) {
+			result |= 2;
+		} else if (phase < 76) {
+			result |= 4;
+		} else if (phase < 80) {
+			result |= 2;
+		} else if (phase >= 112) {
+			if (phase < 116) {
+				result |= 2;
+			} else if (phase < 124) {
+				result |= 4;
+			} else if (phase < 128) {
+				result |= 2;
+			}
+		}
+	}
+	return(result);
+}
+
+
+/// <summary>
+/// Whether the house sees through this object's disguise: not while the blink timer runs for another
+/// player's object, for its own player only during the visible part of the pulse, and otherwise unless
+/// the cell senses disguises for the house.
+/// </summary>
+bool TechnoClass::IsClearlyVisibleTo(HouseClass * house) const // RA2: not in TibSun, at 0x6D8CE0
+{
+	if (DisguiseBlinkTimer.Value() != 0 && !House->Is_Player_Control()) {
+		return(true);
+	}
+	if (House->Is_Player_Control() && IsDisguised()) {
+		int phase = (int)(Frame - DisguiseCreationFrame + 64) % 256;
+		if (phase >= 72 && phase <= 119) {
+			return(false);
+		}
+		return(true);
+	}
+	CellClass const * cell = Get_Cell_Ptr();
+	if (IsDisguised() && cell != NULL && !cell->Is_Disguise_Sensed((HousesType)house->HeapID)) {
+		return(false);
+	}
+	return(true);
+}
+
+
+/// <summary>
+/// Whether the weapon chosen against the target fires on terrain: trees, rocks and undisguised objects.
+/// </summary>
+bool TechnoClass::CanDisguiseAs(AbstractClass * target) const // RA2: not in TibSun, at 0x6D8DB0
+{
+	WeaponTypeClass const * weapon = Get_Class_Weapon_Data(What_Weapon_Should_I_Use(target))->Weapon;
+	if (weapon == NULL) {
+		return(false);
+	}
+	if (target->Fetch_RTTI() == RTTI_TERRAIN) {
+		if (Rule->IsTreeTarget || weapon->TerrainFire) {
+			return(true);
+		}
+		return(false);
+	}
+	if (!weapon->TerrainFire) {
+		return(false);
+	}
+	if (target->Fetch_RTTI() == RTTI_CELL && ((CellClass *)target)->Overlay != OVERLAY_NONE
+		&& OverlayTypes[((CellClass *)target)->Overlay]->IsARock) {
+		return(true);
+	}
+	if (target != NULL && (target->AbstractFlags & 2) && ((ObjectClass *)target)->IsDisguised() && ((ObjectClass *)target)->GetDisguiseHouse(true) == NULL) {
+		return(true);
+	}
+	return(false);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /// <summary>
