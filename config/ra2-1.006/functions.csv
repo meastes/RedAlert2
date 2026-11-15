@@ -3684,7 +3684,7 @@ address,size,evidence
 0x005B4980,96,"code of src/msgbox.cpp, matched"
 0x005B4BD0,112,"code of src/msglist.cpp, matched"
 0x005B4C40,32,"function of the Tiberian Sun reconstruction, matched"
-0x005B4C60,,"inferred: target of the call at 0x005B4C59 in matched src/msglist.cpp; size not known"
+0x005B4C60,320,"code of src/msglist.cpp, matched"
 0x005B4DA0,960,"code of src/msglist.cpp, matched"
 0x005B5160,48,"function of the Tiberian Sun reconstruction, matched"
 0x005B5190,48,"function of the Tiberian Sun reconstruction, matched"
