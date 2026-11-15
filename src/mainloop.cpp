@@ -87,7 +87,7 @@ extern bool InMainLoop; // RA2: as above
 extern wchar_t IMEResultString[256]; // RA2: characters received through WM_IME_CHAR (winstub.cpp)
 extern int IMEComposing; // RA2: as above
 extern wchar_t IMECompositionString[256]; // RA2: as above
-int __fastcall Compute_Name_CRC_W(wchar_t const * name); // RA2: 0x005BBA50, the CRC of a wide name
+unsigned int __fastcall Compute_Name_CRC(wchar_t const * name); // RA2: 0x005BBA50, the wide form of netdlg.h's
 extern int ChatTarget; // RA2: 0x00A6EBE0; who a typed message goes to: 1 everybody, 2 allies, 3 one player, 0 nobody
 extern char LastPagerName[]; // RA2: 0x00B2AC48; who paged last
 namespace OwnerDraw { char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: wide to narrow text, as modemgst.cpp declares it
@@ -1165,7 +1165,7 @@ void Message_Input(KeyNumType &input)
 				} // RA2: as above
 				strcpy(Session.GPacket.Name, Wide_To_Narrow(Session.Players[0]->Name)); // RA2: as above
 				Session.GPacket.Message.Color = Session.PrefColor; // RA2: as above
-				Session.GPacket.Message.NameCRC = Compute_Name_CRC_W(Session.GameName); // RA2: as above
+				Session.GPacket.Message.NameCRC = Compute_Name_CRC(Session.GameName); // RA2: as above
 				Session.GPacket.Message.Recipients = 0; // RA2: as above
 				if (rc == 3) { // RA2: as above
 					wcscpy((wchar_t *)Session.GPacket.Message.Buf, Session.Messages.Get_Edit_Buf()); // RA2: as above

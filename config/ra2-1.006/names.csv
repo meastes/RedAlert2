@@ -3889,7 +3889,7 @@ address,symbol,evidence
 0x005B9BE0,?AddToList@MultiplayerTeam@@QAEHPAUHWND__@@@Z,"compiled from src/multiplayerteam.cpp, matched"
 0x005BA280,?Read_Settings@FirewallHelperClass@@QAEXXZ,"inferred: referenced by matched src/session.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005BB5A0,?Shutdown_Network@@YIXXZ,"inferred: referenced by matched src/startup.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x005BBA50,?Compute_Name_CRC_W@@YIHPBG@Z,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x005BBA50,?Compute_Name_CRC@@YIIPBG@Z,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C2DA0,?_DrawMessage@@YIXHPBGPAUHWND__@@@Z,"inferred: referenced by matched src/modemhst.cpp (10 references); across all matched code never at another address, and no other symbol here"
 0x005C6600,?RandomMapWaypointCount@@YIHH@Z,"inferred: referenced by matched src/modemhst.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C6960,?Scenario_Dialog@@YIHPAUHWND__@@@Z,"inferred: referenced by matched src/modemhst.cpp (1 reference); across all matched code never at another address, and no other symbol here"
