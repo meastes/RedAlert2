@@ -1064,8 +1064,15 @@ void AnimClass::Set_Owner(HouseClass * house)
  *=============================================================================================*/
 LayerType AnimClass::In_Which_Layer(void) const
 {
-	return(LAYER_AIR); // RA2: no IsGroundLayer (not in RA2's layout)
+	if (xObject != 0) { // RA2: RA2's form
+		return LAYER_GROUND; // RA2: as above
+	}
+	if (Class != 0) { // RA2: as above
+		return Class->Layer; // RA2: as above
+	}
+	return LAYER_AIR; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -1142,73 +1149,32 @@ void AnimClass::Start(void)
  *=============================================================================================*/
 void AnimClass::Middle(void)
 {
-	Cell cell = Center_Coord().As_Cell();
-	CellClass * cellptr = &Map[cell];
-
+	Cell where = Center_Coord().As_Cell(); // RA2: RA2's form
+	CellClass *cell = (CellClass *)&Map[where]; // RA2: as above
 	int width = 30;
 	int height = 30;
-
-	ShapeSet const * shapefile = (ShapeSet const *)Get_Image_Data();
-	if (shapefile != NULL) {
-		width = shapefile->Get_Rect(Class->Biggest).Width;
-		height = shapefile->Get_Rect(Class->Biggest).Height;
+	ShapeSet const *shape = (ShapeSet const *)Get_Image_Data(); // RA2: as above
+	if (shape != 0) { // RA2: as above
+		width = shape->Get_Rect(Class->Biggest).Width; // RA2: as above
+		height = shape->Get_Rect(Class->Biggest).Height; // RA2: as above
 	}
-
 	if (HeightAGL < 30) {
-
-		/*
-		**	If this animation leaves scorch marks (e.g., napalm), then do so at this time.
-		*/
-		if (Class->IsScorcher && (!Class->IsCraterForming || Random_Double(0.0, 1.0) < 0.5)) {
-			SmudgeTypeClass::Scorch_The_Ground(Center_Coord(), width, height);
+		if (Class->IsScorcher && // RA2: as above
+			(!Class->IsCraterForming || Random_Double(0.0, 1.0) < 0.5)) { // RA2: as above
+			SmudgeTypeClass::Scorch_The_Ground(Center_Coord(), width, height, false); // RA2: as above
+			return; // RA2: as above
 		}
-
-		/*
-		**	Some animations leave a crater when they occur. Artillery is a good example.
-		**	Craters always remove the Tiberium where they occur.
-		*/
-		else if (Class->IsCraterForming) {
-
-			/*
-			**	Craters reduce the level of Tiberium in the cell.
-			*/
-			cellptr->Reduce_Tiberium(6);
-
-			/*
-			**	If there already is a crater in the cell, then just expand the
-			**	crater.
-			*/
-			SmudgeTypeClass::Crater_The_Ground(Center_Coord(), width, height);
-		}
-	}
-
-	AnimClass * newanim;
-
-	/*
-	**	If this animation spawns side effects during its lifetime, then
-	**	do so now. Usually, these side effects are in the form of other
-	**	animations.
-	*/
-	if (Class->IsFlameThrower) {
-		new AnimClass(Rule->SmallFire, Map.Closest_Free_Spot(Coord_Scatter(Center_Coord(), CELL_LEPTON / 4), true), 0, Random_Pick(1, 2));
-		if (Percent_Chance(50)) {
-			new AnimClass(Rule->SmallFire, Map.Closest_Free_Spot(Coord_Scatter(Center_Coord(), 5 * CELL_LEPTON / 8), true), 0, Random_Pick(1, 2));
-		}
-		if (Percent_Chance(50)) {
-			new AnimClass(Rule->LargeFire, Map.Closest_Free_Spot(Coord_Scatter(Center_Coord(), 7 * CELL_LEPTON / 16), true), 0, Random_Pick(1, 2));
-		}
-	} else if (Class->IsScorcher) {
-		if (HeightAGL < 10) {
-			LandType land = Map[(Coord const &)PositionCoord].Land_Type();
-			if (land != LAND_WATER && land != LAND_BEACH && land != LAND_ICE && land != LAND_ROCK) {
-				newanim = new AnimClass(Rule->SmallFire, Center_Coord(), 0, Random_Pick(1, 2));
-				if (newanim != NULL && xObject != NULL) {
-					newanim->Attach_To(xObject);
-				}
+		if (Class->IsCraterForming) { // RA2: as above
+			cell->Reduce_Tiberium(6); // RA2: as above
+			if (Class->ForceBigCraters) { // RA2: as above
+				SmudgeTypeClass::Crater_The_Ground(Center_Coord(), 300, 300, true); // RA2: as above
+				return; // RA2: as above
 			}
+			SmudgeTypeClass::Crater_The_Ground(Center_Coord(), width, height, false); // RA2: as above
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -1234,17 +1200,22 @@ void AnimClass::Middle(void)
  *=============================================================================================*/
 void AnimClass::Detach(AbstractClass const * target, bool all)
 {
-	BASECLASS::Detach(target, all);
+	ObjectClass::Detach(target, all); // RA2: RA2's form
 	if (xObject == target) {
 		Map.Remove(this);
-		xObject = NULL;
+		xObject = 0; // RA2: as above
 		IsToDelete = true;
 		Mark(MARK_UP);
 	}
 	if (Class == target) {
-		Class = NULL;
+		Class = 0; // RA2: as above
+	}
+	if ((AbstractClass const *)AttachedBullet == target) { // RA2: as above
+		AttachedBullet = 0; // RA2: as above
+		Delete_Me(); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
