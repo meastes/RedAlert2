@@ -61,6 +61,7 @@ struct ThemeControl {
 class ThemeClass
 {
 	private:
+		friend bool Main_Loop(void); // RA2: Main_Loop reads the playing and the pending score itself
 		char const * Theme_File_Name(ThemeType theme);
 
 		int Current;				// Handle to current score.

@@ -35,4 +35,9 @@
 
 bool Main_Loop(void);
 void Keyboard_Process(KeyNumType & input);
-void Multiplayer_Debug_Print(bool noframecheck);
+void Draw_Multiplayer_Debug(bool noframecheck); // RA2: 0x005419E0; was Multiplayer_Debug_Print
+bool Is_In_Main_Loop(void); // RA2: 0x0053F460
+void Enter_Main_Loop(void); // RA2: 0x0053F470
+void Leave_Main_Loop(void); // RA2: 0x0053F480
+void Disconnect_Gracefully(void); // RA2: 0x0053F780; its own debug text names it
+bool Process_Game_End(void); // RA2: 0x0053F840; acts on the win, lose, restart and abort flags

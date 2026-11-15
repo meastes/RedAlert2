@@ -87,7 +87,7 @@ class MultiplayerGameMode
 		virtual void vt_entry_7C(void) {}
 		virtual int vt_entry_80(void) { return(-1); }
 		virtual void vt_entry_84(void) {}
-		virtual void vt_entry_88(unsigned a) {}
+		virtual void vt_entry_88(bool won) {} // RA2: slot 34; takes whether the player won (Process_Game_End pushes the flag as it is)
 		virtual void vt_entry_8C(unsigned a) {}
 		virtual bool vt_entry_90(void) { return(false); }
 		virtual void vt_entry_94(void) {}

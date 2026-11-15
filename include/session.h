@@ -566,7 +566,7 @@ class SessionClass
 		void FUN_0069B760(int side, bool random);
 		void FUN_0069B7E0(int color, bool random);
 		void FUN_0069B8C0(void);
-		void Resume(void);
+		void Resume(void); // RA2: 0x672DE0; back into the game (the counterpart of Leave_Game)
 		void Leave_Game(void); // RA2: 0x672E70
 		unsigned short FUN_0069BC20(int connection_id);
 		int FUN_0069BC60(int index);

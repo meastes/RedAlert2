@@ -35,3 +35,5 @@
 **	Internet specific externs
 */
 extern bool GameStatisticsPacketSent;
+void __fastcall Register_Game_End_Time(void); // RA2: 0x0069A160; notes when the game ended
+void __fastcall Send_Statistics_Packet(bool); // RA2: 0x00698D00; sends the game results

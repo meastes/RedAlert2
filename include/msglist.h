@@ -155,6 +155,7 @@ class MessageListClass {
 		bool Has_Edit_Focus(void);
 
 	private:
+		friend void __fastcall Message_Input(KeyNumType & input); // RA2: Message_Input switches the overflow feature itself
 
 		//.....................................................................
 		// Message parsing
