@@ -474,6 +474,82 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 
 
 /***********************************************************************************************
+ * InfantryClass::Shape_Number -- Fetch the shape number for this infantry.                    *
+ *                                                                                             *
+ *    This will determine the shape number to use for this infantry soldier. The shape number  *
+ *    is relative to the shape file associated with this infantry unit.                        *
+ *                                                                                             *
+ * INPUT:   none                                                                               *
+ *                                                                                             *
+ * OUTPUT:  Returns with the shape number for this infantry object to be used when drawing.    *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   07/29/1996 JLB : Created.                                                                 *
+ *=============================================================================================*/
+int InfantryClass::Shape_Number(void) const
+{
+	/*
+	**	Fetch the shape pointer to use for the infantry. This is controlled by what
+	**	choreograph sequence the infantry is performing, it's facing, and whether it
+	**	is prone.
+	*/
+	DoType doit = Doing;
+	if (doit == DO_NOTHING) {
+		if (Map[Get_Cell()].Land_Type() == LAND_WATER && !IsOnBridge) { // RA2: treading water
+			doit = (DoType)16; // RA2: the Tread sequence
+		} else {
+			doit = DO_STAND_READY;
+		}
+	}
+
+	InfantryTypeClass const * type = Class; // RA2: the disguise's sequences for those who cannot see through it
+	if (!IsClearlyVisibleTo(PlayerPtr)) { // RA2
+		type = (InfantryTypeClass const *)GetDisguise(true); // RA2
+	}
+
+	/*
+	**	The infantry shape is always modulo the number of animation frames
+	**	of the action stage that the infantry is doing.
+	*/
+	int shapenum = Fetch_Stage() % MAX(type->DoControls[doit].Count, 1); // RA2: type
+
+	if (Is_JumpJet() && TarCom != NULL) {
+
+		/*
+		**	If facing makes a difference, then the shape number will be incremented
+		**	by the facing accordingly.
+		*/
+		if (type->DoControls[doit].Jump > 0) { // RA2: type
+			shapenum += HumanShape[Direction(TarCom).As_Dir32()] * type->DoControls[doit].Jump; // RA2: type
+		}
+
+	} else {
+
+		/*
+		**	If facing makes a difference, then the shape number will be incremented
+		**	by the facing accordingly.
+		*/
+		if (type->DoControls[doit].Jump > 0) { // RA2: type
+			shapenum += HumanShape[PrimaryFacing.Current().As_Dir32()] * type->DoControls[doit].Jump; // RA2: type; no DirType copy
+		}
+	}
+
+	/*
+	**	Finally, the shape number is biased according to the starting frame number for
+	**	that action in the infantry shape file.
+	*/
+	shapenum += type->DoControls[doit].Frame; // RA2: type
+
+	/*
+	**	Return with the final infantry shape number.
+	*/
+	return(shapenum);
+}
+
+
+/***********************************************************************************************
  * InfantryClass::Draw_It -- Draws a unit object.                                              *
  *                                                                                             *
  *    This routine is the one that actually draws a unit object. It displays the unit          *
@@ -1139,6 +1215,108 @@ void InfantryClass::Assign_Target(AbstractClass * target)
 	if (NavCom == NULL && Class->IsCapture && !Is_Weapon_Equipped()) {
 		if (target != NULL && target->RTTI == RTTI_BUILDING && ((BuildingClass *)target)->Class->IsCaptureable) {
 			Assign_Destination(target);
+		}
+	}
+}
+
+
+/// <summary>
+/// Handles the infantry traveling through a subterranean tunnel.
+/// This routine walks the soldier along the tube it entered, following the tube's own
+/// path and sinking or rising with it along the way. When the far mouth is reached the
+/// infantry is set back down on the map, marked down into its cell, and given a per
+/// cell process so that it rejoins the world properly. Anything standing in the way of
+/// the exit is told to scatter first.
+/// </summary>
+void InfantryClass::Tunnel_AI(void)
+{
+	bool finished = Tubes[CurrentTube]->Dirs[CurrentTubeDir] == FACING_NONE;
+	if (!finished) {
+		int distance = Distance(LastTubeCoord);
+		TubeClass * tube = Tubes[CurrentTube];
+		DirType facing;
+		DirType direction = facing.Direction(Center_Coord(), LastTubeCoord);
+		int speed = Class->MaxSpeed;
+
+		int height_step;
+		{
+			Cell tube_cell = tube->Exit;
+			Coord exit(tube_cell);
+			tube_cell = tube->Enter;
+			Coord enter(tube_cell);
+			height_step = tube->Count;
+			height_step = (Map.Get_Height_GL(exit) - Map.Get_Height_GL(enter)) / height_step;
+		}
+
+		if (distance <= speed) {
+			CurrentTubeDir++;
+			FacingType tube_dir = tube->Dirs[CurrentTubeDir];
+			finished = tube_dir == FACING_NONE;
+			PositionCoord = LastTubeCoord;
+
+			if (!finished) {
+				Coord coord = Adjacent_Cell(LastTubeCoord, tube->Dirs[CurrentTubeDir]);
+				LastTubeCoord = LastTubeCoord + ((TPoint2D<int> const &)Map[coord].Cell_Coord() - (TPoint2D<int> const &)Map[LastTubeCoord].Cell_Coord());
+				LastTubeCoord.Z += height_step;
+
+				DirType dir = DirType().Direction(Center_Coord(), LastTubeCoord);
+				Coord new_coord = Move_Coord(PositionCoord, dir, speed - distance);
+				double divisor;
+				if (tube_dir % 2) {
+					divisor = CELL_LEPTON_H * M_SQRT2;
+				} else {
+					divisor = CELL_LEPTON_H;
+				}
+				new_coord.Z += (speed - distance) / divisor * height_step;
+				PositionCoord = new_coord;
+				return;
+			}
+		} else {
+			FacingType tube_dir = tube->Dirs[CurrentTubeDir];
+			Coord new_coord = Move_Coord(Get_Coord(), direction, speed);
+			double divisor;
+			if (tube_dir % 2) {
+				divisor = CELL_LEPTON_H * M_SQRT2;
+			} else {
+				divisor = CELL_LEPTON_H;
+			}
+			new_coord.Z += speed / divisor * height_step;
+			PositionCoord = new_coord;
+			return;
+		}
+	}
+
+	if (finished) {
+		CellClass * cellptr = &Map[Get_Coord()];
+		ObjectClass * occupier = cellptr->Cell_Occupier();
+		if (Can_Enter_Cell(cellptr, FACING_NONE, 0) != MOVE_OK) {
+			while (occupier != NULL) {
+				if (occupier->RTTI == RTTI_UNIT || occupier->RTTI == RTTI_INFANTRY) {
+					if (!((FootClass *)occupier)->Locomotion->Is_Moving()) {
+						occupier->Scatter(Coord(0, 0, 0), true, true);
+					}
+				}
+				occupier = occupier->Next;
+			}
+			Set_Speed(0);
+		} else {
+			Coord spot = cellptr->Closest_Free_Spot(Get_Coord());
+			spot.Z = Map.Get_Height_GL(spot);
+			PositionCoord = spot;
+
+			Locomotion->Force_Immediate_Destination(COORD_NONE);
+			Locomotion->Stop_Movement_Animation();
+			Mark(MARK_DOWN);
+			Set_Occupy_Bit(Get_Coord());
+
+			if (NavCom == cellptr) {
+				Scatter(Coord(0, 0, 0), true, true);
+			} else {
+				Set_Speed(1);
+			}
+			CurrentTube = TUBE_NONE;
+			IsPlanningToLook = true;
+			Per_Cell_Process(PCP_END);
 		}
 	}
 }
@@ -2738,6 +2916,33 @@ const char * InfantryClass::Full_Name(void) const
 }
 
 
+/// <summary>
+/// RA2: not in TibSun, at 0x5061D0. Keeps an idle soldier looking for something to shoot.
+/// While the current target is still in range nothing changes; otherwise the soldier takes
+/// the greatest threat around it (none while it is mind controlled) as its new target, and
+/// one left without a target drops back to idle unless it is guarding or a jumpjet.
+/// RA2's slot 240 of TechnoClass (an empty virtual there, 0x41B400); techno.h names that slot Rocking_AI.
+/// </summary>
+void InfantryClass::Rocking_AI(void)
+{
+	int which = What_Weapon_Should_I_Use(NULL);
+	if (TarCom != NULL && In_Range(TarCom, which)) {
+		return;
+	}
+
+	AbstractClass * target = NULL;
+	if (MindControlledBy == NULL) {
+		Coord coord = Position;
+		target = Greatest_Threat(THREAT_RANGE, coord, false);
+	}
+	Assign_Target(target);
+
+	if (target == NULL && CurrentMission != MISSION_GUARD && !Techno_Type_Class()->JumpJet) {
+		Enter_Idle_Mode(false, true);
+	}
+}
+
+
 
 
 
@@ -4135,68 +4340,51 @@ bool InfantryClass::Is_JumpJet(void) const
 }
 
 
-/***********************************************************************************************
- * InfantryClass::Shape_Number -- Fetch the shape number for this infantry.                    *
- *                                                                                             *
- *    This will determine the shape number to use for this infantry soldier. The shape number  *
- *    is relative to the shape file associated with this infantry unit.                        *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  Returns with the shape number for this infantry object to be used when drawing.    *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   07/29/1996 JLB : Created.                                                                 *
- *=============================================================================================*/
-int InfantryClass::Shape_Number(void) const
+/// <summary>
+/// Should the jumpjet infantry fly in order to reach the destination cell?
+/// This routine is used to choose between flying and walking for the next leg of a
+/// journey. A trip that ground movement can manage easily is walked, so that jumpjets
+/// do not take off for every step, but anything ground movement cannot reach -- or
+/// would take too long over -- is flown instead. An ion storm keeps the unit down.
+/// </summary>
+/// <param name="from">The cell the infantry is starting out from.</param>
+/// <param name="to">The cell the infantry wants to reach.</param>
+/// <returns>bool; Should the trip be made by air?</returns>
+bool InfantryClass::Should_JumpJet_Fly(Cell const & from, Cell const & to)
 {
-	/*
-	**	Fetch the shape pointer to use for the infantry. This is controlled by what
-	**	choreograph sequence the infantry is performing, it's facing, and whether it
-	**	is prone.
-	*/
-	DoType doit = Doing;
-	if (doit == DO_NOTHING) doit = DO_STAND_READY;
+	int height = HeightAGL;
+	height = height; /// dead code
 
-	/*
-	**	The infantry shape is always modulo the number of animation frames
-	**	of the action stage that the infantry is doing.
-	*/
-	int shapenum = Fetch_Stage() % MAX(Class->DoControls[doit].Count, 1);
+	if (House->Ion_Sensitives_Should_Be_Offline()) { // RA2: per house, not the ion storm
+		return(false);
+	}
 
-	if (Is_JumpJet() && TarCom != NULL) {
+	if (HeightAGL > 0) {
+		return(true);
+	}
 
-		/*
-		**	If facing makes a difference, then the shape number will be incremented
-		**	by the facing accordingly.
-		*/
-		if (Class->DoControls[doit].Jump > 0) {
-			shapenum += HumanShape[Direction(TarCom).As_Dir32()] * Class->DoControls[doit].Jump;
-		}
-
-	} else {
-
-		/*
-		**	If facing makes a difference, then the shape number will be incremented
-		**	by the facing accordingly.
-		*/
-		if (Class->DoControls[doit].Jump > 0) {
-			shapenum += HumanShape[DirType(PrimaryFacing.Current()).As_Dir32()] * Class->DoControls[doit].Jump;
+	if (House->Is_Human_Player()) {
+		CellClass * startptr = &Map[from];
+		if (startptr != NULL && startptr->Is_Near_Tunnel_NW()) {
+			return(false);
 		}
 	}
 
-	/*
-	**	Finally, the shape number is biased according to the starting frame number for
-	**	that action in the infantry shape file.
-	*/
-	shapenum += Class->DoControls[doit].Frame;
+	if (Map.Is_Same_Cell_Zone(from, to, MZONE_INFANTRY, IsOnBridge, Map[to].IsUnderBridge, false)) {
+		if (from == to) {
+			return(false);
+		}
+		int dist = MAX(abs(to.X - from.X), abs(to.Y - from.Y));
+		if (dist == 1) {
+			return(false);
+		}
+		if (dist >= 4 || !Map.In_Local_Radar(from) || !Map.In_Local_Radar(to)) { // RA2: 4, not 12
+			return(true);
+		}
+		return(Search.Test_Cell_Walk(from, to, this, IsOnBridge, Map[to].IsUnderBridge, MZONE_INFANTRY) > 7); // RA2: 7, not 15
+	}
 
-	/*
-	**	Return with the final infantry shape number.
-	*/
-	return(shapenum);
+	return(true);
 }
 
 
@@ -4631,156 +4819,6 @@ HRESULT STDMETHODCALLTYPE InfantryClass::GetClassID(CLSID * retval)
 RTTIType InfantryClass::Fetch_RTTI(void) const
 {
 	return(RTTI_INFANTRY);
-}
-
-
-/// <summary>
-/// Should the jumpjet infantry fly in order to reach the destination cell?
-/// This routine is used to choose between flying and walking for the next leg of a
-/// journey. A trip that ground movement can manage easily is walked, so that jumpjets
-/// do not take off for every step, but anything ground movement cannot reach -- or
-/// would take too long over -- is flown instead. An ion storm keeps the unit down.
-/// </summary>
-/// <param name="from">The cell the infantry is starting out from.</param>
-/// <param name="to">The cell the infantry wants to reach.</param>
-/// <returns>bool; Should the trip be made by air?</returns>
-bool InfantryClass::Should_JumpJet_Fly(Cell const & from, Cell const & to)
-{
-	int height = HeightAGL;
-	height = height; /// dead code
-
-	if (IonStormClass::Is_Ion_Storm_Active()) {
-		return(false);
-	}
-
-	if (HeightAGL > 0) {
-		return(true);
-	}
-
-	if (House->Is_Human_Player()) {
-		CellClass * startptr = &Map[from];
-		if (startptr != NULL && startptr->Is_Near_Tunnel_NW()) {
-			return(false);
-		}
-	}
-
-	if (Map.Is_Same_Cell_Zone(from, to, MZONE_INFANTRY, IsOnBridge, Map[to].IsUnderBridge, false)) {
-		if (from == to) {
-			return(false);
-		}
-		int dist = MAX(abs(to.X - from.X), abs(to.Y - from.Y));
-		if (dist == 1) {
-			return(false);
-		}
-		if (dist >= 12 || !Map.In_Local_Radar(from) || !Map.In_Local_Radar(to)) {
-			return(true);
-		}
-		return(Search.Test_Cell_Walk(from, to, this, IsOnBridge, Map[to].IsUnderBridge, MZONE_INFANTRY) > 15);
-	}
-
-	return(true);
-}
-
-
-/// <summary>
-/// Handles the infantry traveling through a subterranean tunnel.
-/// This routine walks the soldier along the tube it entered, following the tube's own
-/// path and sinking or rising with it along the way. When the far mouth is reached the
-/// infantry is set back down on the map, marked down into its cell, and given a per
-/// cell process so that it rejoins the world properly. Anything standing in the way of
-/// the exit is told to scatter first.
-/// </summary>
-void InfantryClass::Tunnel_AI(void)
-{
-	bool finished = Tubes[CurrentTube]->Dirs[CurrentTubeDir] == FACING_NONE;
-	if (!finished) {
-		int distance = Distance(LastTubeCoord);
-		TubeClass * tube = Tubes[CurrentTube];
-		DirType facing;
-		DirType direction = facing.Direction(Center_Coord(), LastTubeCoord);
-		int speed = Class->MaxSpeed;
-
-		int height_step;
-		{
-			Cell tube_cell = tube->Exit;
-			Coord exit(tube_cell);
-			tube_cell = tube->Enter;
-			Coord enter(tube_cell);
-			height_step = tube->Count;
-			height_step = (Map.Get_Height_GL(exit) - Map.Get_Height_GL(enter)) / height_step;
-		}
-
-		if (distance <= speed) {
-			CurrentTubeDir++;
-			FacingType tube_dir = tube->Dirs[CurrentTubeDir];
-			finished = tube_dir == FACING_NONE;
-			PositionCoord = LastTubeCoord;
-
-			if (!finished) {
-				Coord coord = Adjacent_Cell(LastTubeCoord, tube->Dirs[CurrentTubeDir]);
-				LastTubeCoord = LastTubeCoord + ((TPoint2D<int> const &)Map[coord].Cell_Coord() - (TPoint2D<int> const &)Map[LastTubeCoord].Cell_Coord());
-				LastTubeCoord.Z += height_step;
-
-				DirType dir = DirType().Direction(Center_Coord(), LastTubeCoord);
-				Coord new_coord = Move_Coord(PositionCoord, dir, speed - distance);
-				double divisor;
-				if (tube_dir % 2) {
-					divisor = CELL_LEPTON_H * M_SQRT2;
-				} else {
-					divisor = CELL_LEPTON_H;
-				}
-				new_coord.Z += (speed - distance) / divisor * height_step;
-				PositionCoord = new_coord;
-				return;
-			}
-		} else {
-			FacingType tube_dir = tube->Dirs[CurrentTubeDir];
-			Coord new_coord = Move_Coord(Get_Coord(), direction, speed);
-			double divisor;
-			if (tube_dir % 2) {
-				divisor = CELL_LEPTON_H * M_SQRT2;
-			} else {
-				divisor = CELL_LEPTON_H;
-			}
-			new_coord.Z += speed / divisor * height_step;
-			PositionCoord = new_coord;
-			return;
-		}
-	}
-
-	if (finished) {
-		CellClass * cellptr = &Map[Get_Coord()];
-		ObjectClass * occupier = cellptr->Cell_Occupier();
-		if (Can_Enter_Cell(cellptr, FACING_NONE, 0) != MOVE_OK) {
-			while (occupier != NULL) {
-				if (occupier->RTTI == RTTI_UNIT || occupier->RTTI == RTTI_INFANTRY) {
-					if (!((FootClass *)occupier)->Locomotion->Is_Moving()) {
-						occupier->Scatter(Coord(0, 0, 0), true, true);
-					}
-				}
-				occupier = occupier->Next;
-			}
-			Set_Speed(0);
-		} else {
-			Coord spot = cellptr->Closest_Free_Spot(Get_Coord());
-			spot.Z = Map.Get_Height_GL(spot);
-			PositionCoord = spot;
-
-			Locomotion->Force_Immediate_Destination(COORD_NONE);
-			Locomotion->Stop_Movement_Animation();
-			Mark(MARK_DOWN);
-			Set_Occupy_Bit(Get_Coord());
-
-			if (NavCom == cellptr) {
-				Scatter(Coord(0, 0, 0), true, true);
-			} else {
-				Set_Speed(1);
-			}
-			CurrentTube = TUBE_NONE;
-			IsPlanningToLook = true;
-			Per_Cell_Process(PCP_END);
-		}
-	}
 }
 
 
