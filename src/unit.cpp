@@ -1158,32 +1158,23 @@ RadioMessageType UnitClass::Receive_Message(RadioClass * from, RadioMessageType 
  *=============================================================================================*/
 bool UnitClass::Unlimbo(Coord const & coord, Dir256 dir)
 {
-	if (BASECLASS::Unlimbo(coord, dir)) {
-
+	if (FootClass::Unlimbo(coord, dir)) { // RA2: RA2's form
 		SecondaryFacing.Set(dir);
-
-		/*
-		**	If it starts off the edge of the map, then it already starts cloaked.
-		*/
-		if (IsCloakable && !IsLocked) Cloak = CLOAKED;
-
-		/*
-		**	Units default to no special animation.
-		*/
-		if (Class->IsSmallVisceroid || Class->IsLargeVisceroid) {
-			Set_Stage(Random_Pick(0, 29));
-			Set_Rate(1);
-			Set_Stage(0); // RA2: no IsLimpetDrone, IsJellyfish (not in RA2's layout)
-			Set_Rate(1);
-		} else {
+		if (IsCloakable && !IsLocked) { // RA2: as above
+			Cloak = CLOAKED; // RA2: as above
+		}
+		if (!Class->IsSmallVisceroid && !Class->IsLargeVisceroid) { // RA2: as above
 			Set_Stage(0);
 			Set_Rate(0);
+			return(true); // RA2: as above
 		}
-
+		Set_Stage(Random_Pick(0, 29)); // RA2: as above
+		Set_Rate(1); // RA2: as above
 		return(true);
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -2669,67 +2660,46 @@ void UnitClass::Draw_It(Point2D const & point, Rect const & cliprect) const
  *=============================================================================================*/
 bool UnitClass::Harvesting(void)
 {
-	CellClass * ptr = &Map[Get_Coord()];
-
-	/*
-	**	Keep waiting if still heading toward a spot to harvest.
-	*/
-	if (NavCom != NULL) return(true);
-
-	bool harvest;
-	if (Class->IsToHarvest) {
-		harvest = (Tiberium_Load() < 1 && ptr->Land_Type() == LAND_TIBERIUM);
-	} else {
-		harvest = (Weed_Load() < 1 && ptr->Land_Type() == LAND_WEEDS && ptr->OverlayData >= OVERLAYDATA_FIRST_SOLID_VEIN);
+	Coord position = Get_Coord(); // RA2: RA2's form
+	CellClass *cell = &Map[position]; // RA2: as above
+	if (NavCom) { // RA2: as above
+		return(true); // RA2: as above
 	}
-
-	if (harvest) {
+	if (Class->IsToHarvest && Tiberium_Load() < 1.0 && cell->Land_Type() == LAND_TIBERIUM) { // RA2: as above
 		if (Class->IsToVeinHarvest) {
-
-			if (Class->IsToVeinHarvest) {
-				ptr->Reduce_Weed();
-				Storage.Increase_Amount(1, 0);
-				if (Weed_Load() < 1) {
-					Storage.Increase_Amount(1, 0);
-				}
-				Set_Stage(0);
-				Set_Rate(Rule->HarvesterLoadRate * 3);
-			}
-
-		} else {
+			cell->Reduce_Weed(); // RA2: as above
+			Storage.Increase_Amount(1.0f, 0); // RA2: as above
 
 			/*
-			**	Lift some Tiberium from the ground. Try to lift a complete
-			**	"level" of Tiberium. A level happens to be 6 steps. If there
-			**	is a partial level, then lift that instead. Never lift more
-			**	than the harvester can carry.
+			**	If the harvester is stopped on a non Tiberium field and the harvester // RA2: as above
+			**	isn't loaded with Tiberium, then no further action can be performed // RA2: as above
+			**	by this logic routine. Bail with a failure and thus cause a branch to // RA2: as above
+			**	a better suited logic processor. // RA2: as above
 			*/
-			TiberiumType tib = ptr->Tiberium_Type_Here();
-			int reducer = MIN(1, Class->Capacity - Storage.Get_Total_Amount());
-			reducer = ptr->Reduce_Tiberium(reducer);
-			if (reducer <= 0) {
+			Set_Stage(0);
+			Set_Rate(Rule->HarvesterLoadRate * 3); // RA2: as above
+		} else {
+			int resource = cell->Tiberium_Type_Here(); // RA2: as above
+			float capacity = (float)Class->Capacity; // RA2: as above
+			int available = (int)(capacity - Storage.Get_Total_Amount() > 1.0f // RA2: as above
+				? 1.0f : (float)Class->Capacity - Storage.Get_Total_Amount()); // RA2: as above
+			int taken = cell->Reduce_Tiberium(available); // RA2: as above
+			if (taken <= 0) { // RA2: as above
 				return(false);
 			}
-			Storage.Increase_Amount(reducer, tib);
+			Storage.Increase_Amount((float)taken, resource); // RA2: as above
 			Set_Stage(0);
 			Set_Rate(Rule->HarvesterLoadRate);
 		}
-
-	} else {
-
-		/*
-		**	If the harvester is stopped on a non Tiberium field and the harvester
-		**	isn't loaded with Tiberium, then no further action can be performed
-		**	by this logic routine. Bail with a failure and thus cause a branch to
-		**	a better suited logic processor.
-		*/
-		Set_Stage(0);
-		Set_Rate(0);
-		return(false);
+		return(true); // RA2: as above
 	}
-
-	return(true);
+	Set_Stage(0); // RA2: as above
+	Set_Rate(0); // RA2: as above
+	return(false); // RA2: as above
 }
+
+
+
 
 
 /***********************************************************************************************
@@ -4969,19 +4939,23 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 AbstractClass * UnitClass::Greatest_Threat(ThreatType threat, Coord const & coord, bool onlyenemy) const
 {
 	if (House->Is_Human_Player() && Class->IsDeployToFire) {
-		return(NULL);
+		return(0); // RA2: RA2's form
 	}
-	if (!(threat & (THREAT_INFANTRY|THREAT_VEHICLES|THREAT_BUILDINGS|THREAT_TIBERIUM|THREAT_CIVILIANS|THREAT_POWER|THREAT_FACTORIES|THREAT_BASE_DEFENSE))) {
-		if (PrimaryWeapon != NULL) {
-			threat = ThreatType(threat | PrimaryWeapon->Allowed_Threats());
-		}
-		if (SecondaryWeapon != NULL) {
-			threat = ThreatType(threat | SecondaryWeapon->Allowed_Threats());
+	if (!(threat & 0x1B978)) { // RA2: as above
+		if (const_cast<UnitClass *>(this)->Has_Turret_Weapons()) { // RA2: as above
+			threat = ThreatType(threat | const_cast<UnitClass *>(this)->Get_Class_Weapon_Data(const_cast<UnitClass *>(this)->Get_Current_Weapon_Number())->Weapon->Allowed_Threats()); // RA2: as above
+		} else { // RA2: as above
+			if (const_cast<UnitClass *>(this)->Get_Class_Weapon_Data(0)->Weapon) { // RA2: as above
+				threat = ThreatType(threat | const_cast<UnitClass *>(this)->Get_Class_Weapon_Data(0)->Weapon->Allowed_Threats()); // RA2: as above
+			}
+			if (const_cast<UnitClass *>(this)->Get_Class_Weapon_Data(1)->Weapon) { // RA2: as above
+				threat = ThreatType(threat | const_cast<UnitClass *>(this)->Get_Class_Weapon_Data(1)->Weapon->Allowed_Threats()); // RA2: as above
+			}
 		}
 	}
-
-	return(BASECLASS::Greatest_Threat(threat, coord, onlyenemy));
+	return FootClass::Greatest_Threat(threat, coord, onlyenemy); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -5470,40 +5444,32 @@ static inline bool Is_Cell_Below(Cell const & a, Cell const & b)
 /// <returns>bool; Is the unit ready to begin its next mission?</returns>
 bool UnitClass::Ready_To_Commence(void)
 {
-	if (CurrentMission == MISSION_STICKY || CurrentMission == MISSION_RESCUE) {
+	if (CurrentMission == MISSION_STICKY || CurrentMission == MISSION_RESCUE || IsDumping) { // RA2: RA2's form
 		return(false);
 	}
-
-	if (IsDumping) {
+	if (MissionQueue != MISSION_ENTER && Locomotion->Is_Moving_Now() && HeightAGL >= 0 // RA2: as above
+		&& Get_Mission() != MISSION_GUARD && (Get_Mission() != MISSION_ATTACK || TarCom != NULL) && !IsMissionUnloadStandby) { // RA2: as above
 		return(false);
 	}
-
-	if (MissionQueue != MISSION_ENTER) {
-		if (Locomotion->Is_Moving_Now() && HeightAGL >= 0 &&
-			Mission != MISSION_GUARD && (Mission != MISSION_ATTACK || TarCom != NULL) && !IsMissionUnloadStandby) {
-
-			return(false);
-		}
-	}
-
 	if (!Door.Is_Door_Closed()) {
 		return(false);
 	}
-
-	RadioClass * radio = Contact_With_Whom();
-	if (radio != NULL) {
-		if (radio->RTTI == RTTI_BUILDING && ((BuildingClass *)radio)->Class->IsWeaponsFactory && MissionQueue != MISSION_MOVE) {
+	TechnoClass * contact = Radio_Link(0); // RA2: as above
+	if (contact != NULL) { // RA2: as above
+		if (contact->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)contact)->Class->IsWeaponsFactory // RA2: as above
+			&& MissionQueue != MISSION_MOVE && MissionQueue != MISSION_ENTER) { // RA2: as above
 			return(false);
 		}
 	} else {
 		BuildingClass * building = Map[Get_Coord()].Cell_Building();
-		if (building != NULL && building->Class->IsWeaponsFactory && (PositionCoord.As_Cell() - building->PositionCoord.As_Cell() == Cell(0, 1))) {
+		if (building != NULL && building->Class->IsWeaponsFactory // RA2: as above
+			&& (PositionCoord.As_Cell() - building->PositionCoord.As_Cell() == Cell(0, 1))) { // RA2: as above
 			return(false);
 		}
 	}
-
 	return(true);
 }
+
 
 
 
