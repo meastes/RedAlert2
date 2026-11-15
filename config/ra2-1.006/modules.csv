@@ -709,8 +709,8 @@ unk_00724600,0x00724600,0x007249F0,unknown,code not assigned to a module
 waypoint,0x007249F0,0x00725200,tibsun,"functions compiled from src/waypoint.cpp, matched, without gaps; _$E5 and _$E3 not placed; four placed by the gap"
 unk_00725200,0x00725200,0x00726930,unknown,code not assigned to a module
 unk_00726930,0x00726930,0x007269B0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_007269B0,0x007269B0,0x0072A7C0,unknown,code not assigned to a module
-unk_0072A7C0,0x0072A7C0,0x0072A840,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
+unk_007269B0,0x007269B0,0x007291C0,unknown,code not assigned to a module
+wdtmap,0x007291C0,0x0072A840,tibsun,"functions compiled from src/wdtmap.cpp, without gaps; matched except ?Load@Map@WorldDominationTour@@QAEXAAVINIClass@@PAVMSEngine@@H@Z; one placed by the gap; ?WDT_Write_Map_Ini@@YIXABVWstring@@0@Z not placed; ??8Centroid@WorldDominationTour@@QBE_NABV01@@Z not placed"
 unk_0072A840,0x0072A840,0x0072BDC0,unknown,code not assigned to a module
 wdtnet,0x0072BDC0,0x0072C9D0,tibsun,"functions compiled from src/wdtnet.cpp, matched, without gaps; one placed by the gap; ?Get_Game_Options@WDTTerritory@@QAEPAUGameOptionsType@@XZ not placed; ?To_String@WDTState@@QAEPADXZ not placed; ?To_String@WDTTerritory@@QAEPADXZ not placed"
 unk_0072C9D0,0x0072C9D0,0x00732A50,unknown,code not assigned to a module
