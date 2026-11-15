@@ -109,7 +109,7 @@
 #include "xstraw.h"
 
 
-char const * const ActionName[ACTION_COUNT] = {
+char const * const ActionName[ACTION_COUNT] = { // RA2: 66 names (0x79D888..0x79D990), read from the exe; the first 62 follow the enum, the last four are the added ACTION_ATTACK_MOVE_NAV.. entries
 	"None",
 	"Move",
 	"NoMove",
@@ -120,6 +120,7 @@ char const * const ActionName[ACTION_COUNT] = {
 	"Select",
 	"ToggleSelect",
 	"Capture",
+	"Eaten",
 	"Repair",
 	"Sell",
 	"SellUnit",
@@ -146,12 +147,13 @@ char const * const ActionName[ACTION_COUNT] = {
 	"NoTogglePower",
 	"EnterTunnel",
 	"NoEnterTunnel",
-	"EMPulse",
-	"IonCannon",
-	"EMPulseRange",
-	"ChemBomb",
+	"IronCurtain",
+	"LightningStorm",
+	"ChronoSphere",
+	"ChronoWarp",
+	"ParaDrop",
 	"PlaceWaypoint",
-	"NoPlaceWaypoint",
+	"TibSunBug",
 	"EnterWaypointMode",
 	"FollowWaypoint",
 	"SelectWaypoint",
@@ -160,9 +162,20 @@ char const * const ActionName[ACTION_COUNT] = {
 	"AttackWaypoint",
 	"EnterWaypoint",
 	"PatrolWaypoint",
-	"DropPod",
-	"Rally To Point",
-	"Attack Support"
+	"AreaAttack",
+	"IvanBomb",
+	"NoIvanBomb",
+	"Detonate",
+	"DetonateAll",
+	"DisarmBomb",
+	"SelectNode",
+	"AttackSupport",
+	"PlaceBeacon",
+	"SelectBeacon",
+	"AttackMoveNav",
+	"AttackMoveTar",
+	"Demolish",
+	"AmerParaDrop"
 };
 
 
@@ -529,8 +542,7 @@ static struct
 {
 	char const * Name;
 	PipEnum Type;
-} _pips[6] = {
-	{ "empty", PIP_EMPTY },
+} _pips[5] = { // RA2: 5 entries from green (the exe's loop and its first read are at 0x7D1970); there is no "empty"
 	{ "green", PIP_GREEN },
 	{ "yellow", PIP_YELLOW },
 	{ "white", PIP_WHITE },
@@ -576,12 +588,11 @@ static struct
 {
 	char const * Name;
 	PipScaleType Index;
-} _pipscales[5] = {
+} _pipscales[4] = { // RA2: 4 entries (the exe's loop ends at 0x7D19B8); there is no "Charge"
 	{ "Ammo", PIPSCALE_AMMO },
 	{ "Tiberium", PIPSCALE_TIBERIUM },
 	{ "Passengers", PIPSCALE_PASSENGERS },
-	{ "Power", PIPSCALE_POWER },
-	{ "Charge", PIPSCALE_CHARGE }
+	{ "Power", PIPSCALE_POWER }
 };
 
 
@@ -848,7 +859,7 @@ bool CCINIClass::Put_BSizeType(char const * section, char const * entry, BSizeTy
 }
 
 
-const char * _mzones[MZONE_COUNT] = {
+const char * _mzones[MZONE_CRUSHER_ALL] = { // RA2: 12 entries, ending with Water and WaterBeach
 	"Normal",
 	"Crusher",
 	"Destroyer",
@@ -858,7 +869,9 @@ const char * _mzones[MZONE_COUNT] = {
 	"Subterannean",
 	"Infantry",
 	"InfantryDestroyer",
-	"Fly"
+	"Fly",
+	"Water", // RA2: 0x7D1AB8
+	"WaterBeach" // RA2: 0x7D1AAC
 };
 
 

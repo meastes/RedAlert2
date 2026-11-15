@@ -1875,7 +1875,7 @@ bool CellClass::Draw_Placement_Cursor(Point2D const & xpoint, Rect const & clipr
 
 	bool ok = false;
 	if (IsCursorHere || IsFoundationCopyHere) { // RA2: as above
-		ObjectTypeClass const *pending = IsCursorHere ? (ObjectTypeClass const *)Map.PendingObject : (ObjectTypeClass const *)Map.PendingObjectPtr; // RA2: as above
+		ObjectTypeClass const *pending = IsCursorHere ? (ObjectTypeClass const *)Map.PendingObject : (ObjectTypeClass const *)Map.CopyPendingObject; // RA2: Map+0x1190 (CopyPendingObject), where the foundation copy's type is kept
 
 		/*
 		 * Fetch the locomotion type of the object being placed. It is needed by

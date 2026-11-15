@@ -34,6 +34,8 @@ char const * const QuarryName[QUARRY_COUNT] = {
 	"Base Defenses",
 	"Base Threats",
 	"Power Facilities",
+	"Occupiable Buildings Only", // RA2: 0x7EC358
+	"Tech Buildings Only", // RA2: 0x7EC344
 };
 
 

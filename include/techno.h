@@ -606,6 +606,7 @@ class TechnoClass :	public RadioClass,
 		virtual ~TechnoClass(void) override;
 
 		virtual HRESULT STDMETHODCALLTYPE Load(IStream * stream) override;
+		virtual HRESULT STDMETHODCALLTYPE Save(IStream * stream, BOOL cleardirty) override; // RA2: 0x6D6A80; TechnoClass's own Save (between RadioClass's and the derived classes')
 
 		/*
 		**	Query functions.

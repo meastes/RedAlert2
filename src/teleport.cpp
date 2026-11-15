@@ -236,7 +236,7 @@ void TeleportLocomotionClass::Check_Landing(Coord to)
 		return;
 	}
 	if (LinkedTo->Can_Enter_Cell(&Map[to.As_Cell()], FACING_NONE, -1, NULL, true) == MOVE_NO || kill) { // RA2: as above
-		if (!Map[to.As_Cell()].Is_Tile_Clear() || LinkedTo->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+		if (!Map[to.As_Cell()].Is_Tile_With_Water() || LinkedTo->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: Is_Tile_With_Water (0x47B7E0)
 			int damage = LinkedTo->Techno_Type_Class()->MaxStrength;
 			LinkedTo->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, false);
 		} else { // RA2: as above

@@ -86,6 +86,10 @@ enum ActionType {
 	ACTION_ATTACK_SUPPORT,
 	ACTION_PLACE_BEACON,	// RA2
 	ACTION_SELECT_BEACON,	// RA2
+	ACTION_ATTACK_MOVE_NAV,	// RA2: "AttackMoveNav", name at index 62 of the table at 0x79D888
+	ACTION_ATTACK_MOVE_TAR,	// RA2: "AttackMoveTar"
+	ACTION_DEMOLISH,		// RA2: "Demolish"
+	ACTION_AMER_PARA_DROP,	// RA2: "AmerParaDrop"
 
 	ACTION_COUNT
 };

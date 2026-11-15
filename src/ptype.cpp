@@ -359,17 +359,15 @@ void ParticleTypeClass::Detach(AbstractClass const * target, bool all)
 /// is not recognized.</returns>
 ParticleBehaviorType Particle_Behavior_From_Name(char const * name)
 {
-	static char const * _BehaviorNames[BEHAVIOR_COUNT] = {
+	static char const * _BehaviorNames[BEHAVIOR_WEB] = { // RA2: 5 names (0x7EC1B4..0x7EC1C8); the exe has no "Web" or "WeakGas"
 		"Gas",
 		"Smoke",
 		"Fire",
 		"Spark",
-		"Railgun",
-		"Web",
-		"WeakGas"
+		"Railgun"
 	};
 
-	for (ParticleBehaviorType behavior = BEHAVIOR_FIRST; behavior < BEHAVIOR_COUNT; behavior++) {
+	for (ParticleBehaviorType behavior = BEHAVIOR_FIRST; behavior < BEHAVIOR_WEB; behavior++) { // RA2: five names
 		if (!strcmpi(name, _BehaviorNames[behavior])) {
 			return(behavior);
 		}

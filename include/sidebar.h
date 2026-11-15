@@ -53,6 +53,7 @@ class SidebarClass : public PowerClass
 	public:
 		virtual HRESULT Load(IStream * stream) override;
 		virtual HRESULT Save(IStream * stream) override;
+		virtual void DisposeOfArt(void) override; // RA2: 0x67BFC0; TabClass::DisposeOfArt calls it first
 
 	public:
 		/*

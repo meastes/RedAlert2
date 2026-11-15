@@ -9638,7 +9638,7 @@ void BuildingClass::SensorArrayActivate(Cell cell) // RA2: Enable_Sensor_Array i
 				Cell spot = Cell(cell.X + x, cell.Y + y); // RA2: as above
 				if (x * x + y * y < range_squared) { // RA2: as above
 					CellClass *object = &Map[spot]; // RA2: as above
-				object->Sensed_By(house); // RA2: as above
+				object->Disguise_Sensed_By(house); // RA2: Disguise_Sensed_By (0x47C380)
 				}
 			}
 		}

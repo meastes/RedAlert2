@@ -31,6 +31,8 @@ enum QuarryType {
 	QUARRY_DEFENSE,     // Attack base defense buildings.
 	QUARRY_THREAT,      // Attack enemies near friendly base.
 	QUARRY_POWER,       // Attack power facilities.
+	QUARRY_OCCUPIABLE,  // RA2: "Occupiable Buildings Only" (index 10 of the name table at 0x7A8620)
+	QUARRY_TECH,        // RA2: "Tech Buildings Only" (index 11)
 
 	QUARRY_COUNT,
 	QUARRY_FIRST=0

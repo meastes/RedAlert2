@@ -30,6 +30,7 @@
 #include "wwmouse.h"
 #include "bsurface.h"
 #include "geoconst2.h"
+namespace Game { bool __fastcall IsMoviePlaying(void); void __fastcall BlitMovie(void); } // RA2: 0x5A1ED0 and 0x5A1EF0
 #include <commctrl.h>
 #include <math.h>
 #define WINIMMAPI
@@ -164,8 +165,8 @@ LRESULT CALLBACK Windows_Procedure(HWND hwnd, UINT message, UINT wParam, LONG lP
 							Map.Blit_Sidebar(true);
 							ValidateRect(hwnd, NULL);
 							break;
-						} else if (Movie_Is_Playing()) {
-							Movie_Update_Visible_Surface();
+						} else if (Game::IsMoviePlaying()) { // RA2: Game::IsMoviePlaying (0x5A1ED0)
+							Game::BlitMovie(); // RA2: Game::BlitMovie (0x5A1EF0)
 							ValidateRect(hwnd, NULL);
 							break;
 						} else {

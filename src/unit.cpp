@@ -5454,7 +5454,7 @@ bool UnitClass::Ready_To_Commence(void)
 	if (!Door.Is_Door_Closed()) {
 		return(false);
 	}
-	TechnoClass * contact = Radio_Link(0); // RA2: as above
+	TechnoClass * contact = ((RadioClass const *)this)->Radio_Link(0); // RA2: the const Radio_Link (0x636E20)
 	if (contact != NULL) { // RA2: as above
 		if (contact->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)contact)->Class->IsWeaponsFactory // RA2: as above
 			&& MissionQueue != MISSION_MOVE && MissionQueue != MISSION_ENTER) { // RA2: as above

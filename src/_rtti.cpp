@@ -86,6 +86,13 @@ struct {
 	{ "FoggedObject",		RTTI_FOGGEDOBJECT },
 	{ "AlphaShape",			RTTI_ALPHASHAPE },
 	{ "VeinholeMonster",	RTTI_VEINHOLEMONSTER },
+	{ "NavyType",			RTTI_NAVYTYPE }, // RA2: the exe's table has seven more entries (0x7CDB78..0x7CDBB0)
+	{ "SpawnManager",		RTTI_SPAWNMANAGER }, // RA2: as above
+	{ "CaptureManager",		RTTI_CAPTUREMANAGER }, // RA2: as above
+	{ "Parasite",			RTTI_PARASITE }, // RA2: as above
+	{ "Bomb",				RTTI_BOMB }, // RA2: as above
+	{ "Temporal",			RTTI_TEMPORAL }, // RA2: as above; listed before RadSite although its value is 70
+	{ "RadSite",			RTTI_RADSITE }, // RA2: as above
 };
 
 static char UNKNOWN_RTTI_NAME[] = { "Unknown" };

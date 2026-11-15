@@ -3960,7 +3960,7 @@ void AircraftClass::Detach(AbstractClass const * target, bool all)
 LONG STDMETHODCALLTYPE AircraftClass::Landing_Altitude(void)
 {
 	if (Class->IsCarryall && !Cargo.Is_Something_Attached() && HasAnyLink()) { // RA2: RA2's form
-		TechnoClass * tptr = Radio_Link(0); // RA2: as above
+		TechnoClass * tptr = ((RadioClass const *)this)->Radio_Link(0); // RA2: the const Radio_Link (0x636E20)
 		if (Get_Mission() == MISSION_ENTER && tptr != NULL && tptr->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
 			BuildingTypeClass const * btype = ((BuildingClass *)tptr)->Class; // RA2: as above
 			if (btype->IsCanUnitRepair || btype->IsHelipad) { // RA2: as above
@@ -3986,7 +3986,7 @@ LONG STDMETHODCALLTYPE AircraftClass::Landing_Altitude(void)
 LONG STDMETHODCALLTYPE AircraftClass::Landing_Direction(void)
 {
 	if (HasAnyLink()) { // RA2: RA2's form
-		TechnoClass * tptr = Radio_Link(0); // RA2: as above
+		TechnoClass * tptr = ((RadioClass const *)this)->Radio_Link(0); // RA2: the const Radio_Link (0x636E20)
 		return(tptr->PrimaryFacing.Current().As_Dir8());
 	}
 	if (Cargo.Is_Something_Attached()) {

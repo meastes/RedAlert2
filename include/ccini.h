@@ -270,4 +270,4 @@ inline TypeList<int> CCINIClass::Get_VocType_List(CCINIClass const & ini, const 
 	return(defvalue);
 }
 
-extern const char * _mzones[MZONE_COUNT];
+extern const char * _mzones[MZONE_CRUSHER_ALL]; // RA2: 12 names (the exe loops from 0x7D1A68 to 0x7D1A98); the 13th zone has none

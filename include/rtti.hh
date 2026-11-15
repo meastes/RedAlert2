@@ -85,6 +85,13 @@ enum RTTIType {
 	RTTI_FOGGEDOBJECT,
 	RTTI_ALPHASHAPE,
 	RTTI_VEINHOLEMONSTER,
+	RTTI_NAVYTYPE,			// RA2: "NavyType", entry 64 of the RTTIs table at 0x7CD978 (71 entries)
+	RTTI_SPAWNMANAGER,		// RA2: "SpawnManager"
+	RTTI_CAPTUREMANAGER,	// RA2: "CaptureManager"
+	RTTI_PARASITE,			// RA2: "Parasite"
+	RTTI_BOMB,				// RA2: "Bomb"
+	RTTI_RADSITE,			// RA2: "RadSite"
+	RTTI_TEMPORAL,			// RA2: "Temporal"
 
 	RTTI_COUNT
 };

@@ -409,6 +409,7 @@ class FootClass : public TechnoClass
 
 		virtual HRESULT STDMETHODCALLTYPE Load(IStream * stream) override;
 		virtual HRESULT STDMETHODCALLTYPE Save(IStream * stream, BOOL cleardirty) override;
+		virtual void const * Get_Image_Data(void) const override; // RA2: 0x4CD650; InfantryClass::Get_Image_Data tail-calls it
 
 		/*---------------------------------------------------------------------
 		**	Member function prototypes.
