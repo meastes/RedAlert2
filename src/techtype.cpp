@@ -206,11 +206,13 @@ int TechnoTypeClass::Time_To_Build(void) const
  *=============================================================================================*/
 int TechnoTypeClass::Cost_Of(HouseClass * house) const
 {
-	if (house != NULL) {
-		return(Raw_Cost() * house->CostBias);
+	if (house) { // RA2: RA2's form
+		float factor = house->Cost_Multiplier(this); // RA2: as above
+		return (int)(Raw_Cost() * factor); // RA2: as above
 	}
-	return(Raw_Cost());
+	return Raw_Cost(); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -637,23 +639,18 @@ bool TechnoTypeClass::Legal_Placement(Cell const & pos, HouseClass * house) cons
 int TechnoTypeClass::Max_Pips(void) const
 {
 	switch (PipScale) {
-		case PIPSCALE_POWER:
-			return(10);
-
-		case PIPSCALE_AMMO:
-			return(MIN(MaxAmmo, 5));
-
-		case PIPSCALE_TIBERIUM:
-			return(5);
-
-		case PIPSCALE_PASSENGERS:
-			return(MIN(MaxPassengers, 5));
-
-		case PIPSCALE_CHARGE:
-			return(8);
+	case 4: // RA2: RA2's form
+		return 10; // RA2: as above
+	case 1: // RA2: as above
+		return MaxAmmo; // RA2: as above
+	case 2: // RA2: as above
+		return 5; // RA2: as above
+	case 3: // RA2: as above
+		return MaxPassengers; // RA2: as above
 	}
 	return(0);
 }
+
 
 
 /// <summary>
@@ -743,24 +740,31 @@ HRESULT STDMETHODCALLTYPE TechnoTypeClass::Load(IStream *stream)
 /// <returns>Returns with S_OK if the object type was written, otherwise the failure code.</returns>
 HRESULT STDMETHODCALLTYPE TechnoTypeClass::Save(IStream *stream, int cleardirty)
 {
-	HRESULT result = BASECLASS::Save(stream, cleardirty);
-	if (SUCCEEDED(result)) {
-		Dock.Save(stream);
-		DebrisTypes.Save(stream);
-		VoiceSelect.Save(stream);
-		VoiceMove.Save(stream);
-		VoiceAttack.Save(stream);
-		VoiceDie.Save(stream);
-		VoiceFeedback.Save(stream);
-		Explosion.Save(stream);
-		DebrisMaximums.Save(stream);
-		Prerequisite.Save(stream);
-		DamageParticleSystems.Save(stream);
-
-		result = S_OK;
+	HRESULT result = ObjectTypeClass::Save(stream, cleardirty); // RA2: RA2's form
+	if (FAILED(result)) { // RA2: as above
+		return result; // RA2: as above
 	}
-	return(result);
+	Dock.Save(stream); // RA2: as above
+	DebrisTypes.Save(stream); // RA2: as above
+	DebrisAnims.Save(stream); // RA2: as above
+	VoiceSelect.Save(stream); // RA2: as above
+	VoiceMove.Save(stream); // RA2: as above
+	VoiceAttack.Save(stream); // RA2: as above
+	VoiceSpecialAttack.Save(stream); // RA2: as above
+	VoiceDie.Save(stream); // RA2: as above
+	VoiceFeedback.Save(stream); // RA2: as above
+	MoveSound.Save(stream); // RA2: as above
+	DieSound.Save(stream); // RA2: as above
+	Explosion.Save(stream); // RA2: as above
+	DestroyAnim.Save(stream); // RA2: as above
+	DebrisMaximums.Save(stream); // RA2: as above
+	Prerequisite.Save(stream); // RA2: as above
+	PrerequisiteOverride.Save(stream); // RA2: as above
+	DamageParticleSystems.Save(stream); // RA2: as above
+	DestroyParticleSystems.Save(stream); // RA2: as above
+	return S_OK; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -772,22 +776,29 @@ HRESULT STDMETHODCALLTYPE TechnoTypeClass::Save(IStream *stream, int cleardirty)
 /// <returns>Returns with S_OK, or the failure code reported by the base class.</returns>
 HRESULT STDMETHODCALLTYPE TechnoTypeClass::GetSizeMax(ULARGE_INTEGER *pcbSize)
 {
-	HRESULT res = BASECLASS::GetSizeMax(pcbSize);
-	if (SUCCEEDED(res)) {
-		pcbSize->LowPart += sizeof(int) + (sizeof(VoiceSelect[0]) * VoiceSelect.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(VoiceMove[0]) * VoiceMove.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(VoiceAttack[0]) * VoiceAttack.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(VoiceDie[0]) * VoiceDie.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(VoiceFeedback[0]) * VoiceFeedback.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(Explosion[0]) * Explosion.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(DebrisTypes[0]) * DebrisTypes.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(Dock[0]) * Dock.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(DebrisMaximums[0]) * DebrisMaximums.Count());
-		pcbSize->LowPart += sizeof(int) + (sizeof(DamageParticleSystems[0]) * DamageParticleSystems.Count());
-		res = S_OK;
+	HRESULT result = ObjectTypeClass::GetSizeMax(pcbSize); // RA2: RA2's form
+	if (FAILED(result)) { // RA2: as above
+		return result; // RA2: as above
 	}
-	return(res);
+	pcbSize->LowPart += VoiceSelect.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += VoiceMove.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += VoiceAttack.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += VoiceSpecialAttack.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += VoiceDie.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += VoiceFeedback.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += MoveSound.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DieSound.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += Explosion.Count() * sizeof(AnimTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DestroyAnim.Count() * sizeof(AnimTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DebrisTypes.Count() * sizeof(VoxelAnimTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DebrisAnims.Count() * sizeof(AnimTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += Dock.Count() * sizeof(BuildingTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DebrisMaximums.Count() * sizeof(int) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DamageParticleSystems.Count() * sizeof(ParticleSystemTypeClass *) + sizeof(int); // RA2: as above
+	pcbSize->LowPart += DestroyParticleSystems.Count() * sizeof(ParticleSystemTypeClass *) + sizeof(int); // RA2: as above
+	return S_OK; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -885,11 +896,9 @@ void TechnoTypeClass::Compute_CRC(class CRCEngine & crc) const
 /// <returns>Returns with a pointer to the weapon data for that slot.</returns>
 WeaponDataStruct const * TechnoTypeClass::Get_Weapon(int which) const
 {
-	if (which == 2 && Weapons[which].Weapon == NULL) {
-		which = 0;
-	}
-	return(&Weapons[which]);
+	return &Weapons[which]; // RA2: RA2's form
 }
+
 
 
 /// <summary>
