@@ -5319,7 +5319,7 @@ address,size,evidence
 0x006D6750,48,"code of src/techno.cpp, matched"
 0x006D6780,208,"code of src/techno.cpp, matched"
 0x006D6A80,,"inferred: target of the call at 0x0044F303 in matched src/building.cpp; size not known"
-0x006D6AA0,,"inferred: target of the call at 0x004CA3E1 in matched src/foot.cpp; size not known"
+0x006D6AA0,832,"code of src/techno.cpp, matched"
 0x006D6DE0,16,"code of src/techno.cpp, matched: too short for the match rule"
 0x006D6DF0,16,"code of src/techno.cpp, matched: too short for the match rule"
 0x006D6E00,16,"code of src/techno.cpp, matched: too short for the match rule"
