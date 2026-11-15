@@ -243,20 +243,29 @@ AircraftClass::AircraftClass(AircraftTypeClass const * type, HouseClass * house)
  *=============================================================================================*/
 void AircraftClass::Init(void)
 {
-	BASECLASS::Init();
-	if (Class != NULL) {
+	TechnoClass::Init(); // RA2: RA2's form
+	if (Class != 0) { // RA2: as above
+		if (House != 0) { // RA2: as above
+			DynamicVectorClass<TechnoTypeClass *> &types = (DynamicVectorClass<TechnoTypeClass *> &)House->Class->VeteranAircraft; // RA2: as above
+			for (int index = 0; index < types.Count(); index++) { // RA2: as above
+				if (types[index] == Class) { // RA2: as above
+					Veterancy.Set_Veteran(true); // RA2: as above
+					break; // RA2: as above
+				}
+			}
+		}
 		PrimaryFacing.Set_ROT(Class->ROT);
 		SecondaryFacing.Set_ROT(Class->ROT);
 		SecondaryFacing.Set(PrimaryFacing.Current());
-		HeightAGL = Class->Flight_Level();
-		Ammo = Class->MaxAmmo;
-		Strength = Class->MaxStrength;
+		Set_Height_AGL(Class->Flight_Level()); // RA2: as above
+		Ammo = Class->InitialAmmo != -1 ? Class->InitialAmmo : Class->MaxAmmo; // RA2: as above
+		EstimatedHealth = Strength = Class->MaxStrength; // RA2: as above
 	}
-
-	if (House != NULL) {
+	if (House != 0) { // RA2: as above
 		House->Tracking_Add(this);
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -4094,13 +4103,14 @@ bool AircraftClass::Commence(void)
 /// <returns>bool; Should this aircraft be deleted when it flies off the map?</returns>
 bool AircraftClass::Should_Delete_Off_Map(void)
 {
-	if (TarCom == NULL && IsLocked) {
-		if ((Team == NULL && IsALoaner) || (Team != NULL && Team->Is_Leaving_Map())) {
+	if (TarCom == 0 && IsLocked && Get_Mission() != MISSION_PARADROP_APPROACH && Get_Mission() != MISSION_PARADROP_OVERFLY) { // RA2: RA2's form
+		if ((Team == 0 && IsALoaner) || (Team != 0 && Team->Is_Leaving_Map())) { // RA2: as above
 			return(true);
 		}
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -4161,6 +4171,7 @@ void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0
 
 
 
+
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4172,6 +4183,7 @@ void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in
 
 
 
+
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4179,6 +4191,7 @@ void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom
 	}
 	BASECLASS::Override_Mission(mission, tarcom, navcom); // RA2: as above
 }
+
 
 /// <summary>
 /// An airport-bound aircraft keeps the dock it is heading for while that one still takes it; otherwise
