@@ -1376,14 +1376,13 @@ void BuildingClass::Set_Turret_Index(int index)
  *=============================================================================================*/
 int BuildingClass::Shape_Number(void) const
 {
-	int shapenum = Fetch_Stage();
-
-	if (Class->IsLaserFence) {
-		return(LaserFenceFrame);
+	BuildingTypeClass *type = Class; // RA2: RA2's form
+	unsigned int frame = (unsigned int)Fetch_Stage(); // RA2: as above
+	if (type->IsLaserFence) { // RA2: as above
+		return LaserFenceFrame; // RA2: as above
 	}
-
-	if (Class->IsFirestormWall) {
-		return(FirestormWallFrame);
+	if (type->IsFirestormWall) { // RA2: as above
+		return FirestormWallFrame; // RA2: as above
 	}
 
 	/*
@@ -1391,50 +1390,64 @@ int BuildingClass::Shape_Number(void) const
 	**	is undergoing construction or not.
 	*/
 	if (BState == BSTATE_CONSTRUCTION) {
-
-		if (Class->IsGate) {
-			shapenum = (Class->Anims[BSTATE_CONSTRUCTION].Start+Class->Anims[BSTATE_CONSTRUCTION].Count-1)-shapenum;
+		if (type->IsGate) { // RA2: as above
+			frame = (unsigned int)type->Anims[BSTATE_CONSTRUCTION].Count + (unsigned int)type->Anims[BSTATE_CONSTRUCTION].Start - frame - 1; // RA2: as above
 		}
 
 		/*
 		**	If the building is deconstructing, then the display frame progresses
 		**	from the end to the beginning. Reverse the shape number accordingly.
 		*/
-		if (Mission == MISSION_DECONSTRUCTION) {
-			shapenum = (Class->Anims[BState].Start+Class->Anims[BState].Count-1)-shapenum;
+		if (Get_Mission() == MISSION_DECONSTRUCTION) { // RA2: as above
+			frame = (unsigned int)Class->Anims[BState].Count + (unsigned int)Class->Anims[BState].Start - frame - 1; // RA2: as above
 		}
-
-	} else if (Class->IsGate) {
-
-		if (HealthRatio <= Rule->ConditionYellow) {
-			return(Class->GateStages + 1);
-		} else {
-			return(0);
-		}
-
 	} else {
-
-		/*
-		**	If below half strenth, then show the damage frames of the
-		**	building.
-		*/
+		if (type->CanBeOccupied) { // RA2: as above
+			if (HealthRatio <= Rule->ConditionRed) { // RA2: as above
+				return 1; // RA2: as above
+			}
+			if (Occupants.Count() > 0) { // RA2: as above
+				return 2; // RA2: as above
+			}
+			return 0; // RA2: as above
+		}
+		if (type->IsGate) { // RA2: as above
+			/* // RA2: as above
+			**	If below half strenth, then show the damage frames of the // RA2: as above
+			**	building. // RA2: as above
+			*/ // RA2: as above
+			if (HealthRatio <= Rule->ConditionYellow) { // RA2: as above
+				return (unsigned int)Class->GateStages + 1; // RA2: as above
+			}
+			return 0; // RA2: as above
+		}
 		if (HealthRatio <= Rule->ConditionYellow) {
 			if (BState == BSTATE_IDLE) {
-				shapenum++;
+				++frame; // RA2: as above
 			} else {
-				int last1 = Class->Anims[BSTATE_IDLE].Start + Class->Anims[BSTATE_IDLE].Count;
-				int last2 = Class->Anims[BSTATE_ACTIVE].Start + Class->Anims[BSTATE_ACTIVE].Count;
-				int largest = MAX(last1, last2);
-				last2 = Class->Anims[BSTATE_AUX1].Start + Class->Anims[BSTATE_AUX1].Count;
-				largest = MAX(largest, last2);
-				last2 = Class->Anims[BSTATE_AUX2].Start + Class->Anims[BSTATE_AUX2].Count;
-				largest = MAX(largest, last2);
-				shapenum += largest;
+				type = Class; // RA2: as above
+				int end = (int)((unsigned int)type->Anims[BSTATE_IDLE].Count + (unsigned int)type->Anims[BSTATE_IDLE].Start); // RA2: as above
+				int other = (int)((unsigned int)type->Anims[BSTATE_ACTIVE].Count + (unsigned int)type->Anims[BSTATE_ACTIVE].Start); // RA2: as above
+				if (end <= other) { // RA2: as above
+					end = other; // RA2: as above
+				}
+				other = (int)((unsigned int)type->Anims[BSTATE_AUX1].Count + (unsigned int)type->Anims[BSTATE_AUX1].Start); // RA2: as above
+				if (end <= other) { // RA2: as above
+					end = other; // RA2: as above
+				}
+				other = (int)((unsigned int)type->Anims[BSTATE_AUX2].Count + (unsigned int)type->Anims[BSTATE_AUX2].Start); // RA2: as above
+				if (end <= other) { // RA2: as above
+					end = other; // RA2: as above
+				}
+				frame += (unsigned int)end; // RA2: as above
 			}
 		}
 	}
-	return(shapenum);
+	return frame; // RA2: as above
 }
+
+
+
 
 
 /***********************************************************************************************
@@ -7840,20 +7853,50 @@ void BuildingClass::Create_Anim(char const * name, BAnimType anim, bool damaged,
 /// <param name="anim">The animation that is going away.</param>
 void BuildingClass::Detach_Anim(AnimClass * anim)
 {
-	if (IsActive) {
-		for (int i = 0; i < BANIM_COUNT; i++) {
-			if (Anims[i] == anim) {
-				Anims[i] = NULL;
-				if (i == BANIM_SPECIAL_ONE && Class->IsCanUnitRepair) {
-					if (In_Radio_Contact() && Mission == MISSION_REPAIR) {
-						Begin_Anim(BANIM_SPECIAL_TWO, false);
-					}
-				}
-				break;
-			}
+	if (!IsActive) { // RA2: RA2's form
+		return; // RA2: as above
+	}
+	for (int index = 0; index < 18; ++index) { // RA2: as above
+		if (Anims[index] != anim) { // RA2: as above
+			continue; // RA2: as above
 		}
+		Anims[index] = NULL; // RA2: as above
+		AnimClass * animation = static_cast<AnimClass *>(anim); // RA2: as above
+		switch (index) { // RA2: as above
+		case 10: // RA2: as above
+			if (Class->IsCanUnitRepair) { // RA2: as above
+				if (HasAnyLink() && Get_Mission() == MISSION_REPAIR) { // RA2: as above
+					Begin_Anim(BANIM_SPECIAL_TWO, HealthRatio <= Rule->ConditionYellow, false, 0); // RA2: as above
+					return; // RA2: as above
+				}
+				Begin_Anim(BANIM_IDLE, HealthRatio <= Rule->ConditionYellow, false, 0); // RA2: as above
+			} else if (Class->IsAnimDelayedFire && animation->TimeToDie) { // RA2: as above
+				Begin_Anim(BANIM_ACTIVE_ONE, HealthRatio <= Rule->ConditionYellow, Occupants.Count() > 0, 0); // RA2: as above
+			}
+			break; // RA2: as above
+		case 12: // RA2: as above
+			if (Class->IsCanUnitRepair && animation->TimeToDie) { // RA2: as above
+				Begin_Anim(BANIM_IDLE, HealthRatio <= Rule->ConditionYellow, false, 0); // RA2: as above
+			}
+			break; // RA2: as above
+		case 14: // RA2: as above
+			if (animation->TimeToDie) { // RA2: as above
+				Begin_Anim(BANIM_SUPER_THREE, HealthRatio <= Rule->ConditionYellow, false, 0); // RA2: as above
+			}
+			break; // RA2: as above
+		case 16: // RA2: as above
+			if (animation->TimeToDie) { // RA2: as above
+				Begin_Anim(BANIM_SUPER_ONE, HealthRatio <= Rule->ConditionYellow, false, 0); // RA2: as above
+			}
+			break; // RA2: as above
+		}
+		return; // RA2: as above
 	}
 }
+
+
+
+
 
 
 /// <summary>
@@ -7939,10 +7982,10 @@ void BuildingClass::Set_Anim_Damage_State(bool damaged)
 /// <param name="brightness">The brightness level to draw the animations at.</param>
 void BuildingClass::Set_Anim_Drawer(ConvertClass * drawer, int brightness)
 {
-	for (int i = 0; i < BANIM_COUNT; i++) {
-		AnimClass * anim = Anims[i];
-		if (anim != NULL) {
-			if (anim->Class->IsShouldUseCellDrawer) {
+	for (int index = 0; index < 18; index++) { // RA2: RA2's form
+		AnimClass *anim = static_cast<AnimClass *>(Anims[index]); // RA2: as above
+		if (anim != 0) { // RA2: as above
+			if (anim->Class != 0 && anim->Class->IsShouldUseCellDrawer) { // RA2: as above
 				anim->AlternativeDrawer = drawer;
 				anim->AlternativeBrightness = brightness;
 			}
@@ -7950,6 +7993,7 @@ void BuildingClass::Set_Anim_Drawer(ConvertClass * drawer, int brightness)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -8137,25 +8181,41 @@ void BuildingClass::Power_On(void)
 /// </summary>
 void BuildingClass::Power_Off(void)
 {
+	HouseClass *house = House; // RA2: RA2's form
 	IsPoweredOn = false;
-	Adjust_House_Power(House);
-
+	int count = house->Buildings.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		BuildingClass *building = house->Buildings[index]; // RA2: as above
+		if (building->IsActive && !building->IsInLimbo) { // RA2: as above
+			if (building->Class->IsLaserFencePost) { // RA2: as above
+				building->Toggle_Laser_Fence_Post(0); // RA2: as above
+			}
+			building->Update_Power_State(); // RA2: as above
+		}
+	}
 	if (LightSource) {
 		LightSource->Disable();
 	}
-
-	Disable_Cloak_Generator();
-
-	if (Class->IsLaserFencePost) {
-		Toggle_Laser_Fence_Post(false);
+	if (Class->IsCloakGenerator) { // RA2: as above
+		CloakGeneratorState = -1; // RA2: as above
+		if (!CurrentCloakRadius) { // RA2: as above
+			CurrentCloakRadius = Class->CloakRadiusInCells; // RA2: as above
+		}
+		IsToDisplay = true; // RA2: as above
 	}
-
-	for (int i = 0; i < BANIM_COUNT; i++) {
-		if (Class->AnimData[i].Powered && Anims[i] != NULL) {
-			Anims[i]->Disable();
+	if (Class->GapGenerator && GeneratingGap) { // RA2: as above
+		DestroyGap(); // RA2: as above
+	}
+	if (Class->IsLaserFencePost) {
+		Toggle_Laser_Fence_Post(0); // RA2: as above
+	}
+	for (int anim = 0; anim < 18; anim++) { // RA2: as above
+		if (Class->AnimData[anim].Powered && Anims[anim]) { // RA2: as above
+			Anims[anim]->Disable(); // RA2: as above
 		}
 	}
 }
+
 
 
 
@@ -8931,32 +8991,64 @@ void BuildingClass::Clear_Occupy_Bit(Coord const & coord)
 HRESULT STDMETHODCALLTYPE BuildingClass::Load(IStream *stream)
 {
 	TargetTracker.Remove_Index(Fetch_ID());
-	HRESULT result = BASECLASS::Load(stream);
+	HRESULT result = TechnoClass::Load(stream); // RA2: RA2's form
 	if (SUCCEEDED(result)) {
+		int count; // RA2: as above
 		new (this) BuildingClass(NoInitClass());
-
 		TargetTracker.Add_Index(Fetch_ID(), this);
-
 		Swizzle_Pointer(&Class);
 		Swizzle_Pointer(&Factory);
 		Swizzle_Pointer(&WhomToRepay);
 		Swizzle_Pointer(&AnimToTrack);
+		Swizzle_Pointer(&PsiWarnAnim); // RA2: as above
 		Swizzle_Pointer(&BuildingLight);
-
-		for (int anim = 0; anim < BANIM_COUNT; anim++) {
-			Swizzle_Pointer(&Anims[anim]);
+		BuildupSoundController.Init(); // RA2: as above
+		WorkingSoundController.Init(); // RA2: as above
+		HRESULT read = stream->Read(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(read)) { // RA2: as above
+			return read; // RA2: as above
 		}
-
-		for (int upgrade = 0; upgrade < ARRAY_SIZE(Upgrades); upgrade++) {
-			Swizzle_Pointer(&Upgrades[upgrade]);
+		for (int index = 0; index < count; index++) { // RA2: as above
+			InfantryClass *infantry; // RA2: as above
+			read = stream->Read(&infantry, sizeof(infantry), 0); // RA2: as above
+			if (FAILED(read)) { // RA2: as above
+				return read; // RA2: as above
+			}
+			Overpowerers.Add(infantry); // RA2: as above
 		}
-
-		LightSource = NULL;
-
-		result = S_OK;
+		for (index = 0; index < count; index++) { // RA2: as above
+			Swizzle_Pointer(&Overpowerers[index]); // RA2: as above
+		}
+		read = stream->Read(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(read)) { // RA2: as above
+			return read; // RA2: as above
+		}
+		for (index = 0; index < count; index++) { // RA2: as above
+			InfantryClass *infantry; // RA2: as above
+			read = stream->Read(&infantry, sizeof(infantry), 0); // RA2: as above
+			if (FAILED(read)) { // RA2: as above
+				return read; // RA2: as above
+			}
+			Occupants.Add(infantry); // RA2: as above
+		}
+		for (index = 0; index < count; index++) { // RA2: as above
+			Swizzle_Pointer(&Occupants[index]); // RA2: as above
+		}
+		for (index = 0; index < 18; index++) { // RA2: as above
+			Swizzle_Pointer(&Anims[index]); // RA2: as above
+		}
+		for (index = 0; index < 3; index++) { // RA2: as above
+			Swizzle_Pointer(&Upgrades[index]); // RA2: as above
+		}
+		for (index = 0; index < 8; index++) { // RA2: as above
+			Swizzle_Pointer(&DamageFireAnims[index]); // RA2: as above
+		}
+		LightSource = 0; // RA2: as above
 	}
-	return(result);
+	return result; // RA2: as above
 }
+
+
 
 
 /// <summary>
@@ -9206,55 +9298,17 @@ void BuildingClass::Update_Power_State(void) // RA2: not in TibSun, at 0x44F8E0
 /// <param name="house">The house whose buildings are to be adjusted.</param>
 void Adjust_House_Power(HouseClass * house)
 {
-	double fraction = house->Power_Fraction();
-
-	for (int i = 0; i < Buildings.Count(); i++) {
-		BuildingClass * bptr = Buildings[i];
-		if (bptr->House == house && bptr->IsActive && !bptr->IsInLimbo) {
-			if (bptr->Class->IsLaserFencePost) {
-				bptr->Toggle_Laser_Fence_Post(false);
-			}
-			if (fraction >= 1.0 || !bptr->Class->IsPowered) {
-				if (bptr->Class->IsCloakGenerator && bptr->CloakGeneratorState <= 0) {
-					if (bptr->IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-						if (bptr->CurrentCloakRadius != bptr->Class->CloakRadiusInCells) {
-							bptr->Enable_Cloak_Generator();
-						}
-					}
-				}
-			}
-
-			if (fraction >= 1.0) {
-				for (int banim = 0; banim < BANIM_COUNT; banim++) {
-					if (bptr->Class->AnimData[banim].Powered) {
-						if (bptr->Anims[banim] != NULL) {
-							bptr->Anims[banim]->Enable();
-						}
-					} else if (bptr->Class->AnimData[banim].PoweredLight && bptr->Anims[banim] == NULL) {
-						bptr->Begin_Anim((BAnimType)banim, bptr->HealthRatio <= Rule->ConditionYellow);
-					}
-				}
-			} else {
-				if (bptr->Class->IsCloakGenerator && bptr->CloakGeneratorState >= 0 && !bptr->IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-					if (bptr->CurrentCloakRadius != 0) {
-						bptr->Disable_Cloak_Generator();
-					}
-				}
-				if (bptr->Class->IsPowered && bptr->Class->Drain > 0 && bptr->Class->IsCanTogglePower) {
-					for (int banim = 0; banim < BANIM_COUNT; banim++) {
-						if (bptr->Class->AnimData[banim].Powered) {
-							if (bptr->Anims[banim] != NULL) {
-								bptr->Anims[banim]->Disable();
-							}
-						} else if (bptr->Class->AnimData[banim].PoweredLight && bptr->Anims[banim] != NULL) {
-							bptr->End_Anim((BAnimType)banim);
-						}
-					}
-				}
-			}
+	int count = house->Buildings.Count(); // RA2: RA2's form
+	for (int index = 0; index < count; ++index) { // RA2: as above
+		BuildingClass *building = house->Buildings[index]; // RA2: as above
+		if (building->IsActive && !building->IsInLimbo) { // RA2: as above
+			if (building->Class->IsLaserFencePost) // RA2: as above
+				building->Toggle_Laser_Fence_Post(0); // RA2: as above
+			building->Update_Power_State(); // RA2: as above
 		}
 	}
 }
+
 
 
 
@@ -10684,21 +10738,20 @@ void BuildingClass::IronCurtain(int duration) // RA2: not in TibSun, at 0x452E60
 /// </summary>
 bool BuildingClass::CanBeOccupiedBy(InfantryClass * infantry) const // RA2: not in TibSun, at 0x452EB0
 {
-	if (Class->CanBeOccupied) {
-		if (infantry->Class->Occupier) {
-			if ((House == infantry->House || House->Class->IsMultiplayPassive) && GetOccupantCount() != Class->MaxNumberOccupants) {
-				if (!(Get_Health_Ratio() <= Rule->ConditionRed) && infantry->MindControlledBy == NULL) {
-					return(true);
-				}
-			}
-		} else if (infantry->Class->Assaulter) {
-			if (!House->Is_Ally(infantry) && GetOccupantCount() != 0) {
-				return(true);
-			}
-		}
+	if (!Class->CanBeOccupied) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (infantry->Class->Occupier // RA2: as above
+	    ? ((House == infantry->House || House->Class->IsMultiplayPassive) // RA2: as above
+	       && GetOccupantCount() != Class->MaxNumberOccupants // RA2: as above
+	       && !(char)Is_Red_Health() && !infantry->MindControlledBy) // RA2: as above
+	    : (infantry->Class->Assaulter && !House->Is_Ally(infantry) && GetOccupantCount())) { // RA2: as above
+		return(true); // RA2: as above
 	}
 	return(false);
 }
+
+
 
 
 /// <summary>
