@@ -96,6 +96,7 @@
 #include "bench.h"
 #include "building.h"
 #include "builtype.h"
+#include "capmgr.h"
 #include "ccrand.h"
 #include "cell.h"
 #include "convert.h"
@@ -132,6 +133,8 @@
 #include "bench.hh"
 #include "color.hh"
 #include "tube.hh"
+
+void Queue_Speech(char const * name, int priority, int expire); // RA2: 0x715B40, an EVA line by name
 
 
 DynamicVectorClass<FootClass *> Feet;
@@ -2750,11 +2753,13 @@ int FootClass::Rescue_Mission(AbstractClass * tarcom)
  *=============================================================================================*/
 void FootClass::Death_Announcement(TechnoClass const * ) const
 {
-	if (IsOwnedByPlayer) {
-		LastRadarEventCell = Destination_Coord().As_Cell();
-		Speak(VOX_UNIT_LOST);
+	if (House->Is_Player_Control() && !Techno_Type_Class()->Spawned) { // RA2: RA2's form
+		if (Submit_Radar_Event((RadarEventType)7, Get_Cell())) { // RA2: as above
+			Queue_Speech("EVA_UnitLost", -1, -1); // RA2: as above
+		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3062,10 +3067,10 @@ bool FootClass::Can_Demolish(void) const
  *=============================================================================================*/
 void FootClass::Sell_Back(int control)
 {
-	if (control != 0) {
+	if (control) { // RA2: RA2's form
 		if (House->Is_Player_Control()) {
-			Speak(VOX_UNIT_SOLD);
-			Sound_Effect(Rule->SellSound);
+			Queue_Speech("EVA_UnitSold", -1, -1); // RA2: as above
+			VocClass::PlayGlobal(Rule->SellSound, 1.0f, 0x2000, 0); // RA2: as above
 		}
 		House->Refund_Money(Refund_Amount());
 		Stun();
@@ -3073,6 +3078,7 @@ void FootClass::Sell_Back(int control)
 		Delete_Me();
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -5033,11 +5039,15 @@ void FootClass::Advance_Waypoint_Path(void)
 /// </summary>
 void FootClass::Delete_Me(void)
 {
-	if (Team != NULL) {
-		Team->Remove(this);
+	if (CaptureManager != 0) { // RA2: RA2's form
+		CaptureManager->FreeAll(); // RA2: as above
+	}
+	if (Team != 0) { // RA2: as above
+		Team->Remove(this, -1, 0); // RA2: as above
 	}
 	BASECLASS::Delete_Me();
 }
+
 
 
 /// <summary>
