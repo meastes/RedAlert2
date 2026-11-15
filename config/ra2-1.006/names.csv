@@ -5229,6 +5229,7 @@ address,symbol,evidence
 0x006E7390,?Draw_Background@TextButtonClass@@MAEXXZ,"compiled from src/textbtn.cpp, matched"
 0x006E7460,?Draw_Text@TextButtonClass@@MAEXPBG@Z,"compiled from src/textbtn.cpp, matched"
 0x006E7780,?Fill_In@ThemeControl@@QAE_NABVCCINIClass@@@Z,"compiled from src/theme.cpp, matched"
+0x006E7A70,?Free_Themes@ThemeClass@@QAEXXZ,"compiled from src/theme.cpp, matched"
 0x006E7AF0,?Scan@ThemeClass@@QAEXXZ,"inferred: referenced by matched src/cd.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x006E7C40,?Base_Name@ThemeClass@@QBEPBDW4ThemeType@@@Z,"compiled from src/theme.cpp, matched"
 0x006E7C60,??0ThemeClass@@QAE@XZ,"compiled from src/theme.cpp, matched"
