@@ -212,42 +212,45 @@ AnimTypeClass::~AnimTypeClass(void)
  *=============================================================================================*/
 void AnimTypeClass::Init(TheaterType theater)
 {
-	AnimType index;
-
-	if (Debug_Map || theater != LastTheater) {
-		for (index = ANIM_FIRST; index < AnimTypes.Count(); index++) {
-			AnimTypeClass * anim = AnimTypes[index];
-
-			if (!anim->IsDemandLoad) {
-				if (anim->IsTheater) {
-					char fullname[_MAX_FNAME+_MAX_EXT];	// Fully constructed iconset name.
-					_makepath(fullname, NULL, NULL, anim->Name(), Theaters[theater].Suffix);
-					anim->ImageData = MFCD::Retrieve(fullname);
-					if (anim->ImageData == NULL) {
-						_makepath(fullname, NULL, NULL, anim->Name(), ".SHP");
-						anim->ImageData = MFCD::Retrieve(fullname);
-					}
-				} else if (anim->IsNewTheater) {
-					anim->Load_Image(theater);
-				}
-			} else {
-				if (anim->IsTheater || anim->IsNewTheater) {
-					if (anim->ImageData != NULL) {
-						delete [] (char*) anim->ImageData;
-						anim->ImageData = NULL;
-					}
-				}
-			}
-		}
-	} else {
-		for (index = ANIM_FIRST; index < AnimTypes.Count(); index++) {
-			AnimTypeClass * anim = AnimTypes[index];
-			if (anim->IsNewTheater && anim->ImageData == NULL) {
+	if (!Debug_Map && theater == LastTheater) { // RA2: RA2's form
+		for (int index = 0; index < AnimTypes.Count(); index++) { // RA2: as above
+			AnimTypeClass *anim = AnimTypes[index]; // RA2: as above
+			if (anim->IsNewTheater && anim->ImageData == 0) { // RA2: as above
 				anim->Load_Image(theater);
 			}
 		}
+		return; // RA2: as above
+	}
+
+	for (int index = 0; index < AnimTypes.Count(); index++) { // RA2: as above
+		AnimTypeClass *anim = AnimTypes[index]; // RA2: as above
+		if (!anim->IsDemandLoad) { // RA2: as above
+			if (anim->IsTheater) { // RA2: as above
+				if (anim->ImageData != 0 && anim->ImageAllocated) { // RA2: as above
+					operator delete((void *)anim->ImageData); // RA2: as above
+					anim->ImageAllocated = false; // RA2: as above
+				}
+				anim->ImageData = 0; // RA2: as above
+				char fullname[512]; // RA2: as above
+				_makepath(fullname, 0, 0, anim->Name(), Theaters[theater].Suffix); // RA2: as above
+				anim->ImageData = (void *)MixFileClass::Retrieve(fullname); // RA2: as above
+				if (anim->ImageData == 0) { // RA2: as above
+					_makepath(fullname, 0, 0, anim->Name(), ".SHP"); // RA2: as above
+					anim->ImageData = (void *)MixFileClass::Retrieve(fullname); // RA2: as above
+				}
+			} else if (anim->IsNewTheater) { // RA2: as above
+				anim->Load_Image(theater);
+			}
+		} else if (anim->IsTheater || anim->IsNewTheater) { // RA2: as above
+			if (anim->ImageData != 0 && anim->ImageAllocated) { // RA2: as above
+				operator delete((void *)anim->ImageData); // RA2: as above
+				anim->ImageAllocated = false; // RA2: as above
+			}
+			anim->ImageData = 0; // RA2: as above
+		}
 	}
 }
+
 
 
 /// <summary>
@@ -258,18 +261,25 @@ void AnimTypeClass::Init(TheaterType theater)
 /// <param name="theater">The theater to align the animation artwork with.</param>
 void AnimTypeClass::Init_Theater(TheaterType theater)
 {
-	if (Debug_Map || theater != LastTheater) {
-		if (!IsTheater || IsDemandLoad) {
-			if (IsNewTheater) {
-				Load_Image(theater);
-			}
-		} else {
-			char fullname[_MAX_FNAME+_MAX_EXT];	// Fully constructed iconset name.
-			_makepath(fullname, NULL, NULL, Name(), Theaters[theater].Suffix);
-			ImageData = MFCD::Retrieve(fullname);
+	if (!Debug_Map && theater == LastTheater) { // RA2: RA2's form
+		return; // RA2: as above
+	}
+	if (IsTheater && !IsDemandLoad) { // RA2: as above
+		if (ImageData != 0 && ImageAllocated) { // RA2: as above
+			operator delete((void *)ImageData); // RA2: as above
+			ImageAllocated = false; // RA2: as above
 		}
+		ImageData = 0; // RA2: as above
+		char fullname[512]; // RA2: as above
+		_makepath(fullname, 0, 0, Name(), Theaters[theater].Suffix); // RA2: as above
+		ImageData = (void *)MixFileClass::Retrieve(fullname); // RA2: as above
+		return; // RA2: as above
+	}
+	if (IsNewTheater) { // RA2: as above
+		Load_Image(theater); // RA2: as above
 	}
 }
+
 
 
 /// <summary>
