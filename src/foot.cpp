@@ -3975,14 +3975,15 @@ Coord FootClass::Destination_Coord(TechnoClass *) const // RA2: the docking obje
 /// <returns>bool; Was the object captured?</returns>
 bool FootClass::Captured(HouseClass * newowner, bool announce) // RA2: announce
 {
-	if (BASECLASS::Captured(newowner, announce)) { // RA2: announce
+	if (TechnoClass::Captured(newowner, true)) { // RA2: as above
 		if (!In_Air()) {
-			LastAdjacencyCell = PositionCell;
+			LastAdjacencyCell = Get_Cell(); // RA2: as above
 		}
 		return(true);
 	}
 	return(false);
 }
+
 
 
 /// <summary>
