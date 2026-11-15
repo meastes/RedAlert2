@@ -4302,7 +4302,7 @@ address,symbol,evidence
 0x00633C40,?Update_Transmission@RadarClass@@QAEXXZ,"compiled from src/radar.cpp, matched"
 0x00633D30,?Play_Movie@RadarClass@@QAEXXZ,"compiled from src/radar.cpp, matched"
 0x00634030,?Complete_Radar_Refresh@RadarClass@@QAEXXZ,"compiled from src/radar.cpp, matched"
-0x00634AA0,?Help_Text@DisplayClass@@UAEPBDH@Z,"inferred: referenced by matched src/power.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00634AA0,?Help_Text@RadarClass@@UAEPBDH@Z,"inferred: referenced by matched src/power.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00635090,??0?$VectorClass@VPoint2D@@@@QAE@HPBVPoint2D@@@Z,"inferred: referenced by matched src/radar.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00635110,??0?$DynamicVectorClass@U?$HashObject@URadarTrackingStruct@@PAVTechnoClass@@@@@@QAE@IPBU?$HashObject@URadarTrackingStruct@@PAVTechnoClass@@@@@Z,"inferred: referenced by matched src/radar.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00635440,?Allocate@RadBeam@@SIPAV1@H@Z,"inferred: referenced by matched src/techno.cpp (2 references); across all matched code never at another address, and no other symbol here"

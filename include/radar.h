@@ -93,6 +93,7 @@ class RadarClass: public DisplayClass
 
 	public:
 		virtual HRESULT Load(IStream * stream) override;
+		virtual char const * Help_Text(int id) override; // RA2: 0x00634AA0, the radar's own override (PowerClass::Help_Text calls it)
 		virtual HRESULT Save(IStream * stream) override;
 
 	public:
