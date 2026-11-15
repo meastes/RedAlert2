@@ -81,26 +81,41 @@ class SidebarClass : public PowerClass
 			STRIPS=4 // RA2: four strips, one per tab
 		};
 
-		static ShapeSet const * SidebarShape;
+		/*
+		**	The sidebar's layout, computed by Recalc_Layout and Recalc_Horizontal_Layout.
+		*/
+		static int TopButtonX; // RA2: 0xABCD48; the left of the first button of the top row (upgrade/repair)
+		static int TopButtonY; // RA2: 0xABCD4C
+		static int TopButtonSpacing; // RA2: 0xABCD50; from the first button of the top row to the next
+		static int TabButtonX; // RA2: 0xABCD54; the left of the first tab button
+		static int TabButtonY; // RA2: 0xABCD58
+		static int TabButtonSpacing; // RA2: 0xABCD5C; between the tab buttons
+		static int StripLeft; // RA2: 0xABCD60; where the strips start
+		static int StripTop; // RA2: 0xABCD64; where the strips start (the sidebar height less the strips' share)
+		static int CameoWidth; // RA2: 0xABCD68; 63 for the Allies, 64 for the Soviets
+		static int CameoHeight; // RA2: 0xABCD6C; the step from one row of cameos to the next
+		static int PowerBarLeft; // RA2: 0xABCD74
+		static int SidebarBottomY; // RA2: 0xABCD78; the power bar height plus 234
+		static int SidebarEdgeWidth; // RA2: 0xABCD7C
+		static int SidebarEdgeStep; // RA2: 0xABCD80
 
 		/*
-		 * This is the repeating middle section of the sidebar backdrop. It is stacked
-		 * once for every visible object slot, so that one set of artwork covers the
-		 * sidebar at whatever height the current screen resolution gives it.
-		 */
-		static ShapeSet const * SidebarMiddleShape;
-
-		/*
-		 * This is the bottom cap of the sidebar backdrop, drawn directly below the last
-		 * of the stacked middle sections.
-		 */
-		static ShapeSet const * SidebarBottomShape;
-
-		/*
-		 * This is the small panel drawn below the bottom cap. It dresses up the strip of
-		 * sidebar left over beneath the object slots.
-		 */
-		static ShapeSet const * SidebarAddonShape;
+		**	The sidebar's art. Each shape is allocated by Init_For_House or retrieved from a mix file; the
+		**	allocated ones are freed by DisposeOfArt.
+		*/
+		enum SidebarShapeType {
+			SBSHAPE_TOP, // SIDE1.SHP, the top of the sidebar backdrop
+			SBSHAPE_MIDDLE, // SIDE2.SHP, stacked once for every visible row of cameos
+			SBSHAPE_BOTTOM, // SIDE3.SHP
+			SBSHAPE_ADDON, // ADDON.SHP, drawn below the bottom cap
+			SBSHAPE_SHUTTER_BACK, // the shutter animation that covers the strips while no tab has anything
+			SBSHAPE_SHUTTER_MIDDLE,
+			SBSHAPE_SHUTTER_FRONT,
+			SBSHAPE_CLOCK, // GCLOCK2.SHP, the production clock
+			SBSHAPE_COUNT
+		};
+		static ShapeSet const * SidebarShapes[SBSHAPE_COUNT]; // RA2: 0xABCD20
+		static bool SidebarShapeAllocated[SBSHAPE_COUNT]; // RA2: 0xABCD40
 
 		SidebarClass(void);
 		SidebarClass(NoInitClass const & x);
@@ -113,7 +128,23 @@ class SidebarClass : public PowerClass
 		virtual void Init_IO(void) override;                        // Inits button list
 		virtual void Init_For_House(void) override;
 		void Reload_Sidebar(void);							// Loads house-specific sidebar art
-		void Toggle_Cameo_Text(bool on);
+		void Set_Cameo_Text(bool state); // RA2: 0x67B880; the body is empty (the caption flag is a global)
+		void Recalc_Layout(void); // RA2: 0x67B910; the sidebar's rectangle and the sizes of its parts
+		static void Recalc_Horizontal_Layout(void); // RA2: 0x67BA60; the left edge of the sidebar and of its controls
+		void Request_Redraw(void); // RA2: 0x67C100; the active strip is redrawn and the sidebar for two more frames
+		void Notice_Object_Change(ObjectClass * object); // RA2: 0x67C150
+		void Request_Column_Redraw(int column); // RA2: 0x67C310; as Request_Redraw, if the strip is the active one
+		void Update_Build_Buttons(void); // RA2: 0x67C850; the scroll buttons are on while the active strip holds more than the sidebar shows
+		void Enable_Column_Button(int column); // RA2: 0x67C910
+		void Update_Column_Availability(int column); // RA2: 0x67CA50; the tab of an emptied strip is disabled and another tab selected
+		void Activate_Tab(int tab); // RA2: 0x67D7E0
+		void Start_Tab_Flash(int tab); // RA2: 0x67DC00
+		bool Stop_Tab_Flash(int tab); // RA2: 0x67DC70
+		int First_Used_Column(void); // RA2: 0x681980; the first strip that holds something, or -1
+		int Get_Row_Count(void); // RA2: 0x6820A0; the rows of cameos that fit
+		int Get_Doubled_Row_Count(void); // RA2: 0x6820F0; two cameos to a row
+		static int __fastcall Cameos_Width(int count); // RA2: 0x67E640
+		static int __fastcall Cameos_Height(int count); // RA2: 0x67E650
 
 		virtual void AI(KeyNumType & input, Point2D const & xy) override;
 		virtual void Draw_It(bool complete) override;
@@ -134,8 +165,6 @@ class SidebarClass : public PowerClass
 
 		int Max_Visible(void);
 
-		void Set_Cameo_Text(bool state);
-
 		void Blit_Sidebar(bool complete);
 
 		/*
@@ -152,9 +181,11 @@ class SidebarClass : public PowerClass
 					SelectClass(NoInitClass const & x) : ControlClass(x) {};
 
 					void Set_Owner(StripClass & strip, int index);
+					bool Is_Hovered(void) const; // RA2: 0x681690, the mouse is over the button and input is on
 
 					StripClass * Strip;
 					int Index;
+					bool IsHovered; // RA2: +0x34, the mouse is over the button; the button is 0x38 bytes
 
 				protected:
 					virtual int Action(unsigned flags, KeyNumType & key) override;
@@ -168,12 +199,22 @@ class SidebarClass : public PowerClass
 				bool Add(RTTIType type, int ID);
 				bool Abandon_Production(FactoryClass const * factory);
 				bool Scroll(bool up);
+				bool Scroll(bool up, int amount); // RA2: 0x67EE60; the strip moves by this many rows
+				bool Step(bool up); // RA2: 0x67EEF0; one row
 				bool Page(bool up);
 				bool AI(KeyNumType & input, Point2D const & xy);
-				char const * Help_Text(int id);
+				wchar_t const * Help_Text(int id); // RA2: 0x67F580; the cameo name and cost (wide text)
 				void Draw_It(bool complete);
 				void One_Time(int id);
 				void Init_Clear(void);
+				void Clear_Buildables(void); // RA2: 0x67E770; the scroll state and every entry are cleared
+				void Init_Buttons(int id); // RA2: 0x67E7E0; numbers the strip and places its cameo buttons
+				void Add_Buttons(void); // RA2: 0x67E8F0
+				void Remove_Buttons(void); // RA2: 0x67E9A0
+				bool Is_Before(RTTIType type, int id, RTTIType othertype, int otherid); // RA2: 0x67EA20; the order of the cameos
+				void Insert_Buildable(RTTIType type, int id); // RA2: 0x67ED10
+				int Get_Progress(int index); // RA2: 0x67F7C0; how far an entry's production has come
+				void Set_Flash(int id, int delay); // RA2: 0x682400; the entry flashes until this many frames from now
 				void Init_IO(int id);
 				bool Recalc(void);
 				void Activate(void);
@@ -194,6 +235,7 @@ class SidebarClass : public PowerClass
 					OBJECT_HEIGHT=51,				// Pixel height of each buildable object.
 					OBJECT_WIDTH=64,				// Pixel width of each buildable object.
 					MAX_VISIBLE=4,					// Number of object slots visible at any one time.
+					MAX_SLOTS_PER_STRIP=60,			// RA2: the cameo buttons of a strip in SelectButton
 					MAX_SLOTS=20,					/// Maximum number of object slots at any resolution.
 					SCROLL_RATE=OBJECT_HEIGHT,		// The pixel jump while scrolling (larger is faster).
 					UP_X_OFFSET=5,					// Scroll up arrow coordinates.
@@ -345,9 +387,7 @@ class SidebarClass : public PowerClass
 				static ShapeSet const * RechargeClockShapes;
 				static ShapeSet const * DarkenShapes;
 
-				static ShapeButtonClass UpButton[COLUMNS];
-				static ShapeButtonClass DownButton[COLUMNS];
-				static SelectClass SelectButton[COLUMNS][MAX_SLOTS];
+				static SelectClass SelectButton[STRIPS * MAX_SLOTS_PER_STRIP]; // RA2: 0xAB9740; the cameo buttons of all the strips, 60 to a strip
 
 		} Column[STRIPS]; // RA2: four strips of 0xE64 bytes from +0x1540
 
@@ -402,8 +442,11 @@ class SidebarClass : public PowerClass
 		*/
 		static ShapeButtonClass Repair;
 		static ShapeButtonClass Upgrade;
-		static ShapeButtonClass Power;
-		static ShapeButtonClass Waypoint;
+		static ShapeButtonClass TabButton[STRIPS]; // RA2: 0xAB9508; the four tab buttons (IDs 203 to 206)
+		static ShapeButtonClass ScrollDownButton; // RA2: 0xABCBE8; ID 201, R-DN.SHP
+		static ShapeButtonClass ScrollUpButton; // RA2: 0xABCCC0; ID 200, R-UP.SHP
+		static Rect DirtyRect; // RA2: 0x8336E8; the part of the sidebar surface a strip drew
+		static bool IsSidebarRedrawPending; // RA2: 0x8373C3; set whenever a button or a strip changed
 		static SBGadgetClass Background;
 
 		/*

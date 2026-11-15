@@ -4975,7 +4975,6 @@ address,symbol,evidence
 0x0067B040,?Load@SideClass@@UAGJPAUIStream@@@Z,"compiled from src/side.cpp, matched"
 0x0067B160,?Save@SideClass@@UAGJPAUIStream@@H@Z,"compiled from src/side.cpp, matched"
 0x0067B700,??0SidebarClass@@QAE@XZ,"inferred: referenced by matched src/tab.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x0067B880,?Toggle_Cameo_Text@SidebarClass@@QAEX_N@Z,"inferred: referenced by matched src/options.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0067B890,?One_Time@SidebarClass@@UAEXXZ,"inferred: referenced by matched src/tab.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0067B8B0,?Init_Clear@SidebarClass@@UAEXXZ,"inferred: referenced by matched src/mouse.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0067BAD0,?Init_IO@SidebarClass@@UAEXXZ,"inferred: referenced by matched src/tab.cpp (1 reference); across all matched code never at another address, and no other symbol here"

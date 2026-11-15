@@ -75,6 +75,7 @@
 #include "always.h"
 
 #include "sidebar.h"
+#include "bitfont.h" // RA2: the includes this file needs
 
 #include "_bench.h"
 #include "_convert.h"
@@ -98,6 +99,10 @@
 #include "globals.h"
 #include "goptions.h"
 #include "house.h"
+#include "stringtable.h" // RA2: the includes this file needs
+#include "dsurface.h" // RA2: the includes this file needs
+#include "scenario.h" // RA2: the includes this file needs
+#include "houstype.h" // RA2: the includes this file needs
 #include "incdec.h"
 #include "language\language.h"
 #include "map.h"
@@ -117,11 +122,70 @@
 
 #include "bench.hh"
 #include "color.hh"
+#include "bittext.h" // RA2: the includes this file needs
+#include "ftimer.h" // RA2: the includes this file needs
 
-ShapeSet const * SidebarClass::SidebarShape = NULL;
-ShapeSet const * SidebarClass::SidebarMiddleShape = NULL;
-ShapeSet const * SidebarClass::SidebarBottomShape = NULL;
-ShapeSet const * SidebarClass::SidebarAddonShape = NULL;
+/// <summary>
+/// Determines which sidebar tab an object type is built from.
+/// </summary>
+/// <param name="type">The object type's RTTI.</param>
+/// <param name="id">The object type's index.</param>
+/// <param name="naval">Unused.</param>
+/// <returns>The tab (0 to 3), or -1 if the type is not built from the sidebar.</returns>
+inline int SidebarClass::Which_Tab(RTTIType type, int id, bool naval) // RA2: 0x6818D0; inline here, so the calls in this file carry the body
+{
+	if (type == RTTI_INFANTRY || type == RTTI_INFANTRYTYPE) { // RA2: as above
+		return 2; // RA2: as above
+	}
+	if (type == RTTI_UNIT || type == RTTI_UNITTYPE || type == RTTI_AIRCRAFT || type == RTTI_AIRCRAFTTYPE) { // RA2: as above
+		return 3; // RA2: as above
+	}
+	if (type == RTTI_BUILDING || type == RTTI_BUILDINGTYPE) { // RA2: as above
+		return HouseClass::Build_Category(type, id) == 5; // RA2: as above
+	}
+	if (type == RTTI_SUPERWEAPON || type == RTTI_SUPERWEAPONTYPE || type == RTTI_SPECIAL) { // RA2: as above
+		return 1; // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
+inline int Bottom_Extra(void) // RA2: the strips leave this much room for the scroll buttons, inline in the strip's Draw_It (0x67F800)
+{
+	return Scen->IsGDI ? 26 : 18; // RA2: as above
+}
+inline int Max_Visible_Rows(void) // RA2: the rows that fit, inline in Draw_It (0x67CF80) and AI (0x67DC90); Get_Row_Count (0x6820A0) has the same term out of line
+{
+	return (SidebarRect.Y + SidebarRect.Height - SidebarClass::StripTop - (Scen->IsGDI ? 26 : 18) - 7) / 50; // RA2: as above
+}
+PaletteClass * Get_Game_Palette(void); // RA2: 0x6F45E0, the pointer at 0xAC11A0 (the sidebar layout's module)
+extern int SidebarWidth; // RA2: 0x7ADD80
+namespace Unsorted { extern bool ArmageddonMode; } // RA2: as above
+namespace Game { extern bool IsActive; extern HWND hWnd; } // RA2: as above
+namespace Unsorted { extern bool ScenarioStarted; } // RA2: as above
+namespace Game { extern unsigned char RecordingFlag; } // RA2: as above
+namespace Game { extern int SpecialDialog; } // RA2: as above
+namespace Unsorted { extern int WSDialogCount; } // RA2: as above
+
+
+ShapeSet const * SidebarClass::SidebarShapes[SBSHAPE_COUNT]; // RA2: 0xABCD20; one array instead of TibSun's four shapes
+bool SidebarClass::SidebarShapeAllocated[SBSHAPE_COUNT]; // RA2: 0xABCD40
+int SidebarClass::TopButtonX; // RA2: 0xABCD48
+int SidebarClass::TopButtonY; // RA2: 0xABCD4C
+int SidebarClass::TopButtonSpacing; // RA2: 0xABCD50
+int SidebarClass::TabButtonX; // RA2: 0xABCD54
+int SidebarClass::TabButtonY; // RA2: 0xABCD58
+int SidebarClass::TabButtonSpacing; // RA2: 0xABCD5C
+int SidebarClass::StripLeft; // RA2: 0xABCD60
+int SidebarClass::StripTop; // RA2: 0xABCD64
+int SidebarClass::CameoWidth; // RA2: 0xABCD68
+int SidebarClass::CameoHeight; // RA2: 0xABCD6C
+int SidebarClass::PowerBarLeft; // RA2: 0xABCD74
+int SidebarClass::SidebarBottomY; // RA2: 0xABCD78
+int SidebarClass::SidebarEdgeWidth; // RA2: 0xABCD7C
+int SidebarClass::SidebarEdgeStep; // RA2: 0xABCD80
+bool IsCameoTextShown; // RA2: 0x8373C0; set, the cameos carry their names and the help text shows the cost only
+bool SidebarClass::IsSidebarRedrawPending; // RA2: 0x8373C3
+wchar_t CameoHelpBuffer[66]; // RA2: 0xAB9484; the help text of a cameo
 
 /***************************************************************************
 **	This points to the main sidebar shapes. These include the upgrade and
@@ -141,15 +205,13 @@ enum ButtonNumberType {
 /*
 **	Sidebar buttons
 */
-SidebarClass::SBGadgetClass SidebarClass::Background;
-ShapeButtonClass SidebarClass::Repair;
-ShapeButtonClass SidebarClass::Power;
-ShapeButtonClass SidebarClass::Upgrade;
-ShapeButtonClass SidebarClass::Waypoint;
-ShapeButtonClass SidebarClass::StripClass::UpButton[COLUMNS];
-ShapeButtonClass SidebarClass::StripClass::DownButton[COLUMNS];
-SidebarClass::StripClass::SelectClass
-SidebarClass::StripClass::SelectButton[COLUMNS][MAX_SLOTS];
+SidebarClass::SBGadgetClass SidebarClass::Background; // RA2: 0xAB9718
+ShapeButtonClass SidebarClass::Repair; // RA2: 0xAB96B8
+ShapeButtonClass SidebarClass::Upgrade; // RA2: 0xABCC58
+ShapeButtonClass SidebarClass::TabButton[STRIPS]; // RA2: 0xAB9508
+ShapeButtonClass SidebarClass::ScrollDownButton; // RA2: 0xABCBE8
+ShapeButtonClass SidebarClass::ScrollUpButton; // RA2: 0xABCCC0
+SidebarClass::StripClass::SelectClass SidebarClass::StripClass::SelectButton[STRIPS * MAX_SLOTS_PER_STRIP]; // RA2: 0xAB9740
 
 bool SidebarClass::IsToBlitSidebar = false;
 bool SidebarClass::IsToEraseSidebarMouse = false;
@@ -160,11 +222,10 @@ bool SidebarClass::IsToEraseSidebarMouse = false;
 ShapeSet * SidebarClass::StripClass::LogoShapes = NULL;
 ShapeSet const * SidebarClass::StripClass::ClockShapes;
 ShapeSet const * SidebarClass::StripClass::RechargeClockShapes;
-ShapeSet const * SidebarClass::StripClass::DarkenShapes;
+ShapeSet const * SidebarClass::StripClass::DarkenShapes; // RA2: 0xAB9480
 
-void Print_Cameo_Text(char const * string, Point2D const & point, Rect const & cliprect, int maxlinelen);
-
-
+void Print_Cameo_Text(wchar_t const * string, Point2D const & point, Rect const & cliprect, int maxlinelen); // RA2: wide text; the flag is a global
+extern bool IsCameoTextShown; // RA2: 0x8373C0
 /// <summary>
 /// Default constructor for the sidebar background gadget.
 /// This gadget exists to cover the sidebar so that the mouse reverts to its normal shape
@@ -194,27 +255,23 @@ SidebarClass::SBGadgetClass::SBGadgetClass(void) :
  *=============================================================================================*/
 SidebarClass::SidebarClass(void) :
 	BASECLASS(),
+	ActiveTabIndex(0), // RA2: 0x67B700
+	RedrawUntilFrame(0), // RA2: as above
 	IsCameoText(false),
 	IsSidebarActive(false),
-	IsToRedrawCredits(false),
 	IsToRedraw(true),
-	IsRepairActive(false),
-	IsUpgradeActive(false),
-	IsDemolishActive(false)
+	IsToRedrawCredits(false),
+	IsDemolishActive(false), // RA2: as above
+	IsRepairActive(false) // RA2: as above
 {
 	/*
 	**	Set up the coordinates for the sidebar strips. These coordinates are for
 	**	the upper left corner.
+	**	Set up the strips (RA2 has four, one per tab).
 	*/
-	new (&Column[0]) StripClass(InitClass());
-	new (&Column[1]) StripClass(InitClass());
-
-	Column[0].X = COLUMN_ONE_X;
-	Column[0].Y = COLUMN_ONE_Y;
-	Column[0].ObjectRect = Rect(Column[0].X, Column[0].Y, StripClass::OBJECT_WIDTH, StripClass::OBJECT_HEIGHT * Max_Visible());
-	Column[1].X = COLUMN_TWO_X;
-	Column[1].Y = COLUMN_TWO_Y;
-	Column[1].ObjectRect = Rect(Column[1].X, Column[1].Y, StripClass::OBJECT_WIDTH, StripClass::OBJECT_HEIGHT * Max_Visible());
+	for (int index = 0; index < STRIPS; index++) { // RA2: four strips
+		new (&Column[index]) StripClass(InitClass()); // RA2: as above
+	}
 }
 
 
@@ -248,13 +305,9 @@ SidebarClass::SidebarClass(NoInitClass const & x) :
 /// build cameo is captioned with its cost, so the sidebar is flagged to redraw itself.
 /// </summary>
 /// <param name="on">Should the cameo text be displayed?</param>
-void SidebarClass::Toggle_Cameo_Text(bool on)
+void SidebarClass::Set_Cameo_Text(bool state) // RA2: as above
 {
-	if (on != IsCameoText) {
-		IsCameoText = on;
-		IsToRedraw = true;
-		Flag_To_Redraw();
-	}
+	// RA2: 0x67B880; the body is empty (the caption flag is a global here)
 }
 
 
@@ -277,11 +330,9 @@ void SidebarClass::One_Time(void)
 {
 	BASECLASS::One_Time();
 
-	Column[0].One_Time(0);
-	Column[1].One_Time(1);
-
-	StripClass::RechargeClockShapes = (ShapeSet const *)MFCD::Retrieve("RCLOCK2.SHP");
-	StripClass::ClockShapes = (ShapeSet const *)MFCD::Retrieve("GCLOCK2.SHP");
+	for (int index = 0; index < STRIPS; index++) { // RA2: as above
+		Column[index].One_Time(index); // RA2: as above
+	}
 }
 
 
@@ -299,18 +350,16 @@ void SidebarClass::One_Time(void)
  *=============================================================================================*/
 void SidebarClass::Init_Clear(void)
 {
-
-	BASECLASS::Init_Clear();
-
+	PowerClass::Init_Clear(); // RA2: as above
 	IsToRedraw = true;
 	IsRepairActive = false;
-	IsUpgradeActive = false;
 	IsDemolishActive = false;
-
-	Column[0].Init_Clear();
-	Column[1].Init_Clear();
-
-	Activate(false);
+	for (int index = 0; index < 4; index++) { // RA2: as above
+		Column[index].Clear_Buildables(); // RA2: as above
+	}
+	ActiveTabIndex = 0; // RA2: as above
+	RedrawUntilFrame = 0; // RA2: as above
+	Activate(0); // RA2: as above
 }
 
 
@@ -326,214 +375,294 @@ void SidebarClass::Init_Clear(void)
  * HISTORY:                                                                                    *
  *   12/24/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
-void SidebarClass::Init_IO(void)
+void SidebarClass::Recalc_Layout() // RA2: as above
 {
-	BASECLASS::Init_IO();
+	SidebarRect.Width = SidebarWidth; // RA2: as above
+	SidebarRect.Y = 0x9E; // RA2: as above
+	SidebarRect.Height = TacticalRect.Y + TacticalRect.Height + TabBarHeight - 0x9E; // RA2: as above
+	if (Scen->IsGDI) { // RA2: as above
+		TopButtonY = 0xA6; // RA2: as above
+		TopButtonSpacing = 0x40; // RA2: as above
+		TabButtonY = 0xC5; // RA2: as above
+		TabButtonSpacing = 0x1D; // RA2: as above
+		StripTop = 0xE3; // RA2: as above
+		CameoWidth = 0x3F; // RA2: as above
+	} else {
+		TopButtonY = 0xA5; // RA2: as above
+		TopButtonSpacing = 0x34; // RA2: as above
+		TabButtonY = 0xC5; // RA2: as above
+		TabButtonSpacing = 0x20; // RA2: as above
+		StripTop = 0xE3; // RA2: as above
+		CameoWidth = 0x40; // RA2: as above
+	}
+	CameoHeight = 0x32; // RA2: as above
+	int extra; // RA2: as above
+	if (Scen->IsGDI) { // RA2: as above
+		extra = 26; // RA2: as above
+	} else {
+		extra = 18; // RA2: as above
+	}
+	PowerBarHeight = (SidebarRect.Height - extra - 0x4C) / 50 * 50; // RA2: as above
+	if (Scen->IsGDI) { // RA2: as above
+		SidebarBottomY = PowerBarHeight + 0xEA; // RA2: as above
+		SidebarEdgeWidth = 0x2E; // RA2: as above
+		SidebarEdgeStep = 0x32; // RA2: as above
+	} else {
+		SidebarBottomY = PowerBarHeight + 0xEA; // RA2: as above
+		SidebarEdgeWidth = 0x2D; // RA2: as above
+		SidebarEdgeStep = 0x32; // RA2: as above
+	}
+}
 
-	SidebarRect.X = TacticalRect.X + TacticalRect.Width;
-	SidebarRect.Y = SIDE_Y;
-	SidebarRect.Width = 641 - SidebarRect.X;
-	SidebarRect.Height = (TacticalRect.Y - SidebarRect.Y) + TacticalRect.Height;
+
+void SidebarClass::Recalc_Horizontal_Layout() // RA2: as above
+{
+	int x = Options.IsSidebarOnRight ? TacticalRect.X + TacticalRect.Width : 0; // RA2: as above
+	SidebarRect.X = x; // RA2: as above
+	StripLeft = x + 22; // RA2: as above
+	if (Scen->IsGDI) { // RA2: as above
+		TopButtonX = x + 20; // RA2: as above
+		TabButtonX = x + 26; // RA2: as above
+		PowerBarLeft = x + 39; // RA2: as above
+	} else {
+		TopButtonX = x + 33; // RA2: as above
+		TabButtonX = x + 20; // RA2: as above
+		PowerBarLeft = x + 39; // RA2: as above
+	}
+}
+
+
+void SidebarClass::Init_IO() // RA2: as above
+{
+	RadarClass::Init_IO(); // RA2: as above
+	Recalc_Layout(); // RA2: as above
+	Recalc_Horizontal_Layout(); // RA2: as above
+	if (Debug_Map) { // RA2: as above
+		return;
+	}
+
+	Upgrade.IsSticky = true;
+	Upgrade.ID = 101; // RA2: as above
+	Upgrade.X = TopButtonX; // RA2: as above
+	Upgrade.Y = TopButtonY; // RA2: as above
+	Upgrade.DrawOffsetX = -480; // RA2: as above
+	Upgrade.DrawOffsetY = 0; // RA2: as above
+	Upgrade.DrawOnSidebar = true;
+	Upgrade.ShapeDrawer = SidebarDrawer;
+	Upgrade.IsOn = false; // RA2: as above
+	Upgrade.IsToggleType = 1; // RA2: as above
+	Upgrade.ReflectButtonState = true;
+	Upgrade.Stop_Flashing(); // RA2: as above
 
 	/*
 	**	Add the sidebar's buttons only if we're not in editor mode.
 	*/
-	if (!Debug_Map) {
-		int xoff = -480;
-		int yoff = 3;
+	Repair.IsSticky = true;
+	Repair.ID = 102; // RA2: as above
+	Repair.X = Upgrade.X + TopButtonSpacing; // RA2: as above
+	Repair.Y = Upgrade.Y; // RA2: as above
+	Repair.DrawOffsetX = -480; // RA2: as above
+	Repair.DrawOffsetY = 0; // RA2: as above
+	Repair.DrawOnSidebar = true;
+	Repair.ShapeDrawer = SidebarDrawer;
+	Repair.IsOn = false; // RA2: as above
+	Repair.IsToggleType = 1; // RA2: as above
+	Repair.ReflectButtonState = true;
+	Repair.Stop_Flashing(); // RA2: as above
 
-		Repair.IsSticky = true;
-		Repair.ID = BUTTON_REPAIR;
-		Repair.X = SidebarRect.X;
-		Repair.Y = SidebarRect.Y;
-		Repair.DrawOffsetX = xoff;
-		Repair.DrawOffsetY = yoff;
-		Repair.DrawOnSidebar = true;
-		Repair.ShapeDrawer = SidebarDrawer;
-		Repair.IsPressed = false;
-		Repair.IsToggleType = true;
-		Repair.ReflectButtonState = true;
+	for (int index = 0; index < 4; index++) { // RA2: as above
+		TabButton[index].IsSticky = true; // RA2: as above
+		TabButton[index].ID = 203 + index; // RA2: as above
+		TabButton[index].X = TabButtonSpacing * index + TabButtonX; // RA2: as above
+		TabButton[index].Y = TabButtonY; // RA2: as above
+		TabButton[index].DrawOffsetX = -480; // RA2: as above
+		TabButton[index].DrawOffsetY = 0; // RA2: as above
+		TabButton[index].DrawOnSidebar = true; // RA2: as above
+		TabButton[index].ShapeDrawer = SidebarDrawer; // RA2: as above
+		TabButton[index].IsOn = false; // RA2: as above
+		TabButton[index].IsToggleType = 2; // RA2: as above
+		TabButton[index].ReflectButtonState = true; // RA2: as above
+		TabButton[index].Disable(); // RA2: as above
+		TabButton[index].Stop_Flashing(); // RA2: as above
+	}
 
-		Upgrade.IsSticky = true;
-		Upgrade.ID = BUTTON_UPGRADE;
-		Upgrade.X = Repair.X + BUTTON_SPACING;
-		Upgrade.Y = Repair.Y;
-		Upgrade.DrawOffsetX = xoff;
-		Upgrade.DrawOffsetY = yoff;
-		Upgrade.DrawOnSidebar = true;
-		Upgrade.ShapeDrawer = SidebarDrawer;
-		Upgrade.IsPressed = false;
-		Upgrade.IsToggleType = true;
-		Upgrade.ReflectButtonState = true;
+	ScrollDownButton.IsSticky = true; // RA2: as above
+	ScrollDownButton.ID = 201; // RA2: as above
+	ScrollDownButton.DrawOnSidebar = true; // RA2: as above
+	ScrollDownButton.ShapeDrawer = SidebarDrawer; // RA2: as above
+	ScrollDownButton.Set_Flags(0x55); // RA2: as above
+	ScrollDownButton.Stop_Flashing(); // RA2: as above
 
-		Power.IsSticky = true;
-		Power.ID = BUTTON_POWER;
-		Power.X = Upgrade.X + BUTTON_SPACING;
-		Power.Y = Upgrade.Y;
-		Power.DrawOffsetX = xoff;
-		Power.DrawOffsetY = yoff;
-		Power.DrawOnSidebar = true;
-		Power.ShapeDrawer = SidebarDrawer;
-		Power.IsPressed = false;
-		Power.IsToggleType = true;
-		Power.ReflectButtonState = true;
+	ScrollUpButton.IsSticky = true; // RA2: as above
+	ScrollUpButton.ID = 200; // RA2: as above
+	ScrollUpButton.DrawOnSidebar = true; // RA2: as above
+	ScrollUpButton.ShapeDrawer = SidebarDrawer; // RA2: as above
+	ScrollUpButton.Set_Flags(0x55); // RA2: as above
+	ScrollUpButton.Stop_Flashing(); // RA2: as above
 
-		Waypoint.IsSticky = true;
-		Waypoint.ID = BUTTON_WAYPOINT;
-		Waypoint.X = Power.X + BUTTON_SPACING;
-		Waypoint.Y = Power.Y;
-		Waypoint.DrawOffsetX = xoff;
-		Waypoint.DrawOffsetY = yoff;
-		Waypoint.DrawOnSidebar = true;
-		Waypoint.ShapeDrawer = SidebarDrawer;
-		Waypoint.IsPressed = false;
-		Waypoint.IsToggleType = true;
-		Waypoint.ReflectButtonState = true;
+	for (int column = 0; column < 4; column++) { // RA2: as above
+		Column[column].X = StripLeft; // RA2: as above
+		Column[column].Y = StripTop; // RA2: as above
+		Column[column].ObjectRect = Rect(0, 0, 60, PowerBarHeight); // RA2: as above
+		Column[column].Init_Buttons(column); // RA2: as above
+	}
+	Reposition_Sidebar();
+	if (IsSidebarActive) {
+		Activate(0); // RA2: as above
+		Activate(1);
+	}
+}
 
-		Waypoint.Enable();
 
-		Column[0].Init_IO(0);
-		Column[1].Init_IO(1);
+void SidebarClass::Init_For_House() // RA2: as above
+{
+	PowerClass::Init_For_House(); // RA2: as above
+	PaletteClass palette = *Get_Game_Palette(); // RA2: as above
+	if (SidebarDrawer) { // RA2: as above
+		delete SidebarDrawer;
+		SidebarDrawer = 0; // RA2: as above
+	}
+	SidebarDrawer = new ConvertClass(palette, palette, *VisibleSurface, 1, false); // RA2: as above
+	SidebarShapes[SBSHAPE_CLOCK] = (ShapeSet const *)Load_Alloc_Data("GCLOCK2.SHP", SidebarShapeAllocated[SBSHAPE_CLOCK]); // RA2: as above
 
-		Reposition_Sidebar();
+	bool allocated = false; // RA2: as above
+	Repair.Set_Shape((ShapeSet const *)Load_Alloc_Data("SELL.SHP", allocated)); // RA2: as above
+	Repair.Set_Shape_Loaded(allocated); // RA2: as above
+	Repair.ShapeDrawer = SidebarDrawer;
 
 		/*
 		**	If a game was loaded & the sidebar was enabled, pop it up now
 		*/
-		if (IsSidebarActive) {
-			IsSidebarActive = false;
-			Activate(1);
-//			Background.Zap();
-//			Add_A_Button(Background);
+	Upgrade.Set_Shape((ShapeSet const *)Load_Alloc_Data("REPAIR.SHP", allocated)); // RA2: as above
+	Upgrade.Set_Shape_Loaded(allocated); // RA2: as above
+	Upgrade.ShapeDrawer = SidebarDrawer;
+
+	for (int index = 0; index < 4; index++) { // RA2: as above
+		char name[256]; // RA2: as above
+		sprintf(name, "TAB%02d.SHP", index); // RA2: as above
+		TabButton[index].Set_Shape((ShapeSet const *)Load_Alloc_Data(name, allocated)); // RA2: as above
+		TabButton[index].Set_Shape_Loaded(allocated); // RA2: as above
+		TabButton[index].ShapeDrawer = SidebarDrawer; // RA2: as above
+	}
+
+	ScrollDownButton.Set_Shape((ShapeSet const *)Load_Alloc_Data("R-DN.SHP", allocated)); // RA2: as above
+	ScrollDownButton.Set_Shape_Loaded(allocated); // RA2: as above
+	ScrollDownButton.ShapeDrawer = SidebarDrawer; // RA2: as above
+
+	ScrollUpButton.Set_Shape((ShapeSet const *)Load_Alloc_Data("R-UP.SHP", allocated)); // RA2: as above
+	ScrollUpButton.Set_Shape_Loaded(allocated); // RA2: as above
+	ScrollUpButton.ShapeDrawer = SidebarDrawer; // RA2: as above
+
+	SidebarShapes[SBSHAPE_TOP] = (ShapeSet const *)Load_Alloc_Data("SIDE1.SHP", SidebarShapeAllocated[SBSHAPE_TOP]); // RA2: as above
+	SidebarShapes[SBSHAPE_MIDDLE] = (ShapeSet const *)Load_Alloc_Data("SIDE2.SHP", SidebarShapeAllocated[SBSHAPE_MIDDLE]); // RA2: as above
+	SidebarShapes[SBSHAPE_BOTTOM] = (ShapeSet const *)Load_Alloc_Data("SIDE3.SHP", SidebarShapeAllocated[SBSHAPE_BOTTOM]); // RA2: as above
+	SidebarShapes[SBSHAPE_ADDON] = (ShapeSet const *)Load_Alloc_Data("ADDON.SHP", SidebarShapeAllocated[SBSHAPE_ADDON]); // RA2: as above
+}
+
+
+void SidebarClass::DisposeOfArt() // RA2: as above
+{
+	PowerClass::DisposeOfArt(); // RA2: as above
+	if (SidebarShapeAllocated[SBSHAPE_TOP]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_TOP]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_TOP] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_MIDDLE]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_MIDDLE]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_MIDDLE] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_BOTTOM]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_BOTTOM]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_BOTTOM] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_ADDON]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_ADDON]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_ADDON] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_SHUTTER_BACK]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_SHUTTER_BACK]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_SHUTTER_BACK] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_SHUTTER_MIDDLE]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_SHUTTER_MIDDLE]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_SHUTTER_MIDDLE] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_SHUTTER_FRONT]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_SHUTTER_FRONT]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_SHUTTER_FRONT] = false; // RA2: as above
+	}
+	if (SidebarShapeAllocated[SBSHAPE_CLOCK]) { // RA2: as above
+		operator delete((void *)SidebarShapes[SBSHAPE_CLOCK]); // RA2: as above
+		SidebarShapeAllocated[SBSHAPE_CLOCK] = false; // RA2: as above
+	}
+	Repair.Clear_Shape(); // RA2: as above
+	Upgrade.Clear_Shape(); // RA2: as above
+	for (int index = 0; index < 4; index++) { // RA2: as above
+		TabButton[index].Clear_Shape(); // RA2: as above
+	}
+	ScrollDownButton.Clear_Shape(); // RA2: as above
+	ScrollUpButton.Clear_Shape(); // RA2: as above
+}
+
+
+void SidebarClass::Request_Redraw() // RA2: as above
+{
+	IsToRedraw = true;
+	Column[ActiveTabIndex].IsToRedraw = true; // RA2: as above
+	Map.Flag_To_Redraw();
+	if (RedrawUntilFrame <= Frame) { // RA2: as above
+		RedrawUntilFrame = Frame + 2; // RA2: as above
+	}
+}
+
+
+void SidebarClass::Notice_Object_Change(ObjectClass * object) // RA2: as above
+{
+	if (!IsSidebarActive || !object) { // RA2: as above
+		return;
+	}
+	TechnoTypeClass const * type = object->Techno_Type_Class(); // RA2: as above
+	if (!PlayerPtr) { // RA2: as above
+		return;
+	}
+	RTTIType kind = object->Fetch_RTTI(); // RA2: as above
+	int id = object->Fetch_Heap_ID(); // RA2: as above
+	if (Which_Tab(kind, id, false) == ActiveTabIndex) { // RA2: as above
+		if (PlayerPtr->Is_Build_Limited(type)) { // RA2: as above
+			Request_Redraw(); // RA2: as above
+		}
+	} else if (kind == RTTI_BUILDING && ((BuildingClass *)object)->Class->IsHelipad) { // RA2: as above
+		Request_Column_Redraw(3); // RA2: as above
+	}
+}
+
+
+void SidebarClass::Flag_Tab_To_Redraw(int column) // RA2: as above
+{
+	if (column == ActiveTabIndex) { // RA2: as above
+		IsToRedraw = true;
+		Column[column].IsToRedraw = true; // RA2: as above
+		Map.Flag_To_Redraw();
+	}
+}
+
+
+void SidebarClass::Request_Column_Redraw(int column) // RA2: as above
+{
+	if (column == ActiveTabIndex) { // RA2: as above
+		IsToRedraw = true;
+		Column[ActiveTabIndex].IsToRedraw = true; // RA2: as above
+		Map.Flag_To_Redraw();
+		if (RedrawUntilFrame <= Frame) { // RA2: as above
+			RedrawUntilFrame = Frame + 2; // RA2: as above
 		}
 	}
 }
 
 
-/// <summary>
-/// Loads the sidebar artwork that belongs to the player's house.
-/// This routine is called whenever the house the player controls is established. It builds
-/// the sidebar's own drawing translation table from the sidebar palette and then fetches
-/// the frame, mode button and scroll arrow shapes that are drawn through it.
-/// </summary>
-void SidebarClass::Init_For_House(void)
-{
-	int i;
-
-	BASECLASS::Init_For_House();
-
-	PaletteClass pal;
-
-	memmove(&pal, MFCD::Retrieve("SIDEBAR.PAL"), sizeof(pal));
-
-	for (i = 0; i < PaletteClass::COLOR_COUNT; i++) {
-		pal[i] = RGBClass(pal[i].Get_Red() * 4, pal[i].Get_Green() * 4, pal[i].Get_Blue() * 4);
-	}
-
-	if (SidebarDrawer != NULL) {
-		delete SidebarDrawer;
-		SidebarDrawer = NULL;
-	}
-
-	SidebarDrawer = new ConvertClass(pal, pal, *VisibleSurface, 1, false);
-
-	Upgrade.Set_Shape((ShapeSet *)MFCD::Retrieve("SELL.SHP"));
-	Upgrade.ShapeDrawer = SidebarDrawer;
-	Power.Set_Shape((ShapeSet *)MFCD::Retrieve("POWER.SHP"));
-	Power.ShapeDrawer = SidebarDrawer;
-	Waypoint.Set_Shape((ShapeSet *)MFCD::Retrieve("WAYP.SHP"));
-	Waypoint.ShapeDrawer = SidebarDrawer;
-	Repair.Set_Shape((ShapeSet *)MFCD::Retrieve("REPAIR.SHP"));
-	Repair.ShapeDrawer = SidebarDrawer;
-
-	SidebarShape = (ShapeSet *)MFCD::Retrieve("SIDE1.SHP");
-	SidebarMiddleShape = (ShapeSet *)MFCD::Retrieve("SIDE2.SHP");
-	SidebarBottomShape = (ShapeSet *)MFCD::Retrieve("SIDE3.SHP");
-	SidebarAddonShape = (ShapeSet *)MFCD::Retrieve("ADDON.SHP");
-
-	for (i = 0; i < COLUMNS; i++) {
-		StripClass::UpButton[i].Set_Shape((ShapeSet *)MFCD::Retrieve("R-UP.SHP"));
-		StripClass::UpButton[i].ShapeDrawer = SidebarDrawer;
-		StripClass::DownButton[i].Set_Shape((ShapeSet *)MFCD::Retrieve("R-DN.SHP"));
-		StripClass::DownButton[i].ShapeDrawer = SidebarDrawer;
-	}
-}
-
-
-/***********************************************************************************************
- * SidebarClass::Reload_Sidebar -- Loads appropriate sidebar shapes depending on house         *
- *                                                                                             *
- * INPUT:  none                                                                                *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   9/18/1996 BWG : Created.                                                                  *
- *=============================================================================================*/
-void SidebarClass::Reload_Sidebar(void)
-{
-	Column[0].X = COLUMN_ONE_X;
-	Column[0].Y = COLUMN_ONE_Y;
-	Column[0].ObjectRect = Rect(Column[0].X, Column[0].Y, StripClass::OBJECT_WIDTH, (StripClass::OBJECT_HEIGHT) * Max_Visible());
-
-	Column[1].X = COLUMN_TWO_X;
-	Column[1].Y = COLUMN_ONE_Y;
-	Column[1].ObjectRect = Rect(Column[1].X, Column[1].Y, StripClass::OBJECT_WIDTH, (StripClass::OBJECT_HEIGHT) * Max_Visible());
-}
-
-
-/***********************************************************************************************
- * SidebarClass::Which_Column -- Determines which column a given type should appear.           *
- *                                                                                             *
- *    Use this function to resolve what column the specified object type should be placed      *
- *    into.                                                                                    *
- *                                                                                             *
- * INPUT:   otype -- Pointer to the object type class of the object in question.               *
- *                                                                                             *
- * OUTPUT:  Returns with the column number that the object should be placed in.                *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   01/01/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
-int SidebarClass::Which_Column(RTTIType type)
-{
-	if (type == RTTI_BUILDINGTYPE || type == RTTI_BUILDING) {
-		return(0);
-	}
-	return(1);
-}
-
-
-/***********************************************************************************************
- * SidebarClass::Factory_Link -- Links a factory to a sidebar strip.                           *
- *                                                                                             *
- *    This routine will link the specified factory to the sidebar strip. A factory must be     *
- *    linked to the sidebar so that as the factory production progresses, the sidebar will     *
- *    show the production progress.                                                            *
- *                                                                                             *
- * INPUT:   factory  -- The factory number to attach.                                          *
- *                                                                                             *
- *          type     -- The object type number.                                                *
- *                                                                                             *
- *          id       -- The object sub-type number.                                            *
- *                                                                                             *
- * OUTPUT:  Was the factory successfully attached to the sidebar strip?                        *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   05/19/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
 bool SidebarClass::Factory_Link(FactoryClass * factory, RTTIType type, int id)
 {
-	assert((unsigned)type < RTTI_COUNT);
-	assert(id >= 0);
-
-	return(Column[Which_Column(type)].Factory_Link(factory, type, id));
+	return Column[Which_Tab(type, id, false)].Factory_Link(factory, type, id); // RA2: as above
 }
 
 
@@ -578,51 +707,6 @@ bool SidebarClass::Activate_Repair(int control)
 
 		if (!IsRepairActive) {
 //			Help_Text(TXT_NONE);
-			Set_Default_Mouse(MOUSE_NORMAL, false);
-		}
-	}
-	return(old);
-}
-
-
-/***********************************************************************************************
- * SidebarClass::Activate_Upgrade -- Controls the upgrade button on the sidebar.               *
- *                                                                                             *
- *    Use this routine to turn the upgrade sidebar button on and off. Typically, the button    *
- *    is enabled when the currently selected structure can be upgraded and disabled otherwise. *
- *                                                                                             *
- * INPUT:   control  -- The controls how the button is to be activated or deactivated;         *
- *                      0  -- Turn button off.                                                 *
- *                      1  -- Turn button on.                                                  *
- *                      -1 -- Toggle button state.                                             *
- *                                                                                             *
- * OUTPUT:  bool; Was the button previously activated?                                         *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   12/24/1994 JLB : Created.                                                                 *
- *=============================================================================================*/
-bool SidebarClass::Activate_Upgrade(int control)
-{
-	bool old = IsUpgradeActive;
-	if (control == -1) {
-		control = IsUpgradeActive ? 0 : 1;
-	}
-	switch (control) {
-		case 1:
-			IsUpgradeActive = true;
-			break;
-
-		default:
-		case 0:
-			IsUpgradeActive = false;
-			break;
-	}
-	if (old != IsUpgradeActive) {
-		Flag_To_Redraw();
-		IsToRedraw = true;
-		if (!IsUpgradeActive) {
 			Set_Default_Mouse(MOUSE_NORMAL, false);
 		}
 	}
@@ -694,21 +778,22 @@ bool SidebarClass::Activate_Demolish(int control)
  *=============================================================================================*/
 bool SidebarClass::Add(RTTIType type, int id)
 {
-	assert((unsigned)type < RTTI_COUNT);
-
-	/*
-	**	Add the sidebar only if we're not in editor mode.
-	*/
 	if (!Debug_Map) {
-		int column = Which_Column(type);
-
+		int first = First_Used_Column(); // RA2: as above
+		int column = Which_Tab(type, id, false); // RA2: as above
 		if (Column[column].Add(type, id)) {
+			Enable_Column_Button(column); // RA2: as above
 			Activate(1);
+			if (first == -1) { // RA2: as above
+				Select_Tab(First_Used_Column()); // RA2: as above
+			}
 			IsToRedraw = true;
 			Flag_To_Redraw();
+			if (column == ActiveTabIndex) { // RA2: as above
+				IsToBlitSidebar = true;
+			}
 			return(true);
 		}
-		return(false);
 	}
 
 	return(false);
@@ -733,34 +818,77 @@ bool SidebarClass::Add(RTTIType type, int id)
  * HISTORY:                                                                                    *
  *   10/28/94   JLB : Created.                                                                 *
  *=============================================================================================*/
+void SidebarClass::Update_Build_Buttons() // RA2: as above
+{
+	if (Column[ActiveTabIndex].BuildableCount > Get_Doubled_Row_Count()) { // RA2: as above
+		if (!ScrollDownButton.Is_Enabled()) { // RA2: as above
+			ScrollDownButton.Enable(); // RA2: as above
+		}
+		if (!ScrollUpButton.Is_Enabled()) { // RA2: as above
+			ScrollUpButton.Enable(); // RA2: as above
+		}
+	} else {
+		if (ScrollDownButton.Is_Enabled()) { // RA2: as above
+			ScrollDownButton.Disable(); // RA2: as above
+		}
+		if (ScrollUpButton.Is_Enabled()) { // RA2: as above
+			ScrollUpButton.Disable(); // RA2: as above
+		}
+	}
+}
+
+
+void SidebarClass::Enable_Column_Button(int index) // RA2: as above
+{
+	if (First_Used_Column() == -1 && SidebarShapes[SBSHAPE_SHUTTER_BACK]) { // RA2: as above
+		ShutterStep = 1; // RA2: as above
+		ShutterFrame = 0; // RA2: as above
+	}
+	if (!TabButton[index].Is_Enabled()) { // RA2: as above
+		TabButton[index].Enable(); // RA2: as above
+	}
+	if (index == ActiveTabIndex) { // RA2: as above
+		Update_Build_Buttons(); // RA2: as above
+	}
+}
+
+
+void SidebarClass::Update_Column_Availability(int index) // RA2: as above
+{
+	if (Column[index].BuildableCount > 0) { // RA2: as above
+		Update_Build_Buttons(); // RA2: as above
+	} else {
+		TabButton[index].Disable(); // RA2: as above
+		int first = -1; // RA2: as above
+		for (int i = 0; i < 4; i++) { // RA2: as above
+			if (Column[i].BuildableCount > 0) { // RA2: as above
+				first = i; // RA2: as above
+				break;
+			}
+		}
+		if (first == -1) { // RA2: as above
+			Update_Build_Buttons(); // RA2: as above
+			if (SidebarShapes[SBSHAPE_SHUTTER_BACK]) { // RA2: as above
+				ShutterStep = -1; // RA2: as above
+				ShutterFrame = (SidebarShapes[SBSHAPE_SHUTTER_BACK])->Get_Count(); // RA2: as above
+			}
+		} else {
+			Select_Tab(first); // RA2: as above
+		}
+	}
+}
+
+
 bool SidebarClass::Scroll(bool up, int column)
 {
-	if (_dialog_count != 0) {
+	if (_dialog_count) { // RA2: as above
 		return(false);
 	}
 
 	if (column == -1) {
-		bool scr = false;
-		if (Column[0].Scroll(up)) {
-			scr = true;
-		}
-		if (Column[1].Scroll(up)) {
-			scr = true;
-		}
-		if (scr) {
-			IsToRedraw = true;
-			Flag_To_Redraw();
-			return(true);
-		}
-		if (!scr) {
-			Sound_Effect(Rule->ScoldSound);
-		}
-		return(false);
+		column = ActiveTabIndex; // RA2: as above
 	}
-
-	if (Column[column].Scroll(up)) {
-		// No need to redraw the whole sidebar juts because we scrolled a strip is there? ST - 10/15/96 7:29PM
-		//IsToRedraw = true;
+	if (Column[column].Step(up)) { // RA2: as above
 		Flag_To_Redraw();
 		return(true);
 	}
@@ -781,27 +909,11 @@ bool SidebarClass::Scroll(bool up, int column)
 bool SidebarClass::Page(bool up, int column)
 {
 	if (column == -1) {
-		bool scr = false;
-		if (Column[0].Page(up)) {
-			scr = true;
-		}
-		if (Column[1].Page(up)) {
-			scr = true;
-		}
-		if (scr) {
-			IsToRedraw = true;
-			Flag_To_Redraw();
-			return(true);
-		}
-		if (!scr) {
-			Sound_Effect(Rule->ScoldSound);
-		}
-		return(false);
+		column = ActiveTabIndex; // RA2: as above
 	}
-
-	if (Column[column].Page(up)) {
-		// No need to redraw the whole sidebar juts because we scrolled a strip is there? ST - 10/15/96 7:29PM
-		//IsToRedraw = true;
+	StripClass &strip = Column[column]; // RA2: as above
+	int amount = Get_Row_Count(); // RA2: as above
+	if (strip.Scroll(up, amount)) { // RA2: as above
 		Flag_To_Redraw();
 		return(true);
 	}
@@ -826,81 +938,82 @@ bool SidebarClass::Page(bool up, int column)
  *=============================================================================================*/
 void SidebarClass::Draw_It(bool complete)
 {
-	complete = complete || IsForceCompleteRedraw;
-	Map.LastDrawRect = RECT_NONE;
-
-	BASECLASS::Draw_It(complete);
-
-	BStart(BENCH_SIDEBAR);
-
-	Surface * old = LogicalSurface;
+	DirtyRect = RECT_NONE; // RA2: as above
+	Surface *old = LogicalSurface; // RA2: as above
 	LogicalSurface = SidebarSurface;
-
+	bool drawn = false; // RA2: as above
 	Rect window(0, 0, SidebarSurface->Get_Width(), SidebarSurface->Get_Height());
+	complete = complete || IsToRedraw || IsForceCompleteRedraw; // RA2: as above
 
-	if (IsSidebarActive && (IsToRedraw || complete) && !Debug_Map) {
-		if (complete || Column[0].IsToRedraw || Column[1].IsToRedraw) {
-
-			int y = SidebarRect.Y;
-
-			/*
-			**	The sidebar shape is too big in 640x400 so it needs to be drawn in three chunks.
-			*/
-			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShape, 0, Point2D(0, y), window, SHAPE_WIN_REL);
-			y += SidebarClass::SidebarShape->Get_Height();
-
-			for (int i = 0; i < Max_Visible(); i++) {
-				Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarMiddleShape, 0, Point2D(0, y), window, SHAPE_WIN_REL);
-				y += SidebarMiddleShape->Get_Height();
+	if (IsSidebarActive && complete && !Debug_Map) { // RA2: as above
+		if (IsForceCompleteRedraw) { // RA2: as above
+			drawn = true; // RA2: as above
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_TOP], 0, // RA2: as above
+				Point2D(0, SidebarRect.Y), window, SHAPE_WIN_REL); // RA2: as above
+			int y = StripTop; // RA2: as above
+			int row = 0; // RA2: as above
+			while (true) { // RA2: as above
+				if (row >= Max_Visible_Rows()) { // RA2: as above
+					break;
+				}
+				Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_MIDDLE], 0, // RA2: as above
+					Point2D(0, y), window, SHAPE_WIN_REL); // RA2: as above
+				y += (SidebarShapes[SBSHAPE_MIDDLE])->Get_Height(); // RA2: as above
+				row++; // RA2: as above
 			}
-
-			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarBottomShape, 0, Point2D(0, y), window, SHAPE_WIN_REL);
-			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarAddonShape, 0, Point2D(0, y + SidebarBottomShape->Get_Height()), window, SHAPE_WIN_REL);
-
-			Column[0].IsToRedraw = true;
-			Column[1].IsToRedraw = true;
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_BOTTOM], 0, // RA2: as above
+				Point2D(0, y), window, SHAPE_WIN_REL); // RA2: as above
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_ADDON], 0, // RA2: as above
+				Point2D(0, y + (SidebarShapes[SBSHAPE_BOTTOM])->Get_Height()), window, SHAPE_WIN_REL); // RA2: as above
 		}
-
-		Repair.Draw_Me(true);
-		Upgrade.Draw_Me(true);
-		Power.Draw_Me(true);
-		Waypoint.Draw_Me(true);
+		Repair.Draw_Me(drawn); // RA2: as above
+		Upgrade.Draw_Me(drawn); // RA2: as above
+		for (int index = 0; index < 4; index++) { // RA2: as above
+			TabButton[index].Draw_Me(true); // RA2: as above
+		}
+		ScrollDownButton.Draw_Me(drawn); // RA2: as above
+		ScrollUpButton.Draw_Me(drawn); // RA2: as above
+		if (ShutterStep) { // RA2: as above
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_SHUTTER_BACK], ShutterFrame, // RA2: as above
+				Point2D(0, StripTop), window, SHAPE_WIN_REL); // RA2: as above
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_SHUTTER_MIDDLE], ShutterFrame, // RA2: as above
+				Point2D(0, StripTop), window, SHAPE_WIN_REL); // RA2: as above
+			Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_SHUTTER_FRONT], ShutterFrame, // RA2: as above
+				Point2D(0, StripTop), window, SHAPE_WIN_REL); // RA2: as above
+		}
 		IsToBlitSidebar = true;
 	}
-
-	/*
-	**	Draw the side strip elements by calling their respective draw functions.
-	*/
-	if (IsSidebarActive) {
-		Column[0].Draw_It(complete);
-		Column[1].Draw_It(complete);
-	}
+	Column[ActiveTabIndex].Draw_It(IsForceCompleteRedraw); // RA2: as above
+	PowerClass::Draw_It(complete || drawn); // RA2: as above
 	if (Repair.IsDrawn) {
-		IsToBlitSidebar = true;
 		Repair.IsDrawn = false;
+		IsToBlitSidebar = true;
 	}
 	if (Upgrade.IsDrawn) {
-		IsToBlitSidebar = true;
 		Upgrade.IsDrawn = false;
-	}
-	if (Power.IsDrawn) {
 		IsToBlitSidebar = true;
-		Power.IsDrawn = false;
 	}
-	if (Waypoint.IsDrawn) {
+	for (int tab = 0; tab < 4; tab++) { // RA2: as above
+		if (TabButton[tab].IsDrawn) { // RA2: as above
+			IsToBlitSidebar = true;
+			TabButton[tab].IsDrawn = false; // RA2: as above
+		}
+	}
+	if (ScrollDownButton.IsDrawn) { // RA2: as above
+		ScrollDownButton.IsDrawn = false; // RA2: as above
 		IsToBlitSidebar = true;
-		Waypoint.IsDrawn = false;
 	}
-	if (ToolTips != NULL) {
+	if (ScrollUpButton.IsDrawn) { // RA2: as above
+		ScrollUpButton.IsDrawn = false; // RA2: as above
+		IsToBlitSidebar = true;
+	}
+	if (ToolTips) {
 		ToolTips->Draw_Current(true);
 	}
+	Blit_Sidebar(IsToBlitSidebar || IsForceCompleteRedraw); // RA2: as above
 	IsToRedraw = false;
 	IsForceCompleteRedraw = false;
-
-	Blit_Sidebar(complete);
 	LogicalSurface = old;
-
-	BEnd(BENCH_SIDEBAR);
 }
 
 
@@ -925,16 +1038,12 @@ void SidebarClass::Blit_Sidebar(bool complete)
 
 		if (!IsToBlitSidebar && !complete) {
 			IsToBlitSidebar = false;
-			if (Map.LastDrawRect == RECT_NONE) {
+			if (DirtyRect == RECT_NONE) { // RA2: as above
 				if (IsToRedrawCredits) {
 					MouseCursor->Draw_Mouse(SidebarSurface, true);
 					VisibleSurface->Blit_From(
-						Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, SIDE_WIDTH, CREDITS_HEIGHT),
-						*SidebarSurface,
-						Rect(0, 0, SIDE_WIDTH, CREDITS_HEIGHT),
-						false,
-						true
-					);
+						Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, SidebarRect.Width, 16), // RA2: as above
+						*SidebarSurface, Rect(0, 0, SidebarRect.Width, 16), false, true);
 					IsToRedrawCredits = false;
 					IsToEraseSidebarMouse = true;
 				}
@@ -946,14 +1055,27 @@ void SidebarClass::Blit_Sidebar(bool complete)
 		}
 
 		MouseCursor->Draw_Mouse(SidebarSurface, true);
-		if (Map.LastDrawRect == RECT_NONE && !complete) {
-			VisibleSurface->Blit_From(Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, SIDE_WIDTH, CREDITS_HEIGHT), *SidebarSurface, Rect(0, 0, SIDE_WIDTH, CREDITS_HEIGHT));
-			VisibleSurface->Blit_From(Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y + SIDE_BODY_Y, SIDE_WIDTH, SidebarSurface->Get_Height() - SIDE_BODY_Y), *SidebarSurface, Rect(0, SIDE_BODY_Y, SIDE_WIDTH, SidebarSurface->Get_Height() - SIDE_BODY_Y));
-		} else if (!IsToBlitSidebar) {
-			VisibleSurface->Blit_From(Rect(scrnpt.x + Map.LastDrawRect.X + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y + Map.LastDrawRect.Y, Map.LastDrawRect.Width, Map.LastDrawRect.Height), *SidebarSurface, Map.LastDrawRect);
-		} else {
+		if (DirtyRect == RECT_NONE && !complete) { // RA2: as above
+			if (IsToRedrawCredits) {
+				VisibleSurface->Blit_From(
+					Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, SidebarRect.Width, 16), // RA2: as above
+					*SidebarSurface, Rect(0, 0, SidebarRect.Width, 16), false, true);
+				IsToRedrawCredits = false;
+			}
+			VisibleSurface->Blit_From(
+				Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y + SidebarRect.Y, // RA2: as above
+					 SidebarRect.Width, SidebarSurface->Get_Height() - SidebarRect.Y), // RA2: as above
+				*SidebarSurface, Rect(0, SidebarRect.Y, SidebarRect.Width, SidebarRect.Height), false, true);
+		} else if (IsToBlitSidebar) { // RA2: as above
 			Rect sb_rect = SidebarSurface->Get_Rect();
-			VisibleSurface->Blit_From(Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, sb_rect.Width, sb_rect.Height), *SidebarSurface, Rect(0, 0, sb_rect.Width, sb_rect.Height));
+			VisibleSurface->Blit_From(
+				Rect(scrnpt.x + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), scrnpt.y, sb_rect.Width, sb_rect.Height), // RA2: as above
+				*SidebarSurface, Rect(0, 0, sb_rect.Width, sb_rect.Height), false, true);
+		} else {
+			VisibleSurface->Blit_From(
+				Rect(scrnpt.x + DirtyRect.X + (Options.IsSidebarOnRight ? TacticalRect.Width : 0), // RA2: as above
+					 scrnpt.y + DirtyRect.Y, DirtyRect.Width, DirtyRect.Height), // RA2: as above
+				*SidebarSurface, DirtyRect, false, true);
 		}
 		IsToEraseSidebarMouse = true;
 	}
@@ -983,65 +1105,123 @@ void SidebarClass::Blit_Sidebar(bool complete)
  *   12/31/1994 JLB : Uses mouse coordinate parameters.                                        *
  *   06/27/1995 JLB : <TAB> key toggles sidebar.                                               *
  *=============================================================================================*/
+void SidebarClass::Activate_Tab(int index) // RA2: as above
+{
+	ActiveTabIndex = index; // RA2: as above
+	TabButton[index].Turn_On(); // RA2: as above
+	Column[ActiveTabIndex].Activate(); // RA2: as above
+	Update_Build_Buttons(); // RA2: as above
+}
+
+
+void SidebarClass::Select_Tab(int index) // RA2: as above
+{
+	if (index == ActiveTabIndex) { // RA2: as above
+		return;
+	}
+	ShapeButtonClass &old_button = TabButton[ActiveTabIndex]; // RA2: as above
+	old_button.Turn_Off(); // RA2: as above
+	StripClass &old = Column[ActiveTabIndex]; // RA2: as above
+	old.Deactivate(); // RA2: as above
+	ActiveTabIndex = index; // RA2: as above
+	ShapeButtonClass &button = TabButton[ActiveTabIndex]; // RA2: as above
+	button.Turn_On(); // RA2: as above
+	StripClass &current = Column[ActiveTabIndex]; // RA2: as above
+	current.Activate(); // RA2: as above
+	Update_Build_Buttons(); // RA2: as above
+	IsForceCompleteRedraw = true; // RA2: as above
+}
+
+
+void SidebarClass::Start_Tab_Flash(int index) // RA2: as above
+{
+	int delay = 10 - Frame % 10; // RA2: as above
+	TabButton[index].Start_Flashing(10, delay, (Frame + delay) / 10 % 2 == 0); // RA2: as above
+	Map.IsForceCompleteRedraw = true; // RA2: as above
+	Map.Flag_To_Redraw();
+}
+
+
+bool SidebarClass::Stop_Tab_Flash(int index) // RA2: as above
+{
+	return TabButton[index].Stop_Flashing(); // RA2: as above
+}
+
+
 void SidebarClass::AI(KeyNumType & input, Point2D const & xy)
 {
-	Point2D xy_rel = xy - Point2D(480, 0);
-
+	Point2D point = xy - Point2D(SidebarRect.X, 0); // RA2: as above
 	if (!Debug_Map) {
 		Activate(1);	// Force the sidebar always on in Win95 mode
-	}
-
-	if (!Debug_Map) {
-		Column[0].AI(input, xy_rel);
-		Column[1].AI(input, xy_rel);
+		for (int index = 0; index < 4; index++) { // RA2: as above
+			Column[index].AI(input, point); // RA2: as above
+		}
 	}
 
 	if (IsSidebarActive) {
-
-		/*
-		**	If there are any buildings in the payer's inventory, then allow the repair
-		**	option.
-		*/
-		if (PlayerPtr->CurBuildings > 0) {
-			Activate_Repair(true);
-		} else {
-			Activate_Repair(false);
+		if (ShutterStep == 1) { // RA2: as above
+			ShutterFrame++; // RA2: as above
+			if (ShutterFrame > (SidebarShapes[SBSHAPE_SHUTTER_BACK])->Get_Count()) { // RA2: as above
+				ShutterStep = 0; // RA2: as above
+				ShutterFrame = 0; // RA2: as above
+			}
+		} else if (ShutterStep == -1) { // RA2: as above
+			ShutterFrame--; // RA2: as above
+			if (ShutterFrame < 0) { // RA2: as above
+				ShutterStep = 0; // RA2: as above
+				ShutterFrame = 0; // RA2: as above
+			}
 		}
 
-		if (input == (BUTTON_REPAIR|KN_BUTTON)) {
-			Repair_Mode_Control(-1);
-		}
+		Activate_Demolish(PlayerPtr->CurBuildings > 0); // RA2: as above
 
-		if (input == (BUTTON_POWER|KN_BUTTON)) {
-			Power_Mode_Control(-1);
-		}
-
-		if (input == (BUTTON_WAYPOINT|KN_BUTTON)) {
-			Waypoint_Mode_Control(-1, false);
-		}
-
-		if (input == (BUTTON_UPGRADE|KN_BUTTON)) {
+		if (input == 0x8066) { // RA2: as above
+			VocClass::PlayGlobal(Rule->GUIMainButtonSound, 1.0f, 0x2000, 0); // RA2: as above
 			Sell_Mode_Control(-1);
+		} else if (input == 0x8065) { // RA2: as above
+			VocClass::PlayGlobal(Rule->GUIMainButtonSound, 1.0f, 0x2000, 0); // RA2: as above
+			Repair_Mode_Control(-1);
+		} else if (input >= 0x80CB && input < 0x80CF) { // RA2: as above
+			Select_Tab(input - 0x80CB); // RA2: as above
+			VocClass::PlayGlobal(Rule->GUITabSound, 1.0f, 0x2000, 0); // RA2: as above
+		} else if ((input & ~0x4000) == (ScrollDownButton.ID | 0x8000)) { // RA2: as above
+			ScrollDownButton.IsPressed = false; // RA2: as above
+			StripClass &strip = Column[ActiveTabIndex]; // RA2: as above
+			if (!strip.Scroll(false, Max_Visible_Rows())) { // RA2: as above
+				VocClass::PlayGlobal(Rule->ScoldSound, 1.0f, 0x2000, 0); // RA2: as above
+			} else {
+				VocClass::PlayGlobal(Rule->GUITabSound, 1.0f, 0x2000, 0); // RA2: as above
+			}
+		} else if ((input & ~0x4000) == (ScrollUpButton.ID | 0x8000)) { // RA2: as above
+			ScrollUpButton.IsPressed = false; // RA2: as above
+			if (!Column[ActiveTabIndex].Page(true)) { // RA2: as above
+				VocClass::PlayGlobal(Rule->ScoldSound, 1.0f, 0x2000, 0); // RA2: as above
+			} else {
+				VocClass::PlayGlobal(Rule->GUITabSound, 1.0f, 0x2000, 0); // RA2: as above
+			}
+		}
+
+		bool flashed = false; // RA2: as above
+		for (int tab = 0; tab < 4; tab++) { // RA2: as above
+			if (TabButton[tab].AI()) { // RA2: as above
+				flashed = true; // RA2: as above
+			}
+		}
+		if (flashed) { // RA2: as above
+			IsToRedraw = true;
+			IsToBlitSidebar = true;
+			IsSidebarRedrawPending = true; // RA2: as above
+			Flag_To_Redraw();
 		}
 	}
 
-	if ((!IsRepairMode) && Repair.IsOn) {
+	if (!IsSellMode && Repair.IsOn) { // RA2: as above
 		Repair.Turn_Off();
 	}
-
-	if ((!IsSellMode) && Upgrade.IsOn) {
+	if (!IsRepairMode && Upgrade.IsOn) { // RA2: as above
 		Upgrade.Turn_Off();
 	}
-
-	if ((!IsPowerMode) && Power.IsOn) {
-		Power.Turn_Off();
-	}
-
-	if ((!IsWaypointMode) && Waypoint.IsOn) {
-		Waypoint.Turn_Off();
-	}
-
-	BASECLASS::AI(input, xy);
+	PowerClass::AI(input, xy); // RA2: as above
 }
 
 
@@ -1067,12 +1247,11 @@ void SidebarClass::AI(KeyNumType & input, Point2D const & xy)
 void SidebarClass::Recalc(void)
 {
 	bool redraw = false;
-
-	if (Column[0].Recalc()) {
-		redraw = true;
-	}
-	if (Column[1].Recalc()) {
-		redraw = true;
+	for (int index = 0; index < STRIPS; index++) { // RA2: as above
+		if (Column[index].Recalc() && index == ActiveTabIndex) { // RA2: as above
+			Column[index].IsToRedraw = true; // RA2: as above
+			redraw = true;
+		}
 	}
 	if (redraw) {
 		IsToRedraw = true;
@@ -1128,12 +1307,9 @@ bool SidebarClass::Activate(int control)
 	**	Only if there is a change in the state of the sidebar will anything
 	**	be done to change it.
 	*/
-	if (IsSidebarActive != old) {
-
-		/*
-		**	If the sidebar is activated but was on the right side of the screen, then
-		**	activate it on the left side of the screen.
-		*/
+	bool changed = IsSidebarActive != old; // RA2: as above
+	if (changed) { // RA2: as above
+		Set_Buttons(IsSidebarActive); // RA2: as above
 		if (IsSidebarActive) {
 			Reposition_Sidebar();
 			IsToRedraw = true;
@@ -1141,25 +1317,39 @@ bool SidebarClass::Activate(int control)
 			Add_A_Button(Repair);
 			Upgrade.Zap();
 			Add_A_Button(Upgrade);
-			Power.Zap();
-			Add_A_Button(Power);
-			Waypoint.Zap();
-			Add_A_Button(Waypoint);
-			Column[0].Activate();
-			Column[1].Activate();
+			for (int tab = 0; tab < STRIPS; tab++) { // RA2: as above
+				TabButton[tab].Zap(); // RA2: as above
+				TabButton[tab].IsOn = false; // RA2: as above
+				Add_A_Button(TabButton[tab]); // RA2: as above
+			}
+			ScrollDownButton.Zap(); // RA2: as above
+			Map.Add_A_Button(ScrollDownButton); // RA2: as above
+			ScrollUpButton.Zap(); // RA2: as above
+			Map.Add_A_Button(ScrollUpButton); // RA2: as above
 			Background.Zap();
 			Add_A_Button(Background);
 			RadarButton.Zap();
 			Add_A_Button(RadarButton);
+			for (int index = 0; index < STRIPS; index++) { // RA2: as above
+				Column[index].TopIndex = 0; // RA2: as above
+				if (Column[index].BuildableCount > 0) { // RA2: as above
+					TabButton[index].Enable(); // RA2: as above
+				}
+			}
+			TabButton[ActiveTabIndex].Turn_On(); // RA2: as above
+			Column[ActiveTabIndex].Activate(); // RA2: as above
+			Update_Build_Buttons(); // RA2: as above
 		} else {
 			Stop_Ingame_Movie();
 			Remove_A_Button(Repair);
 			Remove_A_Button(Upgrade);
-			Remove_A_Button(Power);
-			Remove_A_Button(Waypoint);
 			Remove_A_Button(Background);
-			Column[0].Deactivate();
-			Column[1].Deactivate();
+			for (int tab = 0; tab < STRIPS; tab++) { // RA2: as above
+				Remove_A_Button(TabButton[tab]); // RA2: as above
+			}
+			Remove_A_Button(ScrollDownButton); // RA2: as above
+			Remove_A_Button(ScrollUpButton); // RA2: as above
+			Column[ActiveTabIndex].Remove_Buttons(); // RA2: as above
 			Remove_A_Button(RadarButton);
 		}
 
@@ -1169,8 +1359,7 @@ bool SidebarClass::Activate(int control)
 		*/
 		Flag_To_Redraw(GS_REDRAW_ALL);
 	}
-
-	return(old);
+	return changed; // RA2: as above
 }
 
 
@@ -1188,6 +1377,18 @@ bool SidebarClass::Activate(int control)
  * HISTORY:                                                                                    *
  *   12/31/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
+int __fastcall SidebarClass::Cameos_Width(int value) // RA2: as above
+{
+	return CameoWidth * value; // RA2: as above
+}
+
+
+int __fastcall SidebarClass::Cameos_Height(int value) // RA2: as above
+{
+	return CameoHeight * value + 1; // RA2: as above
+}
+
+
 SidebarClass::StripClass::StripClass(InitClass const &) :
 	X(0),
 	Y(0),
@@ -1207,6 +1408,7 @@ SidebarClass::StripClass::StripClass(InitClass const &) :
 	for (int index = 0; index < MAX_BUILDABLES; index++) {
 		Buildables[index].BuildableID = 0;
 		Buildables[index].BuildableType = RTTI_NONE;
+		Buildables[index].IsAlt = false; // RA2: 0x67E660
 		Buildables[index].Factory = NULL;
 	}
 }
@@ -1269,7 +1471,7 @@ ShapeSet const * SidebarClass::StripClass::Get_Special_Cameo(SuperWeaponType typ
  * HISTORY:                                                                                    *
  *   12/24/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
-void SidebarClass::StripClass::Init_Clear(void)
+void SidebarClass::StripClass::Clear_Buildables() // RA2: as above
 {
 	IsScrollingDown = false;
 	IsScrolling = false;
@@ -1278,14 +1480,15 @@ void SidebarClass::StripClass::Init_Clear(void)
 	TopIndex = 0;
 	Slid = 0;
 	BuildableCount = 0;
-
-	/*
-	**	Since we're resetting the strips, clear out all the buildables & factory pointers.
-	*/
-	for (int index = 0; index < MAX_BUILDABLES; index++) {
+	for (int index = 0; index < 75; index++) { // RA2: as above
 		Buildables[index].BuildableID = 0;
 		Buildables[index].BuildableType = RTTI_NONE;
-		Buildables[index].Factory = NULL;
+		Buildables[index].IsAlt = 0; // RA2: as above
+		Buildables[index].Factory = 0; // RA2: as above
+		Buildables[index].Unknown_10 = 0; // RA2: as above
+		Buildables[index].Progress.Set_Rate(0); // RA2: as above
+		Buildables[index].Progress.Set_Stage(0); // RA2: as above
+		Buildables[index].FlashEndFrame = 0; // RA2: as above
 	}
 }
 
@@ -1304,61 +1507,22 @@ void SidebarClass::StripClass::Init_Clear(void)
  * HISTORY:                                                                                    *
  *   12/24/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
-void SidebarClass::StripClass::Init_IO(int id)
+void SidebarClass::StripClass::Init_Buttons(int id) // RA2: as above
 {
 	ID = id;
-
-	UpButton[ID].IsSticky = true;
-	UpButton[ID].ID = BUTTON_UP+id;
-	UpButton[ID].DrawOnSidebar = true;
-	UpButton[ID].ShapeDrawer = SidebarDrawer;
-	UpButton[ID].Set_Flags(GadgetClass::RIGHTRELEASE | GadgetClass::RIGHTPRESS | GadgetClass::LEFTRELEASE | GadgetClass::LEFTPRESS);
-
-	DownButton[ID].IsSticky = true;
-	DownButton[ID].ID = BUTTON_DOWN+id;
-	DownButton[ID].DrawOnSidebar = true;
-	DownButton[ID].ShapeDrawer = SidebarDrawer;
-	DownButton[ID].Set_Flags(GadgetClass::RIGHTRELEASE | GadgetClass::RIGHTPRESS | GadgetClass::LEFTRELEASE | GadgetClass::LEFTPRESS);
-
-	for (int index = 0; index < Map.Max_Visible(); index++) {
-		SelectClass & g = SelectButton[ID][index];
-		g.ID = BUTTON_SELECT;
-		g.X = SidebarRect.X + Map.Column[ID].X;
-		g.Y = SidebarRect.Y + Map.Column[ID].Y + (OBJECT_HEIGHT*index);
-		g.Width = OBJECT_WIDTH;
-		g.Height = OBJECT_HEIGHT;
-		g.Set_Owner(*this, index);
-	}
-
-}
-
-
-/***********************************************************************************************
- * SidebarClass::StripClass::Activate -- Adds the strip buttons to the input system.           *
- *                                                                                             *
- *    This routine will add the side strip buttons to the map's input system. This routine     *
- *    should be called once when the sidebar activates.                                        *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   Never call this routine a second time without first calling Deactivate().       *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   01/19/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
-void SidebarClass::StripClass::Activate(void)
-{
-	UpButton[ID].Zap();
-	Map.Add_A_Button(UpButton[ID]);
-
-	DownButton[ID].Zap();
-	Map.Add_A_Button(DownButton[ID]);
-
-	for (int index = 0; index < Map.Max_Visible(); index++) {
-		SelectButton[ID][index].Zap();
-		Map.Add_A_Button(SelectButton[ID][index]);
+	int rows = Map.Get_Row_Count(); // RA2: as above
+	for (int row = 0; row < rows; row++) { // RA2: as above
+		for (int column = 0; column < 2; column++) { // RA2: as above
+			int index = row * 2 + column; // RA2: as above
+			SelectClass &button = SelectButton[ID * 60 + index]; // RA2: as above
+			button.ID = 202; // RA2: as above
+			button.X = Map.Column[ID].X + CameoWidth * column; // RA2: as above
+			button.Y = Map.Column[ID].Y + CameoHeight * row + 1; // RA2: as above
+			button.Width = 60; // RA2: as above
+			button.Height = 48; // RA2: as above
+			button.Strip = this; // RA2: as above
+			button.Index = index; // RA2: as above
+		}
 	}
 }
 
@@ -1378,12 +1542,23 @@ void SidebarClass::StripClass::Activate(void)
  * HISTORY:                                                                                    *
  *   01/19/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-void SidebarClass::StripClass::Deactivate(void)
+void SidebarClass::StripClass::Add_Buttons() // RA2: as above
 {
-	Map.Remove_A_Button(UpButton[ID]);
-	Map.Remove_A_Button(DownButton[ID]);
-	for (int index = 0; index < Map.Max_Visible(); index++) {
-		Map.Remove_A_Button(SelectButton[ID][index]);
+
+	int max = Map.Get_Doubled_Row_Count(); // RA2: as above
+	for (int index = 0; index < max; index++) { // RA2: as above
+		SelectButton[ID * 60 + index].Zap(); // RA2: as above
+		Map.Add_A_Button(SelectButton[ID * 60 + index]); // RA2: as above
+	}
+	IsSidebarRedrawPending = true; // RA2: as above
+}
+
+
+void SidebarClass::StripClass::Remove_Buttons() // RA2: as above
+{
+	int max = Map.Get_Doubled_Row_Count(); // RA2: as above
+	for (int index = 0; index < max; index++) { // RA2: as above
+		Map.Remove_A_Button(SelectButton[ID * 60 + index]); // RA2: as above
 	}
 }
 
@@ -1405,21 +1580,143 @@ void SidebarClass::StripClass::Deactivate(void)
  * HISTORY:                                                                                    *
  *   12/31/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
+bool SidebarClass::StripClass::Is_Before(RTTIType type, int id, RTTIType other_type, int other_id) // RA2: as above
+{
+	TechnoTypeClass *techno = (TechnoTypeClass *)Fetch_Techno_Type(type, id); // RA2: as above
+	TechnoTypeClass *other = (TechnoTypeClass *)Fetch_Techno_Type(other_type, other_id); // RA2: as above
+	wchar_t const *name; // RA2: as above
+	wchar_t const *other_name; // RA2: as above
+	if (other_type == RTTI_NONE) { // RA2: as above
+		return(true);
+	}
+
+	bool super = type == RTTI_SPECIAL || type == RTTI_SUPERWEAPON || type == RTTI_SUPERWEAPONTYPE; // RA2: as above
+	bool other_super = other_type == RTTI_SPECIAL || other_type == RTTI_SUPERWEAPON || other_type == RTTI_SUPERWEAPONTYPE; // RA2: as above
+	if (super) { // RA2: as above
+		if (other_super) { // RA2: as above
+			SuperWeaponTypeClass *weapon = SuperWeaponTypes[id]; // RA2: as above
+			SuperWeaponTypeClass *other_weapon = SuperWeaponTypes[other_id]; // RA2: as above
+			if (weapon->RechargeTime < other_weapon->RechargeTime) { // RA2: as above
+				return(true);
+			}
+			if (weapon->RechargeTime > other_weapon->RechargeTime) { // RA2: as above
+				return(false);
+			}
+			name = weapon->UIName; // RA2: as above
+			other_name = other_weapon->UIName; // RA2: as above
+			return wcscmp(name, other_name) <= 0 ? true : false; // RA2: as above
+		}
+	} else if (!other_super) { // RA2: as above
+		int side = PlayerPtr->Class->Side; // RA2: as above
+		bool own = side == techno->AIBasePlanningSide; // RA2: as above
+		bool other_own = side == other->AIBasePlanningSide; // RA2: as above
+		if (own && !other_own) { // RA2: as above
+			return(true);
+		}
+		if (!own && other_own) { // RA2: as above
+			return(false);
+		}
+	}
+
+	bool unit = type == RTTI_UNITTYPE || type == RTTI_AIRCRAFTTYPE; // RA2: as above
+	bool aircraft = unit && techno->ConsideredAircraft; // RA2: as above
+	bool naval = unit && techno->Naval; // RA2: as above
+	bool ground = !aircraft && !naval; // RA2: as above
+	bool other_unit = other_type == RTTI_UNITTYPE || other_type == RTTI_AIRCRAFTTYPE; // RA2: as above
+	bool other_aircraft = other_unit && other->ConsideredAircraft; // RA2: as above
+	bool other_naval = other_unit && other->Naval; // RA2: as above
+	bool other_ground = !other_aircraft && !other_naval; // RA2: as above
+
+	if (super) { // RA2: as above
+		if (other_aircraft || other_naval || other_ground) { // RA2: as above
+			return(true);
+		}
+	} else if (ground) { // RA2: as above
+		if (other_super) { // RA2: as above
+			return(false);
+		}
+		if (other_aircraft || other_naval) { // RA2: as above
+			return(true);
+		}
+	} else if (aircraft) { // RA2: as above
+		if (other_super) { // RA2: as above
+			return(false);
+		}
+		if (other_ground) { // RA2: as above
+			return(false);
+		}
+		if (other_naval) { // RA2: as above
+			return(true);
+		}
+	} else if (naval) { // RA2: as above
+		if (other_super) { // RA2: as above
+			return(false);
+		}
+		if (other_ground || other_aircraft) { // RA2: as above
+			return(false);
+		}
+	}
+
+	if (techno->Level < other->Level) { // RA2: as above
+		return(true);
+	}
+	if (techno->Level > other->Level) { // RA2: as above
+		return(false);
+	}
+	int cost = techno->Cost_Of(PlayerPtr); // RA2: as above
+	int other_cost = other->Cost_Of(PlayerPtr); // RA2: as above
+	if (cost < other_cost) { // RA2: as above
+		return(true);
+	}
+	if (cost > other_cost) { // RA2: as above
+		return(false);
+	}
+	name = techno->UIName; // RA2: as above
+	other_name = other->UIName; // RA2: as above
+	return wcscmp(name, other_name) <= 0 ? true : false; // RA2: as above
+}
+
+
+void SidebarClass::StripClass::Insert_Buildable(RTTIType type, int id) // RA2: as above
+{
+	BuildableCount++;
+	for (int index = 0; index < BuildableCount; index++) {
+		RTTIType other_type = Buildables[index].BuildableType; // RA2: as above
+		int other_id = Buildables[index].BuildableID; // RA2: as above
+		if (Is_Before(type, id, other_type, other_id)) { // RA2: as above
+			for (int move = BuildableCount - 1; move > index; move--) { // RA2: as above
+				Buildables[move] = Buildables[move - 1]; // RA2: as above
+			}
+			Buildables[index].BuildableType = type; // RA2: as above
+			Buildables[index].BuildableID = id; // RA2: as above
+			if (type == RTTI_BUILDINGTYPE) { // RA2: as above
+				Buildables[index].IsAlt = HouseClass::Build_Category(type, id); // RA2: as above
+			}
+			Buildables[index].Factory = 0; // RA2: as above
+			Buildables[index].Unknown_10 = 0; // RA2: as above
+			Buildables[index].Progress.Set_Stage(0); // RA2: as above
+			Buildables[index].Progress.Set_Rate(0); // RA2: as above
+			Buildables[index].FlashEndFrame = 0; // RA2: as above
+			return;
+		}
+	}
+}
+
+
 bool SidebarClass::StripClass::Add(RTTIType type, int id)
 {
-	if (BuildableCount <= MAX_BUILDABLES) {
+	if (BuildableCount <= 75) { // RA2: as above
 		for (int index = 0; index < BuildableCount; index++) {
 			if (Buildables[index].BuildableType == type && Buildables[index].BuildableID == id) {
 				return(false);
 			}
 		}
 		if (!ScenarioInit && type != RTTI_SPECIAL) {
-			Speak(VOX_NEW_CONSTRUCT);
+			Queue_Speech("EVA_NewConstructionOptions", -1, -1); // RA2: as above
 		}
-		Buildables[BuildableCount].BuildableType = type;
-		Buildables[BuildableCount].BuildableID = id;
-		BuildableCount++;
+		Insert_Buildable(type, id); // RA2: as above
 		IsToRedraw = true;
+		IsSidebarRedrawPending = true; // RA2: as above
 		return(true);
 	}
 	return(false);
@@ -1444,16 +1741,20 @@ bool SidebarClass::StripClass::Add(RTTIType type, int id)
  *   12/31/1994 JLB : Created.                                                                 *
  *   07/29/1995 JLB : Simplified scrolling logic.                                              *
  *=============================================================================================*/
-bool SidebarClass::StripClass::Scroll(bool up)
+bool SidebarClass::StripClass::Scroll(bool up, int amount) // RA2: as above
 {
-	if (up) {
-		if (!TopIndex) return(false);
-		Scroller--;
-	} else {
-		if (TopIndex+Map.Max_Visible() >= BuildableCount) return(false);
-		Scroller++;
+	if (up) { // RA2: 0x67EE60
+		if (!TopIndex) { // RA2: as above
+			return false; // RA2: as above
+		}
+		Scroller -= amount; // RA2: as above
+		return true; // RA2: as above
 	}
-	return(true);
+	if ((TopIndex + Map.Get_Row_Count()) * 2 >= BuildableCount) { // RA2: as above
+		return false; // RA2: as above
+	}
+	Scroller += amount; // RA2: as above
+	return true; // RA2: as above
 }
 
 
@@ -1465,16 +1766,16 @@ bool SidebarClass::StripClass::Scroll(bool up)
 /// </summary>
 /// <param name="up">Should the side strip page UP? If it is to page down then pass false.</param>
 /// <returns>bool; Was the side strip started to page in the desired direction?</returns>
+bool SidebarClass::StripClass::Step(bool up) // RA2: as above
+{
+	return Scroll(up, 1); // RA2: 0x67EEF0
+}
+
+
 bool SidebarClass::StripClass::Page(bool up)
 {
-	if (up) {
-		if (!TopIndex) return(false);
-		Scroller-=Map.Max_Visible();
-	} else {
-		if (TopIndex+Map.Max_Visible() >= BuildableCount) return(false);
-		Scroller+=Map.Max_Visible();
-	}
-	return(true);
+	int amount = Map.Get_Row_Count(); // RA2: 0x67EF70
+	return Scroll(up, amount); // RA2: as above
 }
 
 
@@ -1530,8 +1831,8 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 	**	If this is scroll button for this side strip, then scroll the strip as
 	**	indicated.
 	*/
-	if (key == KeyNumType(UpButton[ID].ID|KN_BUTTON)) {
-		UpButton[ID].IsPressed = false;
+	if (key == KeyNumType(ScrollUpButton.ID|KN_BUTTON)) { // RA2: as above
+		ScrollUpButton.IsPressed = false; // RA2: as above
 		if ((input & KN_UNK) != 0) {
 			if (!Page(true)) {
 				Sound_Effect(Rule->ScoldSound);
@@ -1542,8 +1843,8 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 			}
 		}
 	}
-	else if (key == KeyNumType(DownButton[ID].ID|KN_BUTTON)) {
-		DownButton[ID].IsPressed = false;
+	else if (key == KeyNumType(ScrollDownButton.ID|KN_BUTTON)) { // RA2: as above
+		ScrollDownButton.IsPressed = false; // RA2: as above
 		if ((input & KN_UNK) != 0) {
 			if (!Page(false)) {
 				Sound_Effect(Rule->ScoldSound);
@@ -1560,7 +1861,7 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 	**	logic handler. This might result in up or down scrolling.
 	*/
 	if (!IsScrolling && Scroller) {
-		if (BuildableCount <= Map.Max_Visible()) {
+		if (BuildableCount <= Map.Get_Row_Count()) { // RA2: as above
 			Scroller = 0;
 		} else {
 
@@ -1581,7 +1882,7 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 				}
 
 			} else {
-				if (TopIndex+Map.Max_Visible() >= BuildableCount) {
+				if (TopIndex+Map.Get_Row_Count() >= BuildableCount) { // RA2: as above
 					Scroller = 0;
 				} else {
 					Scroller--;
@@ -1691,31 +1992,59 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 /// </summary>
 /// <param name="id">The cameo slot, counted from the top of the strip as it is displayed.</param>
 /// <returns>Returns with a pointer to the help text, or NULL if that slot is empty.</returns>
-char const * SidebarClass::StripClass::Help_Text(int id)
+wchar_t const *SidebarClass::StripClass::Help_Text(int gadget_index) // RA2: as above
 {
-	static char _buffer[84];
-
-	int i = id + TopIndex;
-
-	if (GameActive) {
-		if (i < BuildableCount && BuildableCount < MAX_BUILDABLES) {
-			if (Buildables[i].BuildableType == RTTI_SPECIAL) {
-				return(SuperWeaponTypes[Buildables[i].BuildableID]->Full_Name());
-			}
-
-			TechnoTypeClass const * choice = Fetch_Techno_Type(Buildables[i].BuildableType, Buildables[i].BuildableID);
-
-			if (Map.IsCameoText) {
-				sprintf(_buffer, Fetch_String(TXT_MONEY_FORMAT_1), choice->Cost_Of(PlayerPtr));
-			} else {
-				sprintf(_buffer, Fetch_String(TXT_MONEY_FORMAT_2), choice->Full_Name(), choice->Cost_Of(PlayerPtr));
-			}
-
-			return(_buffer);
+	int index = gadget_index + TopIndex * 2; // RA2: as above
+	if (!GameActive || index >= BuildableCount || BuildableCount >= 75) { // RA2: as above
+		return(0);
+	}
+	if (Buildables[index].BuildableType == RTTI_SPECIAL) { // RA2: as above
+		return SuperWeaponTypes[Buildables[index].BuildableID]->UIName; // RA2: as above
+	}
+	TechnoTypeClass const * type = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID); // RA2: as above
+	if (IsCameoTextShown) { // RA2: as above
+		swprintf(CameoHelpBuffer, // RA2: as above
+			StringTable::LoadString("TXT_MONEY_FORMAT_1", 0, "D:\\Ra2\\Sidebar.CPP", 2627), // RA2: as above
+			type->Cost_Of(PlayerPtr)); // RA2: as above
+	} else {
+		swprintf(CameoHelpBuffer, // RA2: as above
+			StringTable::LoadString("TXT_MONEY_FORMAT_2", 0, "D:\\Ra2\\Sidebar.CPP", 2629), // RA2: as above
+			type->UIName, type->Cost_Of(PlayerPtr)); // RA2: as above
+	}
+	int length = wcslen(CameoHelpBuffer); // RA2: as above
+	for (int i = 0; i < length; i++) { // RA2: as above
+		if (CameoHelpBuffer[i] == ' ') { // RA2: as above
+			CameoHelpBuffer[i] = '\n'; // RA2: as above
 		}
 	}
+	return CameoHelpBuffer; // RA2: as above
+}
 
-	return(NULL);
+
+void SidebarClass::StripClass::Activate() // RA2: as above
+{
+	AllowedToDraw = true; // RA2: as above
+	Add_Buttons(); // RA2: as above
+}
+
+
+void SidebarClass::StripClass::Deactivate() // RA2: as above
+{
+	AllowedToDraw = false; // RA2: as above
+	Remove_Buttons(); // RA2: as above
+}
+
+
+int SidebarClass::StripClass::Get_Progress(int index) // RA2: as above
+{
+	int progress = 0; // RA2: as above
+	if (Buildables[index].Factory) { // RA2: as above
+		progress = Buildables[index].Factory->Completion(); // RA2: as above
+	}
+	if (Buildables[index].Unknown_10 == 1 && Buildables[index].Progress.Fetch_Stage() > progress) { // RA2: as above
+		progress = (progress + Buildables[index].Progress.Fetch_Stage()) / 2; // RA2: as above
+	}
+	return progress; // RA2: as above
 }
 
 
@@ -1748,14 +2077,14 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 		/*
 		**	Redraw the scroll buttons.
 		*/
-		UpButton[ID].Draw_Me(true);
-		DownButton[ID].Draw_Me(true);
+		ScrollUpButton.Draw_Me(true); // RA2: as above
+		ScrollDownButton.Draw_Me(true); // RA2: as above
 
 		/*
 		**	Loop through all the buildable objects that are visible in the strip and render
 		**	them. Their Y offset may be adjusted if the strip is in the process of scrolling.
 		*/
-		for (int i = 0; i < Map.Max_Visible() + (IsScrolling ? 1 : 0); i++) {
+		for (int i = 0; i < Map.Get_Row_Count() + (IsScrolling ? 1 : 0); i++) { // RA2: as above
 			ShapeSet const * shapefile = NULL;
 
 			int index = i+TopIndex;
@@ -1767,7 +2096,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 			int stage = 0;
 			bool darken = false;
 			FactoryClass * factory = NULL;
-			char const * state = NULL;
+			wchar_t const * state = NULL; // RA2: the readout is wide text
 			bool isready = false;
 
 			/*
@@ -1777,7 +2106,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 				y -= OBJECT_HEIGHT - Slid;
 			}
 
-			char const * name = NULL;
+			wchar_t const * name = NULL; // RA2: wide names
 			TechnoTypeClass const * obj = NULL;
 
 			/*
@@ -1792,7 +2121,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 					obj = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID);
 					if (obj != NULL) {
 
-						name = obj->Full_Name();
+						name = obj->UIName; // RA2: the wide UI name
 
 						/*
 						**	If there is already a factory producing this kind of object, then all
@@ -1817,7 +2146,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 							production	= true;
 							completed	= factory->Has_Completed();
 							if (completed) {
-								state = Fetch_String(TXT_READY);
+								state = StringTable::LoadString("TXT_READY", NULL, "D:\\Ra2\\Sidebar.CPP", 2845); // RA2: wide text
 							}
 							stage		= factory->Completion();
 							darken		= false;
@@ -1838,7 +2167,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 				} else {
 
 					spc = SuperWeaponType(Buildables[index].BuildableID);
-					name = SuperWeaponTypes[spc]->Full_Name();
+					name = SuperWeaponTypes[spc]->UIName; // RA2: as above
 					shapefile = Get_Special_Cameo(spc);
 
 					production = true;
@@ -1944,14 +2273,14 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 
 	} else {
 
-		if (UpButton[ID].IsDrawn) {
+		if (ScrollUpButton.IsDrawn) { // RA2: as above
 			IsToBlitSidebar = true;
-			UpButton[ID].IsDrawn = false;
+			ScrollUpButton.IsDrawn = false; // RA2: as above
 		}
 
-		if (DownButton[ID].IsDrawn) {
+		if (ScrollDownButton.IsDrawn) { // RA2: as above
 			IsToBlitSidebar = true;
-			DownButton[ID].IsDrawn = false;
+			ScrollDownButton.IsDrawn = false; // RA2: as above
 		}
 	}
 }
@@ -1985,7 +2314,7 @@ bool SidebarClass::StripClass::Recalc(void)
 	}
 
 	bool scroll = false;
-	int max_visible = Map.Max_Visible();
+	int max_visible = Map.Get_Row_Count(); // RA2: as above
 	BuildType * unshifted = new BuildType[max_visible];
 
 	for (int i = 0; i < max_visible; i++) {
@@ -2418,6 +2747,12 @@ bool SidebarClass::StripClass::Factory_Link(FactoryClass * factory, RTTIType typ
 }
 
 
+bool SidebarClass::StripClass::Has_Buildables(void) const // RA2: as above
+{
+	return BuildableCount > 0; // RA2: as above
+}
+
+
 /***********************************************************************************************
  * SidebarClass::Abandon_Production -- Stops production of the object specified.               *
  *                                                                                             *
@@ -2519,15 +2854,15 @@ void SidebarClass::Zoom_Mode_Control(void)
 	if (Session.Type!=GAME_NORMAL) {
 		if (Is_Radar_Existing()) {
 			if (Is_Player_Names()) {
-				Radar_Activate(1);
+				Radar_Activate(1, true); // RA2: as above
 				return;
 			}
 		} else if (Is_Player_Names()) {
-			Radar_Activate(0);
+			Radar_Activate(0, true); // RA2: as above
 			return;
 		}
 
-		Radar_Activate(2);
+		Radar_Activate(2, true); // RA2: as above
 	}
 }
 
@@ -2539,117 +2874,153 @@ void SidebarClass::Zoom_Mode_Control(void)
 /// and then the mode buttons, scroll arrows, cameo buttons and their tooltip regions are
 /// moved to suit.
 /// </summary>
-void SidebarClass::Reposition_Sidebar(void)
+int SidebarClass::First_Used_Column() // RA2: as above
 {
-	int index;
+	for (int index = 0; index < 4; index++) { // RA2: as above
+		if (Column[index].BuildableCount > 0) { // RA2: as above
+			return index; // RA2: as above
+		}
+	}
+	return -1; // RA2: as above
+}
+
+
+void SidebarClass::Reposition_Sidebar() // RA2: as above
+{
+	PowerClass::Reposition_Sidebar(); // RA2: as above
 
 	/*
 	 * Position the sidebar.
 	 */
-	SidebarRect.X = Options.IsSidebarOnRight ? TacticalRect.X + TacticalRect.Width : 0;
-	SidebarRect.Y = SIDE_Y;
-	SidebarRect.Width = SIDE_WIDTH;
-	SidebarRect.Height = TacticalRect.Height + TacticalRect.Y - SIDE_Y;
-
-	BASECLASS::Reposition_Sidebar();
-
-	if (!SidebarShape) {
-		SidebarShape = (ShapeSet const *)MFCD::Retrieve("SIDEGDI1.SHP");
-		SidebarMiddleShape = (ShapeSet const *)MFCD::Retrieve("SIDEGDI2.SHP");
-		SidebarBottomShape = (ShapeSet const *)MFCD::Retrieve("SIDEGDI3.SHP");
+	if (Options.IsSidebarOnRight) {
+		SidebarRect.X = TacticalRect.X + TacticalRect.Width;
+	} else {
+		SidebarRect.X = 0; // RA2: as above
+	}
+	StripLeft = SidebarRect.X + 0x16; // RA2: as above
+	if (Scen->IsGDI) { // RA2: as above
+		TopButtonX = SidebarRect.X + 0x14; // RA2: as above
+		TabButtonX = SidebarRect.X + 0x1A; // RA2: as above
+		PowerBarLeft = SidebarRect.X + 0x27; // RA2: as above
+	} else {
+		TopButtonX = SidebarRect.X + 0x21; // RA2: as above
+		TabButtonX = SidebarRect.X + 0x14; // RA2: as above
+		PowerBarLeft = SidebarRect.X + 0x27; // RA2: as above
 	}
 
 	/*
 	 * Position the sidebar's buttons.
 	 */
-	Background.Set_Position(SidebarRect.X + 16, TacticalRect.Y);
+	if (SidebarShapes[SBSHAPE_TOP] == 0) { // RA2: as above
+		SidebarShapes[SBSHAPE_TOP] = (ShapeSet const *)MixFileClass::Retrieve("SIDEGDI1.SHP"); // RA2: as above
+		SidebarShapes[SBSHAPE_MIDDLE] = (ShapeSet const *)MixFileClass::Retrieve("SIDEGDI2.SHP"); // RA2: as above
+		SidebarShapes[SBSHAPE_BOTTOM] = (ShapeSet const *)MixFileClass::Retrieve("SIDEGDI3.SHP"); // RA2: as above
+	}
+
+	Background.Set_Position(SidebarRect.X + 0x10, TacticalRect.Y); // RA2: as above
 	Background.Flag_To_Redraw();
+	int top = RadarButton.Y + RadarButton.Height; // RA2: as above
+	if (Options.IsSidebarOnRight) {
+		Background.Set_Position(TacticalRect.X + TacticalRect.Width, top); // RA2: as above
+	} else {
+		Background.Set_Position(0, top); // RA2: as above
+	}
+	Background.Set_Size(SidebarSurface->Get_Width(), SidebarSurface->Get_Height() - top); // RA2: as above
 
-	Repair.Set_Position(SidebarRect.X + BUTTON_ONE_X, SidebarRect.Y + BUTTON_ONE_Y);
-	Repair.Flag_To_Redraw();
-	Repair.DrawOffsetX = -SidebarRect.X;
-
-	Upgrade.Set_Position(Repair.X + BUTTON_SPACING, Power.Y);
+	Upgrade.Set_Position(TopButtonX, TopButtonY); // RA2: as above
 	Upgrade.Flag_To_Redraw();
 	Upgrade.DrawOffsetX = -SidebarRect.X;
 
-	Power.Set_Position(Upgrade.X + BUTTON_SPACING, Repair.Y);
-	Power.Flag_To_Redraw();
-	Power.DrawOffsetX = -SidebarRect.X;
+	Repair.Set_Position(Upgrade.X + TopButtonSpacing, Upgrade.Y); // RA2: as above
+	Repair.Flag_To_Redraw();
+	Repair.DrawOffsetX = -SidebarRect.X;
 
-	Waypoint.Set_Position(Power.X + BUTTON_SPACING, Upgrade.Y);
-	Waypoint.Flag_To_Redraw();
-	Waypoint.DrawOffsetX = -SidebarRect.X;
+	for (int tab = 0; tab < 4; tab++) { // RA2: as above
+		TabButton[tab].Set_Position(TabButtonSpacing * tab + TabButtonX, TabButtonY); // RA2: as above
+		TabButton[tab].Flag_To_Redraw(); // RA2: as above
+		TabButton[tab].DrawOffsetX = -SidebarRect.X; // RA2: as above
+	}
+
+	ScrollDownButton.Set_Position(PowerBarLeft, SidebarBottomY); // RA2: as above
+	ScrollDownButton.Flag_To_Redraw(); // RA2: as above
+	ScrollDownButton.DrawOffsetX = -SidebarRect.X; // RA2: as above
+
+	ScrollUpButton.Set_Position(PowerBarLeft + SidebarEdgeWidth, SidebarBottomY); // RA2: as above
+	ScrollUpButton.Flag_To_Redraw(); // RA2: as above
+	ScrollUpButton.DrawOffsetX = -SidebarRect.X; // RA2: as above
 
 	/*
 	 * Create the tooltips for the sidebar.
 	 */
-	if (ToolTips) {
-		ToolTip tooltip;
-
-		for (index = 0; index < COLUMNS; index++) {
-			for (int j = 0; j < 100; j++) {
-				ToolTips->Remove((j | (index << 8)) + GADGET_CAMEO);
+	int rows = Get_Row_Count(); // RA2: as above
+	int count = rows * 2; // RA2: as above
+	for (int column = 0; column < 4; column++) { // RA2: as above
+		StripClass::SelectClass *button = &StripClass::SelectButton[column * 60]; // RA2: as above
+		for (int row = 0; row < rows; row++) { // RA2: as above
+			for (int side = 0; side < 2; side++, button++) { // RA2: as above
+				button->Set_Position(CameoWidth * side + StripLeft, CameoHeight * row + StripTop + 1); // RA2: as above
+				button->Flag_To_Redraw(); // RA2: as above
 			}
 		}
-		int arrowy = SidebarRect.Y + Map.Max_Visible() * StripClass::OBJECT_HEIGHT + StripClass::UP_Y_OFFSET;
+	}
 
-		for (int col = 0; col < COLUMNS; col++) {
-
-			StripClass::UpButton[col].Set_Position(SidebarRect.X + Column[col].X + StripClass::UP_X_OFFSET, arrowy);
-			StripClass::UpButton[col].Flag_To_Redraw();
-			StripClass::UpButton[col].DrawOffsetX = -SidebarRect.X;
-
-			StripClass::DownButton[col].Set_Position(SidebarRect.X + Column[col].X + StripClass::DOWN_X_OFFSET, arrowy);
-			StripClass::DownButton[col].Flag_To_Redraw();
-			StripClass::DownButton[col].DrawOffsetX = -SidebarRect.X;
-
-			for (int i = 0; i < Map.Max_Visible(); i++) {
-				StripClass::SelectButton[col][i].Set_Position(SidebarRect.X + Column[col].X, SidebarRect.Y + Column[col].Y + (StripClass::OBJECT_HEIGHT * i));
-				StripClass::SelectButton[col][i].Flag_To_Redraw();
-				ToolTip tmp;
-				tmp.Text = TXT_NONE;
-				tmp.ID = (i | (col << 8)) + GADGET_CAMEO;
-				tmp.Region.Set(StripClass::SelectButton[col][i].X,	  StripClass::SelectButton[col][i].Y,
-								   StripClass::SelectButton[col][i].Width, StripClass::SelectButton[col][i].Height);
-				ToolTips->Add(&tmp);
-			}
-
+	if (ToolTips != 0) { // RA2: as above
+		ToolTip tip; // RA2: as above
+		for (int tab = 0; tab < 4; tab++) { // RA2: as above
+			tip.ID = tab + 0xCB; // RA2: as above
+			tip.Text = 0; // RA2: as above
+			tip.Region.X = TabButton[tab].X; // RA2: as above
+			tip.Region.Y = TabButton[tab].Y; // RA2: as above
+			tip.Region.Width = TabButton[tab].Width; // RA2: as above
+			tip.Region.Height = TabButton[tab].Height; // RA2: as above
+			ToolTips->Remove(tip.ID); // RA2: as above
+			ToolTips->Add(&tip); // RA2: as above
 		}
-
-		tooltip.ID = BUTTON_REPAIR;
-		tooltip.Text = TXT_REPAIR_MODE;
-		tooltip.Region.Set(Repair.X, Repair.Y, Repair.Width, Repair.Height);
-		ToolTips->Remove(tooltip.ID);
-		ToolTips->Add(&tooltip);
-
-		tooltip.ID = BUTTON_POWER;
-		tooltip.Text = TXT_POWER_MODE;
-		tooltip.Region.Set(Power.X, Power.Y, Power.Width, Power.Height);
-		ToolTips->Remove(tooltip.ID);
-		ToolTips->Add(&tooltip);
-
-		tooltip.ID = BUTTON_SELL;
-		tooltip.Text = TXT_SELL_MODE;
-		tooltip.Region.Set(Upgrade.X, Upgrade.Y, Upgrade.Width, Upgrade.Height);
-		ToolTips->Remove(tooltip.ID);
-		ToolTips->Add(&tooltip);
-
-		tooltip.ID = BUTTON_WAYPOINT;
-		tooltip.Text = TXT_WAYPOINTMODE;
-		tooltip.Region.Set(Waypoint.X, Waypoint.Y, Waypoint.Width, Waypoint.Height);
-		ToolTips->Remove(tooltip.ID);
-		ToolTips->Add(&tooltip);
+		for (int index = 0; index < count; index++) { // RA2: as above
+			tip.ID = index + 1000; // RA2: as above
+			tip.Text = 0; // RA2: as above
+			tip.Region.X = StripClass::SelectButton[index].X; // RA2: as above
+			tip.Region.Y = StripClass::SelectButton[index].Y; // RA2: as above
+			tip.Region.Width = StripClass::SelectButton[index].Width; // RA2: as above
+			tip.Region.Height = StripClass::SelectButton[index].Height; // RA2: as above
+			tip.IsAnchored = true; // RA2: as above
+			ToolTips->Remove(tip.ID); // RA2: as above
+			ToolTips->Add(&tip); // RA2: as above
+		}
+		tip.IsAnchored = false; // RA2: as above
+		tip.ID = 0x66; // RA2: as above
+		tip.Text = TXT_SELL_MODE; // RA2: as above
+		tip.Region.X = Repair.X; // RA2: as above
+		tip.Region.Y = Repair.Y; // RA2: as above
+		tip.Region.Width = Repair.Width; // RA2: as above
+		tip.Region.Height = Repair.Height; // RA2: as above
+		ToolTips->Remove(0x66); // RA2: as above
+		ToolTips->Add(&tip); // RA2: as above
+		tip.ID = 0x65; // RA2: as above
+		tip.Text = TXT_REPAIR_MODE; // RA2: as above
+		tip.Region.X = Upgrade.X; // RA2: as above
+		tip.Region.Y = Upgrade.Y; // RA2: as above
+		tip.Region.Width = Upgrade.Width; // RA2: as above
+		tip.Region.Height = Upgrade.Height; // RA2: as above
+		ToolTips->Remove(0x65); // RA2: as above
+		ToolTips->Add(&tip); // RA2: as above
+		tip.ID = 0xC8; // RA2: as above
+		tip.Text = 0; // RA2: as above
+		tip.Region.X = ScrollUpButton.X; // RA2: as above
+		tip.Region.Y = ScrollUpButton.Y; // RA2: as above
+		tip.Region.Width = ScrollUpButton.Width; // RA2: as above
+		tip.Region.Height = ScrollUpButton.Height; // RA2: as above
+		ToolTips->Remove(0xC8); // RA2: as above
+		ToolTips->Add(&tip); // RA2: as above
+		tip.ID = 0xC9; // RA2: as above
+		tip.Text = 0; // RA2: as above
+		tip.Region.X = ScrollDownButton.X; // RA2: as above
+		tip.Region.Y = ScrollDownButton.Y; // RA2: as above
+		tip.Region.Width = ScrollDownButton.Width; // RA2: as above
+		tip.Region.Height = ScrollDownButton.Height; // RA2: as above
+		ToolTips->Remove(0xC9); // RA2: as above
+		ToolTips->Add(&tip); // RA2: as above
 	}
-
-	int x = 0;
-	int y = RadarButton.Y + RadarButton.Height;
-	if (Options.IsSidebarOnRight) {
-		Background.Set_Position(TacticalRect.X + TacticalRect.Width, y);
-	} else {
-		Background.Set_Position(x, y);
-	}
-	Background.Set_Size(SidebarSurface->Get_Width(), SidebarSurface->Get_Height() - y);
 }
 
 
@@ -2667,7 +3038,7 @@ const char * SidebarClass::Help_Text(int id)
 		id = id - GADGET_CAMEO;
 		int index = id >> 8;
 		if (index < COLUMNS && index >= 0) {
-			text = Column[index].Help_Text(id % 256U);
+			text = (char const *)Column[index].Help_Text(id % 256U); // RA2: the cameo text is wide
 		}
 	}
 	return(text);
@@ -2680,13 +3051,23 @@ const char * SidebarClass::Help_Text(int id)
 /// resolution. It is used to lay the strips out and to decide when scrolling is called for.
 /// </summary>
 /// <returns>Returns with the number of build cameos that will fit in one strip.</returns>
-int SidebarClass::Max_Visible(void)
+int SidebarClass::Get_Row_Count(void) // RA2: as above
 {
-	if (SidebarSurface != NULL && SidebarShape != NULL) {
-		Rect r = SidebarRect;
-		return((r.Height - SidebarBottomShape->Get_Height() - SidebarShape->Get_Height()) / SidebarMiddleShape->Get_Height());
+	int extra; // RA2: as above
+	if (Scen->IsGDI) { // RA2: 0x6820A0
+		extra = 26; // RA2: as above
+	} else {
+		extra = 18; // RA2: as above
 	}
-	return(StripClass::MAX_VISIBLE);
+	return (SidebarRect.Y + SidebarRect.Height - StripTop - extra - 7) / 50; // RA2: as above
+}
+
+
+int SidebarClass::Get_Doubled_Row_Count() // RA2: as above
+{
+	int const rows = Get_Row_Count(); // RA2: as above
+	int const count = rows + rows; // RA2: as above
+	return count; // RA2: as above
 }
 
 
@@ -2701,76 +3082,27 @@ int SidebarClass::Max_Visible(void)
 /// <param name="cliprect">The clipping rectangle to print within.</param>
 /// <param name="maxlinelen">The width, in pixels, a line may reach before it is broken.</param>
 /// <remarks>Nothing at all is printed unless the player has cameo text turned on.</remarks>
-void Print_Cameo_Text(char const * string, Point2D const & point, Rect const & cliprect, int maxlinelen)
+void Print_Cameo_Text(wchar_t const * string, Point2D const & point, Rect const & cliprect, int maxlinelen) // RA2: as above
 {
-	char buffer[64];
-
-	if (Map.IsCameoText == true && string != NULL) {
-		FontClass * font = Font_From_TPF(TextPrintType(TPF_6POINT|TPF_METAL12|TPF_FULLSHADOW));
+	if (IsCameoTextShown && string != NULL) { // RA2: 0x682140
 		Point2D drawpoint = point;
-
-		if (font->String_Pixel_Width(string) > maxlinelen) {
-			int len = strlen(string);
-			strcpy(buffer, string);
-			string = buffer;
-
-			int w = 0;
-			do {
-				/*
-				**	While the current line is less then the max length...
-				*/
-				int linelen = font->Char_Pixel_Width(buffer[len]);
-				while (linelen <= maxlinelen && len-- > 0) {
-					linelen += font->Char_Pixel_Width(buffer[len]);
-				}
-
-				/*
-				**	Back up to an appropriate location to break.
-				*/
-				while (linelen > maxlinelen) {
-					while (buffer[len] != ' ' && buffer[len] != '-' && buffer[len] != '\0') {
-						linelen -= font->Char_Pixel_Width(buffer[len]);
-						len++;
-					}
-
-					if (buffer[len] == '\0') {
-						len = 0;
-						break;
-					}
-
-					if (linelen <= maxlinelen) {
-						break;
-					}
-
-					linelen -= font->Char_Pixel_Width(buffer[len]);
-					len++;
-				}
-
-				if (len <= 0) {
-					break;
-				}
-
-				if (buffer[len] == ' ') {
-					buffer[len] = '\0';
-					len++;
-				} else if (buffer[len] == '-') {
-					len++;
-				}
-
-				Fancy_Text_Print(&buffer[len], *SidebarSurface, cliprect, drawpoint, Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_FULLSHADOW|TPF_EFNT));
-				buffer[len] = '\0';
-				drawpoint.Y -= font->Get_Height();
-				w = font->String_Pixel_Width(buffer);
-
-			} while (len > 0 && w > maxlinelen);
-
-			/*
-			 * Print the rest of the string.
-			 */
-			finish:;
-		}
-
-		Fancy_Text_Print(string, *SidebarSurface, cliprect, drawpoint, Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_FULLSHADOW|TPF_EFNT));
+		BitFont * font = BitFont::Instance; // RA2: as above
+		ColorScheme * scheme = Fetch_Scheme_By_Name("DarkRed", 1); // RA2: as above
+		RGBClass rgb = scheme->HSV; // RA2: as above
+		unsigned color = ((rgb.Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) | ((rgb.Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) | ((rgb.Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+		LTRBStruct box; // RA2: as above
+		box.Left = cliprect.X; // RA2: as above
+		box.Top = cliprect.Y; // RA2: as above
+		box.Right = cliprect.X + cliprect.Width; // RA2: as above
+		box.Bottom = cliprect.Y + cliprect.Height; // RA2: as above
+		font->Set_Clip(true); // RA2: as above
+		font->Set_Bounds(&box); // RA2: as above
+		font->Set_Color(color); // RA2: as above
+		int textwidth; // RA2: as above
+		int textheight; // RA2: as above
+		font->Text_Dimensions(string, &textwidth, &textheight, maxlinelen); // RA2: as above
+		drawpoint.Y += font->LineHeight - textheight; // RA2: as above
+		BitText::Instance->Draw_Text(font, SidebarSurface, string, drawpoint.X, drawpoint.Y, maxlinelen, 0, 0, 0, 0); // RA2: as above
 	}
 }
 
@@ -2783,7 +3115,7 @@ void Print_Cameo_Text(char const * string, Point2D const & point, Rect const & c
 /// <returns>Returns with S_OK if the load succeeded.</returns>
 HRESULT SidebarClass::Load(IStream * stream)
 {
-	return(BASECLASS::Load(stream));
+	return BASECLASS::Load(stream); // RA2: as above
 }
 
 
@@ -2795,5 +3127,86 @@ HRESULT SidebarClass::Load(IStream * stream)
 /// <returns>Returns with S_OK if the save succeeded.</returns>
 HRESULT SidebarClass::Save(IStream * stream)
 {
-	return(BASECLASS::Save(stream));
+	return BASECLASS::Save(stream); // RA2: as above
+}
+
+
+void SidebarClass::StripClass::Set_Flash(int id, int delay) // RA2: as above
+{
+	for (int index = 0; index < 75; index++) { // RA2: as above
+		if (Buildables[index].BuildableID == id) { // RA2: as above
+			Buildables[index].FlashEndFrame = Frame + delay; // RA2: as above
+			return;
+		}
+	}
+}
+/***********************************************************************************************
+ * SidebarClass::Reload_Sidebar -- Loads appropriate sidebar shapes depending on house         *
+ *                                                                                             *
+ * INPUT:  none                                                                                *
+ *                                                                                             *
+ * OUTPUT:  none                                                                               *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   9/18/1996 BWG : Created.                                                                  *
+ *=============================================================================================*/
+void SidebarClass::Reload_Sidebar(void)
+{
+	Column[0].X = COLUMN_ONE_X;
+	Column[0].Y = COLUMN_ONE_Y;
+	Column[0].ObjectRect = Rect(Column[0].X, Column[0].Y, StripClass::OBJECT_WIDTH, (StripClass::OBJECT_HEIGHT) * Get_Row_Count()); // RA2: as above
+
+	Column[1].X = COLUMN_TWO_X;
+	Column[1].Y = COLUMN_ONE_Y;
+	Column[1].ObjectRect = Rect(Column[1].X, Column[1].Y, StripClass::OBJECT_WIDTH, (StripClass::OBJECT_HEIGHT) * Get_Row_Count()); // RA2: as above
+}
+
+
+/***********************************************************************************************
+ * SidebarClass::Which_Column -- Determines which column a given type should appear.           *
+ *                                                                                             *
+ *    Use this function to resolve what column the specified object type should be placed      *
+ *    into.                                                                                    *
+ *                                                                                             *
+ * INPUT:   otype -- Pointer to the object type class of the object in question.               *
+ *                                                                                             *
+ * OUTPUT:  Returns with the column number that the object should be placed in.                *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   01/01/1995 JLB : Created.                                                                 *
+ *=============================================================================================*/
+int SidebarClass::Which_Column(RTTIType type)
+{
+	if (type == RTTI_BUILDINGTYPE || type == RTTI_BUILDING) {
+		return(0);
+	}
+	return(1);
+}
+
+
+/***********************************************************************************************
+ * SidebarClass::Activate_Upgrade -- Controls the upgrade button on the sidebar.               *
+ *                                                                                             *
+ *    Use this routine to turn the upgrade sidebar button on and off. Typically, the button    *
+ *    is enabled when the currently selected structure can be upgraded and disabled otherwise. *
+ *                                                                                             *
+ * INPUT:   control  -- The controls how the button is to be activated or deactivated;         *
+ *                      0  -- Turn button off.                                                 *
+ *                      1  -- Turn button on.                                                  *
+ *                      -1 -- Toggle button state.                                             *
+ *                                                                                             *
+ * OUTPUT:  bool; Was the button previously activated?                                         *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   12/24/1994 JLB : Created.                                                                 *
+ *=============================================================================================*/
+bool SidebarClass::Activate_Upgrade(int control)
+{
+	return(false); // RA2: RA2 has no upgrade button
 }

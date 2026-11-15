@@ -417,7 +417,7 @@ void OptionsClass::Load_Settings(void)
 
 	DebugString("--------- Complete -------------------------------\n");
 
-	Map.Toggle_Cameo_Text(SidebarCameoText);
+	Map.Set_Cameo_Text(SidebarCameoText);
 	TechnoClass::Set_Action_Lines(ActionLines);
 	Setup_Dest_Net();
 }
@@ -561,7 +561,7 @@ void OptionsClass::Set(void)
 	Set_Score_Volume(ScoreVolume, false);
 	Set_Repeat(IsScoreRepeat);
 	Set_Shuffle(IsScoreShuffle);
-	Map.Toggle_Cameo_Text(SidebarCameoText);
+	Map.Set_Cameo_Text(SidebarCameoText);
 	TechnoClass::Set_Action_Lines(ActionLines);
 }
 
