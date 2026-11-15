@@ -3034,23 +3034,23 @@ Coord TActionClass::Waypoint_As_Coord(void)
 /// </summary>
 void TActionClass::Set_Text(char const * text) // RA2: not in TibSun, at 0x6B2EC0
 {
-	char * buffer = Text;
-	buffer[0] = '\0';
-	if (text != NULL) {
-		while (*text != '\0' && (unsigned char)*text <= ' ') {
+	Text[0] = 0; // RA2: as above
+	if (text != 0) { // RA2: as above
+		while (*text != 0 && (unsigned char)*text <= ' ') { // RA2: as above
 			text++;
 		}
-		if (*text != '\0') {
-			strncpy(buffer, text, sizeof(Text) - 1);
-			buffer[sizeof(Text) - 1] = '\0';
-			int length = strlen(buffer);
-			while (length != 0 && (unsigned char)buffer[length - 1] <= ' ') {
+		if (*text != 0) { // RA2: as above
+			strncpy(Text, text, sizeof(Text) - 1); // RA2: as above
+			Text[(int)(sizeof(Text) - 1)] = 0; // RA2: as above
+			int length = strlen(Text); // RA2: as above
+			while (length != 0 && (unsigned char)Text[length - 1] <= ' ') { // RA2: as above
 				length--;
 			}
-			buffer[length] = '\0';
+			Text[length] = 0; // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
