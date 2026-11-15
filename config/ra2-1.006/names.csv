@@ -973,6 +973,7 @@ address,symbol,evidence
 0x0045EA60,?Free_Under_Roof_Door_Anim@BuildingTypeClass@@QAEXXZ,"compiled from src/builtype.cpp, matched"
 0x0045EAA0,?Calculate_Base_Defense_Values@BuildingTypeClass@@QAEXXZ,"compiled from src/builtype.cpp, matched"
 0x0045EBD0,?Post_Read_Tile_Fixup@BuildingTypeClass@@SIXXZ,"compiled from src/builtype.cpp, matched"
+0x0045EC40,?Can_Always_Undeploy@BuildingTypeClass@@QBE_NXZ,"compiled from src/builtype.cpp, matched"
 0x0045EC50,?Is_Mobile_Deployer@BuildingTypeClass@@QBE_NXZ,"compiled from src/builtype.cpp, matched"
 0x0045EC90,?Deploy_Facing@BuildingTypeClass@@QBE?AW4Dir256@@XZ,"compiled from src/builtype.cpp, matched"
 0x0045ED00,?Fetch_RTTI@BuildingTypeClass@@UBE?AW4RTTIType@@XZ,"compiled from src/builtype.cpp, matched"
