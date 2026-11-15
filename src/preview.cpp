@@ -117,10 +117,8 @@ void MapPreviewClass::Create_Preview(void)
 	Map.Reset_Iterator();
 
 	int minx = 10000;
-	int maxx = 0;
 	int miny = 10000;
-	int originx = 10000;
-	int originy = 10000;
+	int maxx = 0;
 	int maxy = 0;
 
 	cptr = Map.Iterate();
@@ -128,14 +126,12 @@ void MapPreviewClass::Create_Preview(void)
 		if (Map.In_Radar(cptr->CellID)) {
 			Point2D pixel = Cell_To_Preview_Pixel(cptr->CellID);
 			if (pixel.X < minx) {
-				originx = pixel.X;
 				minx = pixel.X;
 			}
 			if (pixel.X > maxx) {
 				maxx = pixel.X;
 			}
 			if (pixel.Y < miny) {
-				originy = pixel.Y;
 				miny = pixel.Y;
 			}
 			if (pixel.Y > maxy) {
@@ -143,7 +139,6 @@ void MapPreviewClass::Create_Preview(void)
 			}
 		}
 		cptr = Map.Iterate();
-
 	}
 
 	int width = 2 * (maxx - minx);
@@ -168,8 +163,9 @@ void MapPreviewClass::Create_Preview(void)
 			unsigned int lowcolor = Map[cell].Preview_Cell_Color(unknown, false);
 			Point2D pixel = Cell_To_Preview_Pixel(cell);
 
-			int x = 2 * (pixel.X - minx);
-			int y = pixel.Y - miny;
+			// The cell's two preview pixels, relative to the bounding box.
+			Point2D offset = pixel - Point2D(minx, miny); // RA2: RA2's form
+			Rect area(2 * offset.X, offset.Y, 2, 1); // RA2: as above
 
 			bool hasradarcolor = false;
 			int level = 100;
@@ -218,11 +214,8 @@ void MapPreviewClass::Create_Preview(void)
 				}
 			}
 
-			SurfacePtr->Put_Pixel_Clip(Point2D(x, y), lowcolor, SurfacePtr->Get_Rect());
-			SurfacePtr->Put_Pixel_Clip(Point2D(x + 1, y), highcolor, SurfacePtr->Get_Rect());
-
-			minx = originx;
-			miny = originy;
+			SurfacePtr->Put_Pixel_Clip(Point2D(area.X, area.Y), lowcolor, SurfacePtr->Get_Rect()); // RA2: as above
+			SurfacePtr->Put_Pixel_Clip(Point2D(area.X + 1, area.Y), highcolor, SurfacePtr->Get_Rect()); // RA2: as above
 		}
 		cptr = Map.Iterate();
 	}
@@ -231,18 +224,19 @@ void MapPreviewClass::Create_Preview(void)
 		if (Scen->Is_Valid_Waypoint(i)) {
 			Cell cell = Scen->Get_Waypoint_Cell(i);
 			Point2D pixel = Cell_To_Preview_Pixel(cell);
+			pixel = pixel - Point2D(minx, miny); // RA2: as above
 			Rect rect;
-			rect.X = 2 * (pixel.X - minx) - 1;
-			rect.Y = pixel.Y - miny - 1;
+			rect.X = 2 * pixel.X - 1; // RA2: as above
+			rect.Y = pixel.Y - 1; // RA2: as above
 			rect.Width = 4;
 			rect.Height = 4;
 			SurfacePtr->Fill_Rect(SurfacePtr->Get_Rect(), rect, DSurface::Build_Hicolor_Pixel(240, 0, 0));
-			miny = originy;
 		}
 	}
 
 	SurfacePtr->Unlock();
 }
+
 
 
 /// <summary>
