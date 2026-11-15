@@ -822,6 +822,9 @@ class TechnoClass :	public RadioClass,
 		void Laser_Zap(AbstractClass * target, int which, WeaponTypeClass const * weapon, Coord const & source_coord); // RA2: not a virtual
 		EBolt * Electric_Zap(AbstractClass * target, WeaponTypeClass const * weapon, Coord const & source_coord); // RA2: 0x6CA020
 		int Get_Sight_Bonus(Coord const & coord);
+		int Elevation_Range_Bonus_3D(ObjectClass * object) const; // RA2: 0x6C48F0
+		int Elevation_Range_Bonus(ObjectClass * object) const; // RA2: 0x6C4A70
+		bool In_Range(Coord const * coord, AbstractClass * target, WeaponTypeClass const * weapon) const; // RA2: 0x6C4BB0
 		static void Remove_Target(AbstractClass * target);
 		bool Has_Ability(AbilityType ability) const;
 		bool Should_Use_High_Arc(int which) const;

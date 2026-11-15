@@ -212,6 +212,7 @@
 #include "bench.hh"
 #include "tube.hh"
 #include "ftimer.h"
+#include "trajhelp.h" // RA2
 
 namespace FileSystem { extern ConvertClass * PALETTE_PAL; }
 namespace Unsorted { extern bool ArmageddonMode; }
@@ -1761,6 +1762,206 @@ int TechnoClass::Get_Sight_Bonus(Coord const & coord)
 	return(10 * (coord.Z / Rule->LeptonsPerSightIncrease));
 }
 
+/// <summary>
+/// The extra weapon range against the given object, combined with the height between the two, for a
+/// weapon whose projectile is subject to elevation; 0 unless both are on the ground.
+/// </summary>
+int TechnoClass::Elevation_Range_Bonus_3D(ObjectClass * object) const // RA2: not in TibSun, at 0x6C48F0
+{
+	if (On_Ground() && object->On_Ground()) {
+		Cell here = Center_Coord().As_Cell();
+		Cell there = object->Center_Coord().As_Cell();
+		CellClass * source = &Map[here];
+		CellClass * target = &Map[there];
+		int rise;
+		if (source->GetLevel() - target->GetLevel() < 0) {
+			rise = 0;
+		} else {
+			rise = source->GetLevel() - target->GetLevel();
+		}
+		double scaled = rise / Rule->ElevationIncrement * Rule->ElevationIncrementBonus;
+		double cap = Rule->ElevationBonusCap;
+		if (scaled >= cap) {
+			scaled = Rule->ElevationBonusCap;
+		}
+		int height = LEVEL_LEPTON_H * rise;
+		int lift = (int)scaled << 8;
+		return((int)fastmath::sqrt((double)(lift * lift + height * height)));
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// The extra weapon range against the given object for standing above it, in leptons; 0 unless both
+/// are on the ground.
+/// </summary>
+int TechnoClass::Elevation_Range_Bonus(ObjectClass * object) const // RA2: not in TibSun, at 0x6C4A70
+{
+	if (On_Ground() && object->On_Ground()) {
+		Cell here = Center_Coord().As_Cell();
+		Cell there = object->Center_Coord().As_Cell();
+		CellClass * source = &Map[here];
+		CellClass * target = &Map[there];
+		int rise;
+		if (source->GetLevel() - target->GetLevel() < 0) {
+			rise = 0;
+		} else {
+			rise = source->GetLevel() - target->GetLevel();
+		}
+		double scaled = rise / Rule->ElevationIncrement * Rule->ElevationIncrementBonus;
+		double cap = Rule->ElevationBonusCap;
+		if (scaled >= cap) {
+			scaled = Rule->ElevationBonusCap;
+		}
+		return((int)scaled << 8);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// RA2: helpers of the weapon range check below (RA2 inlines them; their layers decide what stays inline).
+/// </summary>
+static inline int Distance_3D(Coord const & a, Coord const & b)
+{
+	Point3D delta = a - b;
+	double y = delta.Y;
+	double z = delta.Z;
+	double x = delta.X;
+	return((int)fastmath::sqrt(x * x + z * z + y * y));
+}
+
+static inline BuildingClass * As_Building(AbstractClass * target)
+{
+	if (target->Fetch_RTTI() == RTTI_BUILDING) {
+		return((BuildingClass *)target);
+	}
+	return(NULL);
+}
+
+static inline int Length_3D(Point3D const & delta)
+{
+	return((int)fastmath::sqrt((double)delta.X * delta.X + ((double)delta.Y * delta.Y + (double)delta.Z * delta.Z)));
+}
+
+static inline int Length_XY(Point2D const & point)
+{
+	return((int)fastmath::sqrt((double)point.X * point.X + (double)point.Y * point.Y));
+}
+
+static inline Point2D Coord_XY(Point3D const & coord)
+{
+	return(Point2D(coord.X, coord.Y));
+}
+
+static inline int Bridge_Height(Coord const & coord)
+{
+	return(Map.Get_Height_GL(coord) + BRIDGE_LEPTON_HEIGHT);
+}
+
+
+/// <summary>
+/// Whether the weapon fired from the given coordinate reaches the target (TibSun's TechnoTypeClass::In_Range,
+/// with RA2's air and elevation range bonuses, minimum range and the bridge check).
+/// </summary>
+bool TechnoClass::In_Range(Coord const * coord, AbstractClass * target, WeaponTypeClass const * weapon) const // RA2: not in TibSun, at 0x6C4BB0
+{
+	if (target != NULL && weapon != NULL) {
+		int range = weapon->Range;
+		if (range == -512) {
+			return(true);
+		}
+		if (target->In_Air()) {
+			range += Techno_Type_Class()->AirRangeBonus;
+		}
+		BulletTypeClass const * bullet = weapon->Bullet;
+		int ground_range = range;
+		if (bullet->SubjectToElevation) {
+			ground_range = Elevation_Range_Bonus_3D((ObjectClass *)target) + range;
+		}
+		Coord tcoord = target->Center_Coord();
+		int minrange = weapon->MinimumRange;
+		if (minrange != 0 && Distance_3D(*coord, tcoord) < minrange) {
+			return(false);
+		}
+		if (bullet->IsArcing) {
+			Point3D delta = tcoord - *coord;
+			int dist = Length_XY(Coord_XY(delta));
+			int arcrange = range;
+			if (bullet->SubjectToElevation) {
+				arcrange = Elevation_Range_Bonus((ObjectClass *)target) + range;
+			}
+			if (dist > arcrange) {
+				return(false);
+			}
+			double gravity = weapon->Bullet->IsFloater ? Get_Floater_Gravity() : Rule->Gravity;
+			int speed = Calculate_Projectile_Speed(arcrange, gravity);
+			if (!Is_Projectile_Trajectory_Valid(speed, dist, delta.Z, gravity)) {
+				return(false);
+			}
+			if (Map[tcoord].IsUnderBridge && tcoord.Z - coord->Z >= LEVEL_LEPTON_H * 3) {
+				return(false);
+			}
+			bool clear = TrajectoryHelper::FindFirstImpenetrableObstacle(*coord, tcoord, weapon, House) == NULL;
+			return(clear);
+		} else {
+			BuildingClass * building = As_Building(target);
+			if (building != NULL) {
+				ground_range += (building->Class->Height(false) + building->Class->Width()) * 64;
+			}
+			bool inrange;
+			if (Fetch_RTTI() != RTTI_AIRCRAFTTYPE) { // RA2: compares with the aircraft type, so every object measures in 3D
+				inrange = Length_3D(*coord - tcoord) <= ground_range;
+			} else {
+				inrange = Length_XY(Coord_XY(*coord) - Coord_XY(tcoord)) <= ground_range;
+			}
+			if (inrange) {
+				if (Map[*coord].IsUnderBridge) {
+					int height = Bridge_Height(*coord);
+					if (coord->Z < height && tcoord.Z >= height) {
+						return(false);
+					}
+				}
+				bool clear = TrajectoryHelper::FindFirstImpenetrableObstacle(*coord, tcoord, weapon, House) == NULL;
+				return(clear);
+			}
+		}
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// Whether the target is within the area-fire weapon's warhead spread (less its inset) of this object, in cells.
+/// </summary>
+bool TechnoClass::TriggersCellInset(AbstractClass * target) // RA2: not in TibSun, at 0x6C4F50
+{
+	if (IsAreaFire()) {
+		WarheadTypeClass const * warhead = GetDeployWeapon()->Weapon->WarheadPtr;
+		if (warhead != NULL) {
+			float range = warhead->SpreadFactor;
+			range -= warhead->CellInset;
+			Cell here = Center_Coord().As_Cell();
+			Cell there = target->Center_Coord().As_Cell();
+			Cell delta = here - there;
+			if ((short)delta.Length() <= range) {
+				return(true);
+			}
+		}
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// Whether the weapon this object would use against the target reaches it.
+/// </summary>
+bool TechnoClass::IsCloseEnoughToAttack(AbstractClass * target) const // RA2: not in TibSun, at 0x6C5070
+{
+	return(In_Range(target, What_Weapon_Should_I_Use(target)));
+}
+
 
 
 
@@ -1801,11 +2002,40 @@ bool TechnoClass::In_Range(AbstractClass * target, int which) const
 	}
 
 	Coord coord = Center_Coord();
+	WeaponTypeClass * weapon = Get_Class_Weapon_Data(which)->Weapon; // RA2
+	if (weapon != NULL && weapon->CellRangefinding) { // RA2: fires from the centre of its cell
+		coord = Map[Center_Coord().As_Cell()].Center_Coord(); // RA2
+	}
 	if (In_Air()) {
 		coord.Z = target->Center_Coord().Z;
 	}
 
-	return(TClass->In_Range(coord, target, Get_Class_Weapon_Data(which)->Weapon));
+	return(In_Range(&coord, target, weapon)); // RA2
+}
+
+/// <summary>
+/// Whether the target is in range of the secondary weapon when that one is never chosen on its own, else
+/// of the weapon this object would use against it.
+/// </summary>
+bool TechnoClass::InAuxiliarySearchRange(AbstractClass * target) const // RA2: not in TibSun, at 0x6C51A0
+{
+	int which = GetSecondaryWeaponIndex();
+	WeaponDataStruct const * wdata = Get_Class_Weapon_Data(which);
+	if (wdata != NULL && wdata->Weapon != NULL && wdata->Weapon->NeverUse) {
+		return(In_Range(target, which));
+	} else {
+		return(IsCloseEnoughToAttack(target));
+	}
+}
+
+
+/// <summary>
+/// Whether the weapon this object would use against the cell at the coordinate reaches it.
+/// </summary>
+bool TechnoClass::IsCloseEnoughToAttackCoords(Coord const & coord) const // RA2: not in TibSun, at 0x6C5200
+{
+	AbstractClass * cell = &Map[coord];
+	return(In_Range(cell, What_Weapon_Should_I_Use(cell)));
 }
 
 
