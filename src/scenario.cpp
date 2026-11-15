@@ -3358,32 +3358,39 @@ static inline Point2D Header_Point(CellClass & cell)
 /// <param name="mplayer">Is the scenario being saved as a multiplayer map?</param>
 bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 {
-	static char const * const BASIC = "Basic";
+	static char const * VARIABLE_NAMES = "VariableNames"; // RA2: RA2's form
+	static char const * BASIC = "Basic"; // RA2: as above
 	ini.Clear(BASIC);
-
 	ini.Clear(BASIC, "CivEvac");
-
-
-	Special.Write_INI(ini); // RA2: no BriefingText (TibSun's use does not compile against RA2's declaration)
-
-	ini.Put_String(BASIC, "NextScenario", NextScenarioName); // RA2: no SpeechSide, RequiredAddOn (not in RA2's layout)
-	ini.Put_String(BASIC, "AltNextScenario", AltNextScenarioName);
-	ini.Put_Int(BASIC, "NewINIFormat", 4); // RA2: no Description (TibSun's use does not compile against RA2's declaration)
+	if (strlen(Scen->BriefingCSF) != 0) { // RA2: as above
+		ini.Put_String(BASIC, "BriefingCSF", Scen->BriefingCSF); // RA2: as above
+	}
+	if (strlen(Scen->UIName) != 0) { // RA2: as above
+		ini.Put_String(BASIC, "UIName", Scen->UIName); // RA2: as above
+	}
+	Special.Write_INI(ini); // RA2: as above
+	ini.Put_String(BASIC, "NextScenarioName", NextScenarioName); // RA2: as above
+	ini.Put_String(BASIC, "AltNextScenarioName", AltNextScenarioName); // RA2: as above
+	ini.Put_UnicodeString(BASIC, "Name", Description); // RA2: as above
+	ini.Put_Int(BASIC, "NewINIFormat", 4); // RA2: as above
 	ini.Put_Int(BASIC, "CarryOverCap", CarryOverCap / 100);
-	ini.Put_Bool(BASIC, "EndOfGame", IsEndOfGame);
-	ini.Put_Bool(BASIC, "SkipScore", IsSkipScore);
-	ini.Put_Bool(BASIC, "OneTimeOnly", IsOneTimeOnly);
-	ini.Put_Bool(BASIC, "SkipMapSelect", IsNoMapSel);
+	ini.Put_Bool(BASIC, "IsEndOfGame", IsEndOfGame); // RA2: as above
+	ini.Put_Bool(BASIC, "IsSkipScore", IsSkipScore); // RA2: as above
+	ini.Put_Bool(BASIC, "IsOneTimeOnly", IsOneTimeOnly); // RA2: as above
+	ini.Put_Bool(BASIC, "IsNoMapSel", IsNoMapSel); // RA2: as above
 	ini.Put_Bool(BASIC, "Official", true);
 	ini.Put_Bool(BASIC, "IgnoreGlobalAITriggers", IsIgnoreGlobalAITriggers);
-	ini.Put_Bool(BASIC, "TruckCrate", IsTruckCrate);
+	ini.Put_Bool(BASIC, "IsTruckCrate", IsTruckCrate); // RA2: as above
 	ini.Put_Bool(BASIC, "TrainCrate", IsTrainCargo);
 	ini.Put_Int(BASIC, "Percent", Percent);
 	ini.Put_TechnoType_List(BASIC, "AllowableUnits", AllowableUnits);
 	ini.Put_IntList(BASIC, "AllowableUnitMaximums", AllowableUnitMaximums);
+	ini.Put_ThemeType(BASIC, "TransitTheme", TransitTheme); // RA2: as above
 
 	if (!mplayer) {
-		ini.Put_HousesType(BASIC, "Player", PlayerPtr->Class->House);
+		char player[32]; // RA2: as above
+		strcpy(player, PlayerPtr->IniName); // RA2: as above
+		ini.Put_String(BASIC, "Player", player); // RA2: as above
 		ini.Put_VQType(BASIC, "Intro", IntroMovie);
 		ini.Put_VQType(BASIC, "Brief", BriefMovie);
 		ini.Put_VQType(BASIC, "Win", WinMovie);
@@ -3391,42 +3398,69 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 		ini.Put_VQType(BASIC, "Action", ActionMovie);
 		ini.Put_VQType(BASIC, "PostScore", PostScoreMovie);
 		ini.Put_VQType(BASIC, "PreMapSelect", PreMapSelectMovie);
-		ini.Put_ThemeType(BASIC, "Theme", TransitTheme);
-		ini.Put_Float(BASIC, "CarryOverMoney", CarryOverPercent);
+		ini.Put_Float(BASIC, "CarryOverPercent", CarryOverPercent); // RA2: as above
 		ini.Put_Bool(BASIC, "TimerInherit", IsInheritTimer);
-		ini.Put_Bool(BASIC, "FillSilos", IsMoneyTiberium);
+		ini.Put_Bool(BASIC, "IsMoneyTiberium", IsMoneyTiberium); // RA2: as above
 		ini.Put_Int(BASIC, "StartingDropships", StartingDropships);
-		ini.Put_Int(BASIC, "HomeCell", Home);
-		ini.Put_Int(BASIC, "AltHomeCell", AltHome);
+		ini.Put_Int(BASIC, "Home", Home); // RA2: as above
+		ini.Put_Int(BASIC, "AltHome", AltHome); // RA2: as above
 	}
-
-	ini.Put_Int(BASIC, "MultiplayerOnly", IsMultiplayerOnly);
+	ini.Put_Int(BASIC, "IsMultiplayerOnly", IsMultiplayerOnly); // RA2: as above
 	ini.Put_Bool(BASIC, "TiberiumGrowthEnabled", IsTibGrowth);
 	ini.Put_Bool(BASIC, "VeinGrowthEnabled", IsVeinGrowth);
 	ini.Put_Bool(BASIC, "IceGrowthEnabled", IsIceGrowth);
-	ini.Put_Bool(BASIC, "TiberiumDeathToVisceroid", IsTiberiumDeathToVisceroid);
-	ini.Put_Bool(BASIC, "FreeRadar", IsFreeRadar);
-
+	ini.Put_Bool(BASIC, "IsTiberiumDeathToVisceroid", IsTiberiumDeathToVisceroid); // RA2: as above
+	ini.Put_Bool(BASIC, "IsFreeRadar", IsFreeRadar); // RA2: as above
 	ini.Put_Int(BASIC, "InitTime", InitTime);
 
-	Write_Local_INI(ini);
+	ini.Clear(VARIABLE_NAMES); // RA2: as above
+	for (int index = 0; index < 50; index++) { // RA2: as above
+		ScenarioClass::ScenarioFlagType const &variable = LocalFlags[index]; // RA2: as above
+		if (variable.VariableName[0] != 0) { // RA2: as above
+			char entry[12]; // RA2: as above
+			char value[128]; // RA2: as above
+			wsprintfA(entry, "%d", index); // RA2: as above
+			wsprintfA(value, "%s,%d", (char *)&variable, variable.Value != 0); // RA2: as above
+			ini.Put_String(VARIABLE_NAMES, entry, value); // RA2: as above
+		}
+	}
 
-	char const * const LIGHTING = "Lighting";
-	ini.Clear(LIGHTING);
-	ini.Put_Float(LIGHTING, "Ambient", ((double)AmbientLight) / 100.0);
-	ini.Put_Float(LIGHTING, "Red",     ((double)RedTint)      / 100.0);
-	ini.Put_Float(LIGHTING, "Green",   ((double)GreenTint)    / 100.0);
-	ini.Put_Float(LIGHTING, "Blue",    ((double)BlueTint)     / 100.0);
-	ini.Put_Float(LIGHTING, "Ground",  ((double)GroundLight)  / NORMAL_LIGHT);
-	ini.Put_Float(LIGHTING, "Level",   ((double)LevelLight)   / NORMAL_LIGHT);
-	ini.Put_Float(LIGHTING, "IonAmbient", ((double)IonAmbientLight) / 100.0);
-	ini.Put_Float(LIGHTING, "IonRed",     ((double)IonRedTint)      / 100.0);
-	ini.Put_Float(LIGHTING, "IonGreen",   ((double)IonGreenTint)    / 100.0);
-	ini.Put_Float(LIGHTING, "IonBlue",    ((double)IonBlueTint)     / 100.0);
-	ini.Put_Float(LIGHTING, "IonGround",  ((double)IonGroundLight)  / NORMAL_LIGHT);
-	ini.Put_Float(LIGHTING, "IonLevel",   ((double)IonLevelLight)   / NORMAL_LIGHT);
+	ini.Put_Time("Ranking", "ParTimeEasy", ParTimeEasy); // RA2: as above
+	ini.Put_Time("Ranking", "ParTimeMedium", ParTimeMedium); // RA2: as above
+	ini.Put_Time("Ranking", "ParTimeDifficult", ParTimeDifficult); // RA2: as above
+	ini.Put_String("Ranking", "UnderParTitle", UnderParTitle); // RA2: as above
+	ini.Put_String("Ranking", "UnderParMessage", UnderParMessage); // RA2: as above
+	ini.Put_String("Ranking", "OverParTitle", OverParTitle); // RA2: as above
+	ini.Put_String("Ranking", "OverParMessage", OverParMessage); // RA2: as above
+
+	ini.Clear("Lighting"); // RA2: as above
+	double ambient = AmbientLight * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "Ambient", ambient); // RA2: as above
+	double red = RedTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "Red", red); // RA2: as above
+	double green = GreenTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "Green", green); // RA2: as above
+	double blue = BlueTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "Blue", blue); // RA2: as above
+	double ground = GroundLight * 0.001; // RA2: as above
+	ini.Put_Float("Lighting", "Ground", ground); // RA2: as above
+	double level = LevelLight * 0.001; // RA2: as above
+	ini.Put_Float("Lighting", "Level", level); // RA2: as above
+	double ionambient = IonAmbientLight * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "IonAmbientLight", ionambient); // RA2: as above
+	double ionred = IonRedTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "IonRedTint", ionred); // RA2: as above
+	double iongreen = IonGreenTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "IonGreenTint", iongreen); // RA2: as above
+	double ionblue = IonBlueTint * 0.01; // RA2: as above
+	ini.Put_Float("Lighting", "IonBlueTint", ionblue); // RA2: as above
+	double ionground = IonGroundLight * 0.001; // RA2: as above
+	ini.Put_Float("Lighting", "IonGroundLight", ionground); // RA2: as above
+	double ionlevel = IonLevelLight * 0.001; // RA2: as above
+	ini.Put_Float("Lighting", "IonLevelLight", ionlevel); // RA2: as above
 	return(true);
 }
+
 
 
 /// <summary>
