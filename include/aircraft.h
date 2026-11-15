@@ -82,6 +82,7 @@ class AircraftClass : public FootClass, public IFlyControl
 		virtual void Set_Mission(MissionType mission) override; // RA2: 0x41B120
 		virtual void QueueMission(MissionType mission, bool start) override; // RA2: 0x41B160
 		virtual void Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) override; // RA2: 0x41B1A0
+		virtual BuildingClass * TryNearestDockBuilding(TypeList<BuildingTypeClass *> * list, unsigned unk2, unsigned unk3) const override; // RA2: 0x41B1E0
 
 		virtual void Init(void) override;
 		virtual void Detach(AbstractClass const * target, bool all = true) override;

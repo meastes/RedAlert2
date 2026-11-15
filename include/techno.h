@@ -667,7 +667,7 @@ class TechnoClass :	public RadioClass,
 		virtual bool IsUnderEMP(void) const; // RA2
 		virtual bool IsParalyzed(void) const; // RA2
 		// RA2: vtable +0x32C is a virtual neither Tiberian Sun nor Yuri's Revenge has; it returns whether a timer at +0x154 is still running.
-		virtual bool Unknown_Virtual_32C(void) const;
+		virtual bool Unknown_Virtual_32C(void) const {return(IronCurtainTimer.Value() > 0);} // RA2: inline (one copy, 0x41B390)
 		virtual bool CanCheer(void) const; // RA2
 		virtual void Cheer(void); // RA2
 		virtual int Get_Max_Speed(void) const;
@@ -745,6 +745,8 @@ class TechnoClass :	public RadioClass,
 		virtual void Do_Cloak(bool silent=false);
 		virtual int Apparent_Brightness(int brightness = 1000) const;
 		virtual unsigned DisguiseAs(AbstractClass * target); // RA2
+		virtual bool IsDisguised(void) const override {return(Disguised);} // RA2: inline (one copy, 0x41B410)
+		virtual bool IsDisguisedAs(HouseClass * house) const override {return(Disguised);} // RA2: inline (one copy, 0x41B420)
 		virtual void ClearDisguise(void); // RA2
 		virtual bool Is_Ready_To_Random_Animate(void) const;
 		virtual bool Random_Animate(void) {return(false);}

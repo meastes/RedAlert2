@@ -4160,6 +4160,7 @@ void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0
 
 
 
+
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4170,12 +4171,33 @@ void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in
 
 
 
+
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
 {
-	if ((Mission != MISSION_RETREAT && (Mission < MISSION_PARADROP_APPROACH || Mission > MISSION_PARADROP_OVERFLY)) || mission == MISSION_RETREAT || (mission >= MISSION_PARADROP_APPROACH && mission <= MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
-		BASECLASS::Override_Mission(mission, tarcom, navcom);
+	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
+		return; // RA2: as above
 	}
+	BASECLASS::Override_Mission(mission, tarcom, navcom); // RA2: as above
 }
+
+/// <summary>
+/// An airport-bound aircraft keeps the dock it is heading for while that one still takes it; otherwise
+/// the nearest suitable dock becomes its new one.
+/// </summary>
+BuildingClass * AircraftClass::TryNearestDockBuilding(TypeList<BuildingTypeClass *> * list, unsigned unk2, unsigned unk3) const // RA2: not in TibSun, at 0x41B1E0
+{
+	AircraftClass * self = (AircraftClass *)this;
+	if (Class->IsAirportBound && DockNowHeadingTo != NULL) {
+		if (self->Transmit_Message(RADIO_CAN_LOAD, DockNowHeadingTo) != RADIO_ROGER) {
+			self->DockNowHeadingTo = NULL;
+		} else {
+			return(DockNowHeadingTo);
+		}
+	}
+	self->DockNowHeadingTo = BASECLASS::TryNearestDockBuilding(list, 0, unk3);
+	return(DockNowHeadingTo);
+}
+
 
 
 
