@@ -2769,26 +2769,28 @@ FacingType AircraftClass::Desired_Load_Dir(ObjectClass * object, Cell & moveto) 
  *=============================================================================================*/
 MoveType AircraftClass::Can_Enter_Cell(CellClass const * cell, FacingType, int cell_height, CellClass const *, bool) const
 {
-	if (Team && Team->Is_Leaving_Map() && !Map.In_Local_Radar(cell)) return(MOVE_OK);
-
-	ObjectClass const * occupier = cell->Cell_Occupier();
-
-	if (occupier == NULL ||
-		!occupier->Is_Techno() ||
-		((TechnoClass *)occupier)->House->Is_Ally(House) ||
-		(((TechnoClass *)occupier)->Cloak != CLOAKED &&
-			(ScenarioInit == 0 && (occupier->RTTI != RTTI_BUILDING || !((BuildingClass*)occupier)->Class->IsInvisible)) )
-		) {
-
-		if (!cell->Is_Clear_To_Move(SPEED_WINGED, false, false)) return(MOVE_NO);
+	if (Team != 0 && Team->Is_Leaving_Map() && !Map.In_Local_Radar(cell, 1)) { // RA2: RA2's form
+		return(MOVE_OK); // RA2: as above
 	}
-
-	if (Session.Type == GAME_NORMAL && IsOwnedByPlayer && !IsALoaner && Map.Is_Shrouded(cell->Center_Coord())) {
+	TechnoClass *occupier = (TechnoClass *)cell->Cell_Occupier(); // RA2: as above
+	bool active; // RA2: as above
+	if (occupier != 0) { // RA2: as above
+		active = (occupier->AbstractFlags & 1); // RA2: as above
+	}
+	if ((occupier == 0 || !active || occupier->House->Is_Ally(House) // RA2: as above
+		 || (occupier->Cloak != 2 && ScenarioInit == 0 // RA2: as above
+			 && (occupier->Fetch_RTTI() != RTTI_BUILDING || !((BuildingClass *)occupier)->Class->IsInvisible))) // RA2: as above
+		&& !cell->Is_Clear_To_Move(SPEED_WINGED, 0, 0, -1, MZONE_NORMAL, -1, 1)) { // RA2: as above
 		return(MOVE_NO);
 	}
-
+	if (Session.Type == 0 && IsOwnedByPlayer && !IsALoaner) { // RA2: as above
+		if (Map.Is_Shrouded(cell->Center_Coord())) { // RA2: as above
+			return(MOVE_NO); // RA2: as above
+		}
+	}
 	return(MOVE_OK);
 }
+
 
 
 /***********************************************************************************************
@@ -4151,6 +4153,7 @@ void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0
 
 
 
+
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4167,6 +4170,7 @@ void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in
 
 
 
+
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4174,6 +4178,7 @@ void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom
 	}
 	BASECLASS::Override_Mission(mission, tarcom, navcom); // RA2: as above
 }
+
 
 
 
