@@ -26,10 +26,10 @@ void AudioResumeAllEvents(void);
 void Sound_Service(void);
 void Sound_Pause_All(void);
 void Sound_Resume_All(void);
-void Speech_Init(void);
+int Speech_Init(void); // RA2: returns int (0x7156D0)
 void Speech_Shutdown(void);
 void Speech_Service(void);
-void Aux_Stream_Init(void);
+int Aux_Stream_Init(void); // RA2: returns int (0x715F10)
 void Aux_Stream_Shutdown(void);
 void Aux_Stream_Pause(void);
 void Aux_Stream_Resume(void);
