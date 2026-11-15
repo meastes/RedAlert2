@@ -5488,7 +5488,7 @@ address,size,evidence
 0x006E4700,32,"code of src/terrain.cpp, matched: its code occurs at 14 addresses; placed by the gap the other functions of the file leave"
 0x006E4720,128,"code of src/terrain.cpp, matched"
 0x006E47A0,48,"code of src/terrain.cpp, matched"
-0x006E47D0,,"inferred: target of the call at 0x006E34B0 in matched src/terrain.cpp; size not known"
+0x006E47D0,304,"code of src/terrain.cpp, matched"
 0x006E4900,16,"code of src/terrain.cpp, matched: its code occurs at 2 addresses; placed by the gap the other functions of the file leave"
 0x006E4910,480,"code of src/terrain.cpp, matched"
 0x006E4AF0,16,"code of src/terrain.cpp, matched: too short for the match rule"
