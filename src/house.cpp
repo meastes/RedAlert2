@@ -642,9 +642,10 @@ BSTR STDMETHODCALLTYPE HouseClass::Name(void)
  *=============================================================================================*/
 LONG STDMETHODCALLTYPE HouseClass::Available_Money(void)
 {
-	float scale = Class->IncomeMult; // RA2: as above
+	float scale = Class->IncomeMult; // RA2: RA2's form
 	return (long)(Tiberium.Get_Total_Value() * scale + Credits); // RA2: as above
 }
+
 
 
 
@@ -1968,7 +1969,7 @@ void HouseClass::Super_Weapon_Handler(void)
 	**	the graphic needs changing for the special weapon and updates the
 	**	sidebar as necessary.
 	*/
-	for (int index = 0; index < SuperWeapon.Count(); index++) { // RA2: as above
+	for (int index = 0; index < SuperWeapon.Count(); index++) { // RA2: RA2's form
 		SuperClass *super = (SuperClass *)SuperWeapon[index]; // RA2: as above
 		if (super->Is_Present() && super->AI(this == PlayerPtr) && // RA2: as above
 			this == PlayerPtr) { // RA2: as above
@@ -1977,6 +1978,7 @@ void HouseClass::Super_Weapon_Handler(void)
 		}
 	}
 }
+
 
 
 
@@ -5219,7 +5221,7 @@ void HouseClass::Production_Begun(TechnoClass const * product)
  *=============================================================================================*/
 void HouseClass::Tracking_Remove(TechnoClass const * techno)
 {
-	((TechnoClass *)techno)->CountedAsOwned = false; // RA2: as above
+	((TechnoClass *)techno)->CountedAsOwned = false; // RA2: RA2's form
 	if (!techno->TClass->IsInsignificant) { // RA2: as above
 		switch ((RTTIType)techno->RTTI) {
 		case RTTI_BUILDING:
@@ -5254,6 +5256,7 @@ void HouseClass::Tracking_Remove(TechnoClass const * techno)
 
 
 
+
 /***********************************************************************************************
  * HouseClass::Tracking_Add -- Informs house of new inventory item.                            *
  *                                                                                             *
@@ -5272,7 +5275,7 @@ void HouseClass::Tracking_Remove(TechnoClass const * techno)
  *=============================================================================================*/
 void HouseClass::Tracking_Add(TechnoClass const * techno)
 {
-	((TechnoClass *)techno)->CountedAsOwned = true; // RA2: as above
+	((TechnoClass *)techno)->CountedAsOwned = true; // RA2: RA2's form
 	if (!techno->Techno_Type_Class()->IsInsignificant) { // RA2: as above
 		switch (techno->Fetch_RTTI()) {
 		case 6: { // RA2: as above
@@ -5313,6 +5316,7 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
 		}
 	}
 }
+
 
 
 
@@ -7508,7 +7512,7 @@ void HouseClass::Mark_Scouted(HouseClass const * house)
 /// This routine lays out a base plan for the house, unless the scenario has already supplied
 /// one of its own.
 /// </summary>
-void HouseClass::Plan_Naval_Yard_Path(int node) // RA2: as above
+void HouseClass::Plan_Naval_Yard_Path(int node) // RA2: RA2's form
 {
 	Cell center = Center.As_Cell(); // RA2: as above
 	int zone = Map.Get_Cell_Zone(center, MZONE_NORMAL, false); // RA2: as above
@@ -7614,7 +7618,8 @@ void HouseClass::Plan_Naval_Yard_Path(int node) // RA2: as above
 }
 
 
-void HouseClass::Ensure_Base_Nodes(void) // RA2: as above
+
+void HouseClass::Ensure_Base_Nodes(void) // RA2: RA2's form
 {
 	if (!Is_Human_Player() && Session.Type != GAME_NORMAL) { // RA2: as above
 		Computer_Paranoid();
@@ -7626,6 +7631,7 @@ void HouseClass::Ensure_Base_Nodes(void) // RA2: as above
 		ScenarioInit = save_init;
 	}
 }
+
 
 
 /// <summary>
@@ -7978,19 +7984,22 @@ int HouseClass::Base_Cell_Weight_By_Distance(HouseClass const & house, Cell cons
 /// <returns>Returns with the weight of the cell; the lower the better.</returns>
 int HouseClass::Base_Cell_Weight_By_Defense_Coverage(HouseClass const & house, Cell const & cell, int tie_breaker, int context)
 {
-	int value = house.BaseAreaMap[(cell.X - house.Base.BaseAreaRect.X) + (cell.Y - house.Base.BaseAreaRect.Y) * house.Base.BaseAreaRect.Width];
-	int offset = 0;
+	BaseClass const &base = house.Base; // RA2: RA2's form
+	int value = house.BaseAreaMap[cell.X - base.BaseAreaRect.X + (cell.Y - base.BaseAreaRect.Y) * base.BaseAreaRect.Width]; // RA2: as above
+	int diff = 0; // RA2: as above
 	if (context != FACING_NONE) {
-		int x = cell.X - house.Base.PlacementCenter.X;
-		int y = cell.Y - house.Base.PlacementCenter.Y;
-		DirType dir = DirType(fastmath::atan2((double)-y, (double)x));
-		offset = abs(DIR_STEP_8 * context - dir.As_Dir256());
-		if (offset >= DIR_STEP_2) {
-			offset = DIR_MAX - offset;
+		Point2D d; // RA2: as above
+		d.X = cell.X - base.PlacementCenter.X; // RA2: as above
+		d.Y = cell.Y - base.PlacementCenter.Y; // RA2: as above
+		DirType dir = DirType(fastmath::atan2((double)-d.Y, (double)d.X)); // RA2: as above
+		diff = abs(context * 32 - dir.As_Dir256()); // RA2: as above
+		if (diff >= 128) { // RA2: as above
+			diff = 255 - diff; // RA2: as above
 		}
 	}
-	return(tie_breaker + 1000 * (offset + (value * 128)));
+	return tie_breaker + (value * 128 + diff) * 1000; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -8776,7 +8785,7 @@ void HouseClass::AI_Build_Wall(void)
 /// </summary>
 void HouseClass::Recalc_Power_Drain(void)
 {
-	bool was_low = Power_Fraction() < 1.0; // RA2: as above
+	bool was_low = Power_Fraction() < 1.0; // RA2: RA2's form
 	RecalcPower = false;
 	Power = 0;
 	Drain = 0;
@@ -8804,6 +8813,7 @@ void HouseClass::Recalc_Power_Drain(void)
 
 
 
+
 /// <summary>
 /// Determines whether the radar map should be available.
 /// This routine is called after anything that might switch the radar on or off -- a change
@@ -8815,7 +8825,7 @@ void HouseClass::Recalc_Radar_Availability(void)
 	RecalcRadar = false;
 
 	if (this == PlayerPtr) {
-		bool radar = false; // RA2: as above
+		bool radar = false; // RA2: RA2's form
 		if (RadarBlackoutTimer == 0) { // RA2: as above
 			if (Scen->IsFreeRadar) {
 				radar = true; // RA2: as above
@@ -8841,7 +8851,8 @@ void HouseClass::Recalc_Radar_Availability(void)
 
 
 
-void HouseClass::Update_Spy_Satellite(void) // RA2: as above
+
+void HouseClass::Update_Spy_Satellite(void) // RA2: RA2's form
 {
 	RecalcRadar = false;
 	if (this == PlayerPtr) {
@@ -8865,6 +8876,7 @@ void HouseClass::Update_Spy_Satellite(void) // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9006,7 +9018,7 @@ void HouseClass::Clear_Anger(HouseClass const * house)
 /// </summary>
 void HouseClass::Recalc_Threat_Regions(void)
 {
-	for (int region = 0; region < 0x4204; region++) { // RA2: as above
+	for (int region = 0; region < 0x4204; region++) { // RA2: RA2's form
 		Regions[region].Reset_Threat(); // RA2: as above
 	}
 	for (int index = Technos.Count() - 1; index >= 0; index--) { // RA2: as above
@@ -9039,6 +9051,7 @@ void HouseClass::Recalc_Threat_Regions(void)
 
 
 
+
 /// <summary>
 /// Counts the teams of a given type that this house owns.
 /// This routine is used by the team creation logic so that a team type's allowed count is
@@ -9067,7 +9080,7 @@ int HouseClass::Owned_Team_Count(TeamTypeClass const * teamtype) const
 /// <returns>bool; Can the team be created by this house?</returns>
 bool HouseClass::Can_Create_Team(TeamTypeClass const * teamtype)
 {
-	if (teamtype == NULL || teamtype->TaskForce == NULL) { // RA2: as above
+	if (teamtype == NULL || teamtype->TaskForce == NULL) { // RA2: RA2's form
 		return(false);
 	}
 	for (int index = 0; index < teamtype->TaskForce->ClassCount; index++) { // RA2: as above
@@ -9091,6 +9104,7 @@ bool HouseClass::Can_Create_Team(TeamTypeClass const * teamtype)
 	}
 	return(true);
 }
+
 
 
 
@@ -9170,7 +9184,7 @@ void HouseClass::Update_Production_Mode(RTTIType type)
 /// </summary>
 void HouseClass::AI_Super_Weapons(void)
 {
-	Cell target; // RA2: as above
+	Cell target; // RA2: RA2's form
 	if (!Is_Human_Player()) {
 		for (int index = 0; index < SuperWeapon.Count(); index++) { // RA2: as above
 			SuperClass * super = SuperWeapon[index]; // RA2: as above
@@ -9218,6 +9232,7 @@ void HouseClass::AI_Super_Weapons(void)
 
 
 
+
 /// <summary>
 /// Handles the computer's use of the multi-missile super weapon.
 /// The enemy structure standing in the most threatening spot is chosen as the target. A
@@ -9226,7 +9241,7 @@ void HouseClass::AI_Super_Weapons(void)
 /// </summary>
 void HouseClass::AI_Multi_Missile(SuperClass * super)
 {
-	if (Enemy != -1) { // RA2: as above
+	if (Enemy != -1) { // RA2: RA2's form
 		Cell cell = CELL_NONE; // RA2: as above
 		if (PreferredTarget == 1) { // RA2: as above
 			cell = Best_Super_Weapon_Target(); // RA2: as above
@@ -9241,6 +9256,7 @@ void HouseClass::AI_Multi_Missile(SuperClass * super)
 
 
 
+
 /// <summary>
 /// Handles the computer's use of the hunter seeker super weapon.
 /// The drone hunts down a victim of its own choosing, so this routine merely turns it
@@ -9248,10 +9264,11 @@ void HouseClass::AI_Multi_Missile(SuperClass * super)
 /// </summary>
 void HouseClass::AI_Hunter_Seeker(SuperClass * super)
 {
-	if (Enemy != -1) { // RA2: as above
+	if (Enemy != -1) { // RA2: RA2's form
 		Place_Special_Blast((SuperWeaponType)SuperWeapon.ID(super), CELL_NONE); // RA2: as above
 	}
 }
+
 
 
 
@@ -9263,7 +9280,7 @@ void HouseClass::AI_Hunter_Seeker(SuperClass * super)
 /// </summary>
 void HouseClass::AI_Chem_Missile(SuperClass * super)
 {
-	if (Enemy != -1) { // RA2: as above
+	if (Enemy != -1) { // RA2: RA2's form
 		Cell cell = CELL_NONE; // RA2: as above
 		if (PreferredTarget == 1) { // RA2: as above
 			cell = Best_Super_Weapon_Target(); // RA2: as above
@@ -9278,9 +9295,11 @@ void HouseClass::AI_Chem_Missile(SuperClass * super)
 
 
 
-void HouseClass::AI_Super_Unused(SuperClass * super) // RA2: as above
+
+void HouseClass::AI_Super_Unused(SuperClass * super) // RA2: RA2's form
 {
 }
+
 
 
 /// <summary>
@@ -9290,7 +9309,7 @@ void HouseClass::AI_Super_Unused(SuperClass * super) // RA2: as above
 /// </summary>
 void HouseClass::AI_Drop_Pods(SuperClass * super)
 {
-	HouseClass * house = (Enemy != -1) ? Houses[Enemy] : this; // RA2: as above
+	HouseClass * house = (Enemy != -1) ? Houses[Enemy] : this; // RA2: RA2's form
 	Cell cell = CELL_NONE; // RA2: as above
 	if (PreferredTarget != 1) { // RA2: as above
 		cell = Threat_Target_Cell(PreferredTarget); // RA2: as above
@@ -9307,6 +9326,7 @@ void HouseClass::AI_Drop_Pods(SuperClass * super)
 
 
 
+
 /// <summary>
 /// Handles the computer's use of the ion cannon super weapon.
 /// This routine rates the enemy's objects by how much their loss would hurt -- engineers,
@@ -9317,7 +9337,7 @@ void HouseClass::AI_Drop_Pods(SuperClass * super)
 /// </summary>
 void HouseClass::AI_Ion_Cannon(SuperClass * super)
 {
-	if (!IonStormClass::Is_Ion_Storm_Active() && Enemy != -1) { // RA2: as above
+	if (!IonStormClass::Is_Ion_Storm_Active() && Enemy != -1) { // RA2: RA2's form
 		Cell cell = CELL_NONE; // RA2: as above
 		if (PreferredTarget == 1) { // RA2: as above
 			cell = Best_Super_Weapon_Target(); // RA2: as above
@@ -9331,6 +9351,7 @@ void HouseClass::AI_Ion_Cannon(SuperClass * super)
 }
 
 
+
 /// <summary>
 /// Handles the computer's use of the chemical missile super weapon.
 /// The enemy structure standing in the most threatening spot is chosen as the target. A
@@ -9338,7 +9359,7 @@ void HouseClass::AI_Ion_Cannon(SuperClass * super)
 /// does not appear to see through it.
 /// </summary>
 
-void HouseClass::AI_Strike_Best_Building(SuperClass * super) // RA2: as above
+void HouseClass::AI_Strike_Best_Building(SuperClass * super) // RA2: RA2's form
 {
 	if (Enemy != -1) { // RA2: as above
 		BuildingClass * best = NULL; // RA2: as above
@@ -9362,6 +9383,7 @@ void HouseClass::AI_Strike_Best_Building(SuperClass * super) // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9696,7 +9718,7 @@ void HouseClass::Enable_Available_Super_Weapons(void)
 	if (IsDefeated) {
 		return;
 	}
-	for (int super_index = 0; super_index < SuperWeapon.Count(); super_index++) { // RA2: as above
+	for (int super_index = 0; super_index < SuperWeapon.Count(); super_index++) { // RA2: RA2's form
 		if (!SuperWeapon[super_index]->Is_Present() || SuperWeapon[super_index]->Is_One_Time()) { // RA2: as above
 			bool from_upgrade = false;
 			int building_index = Buildings.Count() - 1; // RA2: as above
@@ -9731,6 +9753,7 @@ void HouseClass::Enable_Available_Super_Weapons(void)
 
 
 
+
 /// <summary>
 /// Has this house used up the build limit for an object type?
 /// This routine is consulted by the production and sidebar logic so that a limited type
@@ -9742,74 +9765,92 @@ void HouseClass::Enable_Available_Super_Weapons(void)
 /// <returns>bool; Has the limit been used up? An invalid type is always exhausted.</returns>
 bool HouseClass::Is_Build_Limited(TechnoTypeClass const * type) const
 {
-	if (type == NULL) {
-		return(true);
-	} else {
-		int queued = 0;
-		FactoryClass * factory = Fetch_Factory(type->RTTI);
-		if (factory != NULL) {
-			queued = factory->Total(type);
-		}
-
-		switch ((RTTIType)type->RTTI) {
-		case RTTI_UNITTYPE:
-			if (type->BuildLimit <= 0) {
-				if (queued + PUQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) {
-					return(true);
-				}
-			}
-			if (type->BuildLimit > 0) {
-				if (queued + UQuantity.Value(type->Fetch_Heap_ID()) >= type->BuildLimit) {
-					return(true);
-				}
-			}
-			break;
-
-		case RTTI_INFANTRYTYPE: {
-			if (type->BuildLimit <= 0) {
-				if (queued + PIQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) {
-					return(true);
-				}
-			}
-			InfantryTypeClass const * inft = (InfantryTypeClass const *)type;
-			int owned = IQuantity.Value(type->Fetch_Heap_ID());
-			if (inft->IsVehicleThief) {
-				for (int i = 0; i < Units.Count(); i++) {
-					UnitClass * unit = Units[i];
-					if (unit->House == this && unit->EnteredByInfType == type->Fetch_Heap_ID()) {
-						owned++;
-					}
-				}
-			}
-			if (type->BuildLimit > 0) {
-				if (queued + owned >= type->BuildLimit) {
-					return(true);
-				}
-			}
-			break;
-		}
-
-		case RTTI_AIRCRAFTTYPE:
-			if (type->BuildLimit <= 0) {
-				if (queued + PAQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) {
-					return(true);
-				}
-			}
-			if (type->BuildLimit > 0) {
-				if (type != NULL) {
-					if (queued + AQuantity.Value(type->Fetch_Heap_ID()) >= type->BuildLimit) {
-						return(true);
-					}
-				}
-			}
-			break;
-
-		default:
-			break;
-		}
+	if (!type) { // RA2: RA2's form
+		return true; // RA2: as above
 	}
-	return(false);
+	int queued = 0; // RA2: as above
+	bool naval = type->Naval; // RA2: as above
+	FactoryClass * factory = Fetch_Factory(type->Fetch_RTTI(), naval, 0); // RA2: as above
+	if (factory) { // RA2: as above
+		queued = factory->Total(type); // RA2: as above
+	}
+	switch (type->Fetch_RTTI()) { // RA2: as above
+	case 40: // RA2: as above
+		if (type->BuildLimit <= 0) { // RA2: as above
+			if (queued + PUQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		if (type->BuildLimit > 0) { // RA2: as above
+			if (queued + UQuantity.Value(type->Fetch_Heap_ID()) >= type->BuildLimit) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		break; // RA2: as above
+	case 16: { // RA2: as above
+		if (type->BuildLimit <= 0) { // RA2: as above
+			if (queued + PIQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		int owned = IQuantity.Value(type->Fetch_Heap_ID()); // RA2: as above
+		if (((InfantryTypeClass *)type)->IsVehicleThief) { // RA2: as above
+			for (int i = 0; i < Units.Count(); ++i) { // RA2: as above
+				UnitClass * unit = Units[i]; // RA2: as above
+				if (unit->House == this && unit->EnteredByInfType == type->Fetch_Heap_ID()) { // RA2: as above
+					++owned; // RA2: as above
+				}
+			}
+		}
+		if (type->BuildLimit > 0) { // RA2: as above
+			if (queued + owned >= type->BuildLimit) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		break; // RA2: as above
+	}
+	case 7: // RA2: as above
+		if (type->BuildLimit <= 0) { // RA2: as above
+			if (queued + PBQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		if (type->BuildLimit > 0) { // RA2: as above
+			if (queued + BQuantity.Value(type->Fetch_Heap_ID()) >= type->BuildLimit) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		break; // RA2: as above
+	case 3: // RA2: as above
+		if (((AircraftTypeClass *)type)->IsAirportBound) { // RA2: as above
+			int owned = 0; // RA2: as above
+			int queued_aircraft = 0; // RA2: as above
+			for (int i = 0; i < Rule->PadAircraft.Count(); ++i) { // RA2: as above
+				owned += AAQuantity.Value(Rule->PadAircraft[i]->Fetch_Heap_ID()); // RA2: as above
+				if (factory) { // RA2: as above
+					queued_aircraft += factory->Total(Rule->PadAircraft[i]); // RA2: as above
+				}
+			}
+			if (queued_aircraft + owned >= AirportDocks) { // RA2: as above
+				return true; // RA2: as above
+			}
+			break;
+		}
+		if (type->BuildLimit <= 0) { // RA2: as above
+			if (queued + PAQuantity.Value(type->Fetch_Heap_ID()) >= abs(type->BuildLimit)) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		if (type->BuildLimit > 0) { // RA2: as above
+			if (queued + AQuantity.Value(type->Fetch_Heap_ID()) >= type->BuildLimit) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+		break; // RA2: as above
+	}
+	return false; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -9897,7 +9938,7 @@ void HouseClass::Initialize_Radar_Color(void)
 /// This routine picks a landing site out along a randomly chosen edge of the map and
 /// fires the super weapon at it, provided the house has an enemy worth harassing.
 /// </summary>
-void __fastcall Normalize_Color(double & red, double & green, double & blue) // RA2: as above
+void __fastcall Normalize_Color(double & red, double & green, double & blue) // RA2: RA2's form
 {
 	double length = fastmath::sqrt(red * red + green * green + blue * blue); // RA2: as above
 	if (length == 0.0) { // RA2: as above
@@ -9921,7 +9962,8 @@ void __fastcall Normalize_Color(double & red, double & green, double & blue) // 
 }
 
 
-void HouseClass::Update_Laser_Color(void) // RA2: as above
+
+void HouseClass::Update_Laser_Color(void) // RA2: RA2's form
 {
 	double red = RemapColorRGB.Get_Red(); // RA2: as above
 	double green = RemapColorRGB.Get_Green(); // RA2: as above
@@ -9941,21 +9983,24 @@ void HouseClass::Update_Laser_Color(void) // RA2: as above
 }
 
 
-void HouseClass::Begin_Power_Blackout(int frames) // RA2: as above
+
+void HouseClass::Begin_Power_Blackout(int frames) // RA2: RA2's form
 {
 	PowerBlackoutTimer = frames; // RA2: as above
 	RecalcPower = true;
 }
 
 
-void HouseClass::Begin_Radar_Blackout(int frames) // RA2: as above
+
+void HouseClass::Begin_Radar_Blackout(int frames) // RA2: RA2's form
 {
 	RadarBlackoutTimer = frames; // RA2: as above
 	RecalcRadar = true;
 }
 
 
-void HouseClass::Spy_Satellite_Lost(void) // RA2: as above
+
+void HouseClass::Spy_Satellite_Lost(void) // RA2: RA2's form
 {
 	if (this == PlayerPtr && !SpySatActive) { // RA2: as above
 		Map.Spy_Satellite_Hide(); // RA2: as above
@@ -9963,7 +10008,8 @@ void HouseClass::Spy_Satellite_Lost(void) // RA2: as above
 }
 
 
-float HouseClass::Armor_Multiplier(TechnoTypeClass const * type) const // RA2: as above
+
+float HouseClass::Armor_Multiplier(TechnoTypeClass const * type) const // RA2: RA2's form
 {
 	switch (type->Fetch_RTTI()) { // RA2: as above
 		case RTTI_INFANTRYTYPE:
@@ -9982,7 +10028,8 @@ float HouseClass::Armor_Multiplier(TechnoTypeClass const * type) const // RA2: a
 }
 
 
-float HouseClass::Cost_Multiplier(TechnoTypeClass const * type) const // RA2: as above
+
+float HouseClass::Cost_Multiplier(TechnoTypeClass const * type) const // RA2: RA2's form
 {
 	switch (type->Fetch_RTTI()) { // RA2: as above
 		case RTTI_INFANTRYTYPE:
@@ -10001,7 +10048,8 @@ float HouseClass::Cost_Multiplier(TechnoTypeClass const * type) const // RA2: as
 }
 
 
-float HouseClass::Speed_Multiplier(TechnoTypeClass const * type) const // RA2: as above
+
+float HouseClass::Speed_Multiplier(TechnoTypeClass const * type) const // RA2: RA2's form
 {
 	switch (type->Fetch_RTTI()) { // RA2: as above
 		case RTTI_INFANTRYTYPE:
@@ -10015,7 +10063,8 @@ float HouseClass::Speed_Multiplier(TechnoTypeClass const * type) const // RA2: a
 }
 
 
-float HouseClass::Buildtime_Multiplier(TechnoTypeClass const * type) const // RA2: as above
+
+float HouseClass::Buildtime_Multiplier(TechnoTypeClass const * type) const // RA2: RA2's form
 {
 	switch (type->Fetch_RTTI()) { // RA2: as above
 		case RTTI_INFANTRYTYPE:
@@ -10034,13 +10083,15 @@ float HouseClass::Buildtime_Multiplier(TechnoTypeClass const * type) const // RA
 }
 
 
-float HouseClass::Income_Multiplier(void) const // RA2: as above
+
+float HouseClass::Income_Multiplier(void) const // RA2: RA2's form
 {
 	return(Class->IncomeMult); // RA2: as above
 }
 
 
-int __fastcall House_Index_From_Name(char const * name) // RA2: as above
+
+int __fastcall House_Index_From_Name(char const * name) // RA2: RA2's form
 {
 	for (int index = 0; index < Houses.Count(); index++) {
 		char buffer[20]; // RA2: as above
@@ -10053,6 +10104,7 @@ int __fastcall House_Index_From_Name(char const * name) // RA2: as above
 }
 
 
+
 /// <summary>
 /// Starts the computer building a base.
 /// This routine lays out a base plan for the house, unless the scenario has already supplied
@@ -10060,7 +10112,7 @@ int __fastcall House_Index_From_Name(char const * name) // RA2: as above
 /// </summary>
 void HouseClass::Begin_Construction(void)
 {
-	BuildingClass * yard = NULL; // RA2: as above
+	BuildingClass * yard = NULL; // RA2: RA2's form
 	for (int index = Buildings.Count() - 1; index >= 0; index--) {
 		BuildingClass * building = Buildings[index];
 		bool is_yard = false; // RA2: as above
@@ -10088,7 +10140,8 @@ void HouseClass::Begin_Construction(void)
 
 
 
-bool HouseClass::Add_Wall_Nodes(int node) // RA2: as above
+
+bool HouseClass::Add_Wall_Nodes(int node) // RA2: RA2's form
 {
 	int wall = -1; // RA2: as above
 	for (int wi = 0; wi < Rule->ConcreteWalls.Count(); wi++) { // RA2: as above
@@ -10135,7 +10188,8 @@ bool HouseClass::Add_Wall_Nodes(int node) // RA2: as above
 }
 
 
-void HouseClass::Cheer(void) // RA2: as above
+
+void HouseClass::Cheer(void) // RA2: RA2's form
 {
 	int count = Technos.Count(); // RA2: as above
 	for (int index = 0; index < count; index++) {
@@ -10148,7 +10202,8 @@ void HouseClass::Cheer(void) // RA2: as above
 }
 
 
-void HouseClass::Recall_Units_To_Base(void) // RA2: as above
+
+void HouseClass::Recall_Units_To_Base(void) // RA2: RA2's form
 {
 	int count = Technos.Count(); // RA2: as above
 	Cell destination = Center.As_Cell(); // RA2: as above
@@ -10170,7 +10225,8 @@ void HouseClass::Recall_Units_To_Base(void) // RA2: as above
 }
 
 
-bool HouseClass::Can_Rebuild_Node(BaseNodeClass const & node) // RA2: as above
+
+bool HouseClass::Can_Rebuild_Node(BaseNodeClass const & node) // RA2: RA2's form
 {
 	int type_index = node.Type; // RA2: as above
 	if (Session.Type == GAME_NORMAL) {
@@ -10209,7 +10265,8 @@ bool HouseClass::Can_Rebuild_Node(BaseNodeClass const & node) // RA2: as above
 }
 
 
-Cell HouseClass::Best_Super_Weapon_Target(void) // RA2: as above
+
+Cell HouseClass::Best_Super_Weapon_Target(void) // RA2: RA2's form
 {
 	HouseClass * enemy = Houses[Enemy];
 	DynamicVectorClass<AbstractClass *> targets;
@@ -10311,7 +10368,8 @@ Cell HouseClass::Best_Super_Weapon_Target(void) // RA2: as above
 }
 
 
-Cell HouseClass::Threat_Target_Cell(int quarry) // RA2: as above
+
+Cell HouseClass::Threat_Target_Cell(int quarry) // RA2: RA2's form
 {
 	ThreatType flags = Quarry_To_Threat(quarry); // RA2: as above
 	TeamClass * team = NULL; // RA2: as above
@@ -10331,6 +10389,7 @@ Cell HouseClass::Threat_Target_Cell(int quarry) // RA2: as above
 	}
 	return(CELL_NONE); // RA2: as above
 }
+
 
 
 /// <summary>
