@@ -9537,25 +9537,27 @@ HRESULT STDMETHODCALLTYPE TechnoClass::Load(IStream * stream)
 /// </summary>
 void TechnoClass::Compute_CRC(CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
-	crc(Group);
-	crc(ActLike);
+	RadioClass::Compute_CRC(crc); // RA2: RA2's form
+	crc((long)Group); // RA2: as above
+	crc((long)ActLike); // RA2: as above
 	crc(ArmorBias);
 	crc(FirepowerBias);
-	crc((int)IdleTimer);
-	crc((int)SpiedBy);
-	crc(Cloak);
-	crc((int)CloakDelay);
+	crc(IdleTimer.Value()); // RA2: as above
+	crc((long)SpiedBy); // RA2: as above
+	crc((long)Cloak); // RA2: as above
+	crc(CloakDelay.Value()); // RA2: as above
 	crc(PredatorOffset);
+	crc(IsSightRevealed); // RA2: as above
+	crc((long)LastSightRange); // RA2: as above
 	crc(PitchAngle);
-	crc((int)Arm);
-	crc(Ammo);
-	crc(PurchasePrice);
+	crc(Arm.Value()); // RA2: as above
+	crc((long)Ammo); // RA2: as above
+	crc(ReloadTimer.Value()); // RA2: as above
+	crc((long)PurchasePrice); // RA2: as above
 	crc(AngleRotatedSideways);
 	crc(AngleRotatedForwards);
 	crc(RockingSidewaysPerFrame);
 	crc(RockingForwardsPerFrame);
-	crc(SinkingYOffset);
 	crc(IsSinking);
 	crc(IsNeedingRescue);
 	crc(IsUseless);
@@ -9564,17 +9566,33 @@ void TechnoClass::Compute_CRC(CRCEngine & crc) const
 	crc(IsLeader);
 	crc(IsALoaner);
 	crc(IsLocked);
-	crc(IsTethered); // RA2: no IsInRecoilState (not in RA2's layout)
-	if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
+	crc(IsTethered); // RA2: as above
+	crc(IsAlternativeTether); // RA2: as above
+	if (Session.Type == 0 || Session.Type == 5) { // RA2: as above
 		crc(IsOwnedByPlayer);
 		crc(IsDiscoveredByPlayer);
 		crc(IsDiscoveredByComputer);
 	}
 	crc(IsALemon);
-	crc(StunDuration);
-	crc(Unused1); // RA2: no UnusedCooldown (not in RA2's layout)
+	crc((long)StunDuration); // RA2: as above
+	crc((long)Cooldown); // RA2: as above
+	crc((long)Unused1); // RA2: as above
 	crc(SightIncrease);
-} // RA2: no LimpetType (not in RA2's layout)
+	int count = CurrentTargets.Count(); // RA2: as above
+	crc((long)count); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		AbstractClass *object = CurrentTargets[index]; // RA2: as above
+		int value = CurrentTargetThreatValues[index]; // RA2: as above
+		crc(object->Fetch_ID()); // RA2: as above
+		crc((long)value); // RA2: as above
+	}
+	count = AttackedTargets.Count(); // RA2: as above
+	crc((long)count); // RA2: as above
+	for (index = 0; index < count; index++) { // RA2: as above
+		crc(AttackedTargets[index]->Fetch_ID()); // RA2: as above
+	}
+}
+ // RA2: no LimpetType (not in RA2's layout)
 
 
 /***********************************************************************************************
