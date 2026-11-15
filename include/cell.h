@@ -70,6 +70,8 @@ class CellClass : public AbstractClass
 {
 		typedef AbstractClass BASECLASS;
 
+		friend class Tactical; // RA2: Tactical::Debug_Draw_Occupier_Links reads OccupierPtr and BridgeOccupierPtr directly
+
 	public:
 		/*
 		**	This is the ID number of this cell. By placing the ID number here, it doesn't have
