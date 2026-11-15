@@ -485,7 +485,7 @@ polygon,0x0061BE40,0x0061C260,tibsun,"functions compiled from src/polygon.cpp, m
 unk_0061C260,0x0061C260,0x0061C450,unknown,code not assigned to a module
 power,0x0061C450,0x0061D220,tibsun,"functions compiled from src/power.cpp, matched, without gaps; two placed by the gap"
 unk_0061D220,0x0061D220,0x0061D440,unknown,code not assigned to a module
-preview,0x0061D440,0x0061EA80,tibsun,"functions compiled from src/preview.cpp, without gaps; matched except ?Create_Preview@MapPreviewClass@@QAEXXZ; ??0MapPreviewClass@@QAE@XZ not placed"
+preview,0x0061D440,0x0061EA80,tibsun,"functions compiled from src/preview.cpp, matched, without gaps; ??0MapPreviewClass@@QAE@XZ not placed"
 unk_0061EA80,0x0061EA80,0x0061ED00,unknown,code not assigned to a module
 progress,0x0061ED00,0x006203E0,tibsun,"functions compiled from src/progress.cpp, without gaps; matched except ?Player_Scheme@ProgressScreenClass@@QAEPAVColorScheme@@H@Z and ?Draw_Player@ProgressScreenClass@@QAEXPAVColorScheme@@PBGAAVPoint2D@@H_N@Z and ?Display_Progress@ProgressScreenClass@@QAEXVPoint2D@@@Z; ?Draw_Player@ProgressScreenClass@@QAEXPAVColorScheme@@PBGAAVPoint2D@@H_N@Z to ?Display_Progress@ProgressScreenClass@@QAEXVPoint2D@@@Z share the room between their neighbours"
 unk_006203E0,0x006203E0,0x00620600,unknown,code not assigned to a module

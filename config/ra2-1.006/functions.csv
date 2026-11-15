@@ -4137,7 +4137,7 @@ address,size,evidence
 0x0061D440,32,"function of the Tiberian Sun reconstruction, matched"
 0x0061D460,384,"code of src/preview.cpp, matched"
 0x0061D5E0,128,"code of src/preview.cpp, matched"
-0x0061D660,,"inferred: target of the call at 0x0061DC93 in matched src/preview.cpp; size not known"
+0x0061D660,1568,"code of src/preview.cpp, matched"
 0x0061DC80,592,"code of src/preview.cpp, matched"
 0x0061DED0,672,"code of src/preview.cpp, matched"
 0x0061E170,304,"code of src/preview.cpp, matched"
