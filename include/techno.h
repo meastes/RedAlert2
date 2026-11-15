@@ -702,11 +702,11 @@ class TechnoClass :	public RadioClass,
 		virtual void Cloaking_AI(bool=false);
 		virtual void CreateGap(void); // RA2
 		virtual void DestroyGap(void); // RA2
+		virtual void Rocking_AI(void); // RA2: ahead of Try_To_Cloak (vtable order)
 		virtual void Try_To_Cloak(void);
-		virtual void Sensed(void); // RA2
 		virtual void Reload(void); // RA2
 		void Start_Reload_Timer(void); // RA2: 0x6C8300
-		virtual void Rocking_AI(void);
+		virtual void Reacquire_Target(void) {} // RA2: inline (one copy, 0x41B400); infantry looks for a new target
 		void Become_Untargetable(void); // RA2: 0x6D7C80
 		virtual Coord GetAttackCoordinates(void) const; // RA2
 		void Draw_Link_Line(Coord start, Coord end, RGBClass color) const; // RA2: 0x6D0990
@@ -751,7 +751,7 @@ class TechnoClass :	public RadioClass,
 		virtual void ClearDisguise(void); // RA2
 		virtual bool Is_Ready_To_Random_Animate(void) const;
 		virtual bool Random_Animate(void) {return(false);}
-		virtual void Unknown_Virtual_40C(AbstractClass * target); // RA2
+		virtual void Set_Follow_Target(AbstractClass * target); // RA2
 		virtual void Assign_Destination(AbstractClass * target, bool = true);
 		virtual bool Enter_Idle_Mode(bool initial=false, bool = true);
 		virtual void UpdateSight(bool, bool, bool, HouseClass *); // RA2: four arguments

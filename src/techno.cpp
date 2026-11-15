@@ -8703,7 +8703,7 @@ bool TechnoClass::Is_Ready_To_Random_Animate(void) const
 /// <summary>
 /// Does nothing at this level.
 /// </summary>
-void TechnoClass::Unknown_Virtual_40C(AbstractClass *) // RA2: not in TibSun, at 0x6D48D0
+void TechnoClass::Set_Follow_Target(AbstractClass *) // RA2: not in TibSun, at 0x6D48D0
 {
 }
 

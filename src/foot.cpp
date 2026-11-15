@@ -2581,7 +2581,7 @@ int FootClass::Do_MISSION_ENTER(void)
 /// <summary>
 /// Sets the object this object follows (the Follow object of a MegaMission order).
 /// </summary>
-void FootClass::Unknown_Virtual_40C(AbstractClass * target) // RA2: not in TibSun, at 0x4C8020
+void FootClass::Set_Follow_Target(AbstractClass * target) // RA2: not in TibSun, at 0x4C8020
 {
 	FollowTarget = target;
 }

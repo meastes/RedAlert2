@@ -143,7 +143,7 @@ class InfantryClass : public FootClass
 		int Shape_Number(void) const;
 		virtual ObjectTypeClass const * Class_Of(void) const override;
 		virtual const char * Full_Name(void) const override;
-		virtual void Rocking_AI(void) override; // RA2: 0x5061D0
+		virtual void Reacquire_Target(void) override; // RA2: 0x5061D0
 
 		/*
 		**	Object entry and exit from the game system.

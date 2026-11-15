@@ -454,7 +454,7 @@ class FootClass : public TechnoClass
 		virtual void Assign_Destination(AbstractClass * target, bool = true) override;
 		virtual bool Enter_Idle_Mode(bool initial=false, bool = true) override;
 		virtual Coord GetAttackCoordinates(void) const override; // RA2: 0x4C71B0
-		virtual void Unknown_Virtual_40C(AbstractClass * target) override; // RA2: 0x4C8020
+		virtual void Set_Follow_Target(AbstractClass * target) override; // RA2: 0x4C8020
 		virtual bool Is_Allowed_To_Leave_Map(void) const override;
 		virtual bool Is_Docked_For_Repair(void);
 		void Link_DropPod(void);

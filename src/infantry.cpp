@@ -2921,9 +2921,8 @@ const char * InfantryClass::Full_Name(void) const
 /// While the current target is still in range nothing changes; otherwise the soldier takes
 /// the greatest threat around it (none while it is mind controlled) as its new target, and
 /// one left without a target drops back to idle unless it is guarding or a jumpjet.
-/// RA2's slot 240 of TechnoClass (an empty virtual there, 0x41B400); techno.h names that slot Rocking_AI.
 /// </summary>
-void InfantryClass::Rocking_AI(void)
+void InfantryClass::Reacquire_Target(void)
 {
 	int which = What_Weapon_Should_I_Use(NULL);
 	if (TarCom != NULL && In_Range(TarCom, which)) {
@@ -2984,7 +2983,7 @@ int InfantryClass::Do_MISSION_ATTACK(void)
 		if (Doing == 0x1d) goto deploy_fire; // RA2: as above
 		if (Doing == 0x1e) { // RA2: as above
 deploy_fire: // RA2: as above
-			Rocking_AI(); // RA2: as above
+			Reacquire_Target(); // RA2: as above
 			return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2)); // RA2: as above
 		}
 	}
@@ -3857,7 +3856,7 @@ int InfantryClass::Update_Deployed_Attack(void)
 				}
 				return(Current_Mission_Control().Normal_Delay() + Random_Pick(10, 20));
 			}
-			Rocking_AI();
+			Reacquire_Target(); // RA2
 			return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
 		}
 		return(-1);

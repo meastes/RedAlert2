@@ -9317,7 +9317,7 @@ void __fastcall Cloak_Cell_Occupiers(CellClass * cellptr) // RA2: Cloak_Cell_Occ
 	while (occupier != NULL) {
 		RTTIType rtti = occupier->RTTI;
 		if (rtti == RTTI_UNIT || rtti == RTTI_INFANTRY || rtti == RTTI_AIRCRAFT) {
-			((FootClass *)occupier)->Sensed(); // RA2: as above
+			((FootClass *)occupier)->Try_To_Cloak(); // RA2: as above
 		}
 		occupier = occupier->Next;
 	}
@@ -9578,7 +9578,7 @@ void BuildingClass::DisguiseDetectorActivate(Cell cell) // RA2: not in TibSun, a
 				for (ObjectClass * occupier = cellptr->Cell_Occupier(); occupier != NULL; occupier = occupier->Next) {
 					RTTIType rtti = occupier->RTTI;
 					if (rtti == RTTI_UNIT || rtti == RTTI_INFANTRY || rtti == RTTI_AIRCRAFT) {
-						((TechnoClass *)occupier)->Sensed();
+						((TechnoClass *)occupier)->Try_To_Cloak();
 					}
 				}
 			}
