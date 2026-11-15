@@ -2419,6 +2419,7 @@ address,size,evidence
 0x00501CB0,48,"code of src/infantry.cpp, matched"
 0x00504AE0,224,"code of src/infantry.cpp, matched"
 0x00504F50,128,"code of src/infantry.cpp, matched"
+0x00506160,112,"code of src/infantry.cpp, matched"
 0x005061D0,176,"code of src/infantry.cpp, matched"
 0x00506280,352,"code of src/infantry.cpp, matched"
 0x005063E0,144,"code of src/infantry.cpp, matched"
