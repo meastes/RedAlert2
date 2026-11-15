@@ -112,6 +112,7 @@ static inline bool Is_Occupy_Offset(Point2D const & offset) // RA2: an offset is
 {
 	return(offset.X != 0xFFFF || offset.Y != 0xFFFF); // RA2: as above
 }
+extern int MuteSWLaunches; // RA2: 0x00A3D548
 bool __fastcall Is_Bridge_Span_End(int tile, int kind, CellClass const * cell); // RA2: 0x556B30, defined after its first caller
 
 Cell const MapClass::RadiusOffset[] = {
@@ -398,47 +399,6 @@ static inline void Update_Bridge_Zones(MapClass & map, Cell const & cell) // RA2
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
- * This is the offset from the cell being walled at which each cliff piece is placed, indexed
- * by the variant the cliff pass picked.
- */
-const Cell CliffVariantOffsets[] = {
-	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
-	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
-	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
-	Cell(0, 0), Cell(1, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
-};
-
-
-
-
-
-
-
 /*
  * These are the shore pieces gathered into groups, one entry per variant of the ShorePieces
  * tile set. Several variants are only randomized forms of the one piece, so they share a
@@ -466,76 +426,6 @@ int ShorePieceFacings[] = {
 	5, 5, 3, 3, 1, 1, 7, 7, 5, 5,
 	4, 4
 };
-
-
-/*
- * This is where each variant of the ShorePieces tile set anchors, given as the offset from the
- * cell the shore is being grown from to the cell the placement cursor belongs at. A piece
- * covers more than the one cell, so it has to be hung off its own corner rather than the cell
- * that asked for it.
- */
-Cell ShorePieceOffsets[] = {
-	Cell(0, -1),
-	Cell(0, -1),
-	Cell(0, -1),
-	Cell(0, -1),
-	Cell(0, -2),
-	Cell(-1, -2),
-	Cell(-1, -1),
-	Cell(-1, -1),
-	Cell(-1, 0),
-	Cell(-1, 0),
-	Cell(-1, 0),
-	Cell(-1, 0),
-	Cell(-2, -1),
-	Cell(-2, 0),
-	Cell(-1, 0),
-	Cell(-1, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(-1, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, -1),
-	Cell(0, 0),
-	Cell(0, -1),
-	Cell(0, -1),
-	Cell(-1, -1),
-	Cell(-1, -1),
-	Cell(-1, 0),
-	Cell(-1, 0),
-	Cell(0, 0),
-	Cell(0, 0),
-	Cell(0, -1),
-	Cell(0, -1),
-	Cell(0, 0),
-	Cell(0, 0)
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 /// <summary>
@@ -4327,8 +4217,10 @@ Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZo
 {
 	Cell candidates[24]; // RA2: as above
 	int count = 0;
+
 	int xx = cell.X;
 	int yy = cell.Y;
+
 	bool found = false;
 	if (zone == 0xffff) zone = -1; // RA2: as above
 	int height = Map[cell].Height;
@@ -4410,6 +4302,7 @@ Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZo
 		if (count == 24) break; // RA2: as above
 		if (found) break;
 	}
+
 	if (count > 0) {
 		Cell visible[24]; // RA2: as above
 		Cell hidden[24]; // RA2: as above
@@ -4424,6 +4317,11 @@ Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZo
 				hidden[hidden_count++] = candidates[index]; // RA2: as above
 			}
 		}
+
+		/*
+		 * If no preferred destination was supplied, pick a pseudo-random cell from the
+		 * visible list (or the hidden list if nothing was visible).
+		 */
 		if (nearto == CELL_NONE) {
 			if (visible_count != 0) return visible[Frame % visible_count]; // RA2: as above
 			return hidden[Frame % hidden_count]; // RA2: as above
@@ -6857,7 +6755,7 @@ void MapClass::Destroy_Low_Bridge2_EW(Cell const &cell) // RA2: RA2's form
 		}
 
 		for (int tries = 0; tries < 3; tries++) { // RA2: as above
-			if (Destroy_Low_Bridge_Piece(cellnum)) { // RA2: as above
+			if (Damage_Low_Bridge2(cellnum)) { // RA2: as above
 				break;
 			}
 		}
@@ -6923,7 +6821,7 @@ void MapClass::Destroy_Low_Bridge2_NS(Cell const &cell) // RA2: RA2's form
 		}
 
 		for (int tries = 0; tries < 3; tries++) { // RA2: as above
-			if (Destroy_Low_Bridge_Piece(cellnum)) { // RA2: as above
+			if (Damage_Low_Bridge2(cellnum)) { // RA2: as above
 				break;
 			}
 		}
@@ -7658,6 +7556,27 @@ Cell MapClass::Pick_Random_Location(void) const
 }
 
 
+void MapClass::Spy_Satellite_Hide(void) // RA2: RA2's form
+{
+	Map.Update_Technos_Visibility(false, false); // RA2: as above
+	Reset_Iterator(); // RA2: as above
+	CellClass * cellptr = Iterate(); // RA2: as above
+	while (cellptr != NULL) { // RA2: as above
+		cellptr->IsMapped = false; // RA2: as above
+		cellptr->IsVisible = false; // RA2: as above
+		cellptr->ShroudCounter = 1; // RA2: as above
+		cellptr->GapsCoveringThisCell = 0; // RA2: as above
+		cellptr->IsFogVisible = false; // RA2: as above
+		cellptr->IsFogMapped = false; // RA2: as above
+		cellptr = Iterate(); // RA2: as above
+	}
+	Map.Reveal_Technos(false, false); // RA2: as above
+	PlayerPtr->IsVisionary = false; // RA2: as above
+	Map.Complete_Radar_Refresh(); // RA2: as above
+	Flag_To_Redraw(GS_REDRAW_ALL); // RA2: as above
+}
+
+
 /***********************************************************************************************
  * MapClass::Shroud_The_Map -- cover the whole map in darkness (usually from blackout crate)   *
  *                                                                                             *
@@ -7688,6 +7607,50 @@ void MapClass::Shroud_The_Map(void)
 	PlayerPtr->IsVisionary = false;
 	Map.Complete_Radar_Refresh();
 	Flag_To_Redraw(GS_REDRAW_ALL);
+}
+
+
+void MapClass::Reset_Shroud_All(void) // RA2: 0x55A070, every cell counts one more shroud and is hidden unless another source still reveals it
+{
+	Reset_Iterator(); // RA2: as above
+	CellClass * cellptr = Iterate(); // RA2: as above
+	while (cellptr != NULL) { // RA2: as above
+		cellptr->IncreaseShroudCounter(); // RA2: as above
+		if (cellptr->ShroudCounter >= 0) { // RA2: as above
+			cellptr->IsMapped = false; // RA2: as above
+			cellptr->IsVisible = false; // RA2: as above
+			cellptr->IsFogVisible = false; // RA2: as above
+			cellptr->IsFogMapped = false; // RA2: as above
+		}
+		cellptr = Iterate(); // RA2: as above
+	}
+	Map.All_To_Look(false, false); // RA2: as above
+	PlayerPtr->IsVisionary = false; // RA2: as above
+	Map.Complete_Radar_Refresh(); // RA2: as above
+	Flag_To_Redraw(GS_REDRAW_ALL); // RA2: as above
+}
+
+
+void MapClass::Spy_Satellite_Reveal(void) // RA2: RA2's form
+{
+	if (!PlayerPtr->IsVisionary) { // RA2: as above
+		Map.Update_Technos_Visibility(false, false); // RA2: as above
+		PlayerPtr->IsVisionary = true; // RA2: as above
+		Map.Reset_Iterator(); // RA2: as above
+		CellClass * cellptr = Map.Iterate(); // RA2: as above
+		while (cellptr != NULL) { // RA2: as above
+			cellptr->IsMapped = true; // RA2: as above
+			cellptr->IsVisible = true; // RA2: as above
+			cellptr->ShroudCounter = 0; // RA2: as above
+			cellptr->GapsCoveringThisCell = 0; // RA2: as above
+			cellptr->IsFogVisible = true; // RA2: as above
+			cellptr->IsFogMapped = true; // RA2: as above
+			cellptr = Map.Iterate(); // RA2: as above
+		}
+		Map.Reveal_Technos(false, false); // RA2: as above
+		Map.Complete_Radar_Refresh(); // RA2: as above
+		Map.Flag_To_Redraw(GS_REDRAW_ALL); // RA2: as above
+	}
 }
 
 
@@ -7722,6 +7685,44 @@ void MapClass::Reveal_The_Map(void)
 int MapClass::Get_Height_GL(Coord const & coord)
 {
 	return(Map[coord].Get_Height(coord));
+}
+
+
+void MapClass::Refresh_Shroud(void) // RA2: 0x55A300, cells flagged IsToShroud are hidden again, then every cell's shadow frame is recomputed
+{
+	Reset_Iterator(); // RA2: as above
+	CellClass * cellptr = Iterate(); // RA2: as above
+	while (cellptr != NULL) { // RA2: as above
+		if (cellptr->IsToShroud) { // RA2: as above
+			cellptr->IsMapped = false; // RA2: as above
+			cellptr->IsVisible = false; // RA2: as above
+			cellptr->IsFogVisible = false; // RA2: as above
+			cellptr->IsFogMapped = false; // RA2: as above
+			cellptr->IsToShroud = false; // RA2: as above
+			cellptr->VisibilityChanged = true; // RA2: as above
+			TacticalMap->Flag_Cell(*cellptr); // RA2: as above
+			if (cellptr->ShadowFrame == -2) { // RA2: as above
+				Map.Reveal_Nearby_Technos(cellptr, PlayerPtr, true); // RA2: as above
+			}
+		}
+		cellptr = Iterate(); // RA2: as above
+	}
+
+	Reset_Iterator(); // RA2: as above
+	cellptr = Iterate(); // RA2: as above
+	while (cellptr != NULL) { // RA2: as above
+		Cell cell = cellptr->Center_Coord().As_Cell(); // RA2: as above
+		signed char frame = TacticalMap->Cell_Shadow(cell, false); // RA2: as above
+		if (frame != cellptr->ShadowFrame) { // RA2: as above
+			cellptr->ShadowFrame = frame; // RA2: as above
+			cellptr->VisibilityChanged = true; // RA2: as above
+			TacticalMap->Flag_Cell(*cellptr); // RA2: as above
+			if (cellptr->ShadowFrame == -2) { // RA2: as above
+				Map.Reveal_Nearby_Technos(cellptr, PlayerPtr, true); // RA2: as above
+			}
+		}
+		cellptr = Iterate(); // RA2: as above
+	}
 }
 
 
@@ -8347,6 +8348,18 @@ bool MapClass::Expand_High_Ground(CellClass * cellptr, int region_id)
 }
 
 
+/*
+ * This is the offset from the cell being walled at which each cliff piece is placed, indexed
+ * by the variant the cliff pass picked.
+ */
+const Cell CliffVariantOffsets[] = {
+	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
+	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
+	Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
+	Cell(0, 0), Cell(1, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0), Cell(0, 0),
+};
+
+
 /// <summary>
 /// Places the cliff tile that suits one cell below high ground.
 /// This is the cliff pass of the generator's height regions. The high ground around the cell
@@ -8556,7 +8569,7 @@ int MapClass::Get_High_Ground_Mask(CellClass * cellptr)
 /// </summary>
 /// <param name="region_id">The region the flooded cells are marked as belonging to.</param>
 /// <returns>bool; Did every pass complete without running into another region?</returns>
-bool MapClass::Build_All_Shores(int region_id)
+int MapClass::Build_All_Shores(int region_id, int set_region) // RA2: 0x55C2C0, names.csv: int return and a second int argument (the exe passes it on to Expand_Water, Prune_Water and Place_Shore, which take no such flag here yet)
 {
 	Map.Set_Cursor_Shape(NULL);
 
@@ -8774,6 +8787,58 @@ int MapClass::Straight_Shore_Length(CellClass * cellptr, FacingType direction)
 
 	return(count);
 }
+
+
+/*
+ * This is where each variant of the ShorePieces tile set anchors, given as the offset from the
+ * cell the shore is being grown from to the cell the placement cursor belongs at. A piece
+ * covers more than the one cell, so it has to be hung off its own corner rather than the cell
+ * that asked for it.
+ */
+Cell ShorePieceOffsets[] = {
+	Cell(0, -1),
+	Cell(0, -1),
+	Cell(0, -1),
+	Cell(0, -1),
+	Cell(0, -2),
+	Cell(-1, -2),
+	Cell(-1, -1),
+	Cell(-1, -1),
+	Cell(-1, 0),
+	Cell(-1, 0),
+	Cell(-1, 0),
+	Cell(-1, 0),
+	Cell(-2, -1),
+	Cell(-2, 0),
+	Cell(-1, 0),
+	Cell(-1, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(-1, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, -1),
+	Cell(0, 0),
+	Cell(0, -1),
+	Cell(0, -1),
+	Cell(-1, -1),
+	Cell(-1, -1),
+	Cell(-1, 0),
+	Cell(-1, 0),
+	Cell(0, 0),
+	Cell(0, 0),
+	Cell(0, -1),
+	Cell(0, -1),
+	Cell(0, 0),
+	Cell(0, 0)
+};
 
 
 /// <summary>
@@ -9535,6 +9600,281 @@ void MapClass::Spring_Low_Bridge_Destroyed_EW(Cell cell)
 }
 
 
+int MapClass::Get_Low_Bridge2_EW_Neighbor_Mask(Cell const & cell) // RA2: 0x55EB70, as Get_Low_Bridge_EW_Neighbor_Mask for the second low bridge kind (overlays 0xCD-0xE8)
+{
+	int left = Map[cell + Cell(-1, 0)].Overlay; // RA2: as above
+	int right = Map[cell + Cell(1, 0)].Overlay; // RA2: as above
+	int flags = 0; // RA2: as above
+	switch (right) { // RA2: as above
+	case 0xD1: // RA2: as above
+	case 0xD3: // RA2: as above
+	case 0xD5: // RA2: as above
+	case 0xE0: // RA2: as above
+		flags = 1; // RA2: as above
+		break; // RA2: as above
+	case 0xD4: // RA2: as above
+	case 0xE7: // RA2: as above
+		flags = 2; // RA2: as above
+		break; // RA2: as above
+	}
+	switch (left) { // RA2: as above
+	case 0xD2: // RA2: as above
+	case 0xD3: // RA2: as above
+	case 0xD4: // RA2: as above
+	case 0xE2: // RA2: as above
+		flags |= 4; // RA2: as above
+		break; // RA2: as above
+	case 0xD5: // RA2: as above
+	case 0xE7: // RA2: as above
+		flags |= 8; // RA2: as above
+		break; // RA2: as above
+	}
+	return flags; // RA2: as above
+}
+
+
+int MapClass::Get_Low_Bridge2_NS_Neighbor_Mask(Cell const & cell) // RA2: 0x55ECA0, as Get_Low_Bridge_NS_Neighbor_Mask for the second low bridge kind
+{
+	int up = Map[cell + Cell(0, -1)].Overlay; // RA2: as above
+	int down = Map[cell + Cell(0, 1)].Overlay; // RA2: as above
+	int flags = 0; // RA2: as above
+	switch (up) { // RA2: as above
+	case 0xDA: // RA2: as above
+	case 0xDC: // RA2: as above
+	case 0xDE: // RA2: as above
+	case 0xE4: // RA2: as above
+		flags = 1; // RA2: as above
+		break; // RA2: as above
+	case 0xDD: // RA2: as above
+	case 0xE8: // RA2: as above
+		flags = 2; // RA2: as above
+		break; // RA2: as above
+	}
+	switch (down) { // RA2: as above
+	case 0xDB: // RA2: as above
+	case 0xDC: // RA2: as above
+	case 0xDD: // RA2: as above
+	case 0xE6: // RA2: as above
+		flags |= 4; // RA2: as above
+		break; // RA2: as above
+	case 0xDE: // RA2: as above
+	case 0xE8: // RA2: as above
+		flags |= 8; // RA2: as above
+		break; // RA2: as above
+	}
+	return flags; // RA2: as above
+}
+
+
+bool MapClass::Damage_Low_Bridge2(Cell const & cell) // RA2: 0x55EDB0, as Damage_Low_Bridge for the second low bridge kind
+{
+	int overlay = Map[cell].Overlay; // RA2: as above
+
+	if (overlay >= 0xcd && overlay <= 0xd5 || overlay >= 0xdf && overlay <= 0xe2 || overlay == 0xe7) { // RA2: as above
+		if (!Is_Low_Bridge2(cell - Cell(0, 1))) { // RA2: as above
+			return Damage_Low_Bridge2_EW(cell + Cell(0, 1)); // RA2: as above
+		} else { // RA2: as above
+			if (!Is_Low_Bridge2(cell - Cell(0, 2))) { // RA2: as above
+				return Damage_Low_Bridge2_EW(cell); // RA2: as above
+			} else { // RA2: as above
+				return Damage_Low_Bridge2_EW(cell - Cell(0, 1)); // RA2: as above
+			}
+		}
+	} else if (overlay >= 0xd6 && overlay <= 0xde || overlay >= 0xe3 && overlay <= 0xe6 || overlay == 0xe8) { // RA2: as above
+		if (!Is_Low_Bridge2(cell - Cell(1, 0))) { // RA2: as above
+			return Damage_Low_Bridge2_NS(cell + Cell(1, 0)); // RA2: as above
+		} else { // RA2: as above
+			if (!Is_Low_Bridge2(cell - Cell(2, 0))) { // RA2: as above
+				return Damage_Low_Bridge2_NS(cell); // RA2: as above
+			} else { // RA2: as above
+				return Damage_Low_Bridge2_NS(cell - Cell(1, 0)); // RA2: as above
+			}
+		}
+	}
+	return(false); // RA2: as above
+}
+
+
+bool MapClass::Damage_Low_Bridge2_EW(Cell const & cell) // RA2: 0x55F020, as Damage_Low_Bridge_EW for the second low bridge kind
+{
+	CellClass * cellptr1 = &Map[cell]; // RA2: as above
+	CellClass * cellptr2 = &Map[cell - Cell(0, 1)]; // RA2: as above
+	CellClass * cellptr3 = &Map[cell + Cell(0, 1)]; // RA2: as above
+
+	OverlayType otype = cellptr1->Overlay; // RA2: as above
+	bool kill = false; // RA2: as above
+	bool didwork = false; // RA2: as above
+
+	Rect draw_rect = Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect()); // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+
+	do { // RA2: as above
+		if (otype == 0xDF) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xE0; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xE0; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xE0; // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell - Cell(1, 0)); // RA2: as above
+		} else if (otype == 0xE1) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xE2; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xE2; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xE2; // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell + Cell(1, 0)); // RA2: as above
+		} else if (otype < 0xD3) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xD3; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xD3; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xD3; // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell - Cell(1, 0)); // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell + Cell(1, 0)); // RA2: as above
+		} else if (otype < 0xD6) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xE7; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xE7; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xE7; // RA2: as above
+			Map.Radar_Background(cellptr2->CellID); // RA2: as above
+			Map.Radar_Background(cellptr3->CellID); // RA2: as above
+			Map.Radar_Background(cellptr1->CellID); // RA2: as above
+			kill = true; // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell - Cell(1, 0)); // RA2: as above
+			Damage_Low_Bridge2_Piece_EW(cell + Cell(1, 0)); // RA2: as above
+			Spring_Low_Bridge2_Destroyed_EW(cell); // RA2: as above
+			didwork = true; // RA2: as above
+			recalc_rect = Rect(cell.X - 1, cell.Y - 1, 3, 3); // RA2: as above
+		} else { // RA2: as above
+			break; // RA2: as above
+		}
+
+		draw_rect = Union(draw_rect, Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect())) - TacticalRect.TopLeft; // RA2: as above
+		TacticalMap->Register_Dirty_Area(draw_rect); // RA2: as above
+
+		cellptr1->Recalc_Attributes(-1); // RA2: as above
+		cellptr2->Recalc_Attributes(-1); // RA2: as above
+		cellptr3->Recalc_Attributes(-1); // RA2: as above
+		cellptr1->Kill_Illegal_Occupiers(); // RA2: as above
+		cellptr2->Kill_Illegal_Occupiers(); // RA2: as above
+		cellptr3->Kill_Illegal_Occupiers(); // RA2: as above
+
+		if (didwork) { // RA2: as above
+			Zone_Reset(); // RA2: as above
+		}
+
+		if (recalc_rect.Is_Valid()) { // RA2: as above
+			Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
+		}
+	} while (false); // RA2: as above
+
+	return(didwork); // RA2: as above
+}
+
+
+bool MapClass::Damage_Low_Bridge2_NS(Cell const & cell) // RA2: 0x55F540, as Damage_Low_Bridge_NS for the second low bridge kind
+{
+	CellClass * cellptr1 = &Map[cell]; // RA2: as above
+	CellClass * cellptr2 = &Map[cell - Cell(1, 0)]; // RA2: as above
+	CellClass * cellptr3 = &Map[cell + Cell(1, 0)]; // RA2: as above
+
+	OverlayType otype = cellptr1->Overlay; // RA2: as above
+	bool kill = false; // RA2: as above
+	bool didwork = false; // RA2: as above
+
+	Rect draw_rect = Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect()); // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+
+	do { // RA2: as above
+		if (otype == 0xE3) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xE4; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xE4; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xE4; // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell + Cell(0, 1)); // RA2: as above
+		} else if (otype == 0xE5) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xE6; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xE6; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xE6; // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell - Cell(0, 1)); // RA2: as above
+		} else if (otype < 0xDC) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0xDC; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0xDC; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0xDC; // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell - Cell(0, 1)); // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell + Cell(0, 1)); // RA2: as above
+		} else if (otype < 0xDF) { // RA2: as above
+			cellptr2->Overlay = (OverlayType)0x142; // RA2: as above
+			cellptr3->Overlay = (OverlayType)0x142; // RA2: as above
+			cellptr1->Overlay = (OverlayType)0x142; // RA2: as above
+			Map.Radar_Background(cellptr2->CellID); // RA2: as above
+			Map.Radar_Background(cellptr3->CellID); // RA2: as above
+			Map.Radar_Background(cellptr1->CellID); // RA2: as above
+			kill = true; // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell - Cell(0, 1)); // RA2: as above
+			Damage_Low_Bridge2_Piece_NS(cell + Cell(0, 1)); // RA2: as above
+			Spring_Low_Bridge2_Destroyed_NS(cell); // RA2: as above
+			didwork = true; // RA2: as above
+			recalc_rect = Rect(cell.X - 1, cell.Y - 1, 3, 3); // RA2: as above
+		} else { // RA2: as above
+			break; // RA2: as above
+		}
+
+		draw_rect = Union(draw_rect, Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect())) - TacticalRect.TopLeft; // RA2: as above
+		TacticalMap->Register_Dirty_Area(draw_rect); // RA2: as above
+
+		cellptr1->Recalc_Attributes(-1); // RA2: as above
+		cellptr2->Recalc_Attributes(-1); // RA2: as above
+		cellptr3->Recalc_Attributes(-1); // RA2: as above
+		cellptr1->Kill_Illegal_Occupiers(); // RA2: as above
+		cellptr2->Kill_Illegal_Occupiers(); // RA2: as above
+		cellptr3->Kill_Illegal_Occupiers(); // RA2: as above
+
+		if (didwork) { // RA2: as above
+			Zone_Reset(); // RA2: as above
+		}
+
+		if (recalc_rect.Is_Valid()) { // RA2: as above
+			Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
+		}
+	} while (false); // RA2: as above
+
+	return(didwork); // RA2: as above
+}
+
+
+void MapClass::Spring_Low_Bridge2_Destroyed_NS(Cell cell) // RA2: 0x55FA60, as Spring_Low_Bridge_Destroyed_NS for the second low bridge kind
+{
+	Cell tmp = cell; // RA2: as above
+	do { // RA2: as above
+		tmp = Adjacent_Cell(tmp, FACING_N); // RA2: as above
+	} while (Is_Low_Bridge2(tmp)); // RA2: as above
+
+	Cell start = Adjacent_Cell(tmp, FACING_S); // RA2: as above
+
+	tmp = cell; // RA2: as above
+	do { // RA2: as above
+		tmp = Adjacent_Cell(tmp, FACING_S); // RA2: as above
+	} while (Is_Low_Bridge2(tmp)); // RA2: as above
+
+	Cell end = Adjacent_Cell(tmp, FACING_N); // RA2: as above
+
+	Spring_Bridge_Destruction_Triggers(start, end); // RA2: as above
+}
+
+
+void MapClass::Spring_Low_Bridge2_Destroyed_EW(Cell cell) // RA2: 0x55FB90, as Spring_Low_Bridge_Destroyed_EW for the second low bridge kind
+{
+	Cell tmp = cell; // RA2: as above
+	do { // RA2: as above
+		tmp = Adjacent_Cell(tmp, FACING_W); // RA2: as above
+	} while (Is_Low_Bridge2(tmp)); // RA2: as above
+
+	Cell start = Adjacent_Cell(tmp, FACING_E); // RA2: as above
+
+	tmp = cell; // RA2: as above
+	do { // RA2: as above
+		tmp = Adjacent_Cell(tmp, FACING_E); // RA2: as above
+	} while (Is_Low_Bridge2(tmp)); // RA2: as above
+
+	Cell end = Adjacent_Cell(tmp, FACING_W); // RA2: as above
+
+	Spring_Bridge_Destruction_Triggers(start, end); // RA2: as above
+}
+
+
 /// <summary>
 /// Damages one piece of an east-west low bridge.
 /// The piece takes whichever overlay suits the neighbors it has left, which is what gives a
@@ -9542,77 +9882,40 @@ void MapClass::Spring_Low_Bridge_Destroyed_EW(Cell cell)
 /// cell that was hit.
 /// </summary>
 /// <param name="cell">The center cell of the piece to damage.</param>
-void MapClass::Damage_Low_Bridge_Piece_EW(Cell const & cell)
+void MapClass::Damage_Low_Bridge_Piece_EW(Cell const & cell) // RA2: 0x55FCC0, RA2's form
 {
-	if (!Is_Low_Bridge(cell)) {
-		return;
-	}
-
-	CellClass * cellptr1 = &Map[cell];
-	CellClass * cellptr2 = &Map[cell - Cell(0, 1)];
-	CellClass * cellptr3 = &Map[cell + Cell(0, 1)];
-
-	bool kill = false; // RA2: as above
-	Rect draw_rect = Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect());
-
-	OverlayType lookup[16] = {
-		OVERLAY_NONE,
-		OVERLAY_LOWBRIDGE_06,
-		OVERLAY_LOWBRIDGE_09,
-		OVERLAY_NONE,
-		OVERLAY_LOWBRIDGE_05,
-		OVERLAY_LOWBRIDGE_07,
-		OVERLAY_LOWBRIDGE_09,
-		OVERLAY_NONE,
-		OVERLAY_LOWBRIDGE_08,
-		OVERLAY_LOWBRIDGE_08,
-		OVERLAY_LOWBRIDGE_27,
-		OVERLAY_NONE,
-		OVERLAY_NONE,
-		OVERLAY_NONE,
-		OVERLAY_NONE,
-		OVERLAY_NONE
-	};
-
-	int mask = Get_Low_Bridge_EW_Neighbor_Mask(cell);
-	OverlayType current = Map[cell].Overlay;
-
-	if (mask > 0) {
-		OverlayType newoverlay;
-
-		if (current >= OVERLAY_LOWBRIDGE_19) {
-			if (current == OVERLAY_LOWBRIDGE_19) {
-				newoverlay = OVERLAY_LOWBRIDGE_20;
-			} else if (current == OVERLAY_LOWBRIDGE_21) {
-				newoverlay = OVERLAY_LOWBRIDGE_22;
-			} else {
-				return;
-			}
-		} else {
-			newoverlay = lookup[mask];
-			if (current == newoverlay) {
-				return;
-			}
+	if (!Is_Low_Bridge(cell)) return; // RA2: as above
+	CellClass *center = &Map[cell]; // RA2: as above
+	CellClass *side1 = &Map[cell - Cell(0, 1)]; // RA2: as above
+	CellClass *side2 = &Map[cell + Cell(0, 1)]; // RA2: as above
+	Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+	int lookup[16] = { -1, 0x4f, 0x52, -1, 0x4e, 0x50, 0x52, -1, 0x51, 0x51, 0x64, -1, -1, -1, -1, -1 }; // RA2: as above
+	int mask = Get_Low_Bridge_EW_Neighbor_Mask(cell); // RA2: as above
+	int current = Map[cell].Overlay; // RA2: as above
+	if (mask > 0) { // RA2: as above
+		int next; // RA2: as above
+		if (current >= 0x5c) { // RA2: as above
+			if (current == 0x5c) next = 0x5d; // RA2: as above
+			else if (current == 0x5e) next = 0x5f; // RA2: as above
+			else return; // RA2: as above
+		} else { // RA2: as above
+			next = lookup[mask]; // RA2: as above
+			if (current == next) return; // RA2: as above
 		}
-
-		cellptr3->Overlay = cellptr2->Overlay = cellptr1->Overlay = newoverlay;
-
-		draw_rect = Union(draw_rect, Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect())) - TacticalRect.TopLeft;
-		TacticalMap->Register_Dirty_Area(draw_rect, false);
-
-		if (newoverlay == OVERLAY_LOWBRIDGE_27) {
-			kill = true; // RA2: as above
-			Map.Radar_Background(cell);
-			Map.Radar_Background(cell + Cell(0, 1));
-			Map.Radar_Background(cell - Cell(0, 1));
+		side2->Overlay = side1->Overlay = center->Overlay = (OverlayType)next; // RA2: as above
+		draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+		TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+		if (next == 0x64) { // RA2: as above
+			Map.Radar_Background(cell); // RA2: as above
+			Map.Radar_Background(cell + Cell(0, 1)); // RA2: as above
+			Map.Radar_Background(cell - Cell(0, 1)); // RA2: as above
 		}
-
-		cellptr1->Recalc_Attributes(-1);
-		cellptr2->Recalc_Attributes(-1);
-		cellptr3->Recalc_Attributes(-1);
-		cellptr1->Kill_Illegal_Occupiers();
-		cellptr2->Kill_Illegal_Occupiers();
-		cellptr3->Kill_Illegal_Occupiers();
+		center->Recalc_Attributes(-1); // RA2: as above
+		side1->Recalc_Attributes(-1); // RA2: as above
+		side2->Recalc_Attributes(-1); // RA2: as above
+		center->Kill_Illegal_Occupiers(); // RA2: as above
+		side1->Kill_Illegal_Occupiers(); // RA2: as above
+		side2->Kill_Illegal_Occupiers(); // RA2: as above
 	}
 }
 
@@ -9698,6 +10001,82 @@ void MapClass::Damage_Low_Bridge_Piece_NS(Cell const & cell)
 }
 
 
+void MapClass::Damage_Low_Bridge2_Piece_EW(Cell const & cell) // RA2: 0x5606D0, as Damage_Low_Bridge_Piece_EW for the second low bridge kind
+{
+	if (!Is_Low_Bridge2(cell)) return; // RA2: as above
+	CellClass *center = &Map[cell]; // RA2: as above
+	CellClass *side1 = &Map[cell - Cell(0, 1)]; // RA2: as above
+	CellClass *side2 = &Map[cell + Cell(0, 1)]; // RA2: as above
+	Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+	int lookup[16] = { -1, 0xd2, 0xd5, -1, 0xd1, 0xd3, 0xd5, -1, 0xd4, 0xd4, 0xe7, -1, -1, -1, -1, -1 }; // RA2: as above
+	int mask = Get_Low_Bridge2_EW_Neighbor_Mask(cell); // RA2: as above
+	int current = Map[cell].Overlay; // RA2: as above
+	if (mask > 0) { // RA2: as above
+		int next; // RA2: as above
+		if (current >= 0xdf) { // RA2: as above
+			if (current == 0xdf) next = 0xe0; // RA2: as above
+			else if (current == 0xe1) next = 0xe2; // RA2: as above
+			else return; // RA2: as above
+		} else { // RA2: as above
+			next = lookup[mask]; // RA2: as above
+			if (current == next) return; // RA2: as above
+		}
+		side2->Overlay = side1->Overlay = center->Overlay = (OverlayType)next; // RA2: as above
+		draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+		TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+		if (next == 0xe7) { // RA2: as above
+			Map.Radar_Background(cell); // RA2: as above
+			Map.Radar_Background(cell + Cell(0, 1)); // RA2: as above
+			Map.Radar_Background(cell - Cell(0, 1)); // RA2: as above
+		}
+		center->Recalc_Attributes(-1); // RA2: as above
+		side1->Recalc_Attributes(-1); // RA2: as above
+		side2->Recalc_Attributes(-1); // RA2: as above
+		center->Kill_Illegal_Occupiers(); // RA2: as above
+		side1->Kill_Illegal_Occupiers(); // RA2: as above
+		side2->Kill_Illegal_Occupiers(); // RA2: as above
+	}
+}
+
+
+void MapClass::Damage_Low_Bridge2_Piece_NS(Cell const & cell) // RA2: 0x560C10, as Damage_Low_Bridge_Piece_NS for the second low bridge kind
+{
+	if (!Is_Low_Bridge2(cell)) return; // RA2: as above
+	CellClass *center = &Map[cell]; // RA2: as above
+	CellClass *side1 = &Map[cell - Cell(1, 0)]; // RA2: as above
+	CellClass *side2 = &Map[cell + Cell(1, 0)]; // RA2: as above
+	Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+	int lookup[16] = { -1, 0xdb, 0xde, -1, 0xda, 0xdc, 0xde, -1, 0xdd, 0xdd, 0xe8, -1, -1, -1, -1, -1 }; // RA2: as above
+	int mask = Get_Low_Bridge2_NS_Neighbor_Mask(cell); // RA2: as above
+	int current = center->Overlay; // RA2: as above
+	if (mask > 0) { // RA2: as above
+		int next; // RA2: as above
+		if (current >= 0xe3) { // RA2: as above
+			if (current == 0xe3) next = 0xe4; // RA2: as above
+			else if (current == 0xe5) next = 0xe6; // RA2: as above
+			else return; // RA2: as above
+		} else { // RA2: as above
+			next = lookup[mask]; // RA2: as above
+			if (next == current) return; // RA2: as above
+		}
+		side2->Overlay = side1->Overlay = center->Overlay = (OverlayType)next; // RA2: as above
+		draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+		TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+		if (next == 0xe8) { // RA2: as above
+			Map.Radar_Background(cell); // RA2: as above
+			Map.Radar_Background(cell + TPoint2D<short>(1, 0)); // RA2: as above
+			Map.Radar_Background(cell - Cell(1, 0)); // RA2: as above
+		}
+		center->Recalc_Attributes(-1); // RA2: as above
+		side1->Recalc_Attributes(-1); // RA2: as above
+		side2->Recalc_Attributes(-1); // RA2: as above
+		center->Kill_Illegal_Occupiers(); // RA2: as above
+		side1->Kill_Illegal_Occupiers(); // RA2: as above
+		side2->Kill_Illegal_Occupiers(); // RA2: as above
+	}
+}
+
+
 /// <summary>
 /// Repairs the low bridge that this cell belongs to.
 /// This is the entry point the repair code calls. The cell's overlay says which way the bridge
@@ -9732,94 +10111,99 @@ void MapClass::Repair_Low_Bridge_Span(Cell const & cell)
 }
 
 
+void MapClass::Repair_Low_Bridge2_Span(Cell const & cell) // RA2: 0x561340, as Repair_Low_Bridge_Span for the second low bridge kind
+{
+	int overlay = Map[cell].Overlay; // RA2: as above
+
+	if (overlay >= 0xcd && overlay <= 0xd5 || overlay >= 0xdf && overlay <= 0xe2 || overlay == 0xe7) { // RA2: as above
+		if (!Is_Low_Bridge2(cell - Cell(0, 1))) { // RA2: as above
+			Repair_Low_Bridge2_EW(cell + Cell(0, 1)); // RA2: as above
+		} else { // RA2: as above
+			if (!Is_Low_Bridge2(cell - Cell(0, 2))) { // RA2: as above
+				Repair_Low_Bridge2_EW(cell); // RA2: as above
+			} else { // RA2: as above
+				Repair_Low_Bridge2_EW(cell - Cell(0, 1)); // RA2: as above
+			}
+		}
+	} else if (overlay >= 0xd6 && overlay <= 0xde || overlay >= 0xe3 && overlay <= 0xe6 || overlay == 0xe8) { // RA2: as above
+		if (!Is_Low_Bridge2(cell - Cell(1, 0))) { // RA2: as above
+			Repair_Low_Bridge2_NS(cell + Cell(1, 0)); // RA2: as above
+		} else { // RA2: as above
+			if (!Is_Low_Bridge2(cell - Cell(2, 0))) { // RA2: as above
+				Repair_Low_Bridge2_NS(cell); // RA2: as above
+			} else { // RA2: as above
+				Repair_Low_Bridge2_NS(cell - Cell(1, 0)); // RA2: as above
+			}
+		}
+	}
+}
+
+
 /// <summary>
 /// Repairs an east-west low bridge run.
 /// The run is walked from its western end and every piece along it is put back to its intact
 /// overlay, so a repaired bridge comes back whole rather than a cell at a time.
 /// </summary>
 /// <param name="cell">A cell on the center line of the run to repair.</param>
-void MapClass::Repair_Low_Bridge_EW(Cell const & cell)
+void MapClass::Repair_Low_Bridge_EW(Cell const & cell) // RA2: 0x5615A0, RA2's form
 {
-	Cell cellnum = cell;
-	bool changed = false;
-
-	do {
-		cellnum.X--;
-	} while (Is_Low_Bridge(cellnum));
-	cellnum.X++;
-
-	Rect recalc_rect(0, 0, 0, 0);
-
-	do {
-		CellClass * cellptr1 = &Map[cellnum];
-		CellClass * cellptr2 = &Map[cellnum - Cell(0, 1)]; // RA2: as above
-		CellClass * cellptr3 = &Map[cellnum + Cell(0, 1)];
-
-		Rect draw_rect = Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect());
-
-		OverlayType otype = cellptr1->Overlay;
-		OverlayType newtype = otype;
-
-		switch (otype) {
-			case OVERLAY_LOWBRIDGE_19:
-			case OVERLAY_LOWBRIDGE_20:
-				newtype = OVERLAY_LOWBRIDGE_19;
-				break;
-
-			case OVERLAY_LOWBRIDGE_21:
-			case OVERLAY_LOWBRIDGE_22:
-				newtype = OVERLAY_LOWBRIDGE_21;
-				break;
-
-			case OVERLAY_LOWBRIDGE_05:
-			case OVERLAY_LOWBRIDGE_06:
-			case OVERLAY_LOWBRIDGE_07:
-			case OVERLAY_LOWBRIDGE_08:
-			case OVERLAY_LOWBRIDGE_09:
-			case OVERLAY_LOWBRIDGE_27:
-				newtype = (OverlayType)(Pick_Random_UInt(0, 3) + OVERLAY_LOWBRIDGE_01);
-				{ Rect r(cellnum.X, cellnum.Y - 1, 1, 3); // RA2: as above
-				recalc_rect = Union(recalc_rect, r); } // RA2: as above
-				changed = true;
-				break;
-
-			default:
-				break;
+	// These known 0/1 predicates are consumed through AL in the original. // RA2: as above
+	unsigned char low_bridge; // RA2: as above
+	Cell cursor = cell; // RA2: as above
+	bool changed = false; // RA2: as above
+	do { // RA2: as above
+		--cursor.X; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	++cursor.X; // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+	do { // RA2: as above
+		CellClass *center = &Map[cursor]; // RA2: as above
+		CellClass *side1 = &Map[cursor - Cell(0, 1)]; // RA2: as above
+		CellClass *side2 = &Map[cursor + Cell(0, 1)]; // RA2: as above
+		Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+		int old_overlay = center->Overlay; // RA2: as above
+		int new_overlay = old_overlay; // RA2: as above
+		switch (old_overlay) { // RA2: as above
+		case 0x5c: case 0x5d: // RA2: as above
+			new_overlay = 0x5c; // RA2: as above
+			break; // RA2: as above
+		case 0x5e: case 0x5f: // RA2: as above
+			new_overlay = 0x5e; // RA2: as above
+			break; // RA2: as above
+		case 0x4e: // RA2: as above
+		case 0x4f: // RA2: as above
+		case 0x50: // RA2: as above
+		case 0x51: // RA2: as above
+		case 0x52: // RA2: as above
+		case 0x64: // RA2: as above
+			new_overlay = Pick_Random_UInt(0, 3) + 0x4a; // RA2: as above
+			recalc_rect = Union(recalc_rect, Rect(cursor.X, cursor.Y - 1, 1, 3)); // RA2: as above
+			changed = true; // RA2: as above
+			break; // RA2: as above
+		default: // RA2: as above
+			break; // RA2: as above
 		}
-
-		if (newtype != otype) {
-			cellptr1->Overlay = newtype;
-			cellptr2->Overlay = newtype;
-			cellptr3->Overlay = newtype;
-
-			draw_rect = Union(draw_rect, Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect())) - TacticalRect.TopLeft;
-			TacticalMap->Register_Dirty_Area(draw_rect, false);
-
-			bool tmp0 = otype == OVERLAY_LOWBRIDGE_27; // RA2: as above
-			if (tmp0) { // RA2: as above
-				Map.Radar_Background(cellnum);
-				Map.Radar_Background(cellnum + Cell(0, 1));
-				Map.Radar_Background(cellnum - Cell(0, 1));
+		if (new_overlay != old_overlay) { // RA2: as above
+			center->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side1->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side2->Overlay = (OverlayType)new_overlay; // RA2: as above
+			draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+			TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+			if (old_overlay == 0x64) { // RA2: as above
+				Map.Radar_Background(cursor); // RA2: as above
+				Map.Radar_Background(cursor + Cell(0, 1)); // RA2: as above
+				Map.Radar_Background(cursor - Cell(0, 1)); // RA2: as above
 			}
-
-			cellptr1->Recalc_Attributes(-1);
-			cellptr2->Recalc_Attributes(-1);
-			cellptr3->Recalc_Attributes(-1);
-			cellptr1->Kill_Illegal_Occupiers();
-			cellptr2->Kill_Illegal_Occupiers();
-			cellptr3->Kill_Illegal_Occupiers();
+			center->Recalc_Attributes(-1); // RA2: as above
+			side1->Recalc_Attributes(-1); // RA2: as above
+			side2->Recalc_Attributes(-1); // RA2: as above
 		}
-
-		cellnum.X++;
-	} while (Is_Low_Bridge(cellnum));
-
-	if (changed) {
-		Zone_Reset();
-	}
-
-	if (recalc_rect.Is_Valid() != 0) { // RA2: as above
-		Recalc_Cells_In_Rect(recalc_rect);
-	}
+		++cursor.X; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	if (changed) Zone_Reset(); // RA2: as above
+	if (recalc_rect.Is_Valid()) Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
 }
 
 
@@ -9829,88 +10213,189 @@ void MapClass::Repair_Low_Bridge_EW(Cell const & cell)
 /// and every piece along it is put back to its intact overlay.
 /// </summary>
 /// <param name="cell">A cell on the center line of the run to repair.</param>
-void MapClass::Repair_Low_Bridge_NS(Cell const & cell)
+void MapClass::Repair_Low_Bridge_NS(Cell const & cell) // RA2: 0x561A80, RA2's form
 {
-	Cell cellnum = cell;
-	Rect recalc_rect(0, 0, 0, 0);
-	bool changed = false;
-
-	do {
-		cellnum.Y--;
-	} while (Is_Low_Bridge(cellnum));
-	cellnum.Y++;
-
-	do {
-		CellClass * cellptr1 = &Map[cellnum];
-		CellClass * cellptr2 = &Map[cellnum - Cell(1, 0)]; // RA2: as above
-		CellClass * cellptr3; // RA2: as above
-		cellptr3 = &Map[cellnum + Cell(1, 0)]; // RA2: as above
-
-		Rect draw_rect = Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect());
-
-		OverlayType otype = cellptr1->Overlay;
-		OverlayType newtype = otype;
-
-		switch (otype) {
-			case OVERLAY_LOWBRIDGE_23:
-			case OVERLAY_LOWBRIDGE_24:
-				newtype = OVERLAY_LOWBRIDGE_23;
-				break;
-
-			case OVERLAY_LOWBRIDGE_25:
-			case OVERLAY_LOWBRIDGE_26:
-				newtype = OVERLAY_LOWBRIDGE_25;
-				break;
-
-			case OVERLAY_LOWBRIDGE_14:
-			case OVERLAY_LOWBRIDGE_15:
-			case OVERLAY_LOWBRIDGE_16:
-			case OVERLAY_LOWBRIDGE_17:
-			case OVERLAY_LOWBRIDGE_18:
-			case OVERLAY_LOWBRIDGE_28:
-				newtype = (OverlayType)(Pick_Random_UInt(0, 3) + OVERLAY_LOWBRIDGE_10);
-				{ Rect r(cellnum.X - 1, cellnum.Y, 3, 1); // RA2: as above
-				recalc_rect = Union(recalc_rect, r); } // RA2: as above
-				changed = true;
-				break;
-
-			default:
-				break;
+	// These known 0/1 predicates are consumed through AL in the original. // RA2: as above
+	unsigned char low_bridge; // RA2: as above
+	Cell cursor = cell; // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+	bool changed = false; // RA2: as above
+	do { // RA2: as above
+		--cursor.Y; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	++cursor.Y; // RA2: as above
+	do { // RA2: as above
+		CellClass *center = &Map[cursor]; // RA2: as above
+		CellClass *side1 = &Map[cursor - Cell(1, 0)]; // RA2: as above
+		CellClass *side2 = &Map[cursor + Cell(1, 0)]; // RA2: as above
+		Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+		int old_overlay = center->Overlay; // RA2: as above
+		int new_overlay = old_overlay; // RA2: as above
+		switch (old_overlay) { // RA2: as above
+		case 0x60: case 0x61: // RA2: as above
+			new_overlay = 0x60; // RA2: as above
+			break; // RA2: as above
+		case 0x62: case 0x63: // RA2: as above
+			new_overlay = 0x62; // RA2: as above
+			break; // RA2: as above
+		case 0x57: // RA2: as above
+		case 0x58: // RA2: as above
+		case 0x59: // RA2: as above
+		case 0x5a: // RA2: as above
+		case 0x5b: // RA2: as above
+		case 0x65: // RA2: as above
+			new_overlay = Pick_Random_UInt(0, 3) + 0x53; // RA2: as above
+			recalc_rect = Union(recalc_rect, Rect(cursor.X - 1, cursor.Y, 3, 1)); // RA2: as above
+			changed = true; // RA2: as above
+			break; // RA2: as above
+		default: // RA2: as above
+			break; // RA2: as above
 		}
-
-		if (newtype != otype) {
-			cellptr1->Overlay = newtype;
-			cellptr2->Overlay = newtype;
-			cellptr3->Overlay = newtype;
-
-			draw_rect = Union(draw_rect, Union(cellptr1->Overlay_Render_Rect(), cellptr1->Overlay_Shadow_Render_Rect())) - TacticalRect.TopLeft;
-			TacticalMap->Register_Dirty_Area(draw_rect, false);
-
-			if (otype != OVERLAY_LOWBRIDGE_28) { // RA2: as above
-			} else {
-				Map.Radar_Background(cellnum);
-				Map.Radar_Background(cellnum + Cell(1, 0));
-				Map.Radar_Background(cellnum - Cell(1, 0));
+		if (new_overlay != old_overlay) { // RA2: as above
+			center->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side1->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side2->Overlay = (OverlayType)new_overlay; // RA2: as above
+			draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+			TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+			if (old_overlay == 0x65) { // RA2: as above
+				Map.Radar_Background(cursor); // RA2: as above
+				Map.Radar_Background(cursor + Cell(1, 0)); // RA2: as above
+				Map.Radar_Background(cursor - Cell(1, 0)); // RA2: as above
 			}
-
-			cellptr1->Recalc_Attributes(-1);
-			cellptr2->Recalc_Attributes(-1);
-			cellptr3->Recalc_Attributes(-1);
-			cellptr1->Kill_Illegal_Occupiers();
-			cellptr2->Kill_Illegal_Occupiers();
-			cellptr3->Kill_Illegal_Occupiers();
+			center->Recalc_Attributes(-1); // RA2: as above
+			side1->Recalc_Attributes(-1); // RA2: as above
+			side2->Recalc_Attributes(-1); // RA2: as above
 		}
+		++cursor.Y; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	if (changed) Zone_Reset(); // RA2: as above
+	if (recalc_rect.Is_Valid()) Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
+}
 
-		cellnum.Y += 1; // RA2: as above
-	} while (Is_Low_Bridge(cellnum));
 
-	if (changed) {
-		Zone_Reset();
-	}
+void MapClass::Repair_Low_Bridge2_EW(Cell const & cell) // RA2: 0x561F60, as Repair_Low_Bridge_EW for the second low bridge kind
+{
+	// These known 0/1 predicates are consumed through AL in the original. // RA2: as above
+	unsigned char low_bridge; // RA2: as above
+	Cell cursor = cell; // RA2: as above
+	bool changed = false; // RA2: as above
+	do { // RA2: as above
+		--cursor.X; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge2(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	++cursor.X; // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+	do { // RA2: as above
+		CellClass *center = &Map[cursor]; // RA2: as above
+		CellClass *side1 = &Map[cursor - Cell(0, 1)]; // RA2: as above
+		CellClass *side2 = &Map[cursor + Cell(0, 1)]; // RA2: as above
+		Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+		int old_overlay = center->Overlay; // RA2: as above
+		int new_overlay = old_overlay; // RA2: as above
+		switch (old_overlay) { // RA2: as above
+		case 0xdf: case 0xe0: // RA2: as above
+			new_overlay = 0xdf; // RA2: as above
+			break; // RA2: as above
+		case 0xe1: case 0xe2: // RA2: as above
+			new_overlay = 0xe1; // RA2: as above
+			break; // RA2: as above
+		case 0xd1: // RA2: as above
+		case 0xd2: // RA2: as above
+		case 0xd3: // RA2: as above
+		case 0xd4: // RA2: as above
+		case 0xd5: // RA2: as above
+		case 0xe7: // RA2: as above
+			new_overlay = Pick_Random_UInt(0, 3) + 0xcd; // RA2: as above
+			recalc_rect = Union(recalc_rect, Rect(cursor.X, cursor.Y - 1, 1, 3)); // RA2: as above
+			changed = true; // RA2: as above
+			break; // RA2: as above
+		default: // RA2: as above
+			break; // RA2: as above
+		}
+		if (new_overlay != old_overlay) { // RA2: as above
+			center->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side1->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side2->Overlay = (OverlayType)new_overlay; // RA2: as above
+			draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+			TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+			if (old_overlay == 0xe7) { // RA2: as above
+				Map.Radar_Background(cursor); // RA2: as above
+				Map.Radar_Background(cursor + Cell(0, 1)); // RA2: as above
+				Map.Radar_Background(cursor - Cell(0, 1)); // RA2: as above
+			}
+			center->Recalc_Attributes(-1); // RA2: as above
+			side1->Recalc_Attributes(-1); // RA2: as above
+			side2->Recalc_Attributes(-1); // RA2: as above
+		}
+		++cursor.X; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge2(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	if (changed) Zone_Reset(); // RA2: as above
+	if (recalc_rect.Is_Valid()) Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
+}
 
-	if (!recalc_rect.Is_Valid()) goto skip0; // RA2: as above
-	Recalc_Cells_In_Rect(recalc_rect);
-skip0:; // RA2: as above
+
+void MapClass::Repair_Low_Bridge2_NS(Cell const & cell) // RA2: 0x562450, as Repair_Low_Bridge_NS for the second low bridge kind
+{
+	// These known 0/1 predicates are consumed through AL in the original. // RA2: as above
+	unsigned char low_bridge; // RA2: as above
+	Cell cursor = cell; // RA2: as above
+	Rect recalc_rect(0, 0, 0, 0); // RA2: as above
+	bool changed = false; // RA2: as above
+	do { // RA2: as above
+		--cursor.Y; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge2(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	++cursor.Y; // RA2: as above
+	do { // RA2: as above
+		CellClass *center = &Map[cursor]; // RA2: as above
+		CellClass *side1 = &Map[cursor - Cell(1, 0)]; // RA2: as above
+		CellClass *side2 = &Map[cursor + Cell(1, 0)]; // RA2: as above
+		Rect draw_rect = Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect()); // RA2: as above
+		int old_overlay = center->Overlay; // RA2: as above
+		int new_overlay = old_overlay; // RA2: as above
+		switch (old_overlay) { // RA2: as above
+		case 0xe3: case 0xe4: // RA2: as above
+			new_overlay = 0xe3; // RA2: as above
+			break; // RA2: as above
+		case 0xe5: case 0xe6: // RA2: as above
+			new_overlay = 0xe5; // RA2: as above
+			break; // RA2: as above
+		case 0xda: // RA2: as above
+		case 0xdb: // RA2: as above
+		case 0xdc: // RA2: as above
+		case 0xdd: // RA2: as above
+		case 0xde: // RA2: as above
+		case 0xe8: // RA2: as above
+			new_overlay = Pick_Random_UInt(0, 3) + 0xd6; // RA2: as above
+			recalc_rect = Union(recalc_rect, Rect(cursor.X - 1, cursor.Y, 3, 1)); // RA2: as above
+			changed = true; // RA2: as above
+			break; // RA2: as above
+		default: // RA2: as above
+			break; // RA2: as above
+		}
+		if (new_overlay != old_overlay) { // RA2: as above
+			center->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side1->Overlay = (OverlayType)new_overlay; // RA2: as above
+			side2->Overlay = (OverlayType)new_overlay; // RA2: as above
+			draw_rect = Union(draw_rect, Union(center->Overlay_Render_Rect(), center->Overlay_Shadow_Render_Rect())) - TacticalRect.Top_Left(); // RA2: as above
+			TacticalMap->Register_Dirty_Area(draw_rect, false); // RA2: as above
+			if (old_overlay == 0xe8) { // RA2: as above
+				Map.Radar_Background(cursor); // RA2: as above
+				Map.Radar_Background(cursor + Cell(1, 0)); // RA2: as above
+				Map.Radar_Background(cursor - Cell(1, 0)); // RA2: as above
+			}
+			center->Recalc_Attributes(-1); // RA2: as above
+			side1->Recalc_Attributes(-1); // RA2: as above
+			side2->Recalc_Attributes(-1); // RA2: as above
+		}
+		++cursor.Y; // RA2: as above
+		low_bridge = (unsigned char)Is_Low_Bridge2(cursor); // RA2: as above
+	} while (low_bridge); // RA2: as above
+	if (changed) Zone_Reset(); // RA2: as above
+	if (recalc_rect.Is_Valid()) Recalc_Cells_In_Rect(recalc_rect); // RA2: as above
 }
 
 
@@ -9923,6 +10408,13 @@ bool MapClass::Is_Low_Bridge(Cell const & cell)
 {
 	OverlayType overlay = Map[cell].Overlay;
 	return(overlay >= 0x4A && overlay <= 0x65); // RA2: as above
+}
+
+
+bool MapClass::Is_Low_Bridge2(Cell const & cell) // RA2: 0x562980, as Is_Low_Bridge for the second low bridge kind (overlays 0xCD-0xE8)
+{
+	OverlayType overlay = Map[cell].Overlay; // RA2: as above
+	return(overlay >= 0xCD && overlay <= 0xE8); // RA2: as above
 }
 
 
@@ -10596,8 +11088,96 @@ void MapClass::Register_Subzone_Zone_Connections(int subzone)
 	for (int i = 0; i < ZoneConnections.Count(); i++) {
 		ZoneConnectionClass & connection = ZoneConnections[i];
 		if (connection.IsPassable) {
-			Register_Zone_Connection_Entries(connection, subzone);
+			Register_Zone_Connection_Entries(&connection, subzone); // RA2: by pointer
 		}
+	}
+}
+
+
+/// <summary>
+/// Records the subzone links a bridge or tunnel makes at one subzone level.
+/// A subzone rebuild only links cells that touch, so a span has to be stitched in by hand.
+/// This routine stages the link between the two ends of the span and between the lanes either
+/// side of them; the rebuild later unpacks the staged pairs into the subzone adjacency lists.
+/// </summary>
+/// <param name="connection">The bridge or tunnel connection to stitch in.</param>
+/// <param name="index">The subzone level whose staging set receives the links.</param>
+void MapClass::Register_Zone_Connection_Entries(ZoneConnectionClass * connection, int index) // RA2: 0x564B60, takes the connection by pointer
+{
+	SUBZONE_CONNECTION_HASH_SET::ObjectType connstr;
+	SUBZONE_CONNECTION_HASH_SET * set = SubzoneConnectionHashTable[index];
+
+	Cell from = connection->From; // RA2: as above
+	Cell to = connection->To; // RA2: as above
+
+	Cell enter1;
+	Cell enter2;
+	Cell newcell1;
+	Cell newcell2;
+
+	CellClass * cell1ptr = &Map[from];
+
+	if (!cell1ptr->Is_Tile_Bridge() && !cell1ptr->Is_Tile_Train_Bridge()) {
+
+		int enter_dir = cell1ptr->Get_Tunnel()->EnterDir; // RA2: the facing stays an int
+		enter1 = Adjacent_Cell(from, (FacingType)(enter_dir + FACING_90)); // RA2: as above
+		enter2 = from + AdjacentCell[(enter_dir - FACING_90) & 7]; // RA2: the cell table is indexed directly here
+
+		CellClass * enterptr1 = &Map[enter1];
+		TubeClass * tube1 = enterptr1->Get_Tunnel();
+		CellClass * enterptr2 = &Map[enter2];
+		TubeClass * tube2 = enterptr2->Get_Tunnel();
+
+		if (tube1 == NULL || tube2 == NULL) {
+			return;
+		}
+
+		newcell1 = Follow_Path(enter1, tube1->Count, tube1->Dirs);
+		newcell2 = Follow_Path(enter2, tube2->Count, tube2->Dirs);
+	} else {
+		IsometricTileType bridge_set = cell1ptr->Is_Tile_Bridge() ? IsometricTileTypeClass::BridgeSet : IsometricTileTypeClass::TrainBridgeSet;
+		FacingType dir = BridgeSideFacings[cell1ptr->ITType - bridge_set];
+
+		enter1 = Adjacent_Cell(from, dir);
+		enter2 = Adjacent_Cell(from, (FacingType)(dir - FACING_180)); // RA2: both second cells lie at dir - 4
+		newcell1 = Adjacent_Cell(to, dir);
+		newcell2 = Adjacent_Cell(to, (FacingType)(dir - FACING_180));
+	}
+
+	{
+		int from_zone = CellSubzones[Get_Cell_Subzone_Index(from)].SubzoneID[index];
+		int to_zone = CellSubzones[Get_Cell_Subzone_Index(to)].SubzoneID[index];
+
+		int value = Zone_Pack32(from_zone, to_zone);
+		int bucket_index = Zone_Pack8(from_zone, to_zone);
+		connstr.Key = value;
+		connstr.Value.SubzoneID = value; // RA2: the record is filled field by field
+		connstr.Value.IsCrossBlock = false; // RA2: as above
+		set->Add_Object(bucket_index, connstr);
+	}
+
+	{
+		int from_zone = CellSubzones[Get_Cell_Subzone_Index(enter1)].SubzoneID[index];
+		int to_zone = CellSubzones[Get_Cell_Subzone_Index(newcell1)].SubzoneID[index];
+
+		int value = Zone_Pack32(from_zone, to_zone);
+		int bucket_index = Zone_Pack8(from_zone, to_zone);
+		connstr.Key = value;
+		connstr.Value.SubzoneID = value; // RA2: as above
+		connstr.Value.IsCrossBlock = false; // RA2: as above
+		set->Add_Object(bucket_index, connstr);
+	}
+
+	{
+		int from_zone = CellSubzones[Get_Cell_Subzone_Index(enter2)].SubzoneID[index];
+		int to_zone = CellSubzones[Get_Cell_Subzone_Index(newcell2)].SubzoneID[index];
+
+		int value = Zone_Pack32(from_zone, to_zone);
+		int bucket_index = Zone_Pack8(from_zone, to_zone);
+		connstr.Key = value;
+		connstr.Value.SubzoneID = value; // RA2: as above
+		connstr.Value.IsCrossBlock = false; // RA2: as above
+		set->Add_Object(bucket_index, connstr);
 	}
 }
 
@@ -10829,6 +11409,94 @@ Cell MapClass::Find_Bridge_End_Cell_For_Subzone(Cell const & cell, int subzone_l
 	}
 
 	return(CELL_NONE);
+}
+
+
+int MapClass::Largest_Water_Zone(int & zone) // RA2: 0x5658C0, RA2's form
+{
+	DynamicVectorClass<int> counts; // RA2: as above
+	Map.LocalIterX = Map.LocalRect.Y + Map.LocalRect.X + 1; // RA2: as above
+	Map.LocalIterY = Map.PlayRect.Width - Map.LocalRect.X + Map.LocalRect.Y; // RA2: as above
+	for (CellClass *cellptr = Map.Local_Iterate(); cellptr != 0; cellptr = Map.Local_Iterate()) { // RA2: as above
+		if (cellptr->Passability == 4) { // RA2: as above
+			int z = Get_Cell_Zone(cellptr->CellID, (MZoneType)10, false); // RA2: as above
+			if (z >= 0) { // RA2: as above
+				if (z >= counts.Count()) { // RA2: as above
+					int need = z - counts.Count() + 1; // RA2: as above
+					for (int index = 0; index < need; index++) { // RA2: as above
+						counts.Add(0); // RA2: as above
+					}
+				}
+				counts[z]++; // RA2: as above
+			}
+		}
+	}
+	int best = -1; // RA2: as above
+	int most = 0; // RA2: as above
+	for (int index = 0; index < counts.Count(); index++) { // RA2: as above
+		if (counts[index] > most) { // RA2: as above
+			best = index; // RA2: as above
+			most = counts[index]; // RA2: as above
+		}
+	}
+	zone = best; // RA2: as above
+	if (best >= 0) { // RA2: as above
+		return counts[best]; // RA2: as above
+	}
+	return(0); // RA2: as above
+}
+
+
+void MapClass::Find_Naval_Yard_Cells(Cell const & center, int radius_limit, int count_limit, int zone_type, int zone, DynamicVectorClass<Cell> & cells, int width, int height) // RA2: 0x565A50, RA2's form
+{
+	for (int radius = 1; radius <= radius_limit; radius++) { // RA2: as above
+		int negative_radius = -radius; // RA2: as above
+		for (int offset = negative_radius; offset <= radius; ++offset) { // RA2: as above
+			Cell candidate = (Cell)(center + Cell(radius, offset)); // RA2: as above
+			if (Get_Cell_Zone(candidate, (MZoneType)zone_type, false) == zone) { // RA2: as above
+				if (Is_Naval_Yard_Area_Clear(Rect(candidate.X, candidate.Y, width, height))) // RA2: as above
+					cells.Add(candidate); // RA2: as above
+			}
+			candidate = (Cell)(center + Cell(-radius, offset)); // RA2: as above
+			if (Get_Cell_Zone(candidate, (MZoneType)zone_type, false) == zone) { // RA2: as above
+				if (Is_Naval_Yard_Area_Clear(Rect(candidate.X, candidate.Y, width, height))) // RA2: as above
+					cells.Add(candidate); // RA2: as above
+			}
+			if (offset != radius && offset != negative_radius) { // RA2: as above
+				candidate = (Cell)(center + Cell(offset, radius)); // RA2: as above
+				if (Get_Cell_Zone(candidate, (MZoneType)zone_type, false) == zone) { // RA2: as above
+					if (Is_Naval_Yard_Area_Clear(Rect(candidate.X, candidate.Y, width, height))) // RA2: as above
+						cells.Add(candidate); // RA2: as above
+				}
+				candidate = (Cell)(center + Cell(offset, negative_radius)); // RA2: as above
+				if (Get_Cell_Zone(candidate, (MZoneType)zone_type, false) == zone) { // RA2: as above
+					if (Is_Naval_Yard_Area_Clear(Rect(candidate.X, candidate.Y, width, height))) // RA2: as above
+						cells.Add(candidate); // RA2: as above
+				}
+			}
+		}
+		if (cells.Count() > count_limit) return; // RA2: as above
+	}
+}
+
+
+bool MapClass::Is_Naval_Yard_Area_Clear(Rect const & rect) // RA2: 0x565E20, is every cell of the rectangle water (passability 3 or 4)
+{
+	int height = rect.Height; // RA2: as above
+	int width = rect.Width; // RA2: as above
+	for (int y = 0; y < height; y++) { // RA2: as above
+		for (int x = 0; x < width; x++) { // RA2: as above
+			int left = rect.X; // RA2: as above
+			int top = rect.Y; // RA2: as above
+			int cx = left + x; // RA2: as above
+			int cy = top + y; // RA2: as above
+			int kind = Map[Cell(cx, cy)].Passability; // RA2: as above
+			if (kind != 4 && kind != 3) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		}
+	}
+	return(true); // RA2: as above
 }
 
 
@@ -11113,7 +11781,7 @@ void MapClass::Update_Cell_Subzones(Cell const & cell)
 					|| (connection.To.X >= bounds.X && connection.To.X < bounds.Width + bounds.X
 					&& connection.To.Y >= bounds.Y && connection.To.Y < bounds.Y + bounds.Height)) {
 					if (connection.IsPassable) {
-						Register_Zone_Connection_Entries(connection, subzone);
+						Register_Zone_Connection_Entries(&connection, subzone); // RA2: by pointer
 					}
 				}
 			}
@@ -11359,6 +12027,83 @@ void MapClass::Initialize_Wall_Ownership(void)
 		}
 		cellptr = Iterate();
 	}
+}
+
+
+/// <summary>
+/// Rebuilds the body of water around a cell and re-dresses its shores.
+/// This routine grows the water out from the seed, throws away any body that came out
+/// unusable, and then lays the shore tiles on the land side and the water side so the new
+/// coastline draws properly. The scratch data the region builder works on is created and
+/// thrown away here when the map generator is not already running.
+/// </summary>
+/// <param name="origin">The cell the water is grown out from.</param>
+/// <returns>bool; Did the whole region come out without running into a conflict?</returns>
+bool MapClass::Rebuild_Shores_At(Cell const & origin)
+{
+	Map.Set_Cursor_Shape(NULL);
+
+	bool is_temp_data = false;
+	if (RMGCellData == NULL) {
+		RMGCellData = new MapRegionClass::CellData[MapCellStride * MapCellStride];
+		is_temp_data = true;
+	}
+
+	int r = MapCellStride;
+	int s = r * r;
+	for (int i = 0; i < s; i++) {
+		MapRegionClass::Get_Cell_Data(i).InFillReach = true;
+		MapRegionClass::Get_Cell_Data(i).WaterMask = -1;
+	}
+
+	Map.Reset_Iterator();
+	CellClass * cptr = Map.Iterate();
+	bool expanded = true;
+	while (cptr != NULL && expanded) {
+		expanded = Expand_Water(cptr, 0);
+		cptr = Map.Iterate();
+	}
+
+	Map.Reset_Iterator();
+	cptr = Map.Iterate();
+	while (cptr != NULL && expanded) {
+		Prune_Water(cptr);
+		cptr = Map.Iterate();
+	}
+
+	Mark_Fill_Area(origin, true);
+
+	Map.Reset_Iterator();
+	cptr = Map.Iterate();
+	while (cptr != NULL && expanded) {
+		expanded = Place_Shore(cptr, 1, 0);
+		cptr = Map.Iterate();
+	}
+
+	Map.Reset_Iterator();
+	cptr = Map.Iterate();
+	while (cptr != NULL && expanded) {
+		expanded = Place_Shore(cptr, 2, 0);
+		cptr = Map.Iterate();
+	}
+
+	ObjectClass * obj = Map.PendingObjectPtr;
+	Map.PendingObject = NULL;
+	if (obj) {
+		delete obj;
+		Map.PendingObjectPtr = NULL;
+	}
+
+	for (int j = 0; j < s; j++) {
+		MapRegionClass::Get_Cell_Data(j).InFillReach = true;
+	}
+
+	if (is_temp_data) {
+		delete [] RMGCellData;
+		RMGCellData = NULL;
+	}
+
+	return(expanded);
 }
 
 
@@ -11648,6 +12393,31 @@ bool MapClass::Is_Shrouded(Coord const & coord)
 }
 
 
+bool MapClass::Is_Under_Fog(Coord const & coord) // RA2: 0x568280, is the coordinate under fog for the player (checks the allied gap coverage)
+{
+	int level = coord.Z / LEVEL_LEPTON_H; // RA2: as above
+	if ((level & 1) != 0) { // RA2: as above
+		int offset = level / 2 + 1; // RA2: as above
+		Cell cell = Cell(coord.X / 256, coord.Y / 256); // RA2: as above
+		CellClass *cellptr = &Map[Cell(cell.X - offset, cell.Y - offset)]; // RA2: as above
+		if ((int)cellptr->AlliedGapsCoveringThisCell <= 0) { // RA2: as above
+			return(false); // RA2: as above
+		}
+		if ((int)cellptr->Adjacent_Cell(FACING_SE).AlliedGapsCoveringThisCell > 0) { // RA2: as above
+			return(true); // RA2: as above
+		}
+	} else { // RA2: as above
+		int offset = level / 2; // RA2: as above
+		Cell cell = Cell(coord.X / 256, coord.Y / 256); // RA2: as above
+		CellClass *cellptr = &Map[Cell(cell.X - offset, cell.Y - offset)]; // RA2: as above
+		if ((int)cellptr->AlliedGapsCoveringThisCell > 0) { // RA2: as above
+			return(true); // RA2: as above
+		}
+	}
+	return(false); // RA2: as above
+}
+
+
 /// <summary>
 /// Determines if a coordinate is hidden under the fog of war.
 /// Which cell a coordinate appears over depends on how high it is, so the height is folded
@@ -11655,11 +12425,30 @@ bool MapClass::Is_Shrouded(Coord const & coord)
 /// under ObiWan sees through the fog, and nothing is reported as hidden from them.
 /// </summary>
 /// <returns>bool; Is the coordinate under the fog?</returns>
-bool MapClass::Is_Fogged(Coord const & coord)
+bool MapClass::Is_Fogged(Coord const & coord) // RA2: RA2's form
 {
 	CellClass * cptr;
 
-	return(false);
+	if (Session.Type == GAME_NORMAL || !PlayerPtr->IsDefeated || !MuteSWLaunches) { // RA2: as above
+		int level_height = coord.Z / LEVEL_LEPTON_H; // RA2: as above
+		if ((level_height & 1) != 0) { // RA2: as above
+			int offset = level_height / 2 + 1; // RA2: as above
+			Cell cell = coord.As_Cell(); // RA2: as above
+			cptr = &Map[Cell(cell.X - offset, cell.Y - offset)]; // RA2: as above
+			if (cptr->IsFogMapped) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			cptr = &cptr->Adjacent_Cell(FACING_SE); // RA2: as above
+		} else { // RA2: as above
+			int offset = level_height / 2; // RA2: as above
+			Cell cell = coord.As_Cell(); // RA2: as above
+			cptr = &Map[Cell(cell.X - offset, cell.Y - offset)]; // RA2: as above
+		}
+		if (!cptr->IsFogMapped) { // RA2: as above
+			return(true); // RA2: as above
+		}
+	}
+	return(false); // RA2: as above
 }
 
 
@@ -11723,6 +12512,43 @@ void MapClass::Deinit_Fog_System(void)
 		cellptr->Unfog_Cell();
 		cellptr = Iterate();
 	}
+}
+
+
+/// <summary>
+/// Determines if a block of cells is free for a house to use.
+/// This routine checks that the house is not already occupying any part of the area and that
+/// the whole of it lies on the playable map.
+/// </summary>
+/// <param name="house">The house index whose occupancy is being tested for.</param>
+/// <returns>bool; Is the area clear of this house and on the map?</returns>
+bool MapClass::Is_Area_Available(Rect const & rect, int house) // RA2: 0x5686B0, RA2's form
+{
+	int bit = 1 << house; // RA2: as above
+	for (int x = rect.X; x < rect.X + rect.Width; x++) { // RA2: as above
+		for (int y = rect.Y; y < rect.Y + rect.Height; y++) { // RA2: as above
+			CellClass &cell = Map[Cell(x, y)]; // RA2: as above
+			if (cell.Cell_Terrain() != 0) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (bit & cell.OccupiedBy) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (cell.Overlay != OVERLAY_NONE) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (cell.Passability != 0) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (cell.Ramp != 0) { // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (cell.Cell_Building() != 0) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		}
+	}
+	return(In_Local_Radar(rect, true)); // RA2: as above
 }
 
 
@@ -12283,80 +13109,52 @@ void MapClass::Place_Wall(Cell const & cell, HouseClass * owner, BuildingTypeCla
 }
 
 
-/// <summary>
-/// Rebuilds the body of water around a cell and re-dresses its shores.
-/// This routine grows the water out from the seed, throws away any body that came out
-/// unusable, and then lays the shore tiles on the land side and the water side so the new
-/// coastline draws properly. The scratch data the region builder works on is created and
-/// thrown away here when the map generator is not already running.
-/// </summary>
-/// <param name="origin">The cell the water is grown out from.</param>
-/// <returns>bool; Did the whole region come out without running into a conflict?</returns>
-bool MapClass::Rebuild_Shores_At(Cell const & origin)
+void MapClass::Lower_Max_Level(int value) // RA2: 0x56A870, MaxLevel is lowered to the value and kept at 0 or more
 {
-	Map.Set_Cursor_Shape(NULL);
+	MaxLevel = MaxLevel < value ? MaxLevel : value; // RA2: as above
+	MaxLevel = MaxLevel > 0 ? MaxLevel : 0; // RA2: as above
+}
 
-	bool is_temp_data = false;
-	if (RMGCellData == NULL) {
-		RMGCellData = new MapRegionClass::CellData[MapCellStride * MapCellStride];
-		is_temp_data = true;
+
+int MapClass::Get_Max_Level() // RA2: 0x56A8A0, RA2's form
+{
+	if (MaxLevel >= 13) { // RA2: as above
+		int count = Array.Length(); // RA2: as above
+		for (int index = 0; index < count; index++) { // RA2: as above
+			CellClass *cell = Array[index]; // RA2: as above
+			if (cell != 0) { // RA2: as above
+				Lower_Max_Level(cell->Height); // RA2: as above
+			}
+		}
 	}
+	return MaxLevel; // RA2: as above
+}
 
-	int r = MapCellStride;
-	int s = r * r;
-	for (int i = 0; i < s; i++) {
-		MapRegionClass::Get_Cell_Data(i).InFillReach = true;
-		MapRegionClass::Get_Cell_Data(i).WaterMask = -1;
+
+int __fastcall Find_Compatible_Passability_Row(int row1, int row2) // RA2: 0x56A900, the zone layer (0-11) that is passable wherever both given layers are, with the most such columns; -1 if none
+{
+	int best = -1; // RA2: as above
+	int best_count = 0; // RA2: as above
+	for (int row = 0; row < 12; row++) { // RA2: as above
+		bool ok = true; // RA2: as above
+		int count = 0; // RA2: as above
+		for (int index = 0; index < 8; index++) { // RA2: as above
+			int value1 = MZonePassability[row1][index]; // RA2: as above
+			int value2 = MZonePassability[row2][index]; // RA2: as above
+			int value = MZonePassability[row][index]; // RA2: as above
+			if ((value1 == 2 || value2 == 2) && value == 1) { // RA2: as above
+				ok = false; // RA2: as above
+			}
+			if (value1 == value && value2 == value && value == 1) { // RA2: as above
+				count++; // RA2: as above
+			}
+		}
+		if (ok && count > best_count) { // RA2: as above
+			best_count = count; // RA2: as above
+			best = row; // RA2: as above
+		}
 	}
-
-	Map.Reset_Iterator();
-	CellClass * cptr = Map.Iterate();
-	bool expanded = true;
-	while (cptr != NULL && expanded) {
-		expanded = Expand_Water(cptr, 0);
-		cptr = Map.Iterate();
-	}
-
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL && expanded) {
-		Prune_Water(cptr);
-		cptr = Map.Iterate();
-	}
-
-	Mark_Fill_Area(origin, true);
-
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 1, 0);
-		cptr = Map.Iterate();
-	}
-
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 2, 0);
-		cptr = Map.Iterate();
-	}
-
-	ObjectClass * obj = Map.PendingObjectPtr;
-	Map.PendingObject = NULL;
-	if (obj) {
-		delete obj;
-		Map.PendingObjectPtr = NULL;
-	}
-
-	for (int j = 0; j < s; j++) {
-		MapRegionClass::Get_Cell_Data(j).InFillReach = true;
-	}
-
-	if (is_temp_data) {
-		delete [] RMGCellData;
-		RMGCellData = NULL;
-	}
-
-	return(expanded);
+	return best; // RA2: as above
 }
 
 
@@ -13315,116 +14113,6 @@ void MapClass::Reset_Subzone(int subzone)
 			}
 		}
 	}
-}
-
-
-/// <summary>
-/// Records the subzone links a bridge or tunnel makes at one subzone level.
-/// A subzone rebuild only links cells that touch, so a span has to be stitched in by hand.
-/// This routine stages the link between the two ends of the span and between the lanes either
-/// side of them; the rebuild later unpacks the staged pairs into the subzone adjacency lists.
-/// </summary>
-/// <param name="connection">The bridge or tunnel connection to stitch in.</param>
-/// <param name="index">The subzone level whose staging set receives the links.</param>
-void MapClass::Register_Zone_Connection_Entries(ZoneConnectionClass & connection, int index)
-{
-	SUBZONE_CONNECTION_HASH_SET::ObjectType connstr;
-	SUBZONE_CONNECTION_HASH_SET * set = SubzoneConnectionHashTable[index];
-
-	Cell from = connection.From;
-	Cell to = connection.To;
-
-	Cell enter1;
-	Cell enter2;
-	Cell newcell1;
-	Cell newcell2;
-
-	CellClass * cell1ptr = &Map[from];
-
-	if (!cell1ptr->Is_Tile_Bridge() && !cell1ptr->Is_Tile_Train_Bridge()) {
-
-		FacingType enter_dir = cell1ptr->Get_Tunnel()->EnterDir;
-		enter1 = Adjacent_Cell(from, (FacingType)(enter_dir + FACING_90));
-		enter2 = Adjacent_Cell(from, (FacingType)(enter_dir - FACING_90));
-
-		CellClass * enterptr1 = &Map[enter1];
-		TubeClass * tube1 = enterptr1->Get_Tunnel();
-		CellClass * enterptr2 = &Map[enter2];
-		TubeClass * tube2 = enterptr2->Get_Tunnel();
-
-		if (tube1 == NULL || tube2 == NULL) {
-			return;
-		}
-
-		newcell1 = Follow_Path(enter1, tube1->Count, tube1->Dirs);
-		newcell2 = Follow_Path(enter2, tube2->Count, tube2->Dirs);
-	} else {
-		IsometricTileType bridge_set = cell1ptr->Is_Tile_Bridge() ? IsometricTileTypeClass::BridgeSet : IsometricTileTypeClass::TrainBridgeSet;
-		FacingType dir = BridgeSideFacings[cell1ptr->ITType - bridge_set];
-
-		enter1 = Adjacent_Cell(from, dir);
-		enter2 = Adjacent_Cell(from, (FacingType)(dir + FACING_180));
-		newcell1 = Adjacent_Cell(to, dir);
-		newcell2 = Adjacent_Cell(to, (FacingType)(dir - FACING_180));
-	}
-
-	{
-		int from_zone = CellSubzones[Get_Cell_Subzone_Index(from)].SubzoneID[index];
-		int to_zone = CellSubzones[Get_Cell_Subzone_Index(to)].SubzoneID[index];
-
-		int value = Zone_Pack32(from_zone, to_zone);
-		int bucket_index = Zone_Pack8(from_zone, to_zone);
-		connstr.Key = value;
-		connstr.Value = SubzoneConnectionStruct(value);
-		connstr.Value.IsCrossBlock = 0;
-		set->Add_Object(bucket_index, connstr);
-	}
-
-	{
-		int from_zone = CellSubzones[Get_Cell_Subzone_Index(enter1)].SubzoneID[index];
-		int to_zone = CellSubzones[Get_Cell_Subzone_Index(newcell1)].SubzoneID[index];
-
-		int value = Zone_Pack32(from_zone, to_zone);
-		int bucket_index = Zone_Pack8(from_zone, to_zone);
-		connstr.Key = value;
-		connstr.Value = SubzoneConnectionStruct(value);
-		connstr.Value.IsCrossBlock = 0;
-		set->Add_Object(bucket_index, connstr);
-	}
-
-	{
-		int from_zone = CellSubzones[Get_Cell_Subzone_Index(enter2)].SubzoneID[index];
-		int to_zone = CellSubzones[Get_Cell_Subzone_Index(newcell2)].SubzoneID[index];
-
-		int value = Zone_Pack32(from_zone, to_zone);
-		int bucket_index = Zone_Pack8(from_zone, to_zone);
-		connstr.Key = value;
-		connstr.Value = SubzoneConnectionStruct(value);
-		connstr.Value.IsCrossBlock = 0;
-		set->Add_Object(bucket_index, connstr);
-	}
-}
-
-
-/// <summary>
-/// Determines if a block of cells is free for a house to use.
-/// This routine checks that the house is not already occupying any part of the area and that
-/// the whole of it lies on the playable map.
-/// </summary>
-/// <param name="house">The house index whose occupancy is being tested for.</param>
-/// <returns>bool; Is the area clear of this house and on the map?</returns>
-bool MapClass::Is_Area_Available(Rect const & rect, int house)
-{
-	int mask = 1 << house;
-	for (int x = rect.X; x < rect.X + rect.Width; x++) {
-		for (int y = rect.Y; y < rect.Y + rect.Height; y++) {
-			CellClass * cptr = &Map[Cell(x,y)];
-			if (cptr->OccupiedBy & mask) {
-				return(false);
-			}
-		}
-	}
-	return(In_Local_Radar(rect));
 }
 
 

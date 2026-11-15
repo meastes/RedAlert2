@@ -125,6 +125,7 @@ class MapClass: public GScreenClass
 		int Cell_Region(Cell const & cell);
 		int Largest_Water_Zone(int & zone); // RA2: 0x5658C0, counts the water cells (Passability 4) per zone and gives the biggest zone and its count
 		void Find_Naval_Yard_Cells(Cell const & center, int a, int b, int c, int zone, DynamicVectorClass<Cell> & cells, int width, int height); // RA2: 0x565A50, collects water-side cells for a naval yard of the size around the center
+		bool Is_Naval_Yard_Area_Clear(Rect const & rect); // RA2: 0x565E20, every cell of the rectangle is water (passability 3 or 4)
 		void Reset_Shroud_All(void); // RA2: 0x0055A070 (declared ahead of its definition; map.cpp is landed up to 0x559F10)
 		int Cell_Threat(Cell const & cell, HouseClass const & house);
 		Cell Pick_Random_Location(void) const;
@@ -161,7 +162,7 @@ class MapClass: public GScreenClass
 		int Get_Max_Level(void); // RA2: 0x56A8A0, MaxLevel after lowering it to every cell
 		int Subzone_Span(CellSubzoneStruct * seed, int subzone_level, int subzone_id, Rect const & bounds, Cell const & cell);
 		void Register_Subzone_Zone_Connections(int subzone);
-		void Register_Zone_Connection_Entries(ZoneConnectionClass & connection, int index);
+		void Register_Zone_Connection_Entries(ZoneConnectionClass * connection, int index); // RA2: 0x564B60, by pointer
 		Cell Get_Bridge_Zone_Connection_Cell(CellClass * cptr, bool isbridge);
 		Cell Get_Zone_Connection_Destination(Cell const & cell, Cell const & reference);
 		Cell Find_Bridge_Span_End_Cell(Cell const & cell, Cell const & reference);
@@ -233,6 +234,8 @@ class MapClass: public GScreenClass
 		 */
 		static int Get_Low_Bridge_EW_Neighbor_Mask(Cell const & cell);
 		static int Get_Low_Bridge_NS_Neighbor_Mask(Cell const & cell);
+		static int Get_Low_Bridge2_EW_Neighbor_Mask(Cell const & cell); // RA2: 0x55EB70, as Get_Low_Bridge_EW_Neighbor_Mask for the second low bridge kind
+		static int Get_Low_Bridge2_NS_Neighbor_Mask(Cell const & cell); // RA2: 0x55ECA0, as Get_Low_Bridge_NS_Neighbor_Mask for the second low bridge kind
 		bool Damage_Low_Bridge_EW(Cell const & cell);
 		void Destroy_Bridge2_Near(Cell const & cell); // RA2: 0x556520, destroys the concrete bridge deck (BridgeSet tiles) near the cell
 		void Destroy_Low_Bridge_Span(Cell const & cell); // RA2: 0x556BF0, the low bridge piece at the cell and its neighbours are destroyed
@@ -242,15 +245,24 @@ class MapClass: public GScreenClass
 		void Destroy_Low_Bridge_NS(Cell const & cell); // RA2: 0x5579C0, the north-south low bridge around the cell is blown up piece by piece
 		void Destroy_Low_Bridge2_EW(Cell const & cell); // RA2: 0x557CE0, as Destroy_Low_Bridge_EW for the second low bridge kind
 		void Destroy_Low_Bridge2_NS(Cell const & cell); // RA2: 0x558010, as Destroy_Low_Bridge_NS for the second low bridge kind
-		bool Destroy_Low_Bridge_Piece(Cell const & cell); // RA2: 0x55EDB0, a low bridge piece is destroyed with its explosions
+		bool Damage_Low_Bridge2(Cell const & cell); // RA2: 0x55EDB0, as Damage_Low_Bridge for the second low bridge kind
 		bool Damage_Low_Bridge_NS(Cell const & cell);
+		bool Damage_Low_Bridge2_EW(Cell const & cell); // RA2: 0x55F020, as Damage_Low_Bridge_EW for the second low bridge kind
+		bool Damage_Low_Bridge2_NS(Cell const & cell); // RA2: 0x55F540, as Damage_Low_Bridge_NS for the second low bridge kind
 		void Damage_Low_Bridge_Piece_EW(Cell const & cell);
 		void Damage_Low_Bridge_Piece_NS(Cell const & cell);
+		void Damage_Low_Bridge2_Piece_EW(Cell const & cell); // RA2: 0x5606D0, as Damage_Low_Bridge_Piece_EW for the second low bridge kind
+		void Damage_Low_Bridge2_Piece_NS(Cell const & cell); // RA2: 0x560C10, as Damage_Low_Bridge_Piece_NS for the second low bridge kind
 		void Spring_Low_Bridge_Destroyed_EW(Cell cell);
 		void Spring_Low_Bridge_Destroyed_NS(Cell cell);
+		void Spring_Low_Bridge2_Destroyed_NS(Cell cell); // RA2: 0x55FA60, as Spring_Low_Bridge_Destroyed_NS for the second low bridge kind
+		void Spring_Low_Bridge2_Destroyed_EW(Cell cell); // RA2: 0x55FB90, as Spring_Low_Bridge_Destroyed_EW for the second low bridge kind
 		void Repair_Low_Bridge_Span(Cell const & cell);
 		void Repair_Low_Bridge_EW(Cell const & cell);
 		void Repair_Low_Bridge_NS(Cell const & cell);
+		void Repair_Low_Bridge2_Span(Cell const & cell); // RA2: 0x561340, as Repair_Low_Bridge_Span for the second low bridge kind
+		void Repair_Low_Bridge2_EW(Cell const & cell); // RA2: 0x561F60, as Repair_Low_Bridge_EW for the second low bridge kind
+		void Repair_Low_Bridge2_NS(Cell const & cell); // RA2: 0x562450, as Repair_Low_Bridge_NS for the second low bridge kind
 		static bool Is_Low_Bridge(Cell const & cell);
 		static bool Is_Low_Bridge2(Cell const & cell); // RA2: 0x562980, as Is_Low_Bridge for the second low bridge kind
 
