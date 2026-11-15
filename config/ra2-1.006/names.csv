@@ -3465,6 +3465,7 @@ address,symbol,evidence
 0x005B53E0,?Set_Edit_Focus@MessageListClass@@QAEXXZ,"compiled from src/msglist.cpp, matched"
 0x005B53F0,?Has_Edit_Focus@MessageListClass@@QAE_NXZ,"compiled from src/msglist.cpp, matched"
 0x005B5410,?Add_Edit@MessageListClass@@QAEPAVTextLabelClass@@HW4TextPrintType@@PAGDH@Z,"compiled from src/msglist.cpp, matched"
+0x005B5580,?Remove_Edit@MessageListClass@@QAEXXZ,"compiled from src/msglist.cpp, matched"
 0x005B55E0,?Get_Edit_Buf@MessageListClass@@QAEPAGXZ,"compiled from src/msglist.cpp, matched"
 0x005B55F0,?Set_Edit_Color@MessageListClass@@QAEXH@Z,"compiled from src/msglist.cpp, matched"
 0x005B5610,?Manage@MessageListClass@@QAEHXZ,"compiled from src/msglist.cpp, matched"
