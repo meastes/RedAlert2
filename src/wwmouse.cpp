@@ -263,13 +263,9 @@ void WWMouseClass::Calc_Confining_Rect(void)
  *=============================================================================================*/
 int WWMouseClass::Get_Mouse_State(void) const
 {
-	if (!Is_Captured()) {
-		ShowCursor(FALSE);
-		int state = ShowCursor(TRUE);
-		return(state);
-	}
-	return(MouseState);
+	return MouseState; // RA2: RA2's form
 }
+
 
 
 /***********************************************************************************************
