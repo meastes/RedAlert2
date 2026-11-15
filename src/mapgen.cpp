@@ -509,22 +509,35 @@ Cell MapRegionClass::Pick_Random_Clear_Cell(void)
 /// none to spare.</returns>
 Cell MapRegionClass::Pick_Random_Clear_Interior_Cell(void)
 {
-	MapRegionClass::CellData & data = RMGCellData[0];
-	int grid_size = MapCellStride * MapCellStride;
+	MapRegionClass::CellData *cell = RMGCellData; // RA2: RA2's form
+	int count = MapCellStride * MapCellStride; // RA2: as above
 	int tries = 0;
-	while (true) {
-		data = RMGCellData[Pick_Random_UInt(0, grid_size - 1)];
+	for (;;) { // RA2: as above
+		unsigned int maximum = count - 1; // RA2: as above
+		unsigned int index; // RA2: as above
+		do { // RA2: as above
+			index = (unsigned int)((unsigned int)RMGRandom() * (1.0 / 4294967295.0) * (unsigned int)(maximum + 1) + (double)0); // RA2: as above
+		} while (index > maximum); // RA2: as above
+		*cell = RMGCellData[index]; // RA2: as above
 		if (++tries >= 100) {
-			return(Cell(0,0));
+			break; // RA2: as above
 		}
-		if (data.RegionID == ID && data.CellID != Cell(0, 0) && data.Interior) {
-			if (Map[data.CellID].Is_Tile_Clear()) {
-				break;
-			}
+		if (cell->RegionID != ID) { // RA2: as above
+			continue; // RA2: as above
+		}
+		if (cell->CellID.X == 0 && cell->CellID.Y == 0) { // RA2: as above
+			continue; // RA2: as above
+		}
+		if (!cell->Interior) { // RA2: as above
+			continue; // RA2: as above
+		}
+		if (Map[cell->CellID].Is_Tile_Clear()) { // RA2: as above
+			return cell->CellID; // RA2: as above
 		}
 	}
-	return(data.CellID);
+	return Cell(0, 0); // RA2: as above
 }
+
 
 
 /// <summary>
