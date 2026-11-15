@@ -7859,6 +7859,8 @@ void BuildingClass::Detach_Anim(AnimClass * anim)
 
 
 
+
+
 /// <summary>
 /// Stops one of this building's attached animations.
 /// Pass BANIM_ALL to stop every animation the building is running.
@@ -8572,30 +8574,27 @@ void BuildingClass::Disconnect_Laser_Fence(FacingType dir, bool explode)
 {
 	if (Class->IsLaserFencePost) {
 		int range = Class->ThreatRange >> 8;
-		range = MAX(range, 1);
-		unsigned face = (unsigned)dir % 4;
-		Cell working_cell = Center_Coord().As_Cell();
-
-		for (int i = 0; i < range; i++) {
-			working_cell = Adjacent_Cell(working_cell, dir);
-			BuildingClass * building = Map[working_cell].Cell_Building();
-
-			if (building != NULL) {
-				if (!building->Class->IsLaserFence) return;
-				if (Owner() != building->Owner()) return;
-				if ((building->PrimaryFacing.Current().As_Axis()) != (int)face) return;
-
+		if (range <= 1) range = 1; // RA2: RA2's form
+		unsigned axis = (unsigned)dir % 4; // RA2: as above
+		Cell cell = Center_Coord().As_Cell(); // RA2: as above
+		for (int index = 0; index < range; ++index) { // RA2: as above
+			cell = Adjacent_Cell(cell, dir); // RA2: as above
+			BuildingClass *segment = static_cast<BuildingClass *>(Map[cell].Cell_Building()); // RA2: as above
+			if (segment) { // RA2: as above
+				if (!segment->Class->IsLaserFence) return; // RA2: as above
+				if (Owner() != segment->Owner()) return; // RA2: as above
+				if ((unsigned)(segment->PrimaryFacing.Current().As_Axis() & 3) != axis) return; // RA2: as above
 				if (explode) {
-					Coord coord = building->Center_Coord();
-					Combat_Lighting(coord, building->Strength, Rule->C4Warhead, false);
-					building->Take_Damage(building->Strength, 0, Rule->C4Warhead, NULL, true, true);
+					Combat_Lighting(segment->Center_Coord(), segment->Strength, Rule->C4Warhead, 0, 0); // RA2: as above
+					segment->Take_Damage(segment->Strength, 0, Rule->C4Warhead, 0, true, 1); // RA2: as above
 				} else {
-					building->Delete_Me();
+					segment->Delete_Me(); // RA2: as above
 				}
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9644,6 +9643,8 @@ void BuildingClass::SensorArrayActivate(Cell cell) // RA2: Enable_Sensor_Array i
 		}
 	}
 }
+
+
 
 
 
@@ -10715,7 +10716,6 @@ void BuildingClass::Eject_Occupants(bool hunt) // RA2: not in TibSun, at 0x452F5
 	probe.X = (short)((unsigned int)(int)probe.X + (unsigned int)width); // RA2: as above
 	probe.Y = (short)((unsigned int)(int)probe.Y + (unsigned int)height); // RA2: as above
 	InfantryClass *occupant = Occupants[0]; // RA2: as above
-
 	int entry_result = occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true); // RA2: as above
 	while (entry_result != 0) { // RA2: as above
 		if ((int)probe.Y <= (int)Get_Cell().Y - 1) goto after_first_edge; // RA2: as above
@@ -10785,6 +10785,7 @@ after_first_edge: // RA2: as above
 	occupants.Resize(capacity, 0); // RA2: as above
 	UpdateThreatInCell(Get_Cell_Ptr());
 }
+
 
 
 
