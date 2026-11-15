@@ -2513,57 +2513,43 @@ void TeamClass::TMission_ATTACK(TeamMissionClass * mission, bool)
 		**	team members having any weapons, will a member without a weapon
 		**	be chosen.
 		*/
-		FootClass const * candidate = Fetch_A_Leader();
+		FootClass * leader = Fetch_A_Leader(); // RA2: RA2's form
 
 		/*
 		**	Have the team leader pick what the next team target will be.
 		*/
-		switch (mission->Data.Quarry) {
-			case QUARRY_ANYTHING:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_NORMAL, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_BUILDINGS:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_BUILDINGS, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_HARVESTERS:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_TIBERIUM, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_INFANTRY:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_INFANTRY, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_VEHICLES:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_VEHICLES, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_FACTORIES:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_FACTORIES, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_DEFENSE:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_BASE_DEFENSE, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_THREAT:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_NORMAL, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			case QUARRY_POWER:
-				Assign_Mission_Target(candidate->Greatest_Threat(THREAT_POWER, candidate->PositionCoord, Class->OnlyTargetHouseEnemy));
-				break;
-
-			default:
-				break;
+		ThreatType target_data = Quarry_To_Threat(mission->Data.Quarry); // RA2: as above
+		AbstractClass * target = leader->Greatest_Threat(target_data, Coord(leader->PositionCoord), Class->OnlyTargetHouseEnemy); // RA2: as above
+		Assign_Mission_Target(target); // RA2: as above
+		bool armed = true; // RA2: as above
+		if (MissionTarget != NULL) { // RA2: as above
+			for (FootClass * member = Member; member != NULL; member = (FootClass *)member->Member) { // RA2: as above
+				if (member->Techno_Type_Class()->MaxAmmo <= 0 || member->Ammo > 0) { // RA2: as above
+					armed = false; // RA2: as above
+					break; // RA2: as above
+				}
+			}
 		}
-		if (MissionTarget == NULL || !Ammo_Check()) IsNextMission = true;
+		if (armed) { // RA2: as above
+			IsNextMission = true; // RA2: as above
+		}
 	}
-	if (MissionTarget == NULL || !Ammo_Check()) IsNextMission = true;
+	bool armed = true; // RA2: as above
+	if (MissionTarget != NULL) { // RA2: as above
+		for (FootClass * member = Member; member != NULL; member = (FootClass *)member->Member) { // RA2: as above
+			if (member->Techno_Type_Class()->MaxAmmo <= 0 || member->Ammo > 0) { // RA2: as above
+				armed = false; // RA2: as above
+				break;
+			}
+		}
+	}
+	if (armed) { // RA2: as above
+		IsNextMission = true; // RA2: as above
+	}
 
 	Coordinate_Attack();
 }
+
 
 
 /***********************************************************************************************
@@ -2643,43 +2629,39 @@ void TeamClass::TMission_LOAD(TeamMissionClass * mission, bool)
 /// </summary>
 void TeamClass::TMission_DEPLOY(TeamMissionClass * mission, bool)
 {
-	FootClass * obj = Member;
+	FootClass *unit = Member; // RA2: RA2's form
 	bool finished = true;
-
-	while (obj != NULL) {
-
-		Coordinate_Conscript(obj);
-
-		if (_Is_It_Playing(obj)) {
-
-			if (obj->RTTI == RTTI_UNIT) {
-				UnitClass * unit = (UnitClass *)obj;
-				if (unit->Class->DeploysInto != NULL) {
-					finished = false;
-					if (unit->Mission != MISSION_UNLOAD) {
-						unit->Mark(MARK_UP);
-						if (!unit->Class->DeploysInto->Legal_Placement(unit->PositionCell, NULL)) {
-							unit->Class->DeploysInto->Flush_For_Placement(unit->PositionCell, unit->House);
-							unit->Mark(MARK_DOWN);
-						} else {
-							unit->Mark(MARK_DOWN);
-							unit->Assign_Destination(NULL);
-							unit->Assign_Target(NULL);
-							unit->Assign_Mission(MISSION_UNLOAD);
-						}
-
+	while (unit != 0) { // RA2: as above
+		Coordinate_Conscript(unit); // RA2: as above
+		if (_Is_It_Breathing(unit) && (unit->IsInitiated || unit->Fetch_RTTI() == RTTI_AIRCRAFT)) { // RA2: as above
+			bool mcv = unit->Fetch_RTTI() == RTTI_UNIT && ((UnitClass *)unit)->Class->DeploysInto != 0; // RA2: as above
+			bool deployer = unit->Fetch_RTTI() == RTTI_UNIT && (((UnitClass *)unit)->Class)->IsSimpleDeployer; // RA2: as above
+			bool infantry = unit->Fetch_RTTI() == 0xF && ((InfantryClass *)unit)->Is_Deployer(); // RA2: as above
+			if (mcv) { // RA2: as above
+				finished = false; // RA2: as above
+				if (unit->Get_Mission() != MISSION_UNLOAD) { // RA2: as above
+					unit->Mark(MARK_UP); // RA2: as above
+					if (!((UnitClass *)unit)->Class->DeploysInto->Legal_Placement(unit->Get_Cell(), 0)) { // RA2: as above
+						((UnitClass *)unit)->Class->DeploysInto->Flush_For_Placement(unit->Get_Cell(), unit->House); // RA2: as above
+						unit->Mark(MARK_DOWN); // RA2: as above
+					} else { // RA2: as above
+						unit->Mark(MARK_DOWN); // RA2: as above
+						unit->Assign_Destination(0, true); // RA2: as above
+						unit->Assign_Target(0); // RA2: as above
+						unit->QueueMission(MISSION_UNLOAD, false); // RA2: as above
 					}
 				}
+			} else if ((deployer || infantry) && unit->Get_Mission() != MISSION_UNLOAD) { // RA2: as above
+				unit->QueueMission(MISSION_UNLOAD, false); // RA2: as above
 			}
 		}
-
-		obj = obj->Member;
+		unit = (FootClass *)unit->Member; // RA2: as above
 	}
-
 	if (finished) {
 		IsNextMission = true;
 	}
 }
+
 
 
 /// <summary>
