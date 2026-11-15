@@ -99,6 +99,9 @@
 
 #include "bench.hh"
 
+
+extern bool CrateWater[CRATE_COUNT]; // RA2: which crates may appear on water
+
 #include <cstring>
 
 
@@ -893,6 +896,68 @@ bool RulesClass::Combat_Damage(CCINIClass const & ini)
 }
 
 
+/// <summary>
+/// Fetches the radiation control values.
+/// These govern how long a radiation site lasts, how strong it can grow, how fast it
+/// decays, the light and tint it casts on the terrain and the warhead it damages with.
+/// </summary>
+/// <returns>bool; Was a radiation section found in the control file?</returns>
+bool RulesClass::Radiation(CCINIClass const & ini) // RA2: not in TibSun, at 0x647B60
+{
+	static char const * const RADIATION = "Radiation";
+	if (ini.Is_Present(RADIATION)) {
+		RadDurationMultiple = ini.Get_Int(RADIATION, "RadDurationMultiple", RadDurationMultiple);
+		RadApplicationDelay = ini.Get_Int(RADIATION, "RadApplicationDelay", RadApplicationDelay);
+		RadLevelMax = ini.Get_Int(RADIATION, "RadLevelMax", RadLevelMax);
+		RadLevelDelay = ini.Get_Int(RADIATION, "RadLevelDelay", RadLevelDelay);
+		RadLightDelay = ini.Get_Int(RADIATION, "RadLightDelay", RadLightDelay);
+		RadLevelFactor = ini.Get_Float(RADIATION, "RadLevelFactor", RadLevelFactor);
+		RadLightFactor = ini.Get_Float(RADIATION, "RadLightFactor", RadLightFactor);
+		RadTintFactor = ini.Get_Float(RADIATION, "RadTintFactor", RadTintFactor);
+		RadColor = ini.Get_RGBClass(RADIATION, "RadColor", RadColor);
+		RadSiteWarhead = TGet_Class(ini, RADIATION, "RadSiteWarhead", RadSiteWarhead);
+		return(true);
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// Fetches the elevation model values.
+/// Units on higher ground gain range in steps of the elevation increment, up to the cap.
+/// </summary>
+/// <returns>bool; Was an elevation model section found in the control file?</returns>
+bool RulesClass::Elevation_Model(CCINIClass const & ini) // RA2: not in TibSun, at 0x647D40
+{
+	static char const * const ELEVATIONMODEL = "ElevationModel";
+	if (ini.Is_Present(ELEVATIONMODEL)) {
+		ElevationIncrement = ini.Get_Int(ELEVATIONMODEL, "ElevationIncrement", ElevationIncrement);
+		ElevationIncrementBonus = ini.Get_Float(ELEVATIONMODEL, "ElevationIncrementBonus", ElevationIncrementBonus);
+		ElevationBonusCap = ini.Get_Float(ELEVATIONMODEL, "ElevationBonusCap", ElevationBonusCap);
+		return(true);
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// Fetches the wall model values.
+/// These say whether allied walls let fire through and how strong a weapon must be to
+/// punch through a wall.
+/// </summary>
+/// <returns>bool; Was a wall model section found in the control file?</returns>
+bool RulesClass::Wall_Model(CCINIClass const & ini) // RA2: not in TibSun, at 0x647DE0
+{
+	static char const * const WALLMODEL = "WallModel";
+	if (ini.Is_Present(WALLMODEL)) {
+		AlliedWallTransparency = ini.Get_Bool(WALLMODEL, "AlliedWallTransparency", AlliedWallTransparency);
+		WallPenetratorThreshold = ini.Get_Float(WALLMODEL, "WallPenetratorThreshold", WallPenetratorThreshold);
+		return(true);
+	}
+	return(false);
+}
+
+
 
 
 
@@ -1643,7 +1708,63 @@ bool RulesClass::AI(CCINIClass const & ini)
  * HISTORY:                                                                                    *
  *   08/08/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
+bool RulesClass::Powerups(CCINIClass const & ini) // RA2: at 0x64D490
+{
+	static char const * const POWERUPS = "Powerups";
+	if (ini.Is_Present(POWERUPS)) {
+		for (int crate = CRATE_FIRST; crate < CRATE_COUNT; crate++) {
+			char buffer[128];
+			if (ini.Get_String(POWERUPS, CrateNames[crate], "0,NONE", buffer, sizeof(buffer))) {
 
+				/*
+				**	Share odds.
+				*/
+				char * token = strtok(buffer, ",");
+				if (token) {
+					strtrim(token);
+					CrateShares[crate] = atoi(token);
+				}
+
+				/*
+				**	Animation to use.
+				*/
+				token = strtok(NULL, ",");
+				if (token) {
+					strtrim(token);
+					CrateAnims[crate] = Anim_From_Name(token);
+				}
+
+				/*
+				**	Can it appear on water? // RA2
+				*/
+				token = strtok(NULL, ","); // RA2
+				if (token != NULL) { // RA2
+					strtrim(token); // RA2
+					if (stricmp(token, "yes") == 0) { // RA2
+						CrateWater[crate] = true; // RA2
+					} else if (stricmp(token, "no") == 0) { // RA2
+						CrateWater[crate] = false; // RA2
+					} // RA2
+				} // RA2
+
+				/*
+				**	Optional data number.
+				*/
+				token = strtok(NULL, ",");
+				if (token != NULL) {
+					if (strchr(token, '%') != NULL) {
+						CrateData[crate] = atof(token) / 100;
+					} else {
+						strtrim(token);
+						CrateData[crate] = atof(token);
+					}
+				}
+			}
+		}
+		return(true);
+	}
+	return(false);
+}
 
 
 /***********************************************************************************************
@@ -2613,6 +2734,30 @@ bool RulesClass::Objects(CCINIClass & ini) // RA2: a writable INI
 		miss->Read_INI(ini);
 	}
 	return(true);
+}
+
+
+static bool CoopCampLoaded; // RA2: has CoopCamp.ini's unique ID been read yet?
+static int CoopCampUniqueID; // RA2: CoopCamp.ini's unique ID
+
+
+/// <summary>
+/// Fetches the identifying checksum of the cooperative campaign control file.
+/// The file is read the first time only; the rule identifier folds the result in, so
+/// that machines running different cooperative campaigns can tell.
+/// </summary>
+/// <returns>Returns with the unique ID of CoopCamp.ini (0 when it cannot be loaded).</returns>
+int Coop_Camp_Unique_ID(void) // RA2: not in TibSun, at 0x652520
+{
+	if (!CoopCampLoaded) {
+		CCINIClass ini;
+		CCFileClass file("CoopCamp.ini");
+		if (ini.Load(file, false, false)) {
+			CoopCampUniqueID = ini.Get_Unique_ID();
+		}
+		CoopCampLoaded = true;
+	}
+	return(CoopCampUniqueID);
 }
 
 
