@@ -392,35 +392,20 @@ ThemeType ThemeClass::Next_Song(ThemeType theme) const
  *=============================================================================================*/
 void ThemeClass::Queue_Song(ThemeType theme)
 {
-	/*
-	**	If there is no score file present, then abort.
-	*/
-	if (!ScoresPresent) return;
-
-	/*
-	**	If there is no sound driver or sounds have been specifically
-	**	turned off, then abort.
-	*/
-	if (!Audio_Available() || Debug_Quiet) return;
-
-	/*
-	**	If the current score volumne is set to silent, then there is no need to play the
-	**	specified theme.
-	*/
-	if (Volume == 0) return;
-
-	/*
-	**	If the pending theme is available to be set and the specified theme is valid, then
-	**	set the queued theme accordingly.
-	*/
-	if (Pending == THEME_NONE || Pending == THEME_PICK_ANOTHER || theme == THEME_NONE || theme == THEME_QUIET) {
+	if (ScoresPresent && AudioDeviceAvailable() && !Debug_Quiet) { // RA2: RA2's form
 		Pending = theme;
-		DebugString("Theme::QueueSong(%d)\n", theme);
-		if (Still_Playing() == true) {
-			Audio.Fade_Sample(Current, THEME_DELAY);
+		if (theme != -1 && theme != -2 && theme != Score) { // RA2: as above
+			DebugString("Theme::QueueSong(%d)\n", theme); // RA2: as above
+			if (Still_Playing() == true) { // RA2: as above
+				if (Stream != 0) { // RA2: as above
+					AudioStreamerFadeOut(Stream); // RA2: as above
+				}
+				IsFading = true; // RA2: as above
+			}
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
