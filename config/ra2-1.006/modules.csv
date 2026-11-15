@@ -678,9 +678,9 @@ unk_007135A0,0x007135A0,0x00713810,unknown,code not assigned to a module
 voc,0x00713810,0x00714D30,tibsun,"functions compiled from src/voc.cpp, matched, without gaps; two placed by the gap"
 unk_00714D30,0x00714D30,0x00715090,unknown,code not assigned to a module
 volinfo,0x00715090,0x00715230,tibsun,"functions compiled from src/volinfo.cpp, matched, without gaps"
-unk_00715230,0x00715230,0x007166C0,unknown,code not assigned to a module
-unk_007166C0,0x007166C0,0x00716720,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00716720,0x00716720,0x00716EE0,unknown,code not assigned to a module
+unk_00715230,0x00715230,0x007156D0,unknown,code not assigned to a module
+vox,0x007156D0,0x00716A20,tibsun,"functions compiled from src/vox.cpp, matched, without gaps; nine placed by the gap"
+unk_00716A20,0x00716A20,0x00716EE0,unknown,code not assigned to a module
 unk_00716EE0,0x00716EE0,0x00716F10,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00716F10,0x00716F10,0x00716F40,unknown,code not assigned to a module
 voxdrsys,0x00716F40,0x00717CD0,tibsun,"functions compiled from src/voxdrsys.cpp, matched, without gaps; four placed by the gap"
