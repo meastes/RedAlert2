@@ -388,6 +388,8 @@ address,symbol,evidence
 0x0041B110,?IsNotWarpingIn@AircraftClass@@UBE_NXZ,"compiled from src/aircraft.cpp, matched"
 0x0041B120,?Set_Mission@AircraftClass@@UAEXW4MissionType@@@Z,"compiled from src/aircraft.cpp, matched"
 0x0041B160,?QueueMission@AircraftClass@@UAEXW4MissionType@@_N@Z,"compiled from src/aircraft.cpp, matched"
+0x0041B1A0,?Override_Mission@AircraftClass@@UAEXW4MissionType@@PAVAbstractClass@@1@Z,"compiled from src/aircraft.cpp, matched"
+0x0041B1E0,?TryNearestDockBuilding@AircraftClass@@UBEPAVBuildingClass@@PAV?$TypeList@PAVBuildingTypeClass@@@@II@Z,"compiled from src/aircraft.cpp, matched"
 0x0041B430,?ClearDisguise@TechnoClass@@UAEXXZ,"compiled from src/aircraft.cpp, matched"
 0x0041B570,?Fetch_Object_Size@AircraftClass@@UBEHXZ,"compiled from src/aircraft.cpp, matched"
 0x0041B580,?Fetch_RTTI@AircraftClass@@UBE?AW4RTTIType@@XZ,"compiled from src/aircraft.cpp, matched"
@@ -1993,6 +1995,7 @@ address,symbol,evidence
 0x004CC800,?Do_MISSION_RESCUE@FootClass@@UAEHXZ,"compiled from src/foot.cpp, matched"
 0x004CCDF0,?Advance_Waypoint_Path@FootClass@@UAEXXZ,"compiled from src/foot.cpp, matched"
 0x004CCE70,?In_Air@FootClass@@UBE_NXZ,"compiled from src/foot.cpp, matched"
+0x004CD920,?TryNearestDockBuilding@FootClass@@UBEPAVBuildingClass@@PAV?$TypeList@PAVBuildingTypeClass@@@@II@Z,"inferred: referenced by matched src/aircraft.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x004CD9B0,?Abort_Motion@FootClass@@QAEXXZ,"inferred: referenced by matched src/tunnel.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x004CEB90,??0?$VectorClass@PAVAbstractClass@@@@QAE@HPBQAVAbstractClass@@@Z,"inferred: referenced by matched src/techno.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x004CEDF0,??0FuseClass@@QAE@XZ,"compiled from src/fuse.cpp, matched"
@@ -6021,7 +6024,7 @@ address,symbol,evidence
 0x00782CF8,___iscsymf,symbol of VC6 LIBCMT.LIB _ctype.obj
 0x00782D35,___iscsym,symbol of VC6 LIBCMT.LIB _ctype.obj
 0x00782D72,_atol,symbol of VC6 LIBCMT.LIB atox.obj
-0x00782DFD,_atoi,"inferred: referenced by matched src/tube.cpp (49 references); across all matched code never at another address, and no other symbol here"
+0x00782DFD,_atoi,"inferred: referenced by matched src/tube.cpp (52 references); across all matched code never at another address, and no other symbol here"
 0x00782E08,__atoi64,symbol of VC6 LIBCMT.LIB atox.obj
 0x00782EC2,_strtok,symbol of VC6 LIBCMT.LIB strtok.obj
 0x00782F66,_atof,symbol of VC6 LIBCMT.LIB atof.obj
@@ -7411,7 +7414,7 @@ address,symbol,evidence
 0x007CE990,??_C@_0CE@FLLK@?$CFs?0?$CFs?0?$CFd?0?$CFd?0?$CFd?0?$CFd?0?$CFs?0?$CFs?0?$CFd?0?$CFd?0?$CFd@,"inferred: referenced by matched src/aircraft.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CE9B4,??_C@_04COF@None?$AA@,"inferred: referenced by matched src/ccini.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x007CE9BC,??_C@_02MECO@?$CFd?$AA@,"inferred: referenced by matched src/winfix.cpp (29 references); across all matched code never at another address, and no other symbol here"
-0x007CE9C0,??_C@_01KMAE@?0?$AA@,"inferred: referenced by matched src/tube.cpp (123 references); across all matched code never at another address, and no other symbol here"
+0x007CE9C0,??_C@_01KMAE@?0?$AA@,"inferred: referenced by matched src/tube.cpp (126 references); across all matched code never at another address, and no other symbol here"
 0x007CE9E8,??_R0?AVTechnoTypeClass@@@8,"inferred: referenced by matched src/target.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CEA28,??_C@_0L@BNPA@RROTOR?4SHP?$AA@,"inferred: referenced by matched src/airctype.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CEA34,??_C@_0L@LPEL@LROTOR?4SHP?$AA@,"inferred: referenced by matched src/airctype.cpp (1 reference); across all matched code never at another address, and no other symbol here"
@@ -7463,9 +7466,9 @@ address,symbol,evidence
 0x007CF1A0,??_C@_0CO@FDBE@Warning?4?5?5A?$CK?5without?5HS?3?5?$CI?$CFd?0?$CFd?$CJ@,"inferred: referenced by matched src/astar.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CF1D0,??_C@_0DE@CDCM@Hierarchical?5findpath?5failure?3?5?$CI@,"inferred: referenced by matched src/astar.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CF208,__GUID_0000010c_0000_0000_c000_000000000046,"inferred: referenced by matched src/droppod.cpp (7 references); across all matched code never at another address, and no other symbol here"
-0x007CF33C,??_C@_04KAJP@?$CF03d?$AA@,"inferred: referenced by matched src/base.cpp (1 references); across all matched code never at another address, and no other symbol here"
-0x007CF344,??_C@_09BKEM@NodeCount?$AA@,"inferred: referenced by matched src/base.cpp (1 references); across all matched code never at another address, and no other symbol here"
-0x007CF350,??_C@_0N@BEF@PercentBuilt?$AA@,"inferred: referenced by matched src/base.cpp (1 references); across all matched code never at another address, and no other symbol here"
+0x007CF33C,??_C@_04KAJP@?$CF03d?$AA@,"inferred: referenced by matched src/base.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x007CF344,??_C@_09BKEM@NodeCount?$AA@,"inferred: referenced by matched src/base.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x007CF350,??_C@_0N@BEF@PercentBuilt?$AA@,"inferred: referenced by matched src/base.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x007CF360,??_C@_08POMI@?$CFd?0?$CFd?0?$CFd?$AA@,"inferred: referenced by matched src/ccini.cpp (13 references); across all matched code never at another address, and no other symbol here"
 0x007CF36C,??_C@_08NOHK@?$CFs?0?$CFd?0?$CFd?$AA@,"inferred: referenced by matched src/base.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CF378,??_C@_0EB@KOEG@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef@,"compiled from src/base64.cpp, matched"
