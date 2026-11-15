@@ -878,7 +878,6 @@ bool Read_Scenario(char const * fname)
 		}
 
 		Progress.Set_Graphic_Data((players > 1) ? "PROGBARM.SHP" : "PROGBAR.SHP", background); // RA2: the shape and background only
-		Progress.Set_Layout(prog_bar_pos, NULL, players > 1, players > 1); // RA2: the layout is set apart (RA2 takes the caption from its loading screen)
 		Progress.Display_Progress();
 
 		if (PacketTransport != NULL && Session.Type == GAME_INTERNET && Session.Players.Count() > 1) {
@@ -3474,55 +3473,55 @@ int Adjust_To_CPU_Timing(int time)
 /// </summary>
 void ScenarioClass::Compute_CRC(CRCEngine & crc) const
 {
-	crc(Description);
-	crc(IntroMovie);
-	crc(BriefMovie);
-	crc(BriefingText);
-	crc(WinMovie);
-	crc(LoseMovie);
-	crc(ActionMovie);
-	crc(PostScoreMovie);
-	crc(PreMapSelectMovie);
-	crc(PlayerHouse);
-	crc(Percent);
-	crc(TransitTheme);
+	crc(UIName); // RA2: RA2's form
+	crc((long)IntroMovie); // RA2: as above
+	crc((long)BriefMovie); // RA2: as above
+	crc((long)WinMovie); // RA2: as above
+	crc((long)LoseMovie); // RA2: as above
+	crc((long)ActionMovie); // RA2: as above
+	crc((long)PostScoreMovie); // RA2: as above
+	crc((long)PreMapSelectMovie); // RA2: as above
+	crc((long)PlayerHouse); // RA2: as above
+	crc((long)Percent); // RA2: as above
+	crc((long)TransitTheme); // RA2: as above
 	crc(CarryOverPercent);
 	crc(IsMultiplayerOnly);
 	crc(IsInheritTimer);
-	crc(CarryOverCap / 100);
-	crc(BridgeCount);
+	crc((long)(CarryOverCap / 100)); // RA2: as above
+	crc((long)BridgeCount); // RA2: as above
 	crc(IsEndOfGame);
-	crc(Campaign);
+	crc((long)Campaign); // RA2: as above
 	crc(IsSkipScore);
 	crc(IsOneTimeOnly);
 	crc(IsNoMapSel);
 	crc(IsMoneyTiberium);
 	crc(IsIgnoreGlobalAITriggers);
 	crc(IsTruckCrate);
-	crc(Percent);
-	crc(StartingDropships);
-	crc((int)MissionTimer);
-	crc((int)ShroudTimer);
-	crc((int)FogTimer);
-	crc((int)IceGrowthTimer);
-	crc((int)VeinGrowthTimer);
-	crc((int)ElapsedTimer);
-	crc(Difficulty);
-	crc(CDifficulty);
-	crc(Theater);
-	crc(GroundLight);
-	crc(LevelLight);
+	crc((long)Percent); // RA2: as above
+	crc((long)StartingDropships); // RA2: as above
+	crc((long)MissionTimer.Value()); // RA2: as above
+	crc((long)ShroudTimer.Value()); // RA2: as above
+	crc((long)FogTimer.Value()); // RA2: as above
+	crc((long)IceGrowthTimer.Value()); // RA2: as above
+	crc((long)VeinGrowthTimer.Value()); // RA2: as above
+	crc((long)ElapsedTimer.Value()); // RA2: as above
+	crc((long)Difficulty); // RA2: as above
+	crc((long)CDifficulty); // RA2: as above
+	crc((long)Theater); // RA2: as above
+	crc((long)GroundLight); // RA2: as above
+	crc((long)LevelLight); // RA2: as above
 	crc(IsFreeRadar);
-	crc(IonAmbientLight);
-	crc(IonRedTint);
-	crc(IonGreenTint);
-	crc(IonBlueTint);
-	crc(IonGroundLight);
-	crc(IonLevelLight);
-	crc(AmbientLight);
-	crc(CurrentAmbientLight);
-	crc(DesiredAmbientLight);
+	crc((long)IonAmbientLight); // RA2: as above
+	crc((long)IonRedTint); // RA2: as above
+	crc((long)IonGreenTint); // RA2: as above
+	crc((long)IonBlueTint); // RA2: as above
+	crc((long)IonGroundLight); // RA2: as above
+	crc((long)IonLevelLight); // RA2: as above
+	crc((long)AmbientLight); // RA2: as above
+	crc((long)CurrentAmbientLight); // RA2: as above
+	crc((long)DesiredAmbientLight); // RA2: as above
 }
+
 
 
 /// <summary>
