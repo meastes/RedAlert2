@@ -154,7 +154,15 @@ void ThemeClass::Free_Themes(void)
 		delete Themes[0];
 		Themes.Delete_Index(0);
 	}
+	if (Stream != 0) { // RA2: RA2's form
+		AudioStreamerFadeOut(Stream); // RA2: as above
+		AudioStreamerWaitForFade(Stream); // RA2: as above
+		AudioStreamerStop(Stream); // RA2: as above
+		AudioStreamerDestroy(Stream); // RA2: as above
+		Stream = 0; // RA2: as above
+	}
 }
+
 
 
 /***********************************************************************************************
