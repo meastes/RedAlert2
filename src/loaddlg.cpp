@@ -276,26 +276,27 @@ LRESULT CALLBACK LoadOptionsClass::Load_Dialog_Proc(HWND window, UINT message, W
 {
 	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
 
-	if (rc == 0) {
-
-		switch (message) {
-			case WM_MOVING:
-				return(On_WM_MOVING(window, wparam, lparam));
-
-			case WM_COMMAND:
-				Load_Dialog_On_WM_COMMAND(window, LOWORD(wparam), lparam, HIWORD(wparam));
-				break;
-
-			case OD_SUBCLASSED:
-				SendDlgItemMessage(window, IDC_MISSION_LOAD_LIST, OD_ADDCOLUMN, 0xF9, 2);
-				SendDlgItemMessage(window, IDC_MISSION_LOAD_LIST, OD_ADDCOLUMN, 0x38, 255);
-				SendDlgItemMessage(window, IDC_MISSION_LOAD_LIST, OD_ADDCOLUMN, 0, 315);
-				break;
-		}
-		return(FALSE);
+	if (rc != 0) { // RA2: RA2's form
+		return rc; // RA2: as above
 	}
-	return(rc);
+	switch (message) { // RA2: as above
+	case 0x0f: // RA2: as above
+		Slide_Pending_Dialog(window); // RA2: as above
+		return(1); // RA2: as above
+	case 0x111: // RA2: as above
+		Load_Dialog_On_WM_COMMAND(window, (unsigned short)wparam, lparam, (unsigned short)(wparam >> 16)); // RA2: as above
+		break; // RA2: as above
+	case 0x216: // RA2: as above
+		return On_WM_MOVING(window, wparam, lparam); // RA2: as above
+	case 0x497: // RA2: as above
+		SendDlgItemMessageA(window, 0x525, 0x4a6, 0xf9, 2); // RA2: as above
+		SendDlgItemMessageA(window, 0x525, 0x4a6, 0x38, 0xff); // RA2: as above
+		SendDlgItemMessageA(window, 0x525, 0x4a6, 0, 0x13b); // RA2: as above
+		break; // RA2: as above
+	}
+	return(0); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -305,34 +306,34 @@ LRESULT CALLBACK LoadOptionsClass::Load_Dialog_Proc(HWND window, UINT message, W
 /// may type, and pass control activity along to the command handler.
 /// </summary>
 /// <returns>Returns with the message result, or FALSE if nothing here dealt with it.</returns>
-LRESULT CALLBACK LoadOptionsClass::Save_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+LRESULT __stdcall LoadOptionsClass::Save_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: RA2's form
 {
-	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-
-	if (rc == 0) {
-
-		switch (message) {
-			case WM_MOVING:
-				return(On_WM_MOVING(window, wparam, lparam));
-
-			case WM_COMMAND:
-				Save_Dialog_On_WM_COMMAND(window, LOWORD(wparam), lparam, HIWORD(wparam));
-				break;
-
-			case WM_INITDIALOG:
-				SendMessage(GetDlgItem(window, IDC_MISSION_SAVE_DESC), EM_SETLIMITTEXT, 79, 0);
-				break;
-
-			case OD_SUBCLASSED:
-				SendDlgItemMessage(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0xF9, 2);
-				SendDlgItemMessage(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0x38, 255);
-				SendDlgItemMessage(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0, 315);
-				break;
-		}
-		return(FALSE);
+	int result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam); // RA2: as above
+	if (result != 0) { // RA2: as above
+		return result; // RA2: as above
 	}
-	return(rc);
+	switch (message) { // RA2: as above
+	case WM_PAINT: // RA2: as above
+		Slide_Pending_Dialog(window); // RA2: as above
+		return(1); // RA2: as above
+	case WM_COMMAND: // RA2: as above
+		Save_Dialog_On_WM_COMMAND(window, LOWORD(wparam), lparam, HIWORD(wparam)); // RA2: as above
+		break; // RA2: as above
+	case WM_MOVING: // RA2: as above
+		return On_WM_MOVING(window, wparam, lparam); // RA2: as above
+	case OD_SUBCLASSED: // RA2: as above
+		SendMessageA(GetDlgItem(window, IDC_MISSION_SAVE_DESC), EM_SETLIMITTEXT, 79, 0); // RA2: as above
+		SendDlgItemMessageA(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0xf9, 2); // RA2: as above
+		SendDlgItemMessageA(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0x38, 255); // RA2: as above
+		SendDlgItemMessageA(window, IDC_MISSION_SAVE_LIST, OD_ADDCOLUMN, 0, 315); // RA2: as above
+		break; // RA2: as above
+	case 0x4da: // RA2: as above
+		((LoadOptionsClass *)GetWindowLongA(window, 8))->State = STATE_OK; // RA2: as above
+		break; // RA2: as above
+	}
+	return(0); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -344,28 +345,28 @@ LRESULT CALLBACK LoadOptionsClass::Save_Dialog_Proc(HWND window, UINT message, W
 /// <returns>Returns with the message result, or FALSE if nothing here dealt with it.</returns>
 LRESULT CALLBACK LoadOptionsClass::Delete_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
-	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-
-	if (rc == 0) {
-
-		switch (message) {
-			case WM_COMMAND:
-				Delete_Dialog_On_WM_COMMAND(window, LOWORD(wparam), lparam, HIWORD(wparam));
-				break;
-
-			case WM_MOVING:
-				return(On_WM_MOVING(window, wparam, lparam));
-
-			case OD_SUBCLASSED:
-				SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0xF9, 2);
-				SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0x38, 255);
-				SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0, 315);
-				break;
-		}
-		return(FALSE);
+	int result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam); // RA2: RA2's form
+	if (result != 0) { // RA2: as above
+		return result; // RA2: as above
 	}
-	return(rc);
+	switch (message) { // RA2: as above
+	case WM_PAINT: // RA2: as above
+		Slide_Pending_Dialog(window); // RA2: as above
+		return(1); // RA2: as above
+	case WM_COMMAND: // RA2: as above
+		Delete_Dialog_On_WM_COMMAND(window, (unsigned short)wparam, lparam, (unsigned short)(wparam >> 16)); // RA2: as above
+		break; // RA2: as above
+	case WM_MOVING: // RA2: as above
+		return On_WM_MOVING(window, wparam, lparam); // RA2: as above
+	case OD_SUBCLASSED: // RA2: as above
+		SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0xf9, 2); // RA2: as above
+		SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0x38, 0xff); // RA2: as above
+		SendDlgItemMessage(window, IDC_MISSION_DELETE_LIST, OD_ADDCOLUMN, 0, 0x13b); // RA2: as above
+		break; // RA2: as above
+	}
+	return(0); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
