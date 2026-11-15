@@ -230,7 +230,7 @@ bool UnitTypeClass::CanAttackMove(void) const
 void UnitTypeClass::One_Time(void)
 {
 	if (EightBitSurface == NULL) {
-		EightBitSurface = new BSurface(160, 160, 1);
+		EightBitSurface = new BSurface(256, 256, 1); // RA2: 256 by 256
 		EightBitSurface->Fill(TBLACK);
 	}
 

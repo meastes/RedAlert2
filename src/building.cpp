@@ -7921,7 +7921,7 @@ void BuildingClass::Set_Anim_Damage_State(bool damaged)
 {
 	if (IsDamagedAnims != damaged) {
 		IsDamagedAnims = damaged;
-		for (int i = 0; i < BANIM_COUNT; i++) {
+		for (int i = 0; i < 18; i++) { // RA2: all eighteen anims (see Anims)
 			if (Anims[i] != NULL) {
 				Begin_Anim((BAnimType)i, damaged);
 			}
@@ -7981,7 +7981,7 @@ void BuildingClass::Set_Anim_Translucency(int translucency)
 		trans = 16;
 	}
 
-	for (int i = 0; i < BANIM_COUNT; i++) {
+	for (int i = 0; i < 18; i++) { // RA2: all eighteen anims (see Anims)
 		if (Anims[i] != NULL) {
 			Anims[i]->TranslucencyLevel = trans;
 		}
