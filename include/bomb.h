@@ -39,7 +39,7 @@ class BombClass : public AbstractClass
 		virtual void Compute_CRC(CRCEngine & crc) const override;
 
 		void Detonate(void);
-		void Disarm(void);
+		void Disarm(void); // RA2: detaches the bomb from its target and clears its owner, at 0x435FB0
 		BOOL Is_Death_Bomb(void) const;
 		int Get_Current_Flicker_Frame(void) const;
 		bool Time_To_Explode(void) const;
