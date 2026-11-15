@@ -973,16 +973,17 @@ void TerrainClass::Detach(AbstractClass const * target, bool all)
 bool TerrainClass::Unlimbo(Coord const & coord, Dir256 dir)
 {
 	if (BASECLASS::Unlimbo(coord, dir)) {
-		Cell cell = coord.As_Cell();
-		for (FacingType facing = FACING_FIRST; facing < FACING_COUNT; facing++) {
-			CellClass * cptr = &Map[Adjacent_Cell(cell, facing)];
-			cptr->AdjacentObjectCount++;
+		Cell cell(coord.X / 256, coord.Y / 256); // RA2: RA2's form
+		for (int facing = 0; facing < 8; facing++) { // RA2: as above
+			CellClass &next = Map[cell + AdjacentCell[facing & 7]]; // RA2: as above
+			next.AdjacentObjectCount++; // RA2: as above
 		}
-
-		TacticalMap->Coord_To_Pixel(Render_Coord(), RenderPixelPos);
-		RenderPixelPos += Point2D(TacticalMap->TacPixelX, TacticalMap->TacPixelY);
-
-		if (Map[coord].Overlay != OVERLAY_NONE && OverlayTypes[Map[coord].Overlay]->IsTiberium) { // RA2: tiberium overlay under the object, not IsTiberiumSpawn
+		Point2D &pixel = (Point2D &)RenderPixelPos; // RA2: as above
+		TacticalMap->Coord_To_Pixel(Render_Coord(), pixel); // RA2: as above
+		Point2D offset(TacticalMap->TacPixelX, TacticalMap->TacPixelY); // RA2: as above
+		pixel.X += offset.X; // RA2: as above
+		pixel.Y += offset.Y; // RA2: as above
+		if (Class->IsTiberiumSpawn) { // RA2: as above
 			Map[coord].Overlay = OVERLAY_NONE;
 			Map[coord].OverlayData = 0;
 		}
@@ -990,6 +991,7 @@ bool TerrainClass::Unlimbo(Coord const & coord, Dir256 dir)
 	}
 	return(false);
 }
+
 
 
 /// <summary>
