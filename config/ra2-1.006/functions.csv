@@ -5039,6 +5039,7 @@ address,size,evidence
 0x006B2330,32,"code of src/taction.cpp, matched"
 0x006B2350,32,"code of src/taction.cpp, matched"
 0x006B25E0,240,"code of src/taction.cpp, matched"
+0x006B26D0,272,"code of src/taction.cpp, matched"
 0x006B27E0,48,"code of src/taction.cpp, matched"
 0x006B2810,32,"code of src/taction.cpp, matched: its code occurs at 2 addresses; placed by the gap the other functions of the file leave"
 0x006B2830,48,"code of src/taction.cpp, matched"
