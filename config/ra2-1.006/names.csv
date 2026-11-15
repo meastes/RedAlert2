@@ -4098,7 +4098,7 @@ address,symbol,evidence
 0x0063B6C0,??0RadarEventClass@@QAE@W4RadarEventType@@VCell@@@Z,"inferred: referenced by matched src/revent.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063B910,?Process_Radar_Events@@YIXXZ,"inferred: referenced by matched src/radar.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063BB40,?Draw_Events@RadarEventClass@@SIXXZ,"compiled from src/revent.cpp, matched"
-0x0063BB90,?Draw@RadarEventClass@@QAEXXZ,"inferred: referenced by matched src/revent.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0063BB90,?Draw@RadarEventClass@@QAEXXZ,"compiled from src/revent.cpp, matched"
 0x0063BEF0,?Remove_Finished@RadarEventClass@@SIXXZ,"compiled from src/revent.cpp, matched"
 0x0063C070,?No_Radar_Events_Submitted@@YI_NXZ,"compiled from src/revent.cpp, matched"
 0x0063C080,?Plot@RadarEventClass@@QAEXXZ,"compiled from src/revent.cpp, matched"
