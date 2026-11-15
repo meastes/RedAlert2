@@ -384,47 +384,47 @@ CellClass::CellClass(void) :
 int CellClass::Preview_Cell_Color(unsigned char & unknown, bool terrainonly) const
 {
 	unknown = 0;
-	BuildingClass * obj = Cell_Building();
+	BuildingClass *obj = (BuildingClass *)Cell_Building(); // RA2: RA2's form
 
-	if (!terrainonly && obj != NULL && !obj->Class->IsInvisible && !obj->Class->IsInvisibleInGame && obj->Visual_Character() != VISUAL_HIDDEN) {
-		ColorScheme * owner_scheme = ColorSchemes[obj->House->Scheme];
-		unsigned int color = owner_scheme->Converter->Convert_Pixel(owner_scheme->Color);
-		return((color << 16) | color);
+	if (!terrainonly && obj != 0 && !obj->Class->IsInvisible && !obj->Class->IsInvisibleInGame && Building_Visual(obj) != 5) { // RA2: as above
+		ColorScheme *scheme = ColorSchemes[obj->House->Scheme]; // RA2: as above
+		unsigned int color = scheme->Converter->Convert_Pixel(scheme->Color); // RA2: as above
+		return (color << 16) | color; // RA2: as above
 	}
 
 	if (IsUnderBridge) {
 		RGBClass bridge_color = OverlayTypes[OVERLAY_BRIDGE1]->Get_Radar_Color(0);
 		unsigned int color = DSurface::Build_Hicolor_Pixel(bridge_color.Get_Red(), bridge_color.Get_Green(), bridge_color.Get_Blue());
-		return((color << 16) | color);
+		return (color << 16) | color; // RA2: as above
 	}
 
-	IsometricTileTypeClass * ittype;
-
+	IsometricTileTypeClass *ittype; // RA2: as above
 	int icon;
-	if (ITType != ISOTILE_NONE) {
+	if (ITType != 0xFFFF) { // RA2: as above
 		ittype = IsometricTileTypes[ITType];
 	} else {
-		ittype = IsometricTileTypes[TILE_CLEAR];
+		ittype = IsometricTileTypes[IsometricTileTypeClass::ClearTile]; // RA2: as above
 	}
 
 	icon = 0;
-	if (ITType != ISOTILE_NONE) {
+	if (ITType != 0xFFFF) { // RA2: as above
 		if (ittype->NumTileTypesInSet > 1) {
-			if (ittype->Is_Randomized(SubTile)) {
-				icon = IsBridgeDamaged ? 1 : 0;
+			if (ittype->Is_Randomized((unsigned char)SubTile)) { // RA2: as above
+				icon = IsBridgeDamaged; // RA2: as above
 			} else {
 				int numtiles = ittype->NumTileTypesInSet;
 				icon = Clear_Icon(ITType, numtiles);
 			}
 		}
 	} else {
-		icon = Clear_Icon(TILE_CLEAR, ittype->NumTileTypesInSet);
+		icon = Clear_Icon(IsometricTileTypeClass::ClearTile, ittype->NumTileTypesInSet); // RA2: as above
 	}
 
-	IsometricTileTypeClass * next_isotype = ittype->Next_Tile_From_Set(icon);
-	unsigned short * tile = next_isotype->Preview_Tile(SubTile, Height);
-	return(((tile[0] << 16) | tile[1]));
+	IsometricTileTypeClass *next = ittype->Next_Tile_From_Set(icon); // RA2: as above
+	unsigned short *tile = next->Preview_Tile((unsigned char)SubTile, Height); // RA2: as above
+	return (tile[0] << 16) | tile[1]; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -589,25 +589,26 @@ void CellClass::Cell_Color(RGBClass & lowcolor, RGBClass & highcolor) const
  *=============================================================================================*/
 TechnoClass * CellClass::Cell_Techno(Point2D const & xy, bool bridge, TechnoClass const * notthis) const
 {
-	ObjectClass * object;
-	Coord		click;			// Coordinate of click relative to cell corner.
-	TechnoClass * close = NULL;
-	int		distance = 0;	// Recorded closest distance.
+	ObjectClass *object; // RA2: RA2's form
+	Coord click; // RA2: as above
+	TechnoClass *close = 0; // RA2: as above
+	int distance = 0; // RA2: as above
 
-	/*
-	**	Create a coordinate value that represent the pixel location within the cell. This is
-	**	actually the lower significant bits (leptons) of a regular coordinate value.
-	*/
-	click = Coord(PIXEL_TO_LEPTON(xy.X),PIXEL_TO_LEPTON(xy.Y));
-
-	ObjectClass * occupier = Cell_Occupier(bridge);
-	if (occupier != NULL) {
+	click = Coord(xy.X * 7, xy.Y * 7, 0); // RA2: as above
+	ObjectClass *occupier = bridge ? BridgeOccupierPtr : OccupierPtr; // RA2: as above
+	if (occupier != 0) { // RA2: as above
 		object = occupier;
-		while (object != NULL) {
-			if (object->Is_Techno() && object != (ObjectClass *) notthis) {
+		while (object != 0) { // RA2: as above
+			bool techno; // RA2: as above
+			if (object != 0) { // RA2: as above
+				techno = object->AbstractFlags & 1; // RA2: as above
+			}
+			if (object != 0 && techno && object != (ObjectClass *) notthis) { // RA2: as above
 				Coord coord = object->Center_Coord();
-				int dist = Point2D(Coord_Fraction(coord) - click).Length();
-				if (!close || dist < distance) {
+				// Westwood's Coord_Fraction(coord) - click.
+				Coord fraction = Coord(coord.X & 0xFF, coord.Y & 0xFF, coord.Z) - click; // RA2: as above
+				int dist = Point2D(fraction.X, fraction.Y).Length(); // RA2: as above
+				if (close == 0 || dist < distance) { // RA2: as above
 					close = (TechnoClass *)object;
 					distance = dist;
 				}
@@ -615,8 +616,9 @@ TechnoClass * CellClass::Cell_Techno(Point2D const & xy, bool bridge, TechnoClas
 			object = object->Next;
 		}
 	}
-	return(close);
+	return close; // RA2: as above
 }
+
 
 
 /***************************************************************************
@@ -1869,78 +1871,54 @@ InfantryClass * CellClass::Cell_Infantry(bool bridge) const
 /// <returns>bool; May the pending building be placed on this cell?</returns>
 bool CellClass::Draw_Placement_Cursor(Point2D const & xpoint, Rect const & cliprect, bool zeroalpha)
 {
-	Point2D point;
-	point.X = ISO_TILE_PIXEL_W / 2;
+	Point2D point = Point2D(30, -1); // RA2: RA2's form
 
 	bool ok = false;
-	if (IsCursorHere) {
+	if (IsCursorHere || IsFoundationCopyHere) { // RA2: as above
+		ObjectTypeClass const *pending = IsCursorHere ? (ObjectTypeClass const *)Map.PendingObject : (ObjectTypeClass const *)Map.PendingObjectPtr; // RA2: as above
 
 		/*
 		 * Fetch the locomotion type of the object being placed. It is needed by
 		 * the clear-to-build test below to validate the building footing.
 		 */
 		SpeedType loco = SPEED_NONE;
-		if (Map.PendingObjectPtr != NULL && Map.PendingObjectPtr->RTTI == RTTI_BUILDING) {
-			loco = ((BuildingClass *)Map.PendingObjectPtr)->Class->Speed;
+		if (pending != NULL && pending->RTTI == RTTI_BUILDINGTYPE) { // RA2: as above
+			loco = ((BuildingTypeClass const *)pending)->Speed; // RA2: as above
 		}
 
 		/*
 		 * Compute the vertical draw offsets. The cursor is lifted according to
 		 * the cell's height level and nudged up further on ramp (sloped) cells.
 		 */
-		int lift = LEVEL_PIXEL_H_1 * Height;
-		point.Y = -1 - lift;
+		int lift = 15 * Height; // RA2: as above
+		point -= Point2D(0, lift); // RA2: as above
 		int height_offset = -2 - lift;
-		if (Ramp) {
+		if (Ramp != 0) { // RA2: as above
 			height_offset -= 10;
 		}
 
-		/*
-		 * Only a building type can ever be placed; anything else stays illegal.
-		 */
-		if (Map.PendingObject->RTTI == RTTI_BUILDINGTYPE) {
-
-			Coord coord(CellID, 0);
+		if (IsCursorHere && ((ObjectTypeClass const *)Map.PendingObject)->RTTI == RTTI_BUILDINGTYPE) { // RA2: as above
+			Coord coord = Coord(CellID, 0); // RA2: as above
 			coord.Z = Map.Get_Height_GL(coord);
 
-			BuildingTypeClass * ptype = (BuildingTypeClass *)Map.PendingObject;
-
 			if (Map.Is_Shrouded(coord)) {
-
-				/*
-				 * Under shroud, only a tile-laying building (e.g. a base node) may
-				 * be placed, and only when the proximity requirement is satisfied.
-				 */
-				if (Map.ProximityCheck && Map.PendingObject != NULL
-						&& Map.PendingObject->RTTI == RTTI_BUILDINGTYPE
-						&& ptype->ToTile != NULL) {
+				if (Map.ProximityCheck && Map.PendingObject != NULL && ((ObjectTypeClass const *)Map.PendingObject)->RTTI == RTTI_BUILDINGTYPE && ((BuildingTypeClass *)Map.PendingObject)->ToTile != NULL) { // RA2: as above
 					ok = true;
 				} else {
 					ok = false;
 				}
-
-			} else if (ptype->PowersUpBuilding[0] != '\0') {
-
-				/*
-				 * This object is an upgrade. It may be placed only onto an existing
-				 * building in this cell that is able to accept the upgrade.
-				 */
-				BuildingClass * building = (BuildingClass *)Cell_Object();
-				if (building != NULL && building->RTTI == RTTI_BUILDING
-						&& building->Can_Upgrade(ptype, PlayerPtr)) {
-					ok = true;
+			} else if (((BuildingTypeClass *)Map.PendingObject)->PowersUpBuilding[0] != '\0') { // RA2: as above
+				BuildingClass *building = (BuildingClass *)Cell_Object(Point2D(0, 0), false); // RA2: as above
+				if (building != NULL && building->RTTI == RTTI_BUILDING) { // RA2: as above
+					BuildingTypeClass *ptype = (BuildingTypeClass *)Map.PendingObject; // RA2: as above
+					if (building->Can_Upgrade(ptype, PlayerPtr)) { // RA2: as above
+						ok = true; // RA2: as above
+					}
 				}
-
 			} else {
-
-				/*
-				 * Normal placement. The footprint must be clear to build, and a
-				 * tile-laying building may not be placed on top of a road.
-				 */
-				if (Map.ProximityCheck && Map.PendingObject != NULL
-						&& Map.PendingObject->RTTI == RTTI_BUILDINGTYPE
-						&& Is_Clear_To_Build(loco, ptype, PlayerPtr)
-						&& !(ptype->ToTile != NULL && Land == LAND_ROAD)) {
+				if (Map.ProximityCheck && Map.PendingObject != NULL && ((ObjectTypeClass const *)Map.PendingObject)->RTTI == RTTI_BUILDINGTYPE // RA2: as above
+						&& Is_Clear_To_Build(loco, (BuildingTypeClass *)Map.PendingObject, PlayerPtr) // RA2: as above
+						&& !(((BuildingTypeClass *)Map.PendingObject)->ToTile != NULL && Land == LAND_ROAD)) { // RA2: as above
 					ok = true;
 				}
 			}
@@ -1950,21 +1928,21 @@ bool CellClass::Draw_Placement_Cursor(Point2D const & xpoint, Rect const & clipr
 		 * Draw the cursor shape -- the valid cursor for a legal placement, or the
 		 * cell's blocked/ramp cursor otherwise.
 		 */
-		ShapeFlags_Type flags = ShapeFlags_Type(zeroalpha
-			? SHAPE_ZERO_ALPHA|SHAPE_WIN_REL|SHAPE_CENTER|SHAPE_TRANSLUCENT50
-			: SHAPE_NONZERO_ALPHA|SHAPE_WIN_REL|SHAPE_CENTER|SHAPE_TRANSLUCENT50);
-
-		if (ok) {
-			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet *)DisplayClass::PlacementShapes,
-				0, point + xpoint, cliprect, flags, 0, height_offset);
+		ShapeFlags_Type flags = ShapeFlags_Type(zeroalpha ? 0x10600 : 0x20600); // RA2: as above
+		if (IsFoundationCopyHere) { // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet *)DisplayClass::PlacementShapes, 1, point + xpoint, cliprect, // RA2: as above
+				flags, 0, height_offset, ZGRAD_GROUND, 1000, 0, 0, Point2D(0, 0)); // RA2: as above
+		} else if (ok) { // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet *)DisplayClass::PlacementShapes, 0, point + xpoint, cliprect, // RA2: as above
+				flags, 0, height_offset, ZGRAD_GROUND, 1000, 0, 0, Point2D(0, 0)); // RA2: as above
 		} else {
-			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet *)DisplayClass::PlacementShapes,
-				Ramp + 1, point + xpoint, cliprect, flags, 0, height_offset);
+			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet *)DisplayClass::PlacementShapes, Ramp + 2, point + xpoint, cliprect, // RA2: as above
+				flags, 0, height_offset, ZGRAD_GROUND, 1000, 0, 0, Point2D(0, 0)); // RA2: as above
 		}
 	}
-
-	return(ok);
+	return ok; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2401,17 +2379,21 @@ Rect CellClass::Cell_Render_Rect(void) const
 /// <returns>Returns with the offset to apply to the cell's draw position.</returns>
 Point2D CellClass::Overlay_Draw_Offset(void) const
 {
-	Point2D offset = ::Overlay_Draw_Offset(Overlay);
+	Point2D offset; // RA2: RA2's form
+	offset = ::Overlay_Draw_Offset(Overlay); // RA2: as above
 	if (IsBridgeDeck) {
-		offset.Y -= ISO_TILE_PIXEL_H / 2 + 1;
-		if (OverlayData >= OVERLAYDATA_BRIDGE_NS_FULL1 && OverlayData <= OVERLAYDATA_BRIDGE_NS_END2) {
-			offset.Y -= ISO_TILE_PIXEL_H / 2;
+		offset.Y -= 16; // RA2: as above
+		if (OverlayData >= 9 && OverlayData <= 17) { // RA2: as above
+			offset.Y -= 15; // RA2: as above
 		}
+	} else if (Overlay == 0xEF) { // RA2: as above
+		offset.Y -= 15; // RA2: as above
 	}
-	offset.Y += TacticalRect.Y - LEVEL_PIXEL_H_1 * Height;
-	offset += Point2D(ISO_TILE_PIXEL_W / 2, ISO_TILE_PIXEL_H / 2);
-	return(offset);
+	offset.Y += TacticalRect.Y - Height * 15; // RA2: as above
+	offset = offset + Point2D(30, 15); // RA2: as above
+	return offset; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -5735,19 +5717,23 @@ bool CellClass::Is_Tile_Destroyable_Cliff(void) const
 /// </summary>
 void CellClass::Trigger_Veins(void)
 {
-	if (Overlay == OVERLAY_VEINS && OverlayData >= OVERLAYDATA_FIRST_SOLID_VEIN && Ramp == RAMP_NONE && !IsAnimAttached) {
-		ObjectClass * occupier = Cell_Occupier();
-		while (occupier != NULL) {
-			if (occupier->HeightAGL <= 5 && occupier->Is_Techno() &&
-				!occupier->TClass->IsImmuneToVeins && !((TechnoClass *)occupier)->Has_Ability(ABILITY_VEIN_PROOF)) {
-
-				new AnimClass(Rule->VeinAttack, Cell_Coord() - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2));
-				IsAnimAttached = true;
+	if (Overlay == OVERLAY_VEINS && OverlayData >= OVERLAYDATA_FIRST_SOLID_VEIN && !Ramp && !IsAnimAttached) { // RA2: RA2's form
+		for (ObjectClass * object = Cell_Occupier(); object != NULL; object = object->Next) { // RA2: as above
+			if (object->HeightAGL <= 5) { // RA2: as above
+				bool is_techno; // RA2: as above
+				if (object != NULL) { // RA2: as above
+					is_techno = (object->AbstractFlags & 1); // RA2: as above
+				}
+				TechnoClass * techno = (object != NULL && is_techno) ? (TechnoClass *)object : NULL; // RA2: as above
+				if (techno != NULL && !techno->TClass->IsImmuneToVeins && !techno->Has_Ability(ABILITY_VEIN_PROOF)) { // RA2: as above
+					new AnimClass(Rule->VeinAttack, Cell_Coord() - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
+					IsAnimAttached = true; // RA2: as above
+				}
 			}
-			occupier = occupier->Next;
 		}
 	}
 }
+
 
 
 /// <summary>
