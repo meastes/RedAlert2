@@ -219,7 +219,7 @@ MapRegionClass::CellData *RMGCellData;
 int MapRegionClass::TotalCount;
 
 DynamicVectorClass<MapRegionClass *> MapRegionClass::MapRegions;
-DynamicVectorClass<Cell> * TiberiumLayoutCells;
+// RA2: no TiberiumLayoutCells (each region keeps its own StartCells)
 
 
 /// <summary>
@@ -4923,12 +4923,7 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 	DebugString("RMG: Creating tiberium\n");
 	Create_Tiberium();
 
-	if (RMGCallback != NULL) RMGCallback();
-
-	if (TiberiumLayoutCells != NULL) {
-		delete TiberiumLayoutCells;
-		TiberiumLayoutCells = NULL;
-	}
+	if (RMGCallback != NULL) RMGCallback(); // RA2: no TiberiumLayoutCells (each region keeps its own StartCells)
 
 	DebugString("RMG: Recalculating cell attributes\n");
 	Map.Reset_Iterator();
@@ -7981,133 +7976,153 @@ bool MapGeneratorClass::Init_Start_Points(void)
 
 
 /// <summary>
-/// Distributes tiberium across the map.
-/// This routine seeds a field at every point of the map's tiberium layout, then hands out a
-/// compensating field to each player's start point -- the further a player sits from the
-/// tiberium already placed, the more of it is put on their doorstep, so that nobody begins the
-/// game starved.
+/// RA2: the number of player start points in a region.
 /// </summary>
-void MapGeneratorClass::Create_Tiberium(void)
+static inline int Start_Count(MapRegionClass const * region)
 {
-	int tiberium_count = SeedData.NumPlayers * (30 * SeedData.Tiberium + 2500) / TiberiumLayoutCells->Count();
-	int tib_index = 0;
-	int layout_index = 0;
-
-	if (TiberiumLayoutCells->Count() > 0) {
-		do {
-			int amount = (int)((double)tiberium_count + Sample_Truncated_Normal(0.0, 50.0, -100.0, 100.0));
-			bool use_blue_tiberium;
-			bool use_tiberium_tree;
-			if (use_blue_tiberium) { // RA2: no UseBlueTiberium (not in RA2's layout)
-				use_tiberium_tree = Pick_Random_UInt(0, 100) < 25;
-			} else {
-				use_tiberium_tree = false;
-			}
-
-			if (amount >= 0) {
-				Create_Tiberium_Patch((*TiberiumLayoutCells)[layout_index], amount, layout_index + 1, use_blue_tiberium, use_tiberium_tree, 1);
-			}
-		} while (++layout_index < TiberiumLayoutCells->Count());
-	}
-
-	double *mean_distances = new double[SeedData.NumPlayers];
-	double *mean_distances_start = mean_distances;
-	int player_index = 0;
-	if (SeedData.NumPlayers > 0) {
-		double *dptr = mean_distances;
-		do {
-			double total_distance = 0.0;
-			Cell waypoint = Scen->Get_Waypoint_Cell((WAYPOINT)player_index);
-			if (TiberiumLayoutCells->Count() > 0) {
-				int y = waypoint.Y;
-				int x = waypoint.X;
-				do {
-					Cell c = (*TiberiumLayoutCells)[tib_index];
-					total_distance += fastmath::sqrt((double)((c.X - x) * (c.X - x) + (c.Y - y) * (c.Y - y)));
-					tib_index++;
-				} while (tib_index < TiberiumLayoutCells->Count());
-				tib_index = 0;
-			}
-			player_index++;
-			*dptr++ = total_distance / (double)TiberiumLayoutCells->Count();
-		} while (player_index < SeedData.NumPlayers);
-	}
-
-	double min_mean_distance = 9999999.0;
-	player_index = 0;
-	while (player_index < SeedData.NumPlayers) {
-		if (mean_distances[player_index] < min_mean_distance) {
-			min_mean_distance = mean_distances[player_index];
-		}
-		player_index++;
-	}
-
-	bool use_blue_tiberium = false;
-
-	static const double _distance_scale = 15.0; // RA2: no UseBlueTiberium (not in RA2's layout)
-
-	if (SeedData.NumPlayers > 0) {
-		do {
-			int d = (int)((*mean_distances - min_mean_distance) * _distance_scale) + 500;
-			Create_Tiberium_Patch(Scen->Get_Waypoint_Cell((WAYPOINT)tib_index), d, ++tib_index, use_blue_tiberium, use_blue_tiberium, 0);
-			mean_distances++;
-		} while (tib_index < SeedData.NumPlayers);
-		mean_distances = mean_distances_start;
-	}
-
-	delete[] mean_distances;
+	return(region->StartCount);
 }
 
 
 /// <summary>
-/// Grows one tiberium field outward from a cell.
-/// This routine spreads tiberium over open ground, thickening what is already there rather than
-/// overwriting it, and will pick a fresh start if the growth stalls early. It can also plant a
-/// tiberium tree at the heart of the field and, with the Firestorm addon present, turn a few
-/// tiberium creatures loose in it -- which is how wildlife reaches a generated map.
+/// RA2: do the players start next to gems rather than ore?
+/// </summary>
+static inline bool Rich_Starts(MapSeedClass const & seed)
+{
+	return(seed.Resources == 3 && (seed.MapType == 1 || seed.MapType == 3 || seed.MapType == 4));
+}
+
+
+/// <summary>
+/// RA2: the straight line distance between two cells.
+/// </summary>
+static inline double Cell_Distance(Cell const & c, int x, int y)
+{
+	int dx = c.X - x;
+	int dy = c.Y - y;
+	return(fastmath::sqrt((double)(dy * dy + dx * dx)));
+}
+
+
+/// <summary>
+/// Distributes tiberium across the map.
+/// This routine works region by region: it seeds a field at each of the region's spread
+/// cells, then hands out a compensating field to each player starting there -- the further a
+/// player sits from the ore already placed, the more of it is put on their doorstep, so that
+/// nobody begins the game starved.
+/// </summary>
+void MapGeneratorClass::Create_Tiberium(void)
+{
+	int waypoint = 0; // RA2: Create_Tiberium at 0x583B80, RA2's form (fields per region, grown from its StartCells)
+	bool seek_center; // RA2: as above
+	int resources = SeedData.Resources; // RA2: as above
+	switch (SeedData.MapType) { // RA2: as above
+		case 0: seek_center = resources == 3; break; // RA2: as above
+		case 1: // RA2: as above
+		case 3: // RA2: as above
+		case 4: seek_center = resources != 3; break; // RA2: as above
+		case 2: seek_center = true; break; // RA2: as above
+		default: seek_center = false; break; // RA2: as above
+	} // RA2: as above
+
+	for (int index = 0; index < MapRegionClass::MapRegions.Count(); index++) { // RA2: as above
+		MapRegionClass * region = MapRegionClass::MapRegions[index]; // RA2: as above
+		if (region->StartCells == NULL) continue; // RA2: as above
+
+		int nearest = -1; // RA2: as above
+		if (seek_center) { // RA2: as above
+			Cell center(0, 0); // RA2: as above
+			if (region->StartCount > 0) { // RA2: as above
+				for (int player = 0; player < region->StartCount; player++) { // RA2: as above
+					Cell start = Scen->Get_Waypoint_Cell((WAYPOINT)(player + waypoint)); // RA2: as above
+					center.Y += start.Y; // RA2: as above
+					center.X += start.X; // RA2: as above
+				} // RA2: as above
+				center.X = center.X / region->StartCount; // RA2: as above
+				center.Y = center.Y / region->StartCount; // RA2: as above
+			} else { // RA2: as above
+				center = region->Cells[Pick_Random_UInt(0, region->Cells.Count() - 1)]; // RA2: as above
+			} // RA2: as above
+			int best = 500000; // RA2: as above
+			for (int i = 0; i < region->StartCells->Count(); i++) { // RA2: as above
+				Cell c = (*region->StartCells)[i]; // RA2: as above
+				double distance = fastmath::sqrt((double)((c.Y - center.Y) * (c.Y - center.Y) + (c.X - center.X) * (c.X - center.X))); // RA2: as above
+				if (distance < (double)best) { // RA2: as above
+					best = (int)distance; // RA2: as above
+					nearest = i; // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+
+		double percent = SeedData.Tiberium * 0.01; // RA2: as above
+		int total = (int)(percent * (RMGMaximumTiberium - RMGMinimumTiberium) + RMGMinimumTiberium); // RA2: as above
+		double players = region->StartCount; // RA2: as above
+		int amount = (int)((double)total * (0.5 > players ? 0.5 : players)); // RA2: as above
+		if (region->StartCells->Count() == 0 || amount == 0) continue; // RA2: as above
+
+		int per_field = amount / region->StartCells->Count(); // RA2: as above
+		for (int field = 0; field < region->StartCells->Count(); field++) { // RA2: as above
+			int size = (int)((double)per_field + Sample_Truncated_Normal_Inline(0.0, 50.0, -100.0, 100.0)); // RA2: as above
+			if (size >= 0) { // RA2: as above
+				Create_Tiberium_Patch((*region->StartCells)[field], size, field + waypoint + 1, field == nearest); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+
+		/*
+		**	Every player starting in this region gets a field of their own, the bigger the
+		**	further they sit from the fields already grown.
+		*/
+		DynamicVectorClass<double> distances; // RA2: as above
+		for (int player = 0; player < Start_Count(region); player++) { // RA2: as above
+			double total_distance = 0.0; // RA2: as above
+			Cell start = Scen->Get_Waypoint_Cell((WAYPOINT)(player + waypoint)); // RA2: as above
+			for (int i = 0; i < region->StartCells->Count(); i++) { // RA2: as above
+				Cell c = (*region->StartCells)[i]; // RA2: as above
+				total_distance += Cell_Distance(c, start.X, start.Y); // RA2: as above
+			} // RA2: as above
+			distances.Add(total_distance / (double)region->StartCells->Count()); // RA2: as above
+		} // RA2: as above
+
+		double closest = 9999999.0; // RA2: as above
+		for (int i = 0; i < Start_Count(region); i++) { // RA2: as above
+			if (distances[i] < closest) closest = distances[i]; // RA2: as above
+		} // RA2: as above
+
+		bool rich = Rich_Starts(SeedData); // RA2: as above
+		for (int spot = 0; spot < Start_Count(region); spot++) { // RA2: as above
+			int size = (int)((distances[spot] - closest) * 15.0); // RA2: as above
+			Create_Tiberium_Patch(Scen->Get_Waypoint_Cell((WAYPOINT)(spot + waypoint)), size + 500, spot + waypoint + 1, rich); // RA2: as above
+		} // RA2: as above
+		waypoint += Start_Count(region); // RA2: as above
+	} // RA2: as above
+}
+
+
+/// <summary>
+/// Grows one ore field outward from a cell.
+/// This routine spreads ore over open ground, thickening what is already there rather than
+/// overwriting it, and will pick a fresh start if the growth stalls early. A field of ore
+/// gets an ore tree at its heart; a rich field is grown from gems instead and has none.
 /// </summary>
 /// <param name="cell">The cell the field grows out from.</param>
-/// <param name="count">The number of cells of tiberium to lay down.</param>
+/// <param name="count">The number of cells of ore to lay down.</param>
 /// <param name="patch_id">Tag marking a cell as claimed by this field, so that the field cannot
 /// grow back over itself.</param>
-/// <param name="use_primary_tiberium">Should the primary tiberium overlays be used rather than
-/// the alternate ones?</param>
-/// <param name="place_tree">Should a tiberium tree be planted in the field?</param>
-/// <param name="spawn_wildlife">Should tiberium creatures be turned loose in the field?</param>
-void MapGeneratorClass::Create_Tiberium_Patch(Cell const &cell, int count, int patch_id, bool use_primary_tiberium, bool place_tree, bool spawn_wildlife)
+/// <param name="rich">Should the field be grown from gems rather than ore?</param>
+void MapGeneratorClass::Create_Tiberium_Patch(Cell const &cell, int count, int patch_id, bool rich) // RA2: four arguments
 {
-	static char const *_tib_creature_names[] = {
-		"JFISH",
-		"VISC_SML",
-		"VISC_LRG",
-		"DOGGIE"
-	};
-
-	static char const *_tib_tree_names[] = {
-		"TIBTRE01",
-		"TIBTRE02",
-		"TIBTRE03"
-	};
-
-	int placed_count = 0;
+	int marker_index = 0; // RA2: Create_Tiberium_Patch at 0x5840A0, RA2's form
 	CellNode *nodes = new CellNode[10 * count];
 	PriorityQueueClass<CellNode> *queue = new PriorityQueueClass<CellNode>(10 * count);
 
 	bool queue_was_reset_for_spread = false;
 	Cell spread_origin = cell;
+	int placed_count = 0; // RA2
 	int restart_count = 0;
-	Cell first_placed_cell = CELL_NONE;
-
-	if (!Addon_Enabled(ADDON_FIRESTORM)) { // RA2: no TiberiumWildlife, tib_wildlife_factor, wildlife_count (not in RA2's layout)
-	} // RA2: no wildlife_count (a local of the dropped code)
-
-	int wildlife_trigger = Pick_Random_UInt(0, count);
-	HouseClass *neutral = House_From_HousesType(HouseTypeClass::From_Name("Neutral"));
+	int overlay_base = rich ? 27 : 102; // RA2: gems, or ore
 
 	queue->Clear();
 	CellNode *node = NULL;
-	int marker_index = 0;
-	int visited = 1;
 
 	while (placed_count < count) {
 		if (restart_count >= 10) {
@@ -8126,8 +8141,9 @@ void MapGeneratorClass::Create_Tiberium_Patch(Cell const &cell, int count, int p
 			}
 
 			marker_index = 1;
+			float & score = nodes[0].Score; // RA2: score written after the cell
 			nodes[0].Element = cell;
-			nodes[0].Score = 0;
+			score = 0; // RA2: as above
 			Set_Cell_Data_Spread(cell, patch_id);
 			queue->Insert(nodes[0]);
 			node = queue->Extract_Min();
@@ -8143,38 +8159,32 @@ void MapGeneratorClass::Create_Tiberium_Patch(Cell const &cell, int count, int p
 		 * while node still points at nodes[0], so the first neighbor stored OVERWRITES
 		 * node->Element and the remaining directions are taken from the new cell.
 		 * Caching the cell in a local would silently scan the true 8-neighborhood and
-		 * generate different tiberium fields.
+		 * generate different fields.
 		 */
 		CellClass *cellptr = &Map[node->Element];
 		if (MapRegionClass::CellData::Is_Not_Inviolate(node->Element)) {
 			if (!queue_was_reset_for_spread) {
+				queue_was_reset_for_spread = true;
 				spread_origin = node->Element;
 				queue->Clear();
 				marker_index = 0;
-				queue_was_reset_for_spread = true;
+				if (!rich) { // RA2: an ore tree where the field starts
+					char name[20]; // RA2: as above
+					sprintf(name, "TIBTRE0%d", (int)Pick_Random_UInt(1, 3) % 10); // RA2: as above
+					new TerrainClass(TerrainTypes[TerrainTypeClass::From_Name(name)], spread_origin); // RA2: as above
+				} // RA2: as above
 			}
 
 			if (cellptr->Overlay == OVERLAY_NONE) {
-				if (use_primary_tiberium) {
-					cellptr->Overlay = OverlayType(Pick_Random_UInt(0, 11) + 102);
-				} else {
-					cellptr->Overlay = OverlayType(Pick_Random_UInt(0, 11) + 127);
-				}
+				cellptr->Overlay = OverlayType(Pick_Random_UInt(0, 11) + overlay_base); // RA2
 				placed_count++;
-				visited++;
 			} else {
 				if (cellptr->OverlayData < OVERLAYDATA_TIBERIUM_MAX) {
 					cellptr->OverlayData++;
 					placed_count++;
-					visited++;
 				}
 			}
-
-			if (first_placed_cell == CELL_NONE) {
-				first_placed_cell = node->Element;
-			}
-
-		} // RA2: no wildlife_count (a local of the dropped code)
+		}
 
 		CellNode *newnode = &nodes[marker_index];
 		for (int dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
@@ -8195,13 +8205,6 @@ void MapGeneratorClass::Create_Tiberium_Patch(Cell const &cell, int count, int p
 		}
 
 		node = queue->Extract_Min();
-	}
-
-	if (place_tree) {
-		if (first_placed_cell != CELL_NONE) {
-			Map[first_placed_cell].Overlay = OVERLAY_NONE;
-			new TerrainClass(TerrainTypes[TerrainTypeClass::From_Name(_tib_tree_names[Pick_Random_UInt(0, 2)])], first_placed_cell);
-		}
 	}
 
 	delete[] nodes;

@@ -569,7 +569,7 @@ class MapGeneratorClass
 		 * Tiberium and wildlife.
 		 */
 		void Create_Tiberium(void);
-		void Create_Tiberium_Patch(Cell const &cell, int count, int patch_id, bool use_primary_tiberium, bool place_tree, bool spawn_wildlife);
+		void Create_Tiberium_Patch(Cell const &cell, int count, int patch_id, bool rich); // RA2: 0x5840A0, four arguments
 
 		/*
 		 * Urban and rural areas.
