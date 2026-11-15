@@ -772,39 +772,23 @@ void LoadOptionsClass::Fill_List(HWND window)
 /// <returns>bool; Was at least one loadable save game found?</returns>
 bool LoadOptionsClass::Files_Present(void)
 {
-	bool files_found = false;
-
 	char pattern[64];
+	WIN32_FIND_DATA find; // RA2: RA2's form
+	bool found = false; // RA2: as above
 	sprintf(pattern, "*.%3s", Extension);
-
-	WIN32_FIND_DATAA find_data;
-	HANDLE hFind = FindFirstFile(pattern, &find_data);
-
-	if (hFind != INVALID_HANDLE_VALUE) {
-		while (true) {
-			if ((find_data.dwFileAttributes & (FILE_ATTRIBUTE_TEMPORARY|FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_HIDDEN)) == 0) {
-				if (_stricmp(find_data.cFileName, NET_SAVE_FILE_NAME) != 0) {
-					FileEntryClass entry;
-					if (Read_File(&entry, &find_data) == true) {
-						files_found = true;
-						break;
-					}
-				}
-			}
-
-			/*
-			**	Find the next file
-			*/
-			if (!FindNextFile(hFind, &find_data)) {
+	HANDLE handle = FindFirstFileA(pattern, &find); // RA2: as above
+	if (handle != INVALID_HANDLE_VALUE) { // RA2: as above
+		do { // RA2: as above
+			if (!(find.dwFileAttributes & 0x116) && _stricmp(find.cFileName, "SAVEGAME.NET") != 0) { // RA2: as above
+				found = true; // RA2: as above
 				break;
 			}
-		}
+		} while (FindNextFileA(handle, &find)); // RA2: as above
 	}
-
-	FindClose(hFind);
-
-	return(files_found);
+	FindClose(handle); // RA2: as above
+	return found; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
