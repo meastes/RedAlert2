@@ -2581,22 +2581,24 @@ bool TActionClass::TAction_LIGHTNING_STORM(HouseClass * house, ObjectClass * , T
 /// </summary>
 bool TActionClass::TAction_IRON_CURTAIN(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: not in TibSun, at 0x6B26D0
 {
-	Cell cell;
+	Cell target_cell; // RA2: as above
 	Cell waypoint = Scen->Get_Waypoint_Cell(EffectLocation);
-	Coord coord = Map[waypoint].Center_Coord();
-	new AnimClass(Rule->IronCurtainInvokeAnim, coord + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(0x600), 0);
+	Coord position = Map[waypoint].Center_Coord(); // RA2: as above
+	new AnimClass(Rule->IronCurtainInvokeAnim, position + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
 	int count = MapClass::RadiusCount[1];
-	for (int index = 0; index < count; index++) {
+	for (int index = 0; index < count; ++index) { // RA2: as above
 		Cell const & offset = MapClass::RadiusOffset[index];
-		cell = Cell(waypoint.X + offset.X, waypoint.Y + offset.Y);
-		ObjectClass * object = Map[cell].Cell_Occupier();
-		while (object != NULL) {
-			object->IronCurtain(Rule->IronCurtainDuration);
-			object = object->Next;
+		target_cell = TPoint2D<short>((short)(waypoint.X + offset.X), (short)(waypoint.Y + offset.Y)); // RA2: as above
+		CellClass & target = Map[target_cell]; // RA2: as above
+		ObjectClass * occupier = target.Cell_Occupier(); // RA2: as above
+		while (occupier != NULL) { // RA2: as above
+			occupier->IronCurtain(Rule->IronCurtainDuration); // RA2: as above
+			occupier = occupier->Next; // RA2: as above
 		}
 	}
 	return(true);
 }
+
 
 
 /// <summary>
