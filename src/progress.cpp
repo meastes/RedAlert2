@@ -620,3 +620,15 @@ void ProgressScreenClass::Clear_Dialog(void)
 
 
 
+
+
+/// <summary>
+/// RA2: past the last player, the job itself; else that player's share of the job (0x6203F0).
+/// </summary>
+double ProgressScreenClass::Get_Current_Progress(int index) const
+{
+	if (index >= PlayerCount) { // RA2: as above
+		return(MainProgress); // RA2: as above
+	}
+	return(PlayerProgress[index] / MainProgress); // RA2: as above
+}

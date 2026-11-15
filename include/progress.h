@@ -60,13 +60,7 @@ class ProgressScreenClass : public INoticeSource // RA2: INoticeSource
 		bool Has_Dialog(void); // RA2: 0x6203C0
 		void Clear_Dialog(void); // RA2: 0x6203D0
 
-		double Get_Current_Progress(int index) const
-		{
-			if (index >= PlayerCount) { // RA2: past the last player, the job itself (0x6203F0)
-				return(MainProgress); // RA2: as above
-			} // RA2: as above
-			return(PlayerProgress[index] / MainProgress);
-		}
+		double Get_Current_Progress(int index) const; // RA2: 0x6203F0, out of line: past the last player, the job itself
 
 	public:
 		/*
