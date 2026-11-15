@@ -651,8 +651,9 @@ LONG STDMETHODCALLTYPE HouseClass::Available_Money(void)
 /// <returns>Returns with the amount of tiberium the house still has room for.</returns>
 LONG STDMETHODCALLTYPE HouseClass::Available_Storage(void)
 {
-	return(Capacity - Tiberium.Get_Total_Amount());
+	return Capacity - (int)Tiberium.Get_Total_Amount(); // RA2: RA2's form
 }
+
 
 
 /// <summary>
@@ -826,11 +827,12 @@ LONG STDMETHODCALLTYPE HouseClass::ID_Number(void)
  *=============================================================================================*/
 double HouseClass::Tiberium_Fraction(void) const
 {
-	if (Tiberium.Get_Total_Amount() == 0) {
-		return(0.f);
+	if ((int)Tiberium.Get_Total_Amount() == 0) { // RA2: RA2's form
+		return 0.0; // RA2: as above
 	}
-	return((double)Tiberium.Get_Total_Amount() / Capacity);
+	return Tiberium.Get_Total_Amount() / Capacity; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -2075,6 +2077,10 @@ void HouseClass::Harvested(int tiberium, TiberiumType slot)
 /// Finds the building of this house that has the most room left for tiberium.
 /// </summary>
 /// <returns>Returns with the building, or NULL if the house has no building that can store tiberium.</returns>
+/// <summary>
+/// Finds the building of this house that has the most room left for tiberium.
+/// </summary>
+/// <returns>Returns with the building, or NULL if the house has no building that can store tiberium.</returns>
 BuildingClass * HouseClass::Emptiest_Storage_Building(void) // RA2: 0x4E5160; not in TibSun
 {
 	BuildingClass * best = NULL; // RA2: as above
@@ -2095,6 +2101,7 @@ BuildingClass * HouseClass::Emptiest_Storage_Building(void) // RA2: 0x4E5160; no
 	}
 	return(best); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2151,48 +2158,51 @@ double HouseClass::Weed_Fraction(void) const
  *=============================================================================================*/
 void HouseClass::Spend_Money(int money)
 {
-	int oldtib = Tiberium.Get_Total_Amount();
-	int oldcapacity = Capacity;
+	float old_amount = Tiberium.Get_Total_Amount(); // RA2: RA2's form
+	int old_capacity = Capacity; // RA2: as above
+	int spent; // RA2: as above
+	int remaining = money; // RA2: as above
 	if (money > Credits) {
-		int deficit = money - Credits;
-		money = Credits;
+		remaining -= Credits; // RA2: as above
+		spent = Credits; // RA2: as above
 		Credits = 0;
-		if (deficit > 0 && Tiberium.Get_Total_Amount() > 0) {
-			for (int index = 0; index < Buildings.Count(); index++) {
-				BuildingClass * b = Buildings[index];
-				if (b && b->House == this) {
-					while (b->Storage.Get_Total_Amount() > 0 && deficit > 0) {
-						int slot = b->Storage.First_Used_Slot();
-						while (true) {
-							if (b->Storage.Get_Amount(slot) <= 0) {
-								break;
-							}
-							int amount = b->Storage.Decrease_Amount(1, slot);
-							Tiberium.Decrease_Amount(amount, slot);
-							int value = amount * Tiberiums[slot]->CreditValue;
-							deficit -= value;
-							money += value;
-							if (deficit < 0) {
-								Credits -= deficit;
-								money += deficit;
-								deficit = 0;
-								break;
-							}
-							if (deficit <= 0) {
-								break;
-							}
-						}
-					}
-				}
-				if (!deficit) break;
-			}
-		}
 	} else {
 		Credits -= money;
+		spent = money; // RA2: as above
+		remaining = 0; // RA2: as above
 	}
-	Silo_Redraw_Check(oldtib, oldcapacity);
-	CreditsSpent += money;
+	if (remaining > 0 && Tiberium.Get_Total_Amount() > 0.0f) { // RA2: as above
+		int count = Buildings.Count(); // RA2: as above
+		for (int index = 0; index < count; ++index) { // RA2: as above
+			TechnoClass *building = (TechnoClass *)Buildings[index]; // RA2: as above
+			if (building) { // RA2: as above
+				StorageClass &storage = building->Storage; // RA2: as above
+				while (storage.Get_Total_Amount() > 0.0f && remaining > 0) { // RA2: as above
+					int type = storage.First_Used_Slot(); // RA2: as above
+					while (remaining > 0 && storage.Get_Amount(type) > 0.0f) { // RA2: as above
+						float removed = storage.Decrease_Amount(1.0f, type); // RA2: as above
+						Tiberium.Decrease_Amount(removed, type); // RA2: as above
+						int value = (int)(Tiberiums[type]->CreditValue * // RA2: as above
+							Class->IncomeMult * removed); // RA2: as above
+						remaining -= value; // RA2: as above
+						spent += value; // RA2: as above
+						if (remaining < 0) { // RA2: as above
+							Credits -= remaining; // RA2: as above
+							spent += remaining; // RA2: as above
+							remaining = 0; // RA2: as above
+							break; // RA2: as above
+						}
+						if (remaining <= 0) break; // RA2: as above
+					}
+				}
+			}
+			if (!remaining) break; // RA2: as above
+		}
+	}
+	Silo_Redraw_Check((int)old_amount, old_capacity); // RA2: as above
+	CreditsSpent += spent; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -2240,20 +2250,26 @@ void HouseClass::Refund_Money(int money)
  *=============================================================================================*/
 void HouseClass::Silo_Redraw_Check(int oldtib, int oldcap)
 {
-	int oldratio = 0;
-	if (oldcap) oldratio = ((double)oldtib / oldcap * 4.0) + 0.5;
-	int newratio = 0;
-	if (Capacity) newratio = ((double)Tiberium.Get_Total_Amount() / Capacity * 4.0)  + 0.5;
-
-	if (oldratio != newratio) {
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * b = Buildings[index];
-			if (b && !b->IsInLimbo && b->House == this && b->Class->IsSiloDamage) {
-				b->Mark(MARK_CHANGE);
+	int old_level = 0; // RA2: RA2's form
+	if (oldcap != 0) { // RA2: as above
+		old_level = (int)((double)oldtib / oldcap * 4.0 + 0.5); // RA2: as above
+	}
+	int level = 0; // RA2: as above
+	if (Capacity != 0) { // RA2: as above
+		level = (int)(Tiberium.Get_Total_Amount() / Capacity * 4.0 + 0.5); // RA2: as above
+	}
+	if (old_level != level) { // RA2: as above
+		int count = Buildings.Count(); // RA2: as above
+		for (int index = 0; index < count; index++) { // RA2: as above
+			BuildingClass *building = Buildings[index]; // RA2: as above
+			if (building != 0 && !building->IsInLimbo && // RA2: as above
+				building->Class->IsSiloDamage) { // RA2: as above
+				building->Mark(MARK_CHANGE); // RA2: as above
 			}
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2903,10 +2919,22 @@ void HouseClass::Special_Weapon_AI(SuperWeaponType id)
  *=============================================================================================*/
 bool HouseClass::Place_Special_Blast(SuperWeaponType id, Cell const & cell)
 {
-	SuperWeapon[id]->Discharged(this == PlayerPtr, cell);
-
+	SuperClass *super = (SuperClass *)SuperWeapon[id]; // RA2: RA2's form
+	SuperClass *linked = 0; // RA2: as above
+	if (super->Class->PostClick) { // RA2: as above
+		linked = (SuperClass *)SuperWeapon[super->Class->PreDependent]; // RA2: as above
+		if (linked != 0) { // RA2: as above
+			super->ChronoMapCoords = linked->ChronoMapCoords; // RA2: as above
+		}
+	}
+	super->Discharged(this == PlayerPtr, cell); // RA2: as above
+	if (super->Class->PostClick && linked != 0) { // RA2: as above
+		linked->Set_Ready(0); // RA2: as above
+		linked->Recharge(this == PlayerPtr); // RA2: as above
+	}
 	return(true);
 }
+
 
 
 /***********************************************************************************************
@@ -3178,42 +3206,53 @@ void HouseClass::Clobber_All(void)
 void HouseClass::Detach(AbstractClass const * target, bool all)
 {
 	if (ToCapture == target) {
-		ToCapture = NULL;
+		ToCapture = 0; // RA2: RA2's form
 	}
-
-	TagClass * tag = ((AbstractClass *)target)->As_TagClass();
-	if (tag != NULL) {
+	TagClass *tag = dynamic_cast<TagClass *>((AbstractClass *)target); // RA2: as above
+	if (tag != 0) { // RA2: as above
 		HouseTags.Delete(tag);
 	}
-
-	if (target->RTTI == RTTI_BUILDING) {
-		if (all) {
-			ConYards.Delete(((BuildingClass *)target));
+	if (target->Fetch_RTTI() == RTTI_BUILDING && all) { // RA2: as above
+		ConYards.Delete((BuildingClass *)target); // RA2: as above
+		UnitRepairStations.Delete((BuildingClass *)target); // RA2: as above
+		CloningVats.Delete((BuildingClass *)target); // RA2: as above
+		PsychicDetectionBuildings.Delete((BuildingClass *)target); // RA2: as above
+		Buildings.Delete((BuildingClass *)target); // RA2: as above
+	}
+	for (int index = 0; index < 12; index++) { // RA2: as above
+		if (Paths[index] == target) { // RA2: as above
+			Paths[index] = 0; // RA2: as above
 		}
 	}
-
-	for (int i = 0; i < ARRAY_SIZE(Paths); i++) {
-		if (Paths[i] == target) {
-			Paths[i] = NULL;
-		}
-	}
-
 	if (AircraftFactory == target) {
-		AircraftFactory = NULL;
+		AircraftFactory = 0; // RA2: as above
 	}
-
 	if (InfantryFactory == target) {
-		InfantryFactory = NULL;
+		InfantryFactory = 0; // RA2: as above
 	}
-
 	if (UnitFactory == target) {
-		UnitFactory = NULL;
+		UnitFactory = 0; // RA2: as above
 	}
-
+	if (Primary_ForShips == target) { // RA2: as above
+		Primary_ForShips = 0; // RA2: as above
+	}
 	if (BuildingFactory == target) {
-		BuildingFactory = NULL;
+		BuildingFactory = 0; // RA2: as above
+	}
+	if (Primary_Unused1 == target) { // RA2: as above
+		Primary_Unused1 = 0; // RA2: as above
+	}
+	if (Primary_Unused2 == target) { // RA2: as above
+		Primary_Unused2 = 0; // RA2: as above
+	}
+	if (Primary_Unused3 == target) { // RA2: as above
+		Primary_Unused3 = 0; // RA2: as above
+	}
+	if (Primary_ForDefenses == target) { // RA2: as above
+		Primary_ForDefenses = 0; // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3788,15 +3827,11 @@ bool HouseClass::Flag_To_Die(void)
 {
 	if (!IsToWin && !IsToDie && !IsToLose) {
 		IsToDie = true;
-		BorrowedTime = TICKS_PER_MINUTE * Rule->SavourDelay;
-		if (Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH) {
-			int time = Frame + MAX(BorrowedTime, (int)Session.MaxAhead);
-			BorrowedTime = 10 * ((time + 9) / 10) - Frame;
-		}
-		DebugString("Frame %d, BorrowedTime == %d\n", Frame, (int)BorrowedTime);
+		BorrowedTime = CDTimerClass<FrameTimerClass>(0); // RA2: RA2's form
 	}
-	return(IsToDie);
+	return IsToDie; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4064,26 +4099,24 @@ BuildingTypeClass const * HouseClass::Suggest_New_Building(void) const
  *=============================================================================================*/
 BuildingClass * HouseClass::Find_Building(StructType type, ZoneType zone) const
 {
-	/*
-	**	Only scan if we KNOW there is at least one building of the type
-	**	requested.
-	*/
 	if (BQuantity.Value(type) > 0) {
-
-		/*
-		**	Search for a suitable launch site for this missile.
-		*/
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * b = Buildings[index];
-			if (b && !b->IsInLimbo && this == b->House && BuildingTypes.ID(b->Class) == type) {
-				if (zone == ZONE_NONE || Which_Zone(b) == zone) {
-					return(b);
+		int count = Buildings.Count(); // RA2: RA2's form
+		for (int index = 0; index < count; index++) { // RA2: as above
+			BuildingClass *building = (BuildingClass *)Buildings[index]; // RA2: as above
+			if (building != 0 && !building->IsInLimbo && // RA2: as above
+				BuildingTypes.ID(building->Class) == type) { // RA2: as above
+				if (zone == ZONE_NONE) { // RA2: as above
+					return (BuildingClass *)building; // RA2: as above
+				}
+				if (Which_Zone(building->Center_Coord()) == zone) { // RA2: as above
+					return (BuildingClass *)building; // RA2: as above
 				}
 			}
 		}
 	}
-	return(NULL);
+	return(0); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4402,14 +4435,12 @@ int HouseClass::Expert_AI(void)
 /// <returns>Returns with the urgency of selling the base off.</returns>
 UrgencyType HouseClass::Check_Fire_Sale(void)
 {
-	/*
-	**	If there are no more factories at all, then sell everything off because the game
-	**	is basically over at this point.
-	*/
 	if (State != STATE_ATTACKED && CurBuildings > 0) {
-		for (int i = 0; i < Buildings.Count(); i++) {
-			BuildingClass * bptr = Buildings[i];
-			if (bptr != NULL && bptr->IsActive && !bptr->IsInLimbo && this == bptr->House && bptr->Class->ToBuild != RTTI_NONE) {
+		int count = Buildings.Count(); // RA2: RA2's form
+		for (int index = 0; index < count; index++) { // RA2: as above
+			BuildingClass *building = (BuildingClass *)Buildings[index]; // RA2: as above
+			if (building != 0 && building->IsActive && !building->IsInLimbo && // RA2: as above
+				(((BuildingTypeClass *)building->Class))->ToBuild != 0) { // RA2: as above
 				return(URGENCY_NONE);
 			}
 		}
@@ -4417,6 +4448,7 @@ UrgencyType HouseClass::Check_Fire_Sale(void)
 	}
 	return(URGENCY_NONE);
 }
+
 
 
 /*
@@ -5599,6 +5631,12 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
 /// <param name="type">The kind of object type.</param>
 /// <param name="id">The heap ID of the object type.</param>
 /// <returns>Returns with the category (5 is the defense category), or 0 for any other type.</returns>
+/// <summary>
+/// Fetches the build category of an object type; only buildings have one.
+/// </summary>
+/// <param name="type">The kind of object type.</param>
+/// <param name="id">The heap ID of the object type.</param>
+/// <returns>Returns with the category (5 is the defense category), or 0 for any other type.</returns>
 int HouseClass::Build_Category(RTTIType type, int id) // RA2: 0x4EB550; not in TibSun
 {
 	if (id < 0) { // RA2: as above
@@ -5612,6 +5650,14 @@ int HouseClass::Build_Category(RTTIType type, int id) // RA2: 0x4EB550; not in T
 }
 
 
+
+/// <summary>
+/// Fetches the factory that makes an object of the given kind.
+/// </summary>
+/// <param name="rtti">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+/// <returns>Returns with the factory, or NULL if there is none.</returns>
 /// <summary>
 /// Fetches the factory that makes an object of the given kind.
 /// </summary>
@@ -5660,6 +5706,13 @@ FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti, bool naval, int category
 }
 
 
+
+/// <summary>
+/// Marks the production of an object kind as pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
 /// <summary>
 /// Marks the production of an object kind as pending.
 /// </summary>
@@ -5699,6 +5752,13 @@ void HouseClass::Set_Production_Pending(RTTIType type, bool naval, int category)
 }
 
 
+
+/// <summary>
+/// Marks the production of an object kind as no longer pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
 /// <summary>
 /// Marks the production of an object kind as no longer pending.
 /// </summary>
@@ -5738,6 +5798,13 @@ void HouseClass::Clear_Production_Pending(RTTIType type, bool naval, int categor
 }
 
 
+
+/// <summary>
+/// Checks whether the production of an object kind is pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
 /// <summary>
 /// Checks whether the production of an object kind is pending.
 /// </summary>
@@ -5778,6 +5845,14 @@ bool HouseClass::Is_Production_Pending(RTTIType type, bool naval, int category) 
 }
 
 
+
+/// <summary>
+/// Sets whether the production of an object kind is pending.
+/// </summary>
+/// <param name="type">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+/// <param name="value">The new state.</param>
 /// <summary>
 /// Sets whether the production of an object kind is pending.
 /// </summary>
@@ -5816,6 +5891,7 @@ void HouseClass::Assign_Production_Pending(RTTIType type, bool naval, int catego
 			break; // RA2: as above
 	}
 }
+
 
 
 
@@ -5898,30 +5974,36 @@ int HouseClass::Factory_Count(RTTIType rtti) const
 /// <param name="ini">The INI database to read the houses from.</param>
 void HouseClass::Read_All(CCINIClass const & ini)
 {
-	HouseClass 	* p;				// Pointer to current player data.
-	HousesType index;
-
 	int count = ini.Entry_Count("Houses");
-
-	for (index = HOUSE_FIRST; index < count; index++) {
-		/// Reading the entry is what forces the house type to be created. The house below is
-		/// built from the type at the same index, which need not be the one just read.
-		ini.Get_HousesType("Houses", ini.Get_Entry("Houses", index), HOUSE_NONE);
-		new HouseClass(HouseTypes[index]);
+	for (int index = 0; index < count; index++) { // RA2: RA2's form
+		char name[20]; // RA2: as above
+		ini.Get_String("Houses", ini.Get_Entry("Houses", index), "", name, sizeof(name)); // RA2: as above
+		int type = ini.Get_HousesType(name, "Country", HOUSE_NONE); // RA2: as above
+		if (type == -1) { // RA2: as above
+			type = 0; // RA2: as above
+		}
+		HouseClass *house = new HouseClass(HouseTypes[type]); // RA2: as above
+		house->IniName = name; // RA2: as above
 	}
 
-	for (index = HOUSE_FIRST; index < Houses.Count(); index++) {
-		p = Houses[index];
-		p->Read_INI(ini);
-		if (Session.Type == GAME_NORMAL) {
-			if (p->Is_Human_Player()) {
-				p->Assign_Handicap(Scen->Difficulty);
-			} else {
-				p->Assign_Handicap(Scen->CDifficulty);
-			}
+	for (int i = 0; i < Houses.Count(); i++) { // RA2: as above
+		HouseClass *house = Houses[i]; // RA2: as above
+		house->Read_INI(ini); // RA2: as above
+		if (!Session.Type && (house->IsHuman || house->IsPlayerControl)) { // RA2: as above
+			house->Assign_Handicap(Scen->Difficulty); // RA2: as above
+		} else if (!Session.Type) { // RA2: as above
+			house->Assign_Handicap(Scen->CDifficulty); // RA2: as above
+		}
+	}
+
+	if (Houses.Count() == 0) { // RA2: as above
+		for (int type = 0; type < HouseTypes.Count(); type++) { // RA2: as above
+			HouseClass *house = new HouseClass(HouseTypes[type]); // RA2: as above
+			house->Read_INI(ini); // RA2: as above
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -6000,20 +6082,19 @@ void HouseClass::Read_INI(CCINIClass const & ini)
 /// <param name="ini">The INI database to write the houses to.</param>
 void HouseClass::Write_All(CCINIClass & ini)
 {
-	char buffer[32];
-	HousesType index;
-
-	ini.Clear("Houses");
-
-	for (index = HOUSE_FIRST; index < Houses.Count(); index++) {
-		sprintf(buffer, "%d", index);
-		ini.Put_HousesType("Houses", buffer, Houses[index]->Class->House);
+	ini.Clear("Houses", 0); // RA2: RA2's form
+	for (int index = 0; index < Houses.Count(); index++) { // RA2: as above
+		char name[32]; // RA2: as above
+		char entry[32]; // RA2: as above
+		strcpy(name, Houses[index]->IniName); // RA2: as above
+		sprintf(entry, "%d", index); // RA2: as above
+		ini.Put_String("Houses", entry, name); // RA2: as above
 	}
-
-	for (index = HOUSE_FIRST; index < Houses.Count(); index++) {
-		Houses[index]->Write_INI(ini);
+	for (int i = 0; i < Houses.Count(); i++) { // RA2: as above
+		Houses[i]->Write_INI(ini); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -6087,17 +6168,18 @@ void HouseClass::Write_INI(CCINIClass & ini)
 HRESULT STDMETHODCALLTYPE HouseClass::Fire_Sale(void)
 {
 	if (CurBuildings > 0) {
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * b = Buildings[index];
-
-			if (b != NULL && !b->IsInLimbo && b->House == this && b->Strength > 0) {
-				b->Sell_Back(1);
+		int count = Buildings.Count(); // RA2: RA2's form
+		for (int index = 0; index < count; index++) { // RA2: as above
+			BuildingClass *building = (BuildingClass *)Buildings[index]; // RA2: as above
+			if (building != 0 && !building->IsInLimbo && building->Strength > 0) { // RA2: as above
+				building->Sell_Back(1); // RA2: as above
 			}
 		}
-		return(false);
+		return S_OK; // RA2: as above
 	}
-	return(true);
+	return(1);   // S_FALSE: nothing to sell
 }
+
 
 
 /***********************************************************************************************
@@ -6118,21 +6200,29 @@ HRESULT STDMETHODCALLTYPE HouseClass::Fire_Sale(void)
  *=============================================================================================*/
 HRESULT STDMETHODCALLTYPE HouseClass::All_To_Hunt(void)
 {
-	int index;
-
-	for (index = 0; index < Technos.Count(); index++) {
-		TechnoClass * techno = Technos[index];
-
-		if (techno->Is_Foot() && this == techno->House && techno->IsDown && !techno->IsInLimbo) {
-			if (((FootClass *)techno)->Team) ((FootClass *)techno)->Team->Remove(((FootClass *)techno));
-			techno->Assign_Mission(MISSION_HUNT);
+	for (int index = Technos.Count() - 1; index >= 0; index--) { // RA2: RA2's form
+		TechnoClass *techno = Technos[index]; // RA2: as above
+		if (this == techno->House && techno->IsDown && !techno->IsInLimbo && techno != 0) { // RA2: as above
+			bool is_foot = techno->Is_Foot(); // RA2: as above
+			if (is_foot) { // RA2: as above
+				FootClass *foot = (FootClass *)techno; // RA2: as above
+				if (foot->Team != 0) { // RA2: as above
+					foot->Team->Remove(foot, -1, 0); // RA2: as above
+				}
+				foot->QueueMission(MISSION_HUNT, false); // RA2: as above
+			}
+			if (!is_foot && techno->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+				BuildingClass *building = (BuildingClass *)techno; // RA2: as above
+				if (building->GetOccupantCount() > 0) { // RA2: as above
+					building->Eject_Occupants(1); // RA2: as above
+				}
+			}
 		}
 	}
-
 	IsAllToHunt = true;
-
-	return(S_OK);
+	return S_OK; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -6807,39 +6897,30 @@ void HouseClass::Tracking_Active_Remove(TechnoClass * techno, bool bycapture)
 /// <param name="techno">The object to begin tracking.</param>
 void HouseClass::Tracking_Active_Add(TechnoClass * techno, bool bycapture)
 {
-	TechnoTypeClass const * ttype;
-	BuildingClass * bptr;
-
 	switch (techno->Fetch_RTTI()) {
-		case RTTI_BUILDING:
-			ttype = techno->TClass;
-			ABQuantity.Increment(ttype->Fetch_Heap_ID());
-			bptr = dynamic_cast<BuildingClass *>(techno);
-			if (bptr != NULL) {
-				Adjust_Drain(bptr->Power_Drain());
-				Capacity += bptr->Class->Capacity;
-				Tiberium += techno->Storage;
-			}
-			break;
-
-		case RTTI_AIRCRAFT:
-			ttype = techno->TClass;
-			AAQuantity.Increment(ttype->Fetch_Heap_ID());
-			break;
-
-		case RTTI_INFANTRY:
-			if (!((InfantryClass *)techno)->IsTechnician) {
-				ttype = techno->TClass;
-				AIQuantity.Increment(ttype->Fetch_Heap_ID());
-			}
-			break;
-
-		case RTTI_UNIT:
-			ttype = techno->TClass;
-			AUQuantity.Increment(ttype->Fetch_Heap_ID());
-			break;
+	case RTTI_BUILDING: // RA2: RA2's form
+		ABQuantity.Increment(techno->Techno_Type_Class()->Fetch_Heap_ID()); // RA2: as above
+		if (techno != 0 && techno->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+			BuildingClass *building = (BuildingClass *)techno; // RA2: as above
+			Adjust_Drain(building->Power_Drain()); // RA2: as above
+			Capacity += building->Class->Capacity; // RA2: as above
+			Tiberium += building->Storage; // RA2: as above
+		}
+		break; // RA2: as above
+	case RTTI_AIRCRAFT: // RA2: as above
+		AAQuantity.Increment(techno->Techno_Type_Class()->Fetch_Heap_ID()); // RA2: as above
+		break; // RA2: as above
+	case RTTI_INFANTRY: // RA2: as above
+		if (!(((InfantryClass *)techno))->IsTechnician) { // RA2: as above
+			AIQuantity.Increment(techno->Techno_Type_Class()->Fetch_Heap_ID()); // RA2: as above
+		}
+		break; // RA2: as above
+	case RTTI_UNIT: // RA2: as above
+		AUQuantity.Increment(techno->Techno_Type_Class()->Fetch_Heap_ID()); // RA2: as above
+		break; // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -7101,102 +7182,160 @@ HRESULT STDMETHODCALLTYPE HouseClass::Load(IStream *stream)
 /// <returns>Returns with S_OK, or the failure code reported by the stream.</returns>
 HRESULT STDMETHODCALLTYPE HouseClass::Save(IStream *stream, int cleardirty)
 {
-	int index;
 	int count;
-
-	HRESULT result = BASECLASS::Save(stream, cleardirty);
+	HRESULT result = AbstractClass::Save(stream, cleardirty); // RA2: RA2's form
 	if (SUCCEEDED(result)) {
-		Base.Save(stream);
+	Base.Save(stream); // RA2: as above
+	BQuantity.Save(stream); // RA2: as above
+	UQuantity.Save(stream); // RA2: as above
+	IQuantity.Save(stream); // RA2: as above
+	AQuantity.Save(stream); // RA2: as above
+	ABQuantity.Save(stream); // RA2: as above
+	AUQuantity.Save(stream); // RA2: as above
+	AIQuantity.Save(stream); // RA2: as above
+	AAQuantity.Save(stream); // RA2: as above
+	PBQuantity.Save(stream); // RA2: as above
+	PUQuantity.Save(stream); // RA2: as above
+	PIQuantity.Save(stream); // RA2: as above
+	PAQuantity.Save(stream); // RA2: as above
 
-		BQuantity.Save(stream);
-		UQuantity.Save(stream);
-		IQuantity.Save(stream);
-		AQuantity.Save(stream);
-
-		ABQuantity.Save(stream);
-		AUQuantity.Save(stream);
-		AIQuantity.Save(stream);
-		AAQuantity.Save(stream);
-
-		PBQuantity.Save(stream);
-		PUQuantity.Save(stream);
-		PIQuantity.Save(stream);
-		PAQuantity.Save(stream);
-
+	{
+		int index; // RA2: as above
 		count = SuperWeapon.Count();
-		result = stream->Write(&count, sizeof(count), NULL);
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
 		if (FAILED(result)) {
 			return(result);
 		}
-
 		for (index = 0; index < count; index++) {
-			result = stream->Write(&SuperWeapon[index], sizeof(SuperWeapon[index]), NULL);
+			result = stream->Write(&SuperWeapon[index], sizeof(SuperWeapon[index]), 0); // RA2: as above
 			if (FAILED(result)) {
 				return(result);
 			}
-		}
-
-		count = HouseTags.Count();
-		result = stream->Write(&count, sizeof(count), NULL);
-		if (FAILED(result)) {
-			return(result);
-		}
-
-		for (index = 0; index < count; index++) {
-			result = stream->Write(&HouseTags[index], sizeof(HouseTags[index]), NULL);
-			if (FAILED(result)) {
-				return(result);
-			}
-		}
-
-		count = AngerNodes.Count();
-		result = stream->Write(&count, sizeof(count), NULL);
-		if (FAILED(result)) {
-			return(result);
-		}
-
-		for (index = 0; index < count; index++) {
-			result = stream->Write(&AngerNodes[index], sizeof(AngerNodes[index]), NULL);
-			if (FAILED(result)) {
-				return(result);
-			}
-		}
-
-		count = ScoutNodes.Count();
-		result = stream->Write(&count, sizeof(count), NULL);
-		if (FAILED(result)) {
-			return(result);
-		}
-
-		for (index = 0; index < count; index++) {
-			result = stream->Write(&ScoutNodes[index], sizeof(ScoutNodes[index]), NULL);
-			if (FAILED(result)) {
-				return(result);
-			}
-		}
-
-		count = ConYards.Count();
-		result = stream->Write(&count, sizeof(count), NULL);
-		if (FAILED(result)) {
-			return(result);
-		}
-
-		for (index = 0; index < count; index++) {
-			result = stream->Write(&ConYards[index], sizeof(ConYards[index]), NULL);
-			if (FAILED(result)) {
-				return(result);
-			}
-		}
-
-		int hasaigen = AIGeneral != NULL;
-		result = stream->Write(&hasaigen, sizeof(hasaigen), NULL);
-		if (SUCCEEDED(result) && hasaigen) {
-			IPersistStreamPtr ptr(AIGeneral);
-			result = OleSaveToStream(ptr, stream);
 		}
 	}
-	return(result);
+	{
+		int index; // RA2: as above
+		count = HouseTags.Count();
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&HouseTags[index], sizeof(HouseTags[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = AngerNodes.Count();
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&AngerNodes[index], sizeof(AngerNodes[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = ScoutNodes.Count();
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&ScoutNodes[index], sizeof(ScoutNodes[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = ConYards.Count();
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&ConYards[index], sizeof(ConYards[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = Buildings.Count(); // RA2: as above
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&Buildings[index], sizeof(Buildings[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = UnitRepairStations.Count(); // RA2: as above
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&UnitRepairStations[index], sizeof(UnitRepairStations[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = CloningVats.Count(); // RA2: as above
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&CloningVats[index], sizeof(CloningVats[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+	{
+		int index; // RA2: as above
+		count = PsychicDetectionBuildings.Count(); // RA2: as above
+		result = stream->Write(&count, sizeof(count), 0); // RA2: as above
+		if (FAILED(result)) {
+			return(result);
+		}
+		for (index = 0; index < count; index++) {
+			result = stream->Write(&PsychicDetectionBuildings[index], sizeof(PsychicDetectionBuildings[index]), 0); // RA2: as above
+			if (FAILED(result)) {
+				return(result);
+			}
+		}
+	}
+
+	BOOL present = AIGeneral != 0; // RA2: as above
+	result = stream->Write(&present, sizeof(present), 0); // RA2: as above
+	if (SUCCEEDED(result) && present) { // RA2: as above
+		IPersistStreamPtr persist(AIGeneral); // RA2: as above
+		result = OleSaveToStream(persist, stream); // RA2: as above
+	}
+	}
+	return result; // RA2: as above
 }
+
 
 
 /// <summary>
