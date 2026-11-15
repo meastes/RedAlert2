@@ -107,6 +107,8 @@ class MapClass: public GScreenClass
 		void Sight_From(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true, bool=false); // RA2: 0x54A110, eight arguments
 		void Shroud_Gap_Area(Coord const & coord, int radius); // RA2: 0x54A720
 		void Refresh_Shroud(void); // RA2: 0x55A300, re-flags the shrouded cells
+		void Spy_Satellite_Hide(void); // RA2: 0x559F10, shrouds every cell again (ShroudCounter 1) and refreshes the radar
+		void Spy_Satellite_Reveal(void); // RA2: 0x55A120, maps and shows every cell (ShroudCounter 0) unless it is done already, and refreshes the radar
 		bool In_Radar(Cell const & cell) const;
 		bool In_Radar(Coord const & coord) const;
 		void Place_Down(Cell const & cell, ObjectClass * object);
@@ -117,6 +119,8 @@ class MapClass: public GScreenClass
 		Cell Nearby_Location(Cell const & cell, SpeedType speed, int zone=-1, MZoneType check=MZONE_NORMAL, bool checkbridge=false, Point2D dimensions=Point2D(1,1), bool checkoverlay=false, bool checkheight=false, bool checkburrow=false, bool allowunderbridge=true, Cell const & nearto=Cell(0, 0), bool flag=false) const; // RA2: flag added
 		bool Base_Region(Cell const & cell, HousesType & house, ZoneType & zone) const;
 		int Cell_Region(Cell const & cell);
+		int Largest_Water_Zone(int & zone); // RA2: 0x5658C0, counts the water cells (Passability 4) per zone and gives the biggest zone and its count
+		void Find_Naval_Yard_Cells(Cell const & center, int a, int b, int c, int zone, DynamicVectorClass<Cell> & cells, int width, int height); // RA2: 0x565A50, collects water-side cells for a naval yard of the size around the center
 		int Cell_Threat(Cell const & cell, HouseClass const & house);
 		Cell Pick_Random_Location(void) const;
 		bool Place_Random_Crate(void);

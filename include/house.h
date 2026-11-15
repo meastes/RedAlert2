@@ -827,6 +827,11 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		bool Flag_To_Win(bool silent = false);
 		bool Flag_To_Lose(bool silent = false);
 		void Cheer(void); // RA2: 0x4F62B0, the house's infantry cheer
+		void Recall_Units_To_Base(void); // RA2: 0x4F6310; every unit that is not a building, aircraft or construction yard is sent to a free spot by the base
+		bool Can_Rebuild_Node(BaseNodeClass const & node); // RA2: 0x4F64C0; whether the base node may be rebuilt now (armed, a wall with a neighbor, powered, or the replace time is over)
+		Cell Best_Super_Weapon_Target(void); // RA2: 0x4F65A0; the cell of the enemy object the AIIonCannon rule values rate highest
+		Cell Threat_Target_Cell(int quarry); // RA2: 0x4F6A80; the cell of the greatest threat (by the quarry) a team leader of the house sees
+		bool Add_Wall_Nodes(int node); // RA2: 0x4F5D30; the nearest base node before this one whose building wants walls gets a ring of wall nodes after it
 		void Flag_To_End(void);
 		void Make_Ally(HouseClass * house);
 		void Make_Ally(HousesType house);
@@ -839,6 +844,8 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		bool Is_Ally(ObjectClass const * object) const;
 		bool Ion_Sensitives_Should_Be_Offline(void); // RA2: always false (0x0051FC80 is xor al, al; ret)
 		void Begin_Radar_Blackout(int frames); // RA2: 0x004F5840; RadarBlackoutTimer (+0x1F8) = frames, and the radar is redrawn (RecalcRadar)
+		void Begin_Power_Blackout(int frames); // RA2: 0x4F5800; PowerBlackoutTimer (+0x1EC) = frames, and the power is recalculated (RecalcPower)
+		void Spy_Satellite_Lost(void); // RA2: 0x4F5880; the player's map is shrouded again unless a spy satellite is active
 		bool Is_Ally(AbstractClass const * target) const;
 #ifdef _DEBUG
 		void Debug_Dump(MonoClass *mono) const;
@@ -962,8 +969,15 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		float Armor_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F58A0, the house type's armor factor for the kind
 		float Income_Multiplier(void) const; // RA2: 0x4F5B30, the house type's income factor (Class->IncomeMult)
 		float Cost_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F5960, the house type's cost factor for the kind
+		float Speed_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F5A20, the house type's speed factor for the kind
+		float Buildtime_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F5A70, the house type's build time factor for the kind
 
 		bool Can_Build_Here(BuildingTypeClass *building,  Cell const & cell);
+		void Plan_Naval_Yard_Path(int node); // RA2: 0x4EECB0; the naval yard node gets a cell by the water and the dummy nodes along the path to it, or the node goes and naval bases are off
+		void Ensure_Base_Nodes(void); // RA2: 0x4EF5A0; the computer house gets its base nodes when it has none (Computer_Paranoid first outside the shell)
+		void Update_Spy_Satellite(void); // RA2: 0x4F2FC0; the player's map is revealed while a spy satellite building works, and shrouded again when none does
+		void AI_Super_Unused(SuperClass * super); // RA2: 0x4F3C40; a super weapon handler with an empty body
+		void AI_Strike_Best_Building(SuperClass * super); // RA2: 0x4F3E00; a super weapon is fired at the enemy building the map rates highest in threat
 
 		/*
 		**	File I/O.
@@ -1000,6 +1014,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		RGBClass RemapColorRGB;
 		RGBClass LaserColor; // RA2: +0x55EC; white when constructed
 		void Initialize_Radar_Color(void);
+		void Update_Laser_Color(void); // RA2: 0x4F5570; LaserColor from the remap color, normalized and thresholded
 
 		/*
 		 * This is the base plan for this house -- the structures the computer means to have
@@ -1195,4 +1210,6 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 };
 
 HouseClass * House_From_HousesType(HousesType house);
+extern bool AllowDisableableSupers; // RA2: 0xA3D2C3, written by Init_Rules; when set, super weapons that DisableableFromShell names are still buildable
 int House_Index_From_Name(char const * name); // RA2: index of the house whose IniName this is
+void __fastcall Normalize_Color(double & red, double & green, double & blue); // RA2: 0x4F5490; scales the color to a length of 240, each part capped at 255

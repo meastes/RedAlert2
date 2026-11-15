@@ -394,6 +394,7 @@ class TeamClass : public AbstractClass
 		bool Coordinate_Conscript(FootClass * unit);
 		void Calc_Center(AbstractClass *& center, AbstractClass *& obj_center) const;
 		bool Lagging_Units(void);
+		friend class HouseClass; // RA2: HouseClass::Threat_Target_Cell (0x4F6A80) calls Fetch_A_Leader
 		FootClass * Fetch_A_Leader(void) const;
 		bool Ammo_Check(void) const;
 

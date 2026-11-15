@@ -72,6 +72,7 @@ class RGBClass
 
 		RGBClass & Lerp(RGBClass const & a, RGBClass const & b, float t);
 		RGBClass & Set(RGBClass const & rgb, float value);
+		void Set(unsigned char red, unsigned char green, unsigned char blue) {Red = red; Green = green; Blue = blue;} // RA2: 0x4F6BC0, out of line in the house range
 		void Adjust(int ratio, RGBClass const & rgb);
 		int Difference(RGBClass const & rgb) const;
 		int Get_Red(void) const {return(Red);}
