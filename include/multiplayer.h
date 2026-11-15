@@ -44,6 +44,7 @@ class MultiplayerGameMode
 		};
 
 		static MultiplayerGameMode * __fastcall Get(int index);
+		static int __cdecl GetModeCount(void); // RA2: the number of registered game modes, at 0x005B6F80
 		CCINIClass * GetINI(void);
 		bool IsMapAllowed(MultiMission const * map);
 		MultiplayerTeam * GetTeam(int index);
