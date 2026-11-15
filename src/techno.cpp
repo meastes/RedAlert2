@@ -609,30 +609,47 @@ int TechnoClass::How_Many_Survivors(void) const
  *=============================================================================================*/
 int TechnoClass::Combat_Damage(int which) const
 {
-	int divisor = 0;
 	int value = 0;
 
-	if (which == 0 || which == -1) {
-		if (PrimaryWeapon != NULL) {
-			value += PrimaryWeapon->Attack;
-			value += PrimaryWeapon->AmbientDamage;
+	if (which == -1) { // RA2: RA2's form
+		int divisor = 0; // RA2: as above
+
+		if (Techno_Type_Class()->Has_Turret_Weapons()) { // RA2: as above
+			const WeaponDataStruct * slot = Get_Class_Weapon_Data(CurrentWeaponNumber); // RA2: as above
+			if (slot == NULL) { // RA2: as above
+				return(0); // RA2: as above
+			}
+			if (slot->Weapon == NULL) { // RA2: as above
+				return(0); // RA2: as above
+			}
+			value += slot->Weapon->Attack; // RA2: as above
+			value += slot->Weapon->AmbientDamage; // RA2: as above
 			divisor = 1;
+		} else { // RA2: as above
+			if (Get_Class_Weapon_Data(0)->Weapon) { // RA2: as above
+				value += Get_Class_Weapon_Data(0)->Weapon->Attack; // RA2: as above
+				value += Get_Class_Weapon_Data(0)->Weapon->AmbientDamage; // RA2: as above
+				divisor = 1; // RA2: as above
+			}
+			if (Get_Class_Weapon_Data(1)->Weapon) { // RA2: as above
+				value += Get_Class_Weapon_Data(1)->Weapon->Attack; // RA2: as above
+				value += Get_Class_Weapon_Data(1)->Weapon->AmbientDamage; // RA2: as above
+				++divisor; // RA2: as above
+			}
 		}
-	}
-
-	if (which == 1 || which == -1) {
-		if (SecondaryWeapon != NULL) {
-			value += SecondaryWeapon->Attack;
-			value += SecondaryWeapon->AmbientDamage;
-			divisor += 1;
+		if (divisor > 0) { // RA2: as above
+			return(value / divisor); // RA2: as above
 		}
+		return(0); // RA2: as above
+	} else { // RA2: as above
+		if (Get_Class_Weapon_Data(which)->Weapon) { // RA2: as above
+			value += Get_Class_Weapon_Data(which)->Weapon->Attack; // RA2: as above
+			value += Get_Class_Weapon_Data(which)->Weapon->AmbientDamage; // RA2: as above
+		}
+		return(value); // RA2: as above
 	}
-
-	if (divisor > 1) {
-		return(value / divisor);
-	}
-	return(value);
 }
+
 
 
 /***********************************************************************************************
@@ -1209,20 +1226,16 @@ void TechnoClass::Try_To_Cloak(void)
 void TechnoClass::Per_Cell_Process(PCPType why)
 {
 	if (why == PCP_END) {
-		Cell cell = Center_Coord().As_Cell();
-
-		Try_To_Cloak();
-
-		if (Tag != NULL) {
-			Tag->Spring(TEVENT_NEAR_WAYPOINT, this);
+		if (TemporalImUsing != 0 && TemporalImUsing->Target != 0) { // RA2: RA2's form
+			TemporalImUsing->LetGo(); // RA2: as above
 		}
-
-		/*
-		**	When enemy units enter the proper map area from off map, they are
-		**	flagged so that they won't travel back off the map again.
-		*/
-		if (!IsLocked && Map.In_Local_Radar(cell)) {
-	  		IsLocked = true;
+		Cell cell = Center_Coord().As_Cell();
+		Try_To_Cloak();
+		if (Tag != 0) { // RA2: as above
+			Tag->Spring(TEVENT_NEAR_WAYPOINT, this, CELL_NONE, 0, 0); // RA2: as above
+		}
+		if (!IsLocked && Map.In_Local_Radar(cell, true)) { // RA2: as above
+			IsLocked = true; // RA2: as above
 		}
 
 		/*
@@ -1232,10 +1245,10 @@ void TechnoClass::Per_Cell_Process(PCPType why)
 		if (!IsDiscoveredByPlayer && Map[cell].IsVisible) {
 			Revealed(PlayerPtr);
 		}
-
 		Map[cell].Trigger_Veins();
 	}
 }
+
 
 
 /// <summary>
@@ -2715,8 +2728,6 @@ bool TechnoClass::Evaluate_Object(ThreatType method, int mask, int range, Techno
  *=============================================================================================*/
 bool TechnoClass::Evaluate_Cell(ThreatType method, int mask, Cell const & cell, int range, TechnoClass const * * object, int & value, int zone) const
 {
-	BStart(BENCH_EVAL_CELL);
-
 	*object = NULL;
 	value = 0;
 
@@ -2724,39 +2735,44 @@ bool TechnoClass::Evaluate_Cell(ThreatType method, int mask, Cell const & cell, 
 	**	Fetch the techno object from the cell. If there is no
 	**	techno object there, then bail.
 	*/
-	CellClass * cellptr = &Map[cell];
+	CellClass * cellptr = reinterpret_cast<CellClass *>(&Map[cell]); // RA2: RA2's form
 
 	/*
 	**	Don't consider for evaluation a cell that is not within the same zone. Only
 	**	perform this check if zone checking is required.
 	*/
 	if (zone != -1 && Map.Get_Cell_Zone(cell, TClass->MZone, true) != zone) {
-		BEnd(BENCH_EVAL_CELL);
 		return(false);
 	}
 
-	ObjectClass const * tentative = cellptr->Cell_Occupier(true);
+	ObjectClass const * tentative = cellptr->Cell_Bridge_Occupier(); // RA2: as above
 	TechnoClass * tech = NULL;
-	if (tentative == NULL) {
-		tentative = cellptr->Cell_Occupier(false);
+	if (!tentative) { // RA2: as above
+		tentative = cellptr->Cell_Occupier(); // RA2: as above
 	}
 
-	while (tentative != NULL) {
+	while (tentative) { // RA2: as above
 		if (tentative != this) {
-			tech = Dynamic_Cast<TechnoClass *>((ObjectClass *)tentative);
+			if (!tentative) { // RA2: as above
+				tech = NULL; // RA2: as above
+			} else { // RA2: as above
+				if (tentative->AbstractFlags & 1) { // RA2: as above
+					tech = static_cast<TechnoClass *>((ObjectClass *)tentative); // RA2: as above
+				} else {
+					tech = NULL; // RA2: as above
+				}
+			}
 			if (tech) {
 				if (Combat_Damage() < 0) {
-					if (tech->HealthRatio < Rule->ConditionGreen && House->Is_Ally(tech)) break;
+					if (tech->HealthRatio < Rule->ConditionGreen && House->Is_Ally(tech)) { // RA2: as above
+						break;
+					}
 				} else {
-					if (!House->Is_Ally(tech)
-						|| (RTTI == RTTI_INFANTRY
-							&& (((InfantryClass*)this)->IsBerzerk
-							|| (((InfantryClass*)this)->Class->IsEngineer
-								&& CurrentMission == MISSION_GUARD_AREA
-								&& tech->HealthRatio <= Rule->ConditionRed
-								&& tech->RTTI == RTTI_BUILDING
-								&& ((BuildingClass*)tech)->Class->Cost_Of(tech->House) > 0)))) {
-
+					if (!House->Is_Ally(tech) || TClass->AttackFriendlies // RA2: as above
+					   || (RTTI == RTTI_INFANTRY && (((InfantryClass*)this)->IsBerzerk // RA2: as above
+					   || (((InfantryClass*)this)->Class->IsEngineer && CurrentMission == MISSION_GUARD_AREA // RA2: as above
+						   && tech->HealthRatio <= Rule->ConditionRed && tech->RTTI == RTTI_BUILDING // RA2: as above
+						   && static_cast<BuildingClass *>(tech)->Class->Cost_Of(tech->House) > 0)))) { // RA2: as above
 						break;
 					}
 				}
@@ -2765,17 +2781,20 @@ bool TechnoClass::Evaluate_Cell(ThreatType method, int mask, Cell const & cell, 
 		tentative = tentative->Next;
 	}
 
-	if (tech == NULL) {
-		BEnd(BENCH_EVAL_CELL);
+	if (!tech) { // RA2: as above
 		return(false);
 	}
 	*object = tech;
 
-	bool result = Evaluate_Object(method, mask, range, tech, value);
-
-	BEnd(BENCH_EVAL_CELL);
+	bool result = false; // RA2: as above
+	if (!House->Is_Ally(tech) || Combat_Damage() < 0 // RA2: as above
+	   || (!House->Is_Human_Player() && this && RTTI == RTTI_INFANTRY // RA2: as above
+		   && ((RTTI == RTTI_INFANTRY) ? (InfantryClass*)this : (InfantryClass*)0)->Class->IsEngineer)) { // RA2: as above
+		result = Evaluate_Object(method, mask, range, tech, value); // RA2: as above
+	}
 	return(result);
 }
+
 
 
 
@@ -3898,25 +3917,23 @@ bool TechnoClass::Is_Ready_To_Cloak(void) const
  *=============================================================================================*/
 bool TechnoClass::Select(void)
 {
-	if (!IsDiscoveredByPlayer && !House->Is_Player_Control() && MainWindow) {
-		return(false);
-	}
-
-	if (BASECLASS::Select()) {
+	if ((IsDiscoveredByPlayer || House->Is_Player_Control() || !MainWindow) && BASECLASS::Select()) { // RA2: RA2's form
+		if (Tag) { // RA2: as above
+			Tag->Spring(TEVENT_SELECTED, this, CELL_NONE, 0, 0); // RA2: as above
+		}
 
 		/*
 		**	Speak a confirmation of selection.
 		*/
 		if (House->Is_Player_Control() && AllowVoice) {
-			if (Tag != NULL) {
-				Tag->Spring(TEVENT_SELECTED, this);
-			}
 			Response_Select();
 		}
+		Select_Planning_Members(); // RA2: as above
 		return(true);
 	}
 	return(false);
 }
+
 
 /// <summary>
 /// Why the weapon cannot fire at the target, range aside.
@@ -6075,30 +6092,42 @@ ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 void TechnoClass::Record_The_Kill(TechnoClass * source)
 {
 	int total_recorded = 0;
-
 	int points = TClass->Cost_Of(House);
-
-	/*
-	**	Handle any trigger event associated with this object.
-	*/
-	if (IsActive && Tag && source) Tag->Spring(TEVENT_ATTACKED, this);
-
-	if (IsActive && Tag && source) Tag->Spring(TEVENT_DISCOVERED, this);
-
-	if (IsActive && RTTI != RTTI_UNIT) {
-
-		if (IsActive && Tag && source) Tag->Spring(TEVENT_DESTROYED, this);
-
-		if (IsActive && Tag) Tag->Spring(TEVENT_DESTROYED_ANY, this);
-
-		if (IsActive && Tag) Tag->Spring(TEVENT_DESTROYED_ANY_X, this);
+	if (IsActive && Tag != 0 && source != 0) { // RA2: RA2's form
+		Tag->Spring(TEVENT_ATTACKED, this, CELL_NONE, 0, 0); // RA2: as above
 	}
-
-	if (source != NULL) {
+	if (IsActive) { // RA2: as above
+		if (Tag != 0 && source != 0) { // RA2: as above
+			Tag->Spring(TEVENT_DISCOVERED, this, CELL_NONE, 0, 0); // RA2: as above
+		}
+		if (IsActive && RTTI != RTTI_UNIT) { // RA2: as above
+			if (IsActive && Tag != 0 && source != 0) { // RA2: as above
+				Tag->Spring(TEVENT_DESTROYED, this, CELL_NONE, 0, 0); // RA2: as above
+			}
+			if (IsActive && Tag != 0) { // RA2: as above
+				Tag->Spring(TEVENT_DESTROYED_ANY, this, CELL_NONE, 0, 0); // RA2: as above
+			}
+			if (IsActive && Tag != 0) { // RA2: as above
+				Tag->Spring(TEVENT_DESTROYED_ANY_X, this, CELL_NONE, 0, 0); // RA2: as above
+			}
+		}
+	}
+	if (source != 0) { // RA2: as above
+		if (source->House->Is_Ally(this)) { // RA2: as above
+			points = 0; // RA2: as above
+		} else if (Veterancy.Is_Veteran()) { // RA2: as above
+			points += points; // RA2: as above
+		} else if (Veterancy.Is_Elite()) { // RA2: as above
+			points *= 3; // RA2: as above
+		}
 		if (source->TClass->IsTrainable) {
 			source->Veterancy.Made_A_Kill(source->TClass->Cost_Of(House), points);
 		}
-
+		if (source->TClass->MissileSpawn && source->SpawnOwner != 0 // RA2: as above
+			&& ((TechnoClass *)source->SpawnOwner)->TClass->IsTrainable) { // RA2: as above
+			((TechnoClass *)source->SpawnOwner)->Veterancy.Made_A_Kill( // RA2: as above
+				((TechnoClass *)source->SpawnOwner)->TClass->Cost_Of(House), points); // RA2: as above
+		}
 		House->WhoLastHurtMe = source->Owner();
 
 		/*
@@ -6106,73 +6135,63 @@ void TechnoClass::Record_The_Kill(TechnoClass * source)
 		*/
 		source->House->PointTotal += points;
 	}
-
 	switch ((RTTIType)RTTI) {
-		case RTTI_BUILDING:
-			{
-				if (!TClass->IsInsignificant) {
-					if (((BuildingClass *)this)->WhoLastHurtMe != HOUSE_NONE) {
-						House->BuildingsLost++;
-					}
-
-					if (source != NULL) {
-						if (Session.Type == GAME_INTERNET) {
-							source->House->DestroyedBuildings.Increment_Unit_Total(((BuildingClass*)this)->Class->HeapID); // RA2: the house trackers are members, not pointers
-						}
-						source->House->BuildingsKilled[Owner()]++;
-					}
-
-					/*
-					**	If the map is displaying the multiplayer player names & their
-					** # of kills, tell it to redraw.
-					*/
-					if (Map.Is_Player_Names()) {
-						Map.Redraw_Radar(false);
-					}
-				}
-			}
+	case RTTI_BUILDING: // RA2: as above
+		if (TClass->IsInsignificant) { // RA2: as above
 			break;
+		}
+		if ((((BuildingClass *)this))->WhoLastHurtMe != -1) { // RA2: as above
+			House->BuildingsLost++; // RA2: as above
+		}
+		if (source != 0) { // RA2: as above
+			source->House->DestroyedBuildings.Increment_Unit_Total(((BuildingClass *)this)->Class->HeapID); // RA2: as above
+			source->House->BuildingsKilled[Owner()]++; // RA2: as above
+		}
 
-		case RTTI_AIRCRAFT:
-			if (source != NULL && Session.Type == GAME_INTERNET) {
-				source->House->DestroyedAircraft.Increment_Unit_Total(((AircraftClass*)this)->Class->HeapID); // RA2: as above
-				total_recorded++;
-			}
-			//Fall through.....
-		case RTTI_INFANTRY:
-			if (source != NULL && !total_recorded && Session.Type == GAME_INTERNET) {
-				source->House->DestroyedInfantry.Increment_Unit_Total(((InfantryClass*)this)->Class->HeapID); // RA2: as above
-				total_recorded++;
-			}
-			//Fall through.....
-		case RTTI_UNIT:
-			if (source != NULL && !total_recorded && Session.Type == GAME_INTERNET) {
-				source->House->DestroyedUnits.Increment_Unit_Total(((UnitClass*)this)->Class->HeapID); // RA2: as above
-				total_recorded++;
-			}
+		/*
+		**	If the map is displaying the multiplayer player names & their // RA2: as above
+		** # of kills, tell it to redraw. // RA2: as above
+		*/
 
+		/*
+		**	If the map is displaying the multiplayer player names & their // RA2: as above
+		** # of kills, tell it to redraw. // RA2: as above
+		*/
+		if (Map.Is_Player_Names()) { // RA2: as above
+			Map.Redraw_Radar(false); // RA2: as above
+		}
+		break; // RA2: as above
+	case RTTI_AIRCRAFT: // RA2: as above
+		if (source != 0) { // RA2: as above
+			source->House->DestroyedAircraft.Increment_Unit_Total(((AircraftClass *)this)->Class->HeapID); // RA2: as above
+			total_recorded = 1; // RA2: as above
+		}
 
-			House->UnitsLost++;
-			if (source != NULL) source->House->UnitsKilled[Owner()]++;
+	//Fall through.....
+	case RTTI_INFANTRY: // RA2: as above
+		if (source != 0 && !total_recorded) { // RA2: as above
+			source->House->DestroyedInfantry.Increment_Unit_Total(((InfantryClass *)this)->Class->HeapID); // RA2: as above
+			total_recorded = 1; // RA2: as above
+		}
 
-			/*
-			**	If the map is displaying the multiplayer player names & their
-			** # of kills, tell it to redraw.
-			*/
-			if (Map.Is_Player_Names()) {
-				Map.Redraw_Radar(false);
-			}
-			break;
-
-		default:
-			break;
+	//Fall through.....
+	case RTTI_UNIT: // RA2: as above
+		if (source != 0 && !total_recorded) { // RA2: as above
+			source->House->DestroyedUnits.Increment_Unit_Total(((UnitClass *)this)->Class->HeapID); // RA2: as above
+		}
+		House->UnitsLost++; // RA2: as above
+		if (source != 0) { // RA2: as above
+			source->House->UnitsKilled[Owner()]++; // RA2: as above
+		}
+		if (Map.Is_Player_Names()) { // RA2: as above
+			Map.Redraw_Radar(false); // RA2: as above
+		}
+		break; // RA2: as above
+	default: // RA2: as above
+		break; // RA2: as above
 	}
-
-	/*
-	**	Since we lost an object, we lose the associated points as well.
-	*/
-	//House->PointTotal -= points;
 }
+
 
 
 /***********************************************************************************************
@@ -10208,29 +10227,39 @@ void TechnoClass::Remove_Damage_Particle(void)
 /// <returns>bool; Was the enter mission assigned?</returns>
 bool TechnoClass::Enter_Object_Nearby(void)
 {
-	if (QueueUpToEnter != NULL) { // RA2: QueueUpToEnter, the object to enter once nearby
-		if (QueueUpToEnter->IsActive) { // RA2: QueueUpToEnter, the object to enter once nearby
-			TechnoClass * techno = QueueUpToEnter->As_TechnoClass(); // RA2: QueueUpToEnter, the object to enter once nearby
-			if (techno != NULL) {
-				if (Transmit_Message(RADIO_HELLO, techno) == RADIO_ROGER) {
-					Assign_Mission(MISSION_ENTER);
-					Assign_Destination(techno);
-					QueueUpToEnter = NULL; // RA2: QueueUpToEnter, the object to enter once nearby
+	if (QueueUpToEnter == 0) { // RA2: RA2's form
+		return(false); // RA2: as above
+	}
+	if (((ObjectClass *)QueueUpToEnter)->IsActive) { // RA2: as above
+		AbstractClass *contact = QueueUpToEnter; // RA2: as above
+		if (contact != 0 && (contact->AbstractFlags & 1)) { // RA2: as above
+			TechnoClass *techno = (TechnoClass *)contact; // RA2: as above
+			if (Transmit_Message(RADIO_HELLO, techno) == RADIO_ROGER) { // RA2: as above
+				if (Transmit_Message(RADIO_CAN_LOAD, techno) == RADIO_ROGER) { // RA2: as above
+					QueueMission(MISSION_ENTER, false); // RA2: as above
+					Assign_Destination(techno, true); // RA2: as above
+					QueueUpToEnter = 0; // RA2: as above
 					return(true);
 				}
-				if (techno->RTTI == RTTI_BUILDING && RTTI == RTTI_AIRCRAFT) {
-					if (((BuildingClass*)techno)->Class->IsCanUnitReload && !((BuildingClass*)techno)->Class->IsCanUnitRepair) {
-						Transmit_Message(RADIO_DOCKING, techno);
-						return(false);
-					}
+				QueueMission(MISSION_NONE, false); // RA2: as above
+				Assign_Destination(0, true); // RA2: as above
+				QueueUpToEnter = 0; // RA2: as above
+				Transmit_Message(RADIO_OVER_OUT, techno); // RA2: as above
+				return(true); // RA2: as above
+			}
+			if (techno->RTTI == RTTI_BUILDING && RTTI == RTTI_AIRCRAFT) { // RA2: as above
+				BuildingTypeClass *type = ((BuildingClass *)techno)->Class; // RA2: as above
+				if (type->IsCanUnitReload && !type->IsCanUnitRepair) { // RA2: as above
+					Transmit_Message(RADIO_DOCKING, techno); // RA2: as above
 				}
 			}
-		} else {
-			QueueUpToEnter = NULL; // RA2: QueueUpToEnter, the object to enter once nearby
 		}
+	} else { // RA2: as above
+		QueueUpToEnter = 0; // RA2: as above
 	}
 	return(false);
 }
+
 
 
 /// <summary>
