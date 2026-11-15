@@ -106,6 +106,7 @@ class MapClass: public GScreenClass
 		void Fresh_Map(void);
 		void Sight_From(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true, bool=false); // RA2: 0x54A110, eight arguments
 		void Shroud_Gap_Area(Coord const & coord, int radius); // RA2: 0x54A720
+		void RevealArea3(Coord const & coord, int height, int radius, int skip_reveal); // RA2: 0x54A550 (YR: RevealArea3)
 		void Refresh_Shroud(void); // RA2: 0x55A300, re-flags the shrouded cells
 		void Spy_Satellite_Hide(void); // RA2: 0x559F10, shrouds every cell again (ShroudCounter 1) and refreshes the radar
 		void Spy_Satellite_Reveal(void); // RA2: 0x55A120, maps and shows every cell (ShroudCounter 0) unless it is done already, and refreshes the radar

@@ -138,6 +138,8 @@ class DisplayClass: public MapClass
 		**	Added functionality.
 		*/
 		void All_To_Look(bool units_only=false, bool=false);
+		void Reveal_Technos(bool units_only=false, bool is_fog=false); // RA2: 0x49DE00, UpdateSight and RevealArea3 for every techno
+		void Update_Technos_Visibility(bool units_only=false, bool is_fog=false); // RA2: 0x49E000, RemoveSight for every techno
 		void Constrained_Look(Coord const & coord, LEPTON distance);
 		void Shroud_Cell(Cell const & cell);
 		void Encroach_Shadow(void);
@@ -160,6 +162,7 @@ class DisplayClass: public MapClass
 		*/
 		virtual void Put_Place_Back(TechnoClass * ) {}; // Affects 'pending' system.
 		void Cursor_Mark(Cell const & pos, bool on);
+		void Mark_Foundation_Copy(Cell const & pos, bool on); // RA2: 0x499970, Cursor_Mark for the copy footprint (IsFoundationCopyHere)
 		void Set_Cursor_Shape(Cell const * list);
 		void Set_Copy_Cursor_Shape(Cell const * list); // RA2: 0x499070, the same for the copy footprint
 		Cell Set_Cursor_Pos(Cell const & pos = CELL_NONE);
@@ -182,6 +185,7 @@ class DisplayClass: public MapClass
 		void Waypoint_Mode_Control(int control, bool edit_selected_path=false);
 		void Power_Mode_Control(int control);
 		void Repair_Mode_Control(int control);
+		void Place_Beacon_Mode_Control(int control); // RA2: 0x49CAC0
 		ObjectClass * Object_To_Follow(void) const;
 		void Set_To_Follow(ObjectClass * object);
 		void Break_Follow_Mode(void) { Set_To_Follow(NULL); }

@@ -145,6 +145,8 @@
 #include "vector3.h"
 #include "vox.h"
 #include "waypoint.h"
+#include "stringtable.h" // RA2
+#include "beacon.h" // RA2
 #include "xpipe.h"
 #include "xstraw.h"
 #include "zbuffer.h"
@@ -406,7 +408,7 @@ void DisplayClass::Set_View_Dimensions(Rect const & dimensions)
 	**	properly set.
 	*/
 	Session.Messages.Init(
-		TacticalRect.X, TacticalRect.Y,     // x,y for messages
+		TacticalRect.X + 3, TacticalRect.Y,     // x,y for messages // RA2: as above
 		6,                                  // max # msgs
 		MAX_MESSAGE_LENGTH-14,              // max msg length
 		7 * 2/*RESFACTOR*/,                 // font height in pixels
@@ -414,7 +416,7 @@ void DisplayClass::Set_View_Dimensions(Rect const & dimensions)
 		0,                                  /// enable edit overflow
 		20,                                 // min,
 		MAX_MESSAGE_LENGTH - 14,            // max for trimming overflow
-		TacticalRect.Width);                // Width in pixels of buffer
+		TacticalRect.Width - 6);                // Width in pixels of buffer // RA2: as above
 
 	Session.Messages.Set_Width(TacticalRect.Width);
 
@@ -460,6 +462,41 @@ void DisplayClass::Set_Cursor_Shape(Cell const * list)
 	} else {
 		CursorSize = 0;
 	}
+}
+
+void DisplayClass::Set_Copy_Cursor_Shape(Cell const * list) // RA2: as above
+{
+	if (CopyCursorSize) { // RA2: as above
+		Mark_Foundation_Copy(CopyZoneCell+CopyZoneOffset, false); // RA2: as above
+	}
+	CopyZoneOffset = CELL_NONE; // RA2: as above
+
+	if (list) {
+		static Cell _list[50]; // RA2: as above
+
+		memcpy(_list, list, sizeof(_list));
+		CopyCursorSize = _list; // RA2: as above
+		Cell dim = Get_Occupy_Dimensions(CopyCursorSize); // RA2: as above
+		dim -= Cell(1,1);
+		CopyZoneOffset = -dim / 2; // RA2: as above
+		Mark_Foundation_Copy(CopyZoneCell+CopyZoneOffset, true); // RA2: as above
+	} else {
+		CopyCursorSize = 0; // RA2: as above
+	}
+}
+
+
+
+static inline Rect Foundation_Rect(Cell const & origin, BuildingTypeClass const * building) // RA2: the building's footprint at origin
+{
+	int height = building->Height();
+	int width = building->Width();
+	return Rect(origin.X, origin.Y, width, height); // RA2: as above
+}
+
+static inline Coord Foundation_Cell_Center(Cell const & cell) // RA2: as above
+{
+	return(cell.As_Coord()); // RA2: as above
 }
 
 
@@ -513,22 +550,10 @@ bool DisplayClass::Passes_Proximity_Check(ObjectTypeClass const * object, Houses
 		return(true);
 	}
 
-	BuildingTypeClass const * building = (BuildingTypeClass const *)object;
-
-	int height = building->Height();
-	int width = building->Width();
-
-	int adj = (building->Adjacent + 1);
-
-	int tryX = trycell.X;
-	int tryY = trycell.Y;
-
-	int xmin = tryX - adj;
-	int ymin = tryY - adj;
-
-	int xmax = xmin + ((2 * adj) + width);
-	int ymax = ymin + ((2 * adj) + height);
-
+	BuildingTypeClass const * building = static_cast<BuildingTypeClass const *>(object); // RA2: as above
+	Rect footprint = Foundation_Rect(trycell, building); // RA2: as above
+	int adj = building->Adjacent + 1; // RA2: as above
+	Rect range(footprint.X - adj, footprint.Y - adj, footprint.Width + adj * 2, footprint.Height + adj * 2); // RA2: as above
 	bool retval = false;
 
 	/*
@@ -536,33 +561,20 @@ bool DisplayClass::Passes_Proximity_Check(ObjectTypeClass const * object, Houses
 	**	cells to these are of friendly persuasion, then consider the proximity check to
 	**	have been a success.
 	*/
-	for (int x = xmin; x < xmax; x++) {
-		for (int y = ymin; y < ymax; y++) {
+	for (int x = range.X; x < range.X + range.Width; x++) { // RA2: as above
+		for (int y = range.Y; y < range.Y + range.Height; y++) { // RA2: as above
 			Cell newcell(x, y);
 
-			if ((short)x < tryX || (short)x >= tryX + width || (short)y < tryY || (short)y >= tryY + height) {
-				CellClass * cellptr = &Map[newcell];
-
-				/*
-				**	The special cell ownership flag allows building adjacent
-				**	to friendly walls and bibs even though there is no official
-				**	building located there.
-				*/
-				//BG: Modified so only walls can be placed next to walls - buildings can't.
-				if (building->IsWall) {
-
-					if (cellptr->Owner == house) {
+			if (!footprint.Is_Point_Within(Point2D(newcell.X, newcell.Y))) { // RA2: as above
+				BuildingClass * newbase = Map[newcell].Cell_Building(); // RA2: as above
+				if (newbase) { // RA2: as above
+					if (newbase->House->HeapID == house && newbase->Class->IsBase) { // RA2: as above
 						retval = true;
 						//break;
 					}
-				}
-
-				BuildingClass * newbase = cellptr->Cell_Building();
-
-				// we've found a building...
-				if (newbase != NULL && newbase->House->HeapID == house && ((BuildingClass *)newbase)->Class->IsBase) {
-					retval = true;
-					//break;
+					if (Session.Options.BuildOffAlly && newbase->House->Is_Ally(Houses[house]) && newbase->Class->EligibleForAllyBuilding) { // RA2: as above
+						retval = true;
+					}
 				}
 			}
 		}
@@ -570,6 +582,7 @@ bool DisplayClass::Passes_Proximity_Check(ObjectTypeClass const * object, Houses
 
 	return(retval);
 }
+
 
 
 /// <summary>
@@ -587,49 +600,37 @@ bool DisplayClass::Passes_Proximity_Check(ObjectTypeClass const * object, Houses
 /// routine always returns true.</returns>
 bool DisplayClass::Passes_Shroud_Check(ObjectTypeClass const * object, HousesType house, Cell const * list, Cell const & trycell) const
 {
-	if (house != PlayerPtr->HeapID) {
+	if (house != PlayerPtr->HeapID || Debug_Map) { // RA2: as above
+		return(true);
+	}
+	if (list == NULL || trycell == CELL_NONE || object == NULL || object->RTTI != RTTI_BUILDINGTYPE) { // RA2: as above
 		return(true);
 	}
 
 	/*
 	**	In editor mode, the proximity check always passes.
 	*/
-	if (Debug_Map) {
-		return(true);
-	}
-
-	if (list == NULL || trycell == CELL_NONE) {
-		return(true);
-	}
-
-	if (object == NULL || object->RTTI != RTTI_BUILDINGTYPE) {
-		return(true);
-	}
-
-	BuildingTypeClass const * building = (BuildingTypeClass const *)object;
-
-	int height = building->Height();
-	int width = building->Width();
-
-	int tryX = trycell.X;
-	int tryY = trycell.Y;
-
-	for (int x = tryX; x < tryX + width; x++) {
-		for (int y = tryY; y < tryY + height; y++) {
-			Coord coord = Coord(Cell(x, y));
-			coord.Z = Map.Get_Height_GL(coord);
-
-			if (Map.Is_Shrouded(coord)) {
-				if (building->ToTile == NULL) {
-					return(false);
+	BuildingTypeClass const * building = static_cast<BuildingTypeClass const *>(object); // RA2: as above
+	Rect footprint = Foundation_Rect(trycell, building); // RA2: as above
+	int x = footprint.X; // RA2: as above
+	if (x < footprint.X + footprint.Width) { // RA2: as above
+		do { // RA2: as above
+			for (int y = footprint.Y; y < footprint.Y + footprint.Height; ++y) { // RA2: as above
+				Coord coord = Foundation_Cell_Center(Cell(x, y)); // RA2: as above
+				coord.Z = Map.Get_Height_GL(coord);
+				if (Map.Is_Shrouded(coord)) {
+					if (building->ToTile == NULL) {
+						return(false);
+					}
+					goto done; // RA2: as above
 				}
-				return(true);
 			}
-		}
+		} while (++x < footprint.X + footprint.Width); // RA2: as above
 	}
-
+done: // RA2: as above
 	return(true);
 }
+
 
 
 /***********************************************************************************************
@@ -825,6 +826,28 @@ void DisplayClass::Cursor_Mark(Cell const &pos, bool on)
 		}
 	}
 }
+
+void DisplayClass::Mark_Foundation_Copy(Cell const & pos, bool on) // RA2: as above
+{
+	Cell const * ptr;
+	CellClass * cellptr;
+
+	if (pos == CELL_NONE) return;
+
+	ptr = CopyCursorSize; // RA2: as above
+	while (*ptr != REFRESH_EOL) {
+		Cell cell = Cell(pos + *ptr++);
+		if (In_Radar(cell)) {
+			cellptr = &(*this)[cell];
+			if (on) {
+				cellptr->IsFoundationCopyHere = true; // RA2: as above
+			} else {
+				cellptr->IsFoundationCopyHere = false; // RA2: as above
+			}
+		}
+	}
+}
+
 
 
 /***********************************************************************************************
@@ -1044,11 +1067,11 @@ bool DisplayClass::Map_Cell(Cell const & cell, HouseClass * house)
 	**	are not allowed, and to fix this, just map the cells until
 	**	all is ok.
 	*/
-	for (FacingType dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
+	for (int dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
 		int	shadow;
 		int fog;
 
-		Cell c = Adjacent_Cell(cell, dir);
+		Cell c = (AdjacentCell[dir & 0x07] + cell); // RA2: as above
 		CellClass * cptr = &(*this)[c];
 
 		if (c != cell && !cptr->IsVisible) {
@@ -1060,8 +1083,8 @@ bool DisplayClass::Map_Cell(Cell const & cell, HouseClass * house)
 				} else {
 					cptr->IsVisible = true;
 					TacticalMap->Flag_Cell(*cptr);
-					for (FacingType dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
-						Cell cc = Adjacent_Cell(c, dir2);
+					for (int dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
+						Cell cc = (AdjacentCell[dir2 & 0x07] + c); // RA2: as above
 						CellClass * scptr = &(*this)[cc];
 						signed char sframe = TacticalMap->Cell_Shadow(cc, false);
 						if (sframe != scptr->ShadowFrame) {
@@ -1091,8 +1114,8 @@ bool DisplayClass::Map_Cell(Cell const & cell, HouseClass * house)
 				} else {
 					cptr->IsFogVisible = true;
 					TacticalMap->Flag_Cell(*cptr);
-					for (FacingType dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
-						Cell cc = Adjacent_Cell(c, dir2);
+					for (int dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
+						Cell cc = (AdjacentCell[dir2 & 0x07] + c); // RA2: as above
 						CellClass * fcptr = &(*this)[cc];
 						signed char fframe = TacticalMap->Cell_Shadow(cc, true);
 						if (fframe != fcptr->FogFrame) {
@@ -1124,6 +1147,54 @@ bool DisplayClass::Map_Cell(Cell const & cell, HouseClass * house)
 
 	return(changed);
 }
+
+bool DisplayClass::RevealFogShroud(Cell const & cell, HouseClass * house, bool increase) // RA2: as above
+{
+	CellClass * cellptr = &(*this)[cell];
+
+	bool wasfogged = cellptr->IsFogMapped == false;
+	bool changed = !cellptr->IsFogMapped || !cellptr->IsMapped;
+	bool newlymapped = changed;
+
+	cellptr->IsToFog = false;
+	cellptr->IsFogMapped = true;
+
+	if (increase) { // RA2: as above
+		cellptr->IncreaseShroudCounter(); // RA2: as above
+	} else {
+		cellptr->ReduceShroudCounter(); // RA2: as above
+	}
+
+	signed char sframe = TacticalMap->Cell_Shadow(cell, false);
+	if (sframe != cellptr->ShadowFrame) {
+		changed = true;
+		cellptr->ShadowFrame = sframe;
+	}
+	if (cellptr->ShadowFrame == -1) {
+		cellptr->IsVisible = true;
+	}
+
+	signed char fframe = TacticalMap->Cell_Shadow(cell, true);
+	if (fframe != cellptr->FogFrame) {
+		changed = true;
+		cellptr->FogFrame = fframe;
+	}
+	if (cellptr->FogFrame == -1) {
+		cellptr->IsFogVisible = true;
+	}
+
+	if (changed) {
+		TacticalMap->Flag_Cell(*cellptr);
+		Map.Reveal_Nearby_Technos(cellptr, house, newlymapped);
+	}
+
+	if (cellptr->IsFogMapped && wasfogged && Scen->Special.IsFogOfWar) {
+		cellptr->Unfog_Cell();
+	}
+
+	return(changed);
+}
+
 
 
 /// <summary>
@@ -1268,10 +1339,10 @@ bool DisplayClass::Shadow_Map_Cell(Cell const & cell, HouseClass * house)
 	**	are not allowed, and to fix this, just map the cells until
 	**	all is ok.
 	*/
-	for (FacingType dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
+	for (int dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
 		int	shadow;
 
-		Cell c = Adjacent_Cell(cell, dir);
+		Cell c = (AdjacentCell[dir & 0x07] + cell); // RA2: as above
 		CellClass * cptr = &(*this)[c];
 
 		if (c != cell && !cptr->IsVisible) {
@@ -1283,8 +1354,8 @@ bool DisplayClass::Shadow_Map_Cell(Cell const & cell, HouseClass * house)
 				} else {
 					cptr->IsVisible = true;
 					TacticalMap->Flag_Cell(*cptr);
-					for (FacingType dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
-						Cell cc = Adjacent_Cell(c, dir2);
+					for (int dir2 = FACING_FIRST; dir2 < FACING_COUNT; dir2++) {
+						Cell cc = (AdjacentCell[dir2 & 0x07] + c); // RA2: as above
 						CellClass * scptr = &(*this)[cc];
 						signed char sframe = TacticalMap->Cell_Shadow(cc, false);
 						if (sframe != scptr->ShadowFrame) {
@@ -1475,18 +1546,18 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
 {
 	bool vert = false;
 	bool horz = false;
-	int x = 0;
-	int y = 0;
-	Cell punt;				// If all else fails, return this cell location.
+	int x;
+	int y;
+	int start; // RA2: as above
+	Cell fallback; // RA2: as above
 	int zone = -1;			// Tentative zone for legality checking.
-	int index;
 
 	/*
 	**	Waypoint edge detection for ground based reinforcements that have a waypoint origin are
 	**	determined by finding the closest map edge to the waypoint. Reinforcement location
 	**	scanning starts from that position.
 	*/
-	Cell trycell(0,0);
+	Cell trycell(0, 0); // RA2: as above
 	if (waypoint != CELL_NONE) {
 		trycell = waypoint;
 	}
@@ -1506,81 +1577,77 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
 	**	scanning values accordingly.
 	*/
 	Point2D trypoint = Cell_To_LocalRect_Point(Point2D(trycell.X, trycell.Y));
-	if (trycell != CELL_NONE) {
-		x = trypoint.X - LocalRect.X;
-		x = min(x, (-trypoint.X + (LocalRect.X+LocalRect.Width)));
-		x *= 2;
 
+	if (trycell != CELL_NONE) {
+		int left = trypoint.X - LocalRect.X; // RA2: as above
+		x = (left < LocalRect.X + (LocalRect.Width - trypoint.X) // RA2: as above
+			? left : LocalRect.X + (LocalRect.Width - trypoint.X)) * 2; // RA2: as above
 		y = trypoint.Y - 2 * LocalRect.Y;
-		y = min(y, (-trypoint.Y + 2 * (LocalRect.Y+LocalRect.Height)));
+		y = min(y, -trypoint.Y + 2 * (LocalRect.Y + LocalRect.Height)); // RA2: as above
 
 		if (x < y) {
 			vert = true;
 			horz = false;
-			if ((trypoint.X-LocalRect.X) < LocalRect.Width/2) {
+			if ((trypoint.X - LocalRect.X) < LocalRect.Width / 2) { // RA2: as above
 				x = -1;
 				dir = SOURCE_WEST;
 			} else {
 				x = LocalRect.Width;
 				dir = SOURCE_EAST;
 			}
-			y = trypoint.Y - LocalRect.Y;
-
+			y = 0;
+			start = trypoint.Y - LocalRect.Y; // RA2: as above
 		} else {
 
 			vert = false;
 			horz = true;
-			if ((trypoint.Y - 2 * LocalRect.Y) < (2 * LocalRect.Height)/2) {
+			if ((trypoint.Y - 2 * LocalRect.Y) < (2 * LocalRect.Height) / 2) { // RA2: as above
 				y = -1;
 				dir = SOURCE_NORTH;
 			} else {
 				y = 2 * LocalRect.Height;
 				dir = SOURCE_SOUTH;
 			}
-			x = trypoint.X - LocalRect.X;
+			x = 0;
+			start = trypoint.X - LocalRect.X; // RA2: as above
 		}
-
 	} else {
+		y = x = 0; // RA2: as above
+		switch (dir) {
+			default:
+			case SOURCE_NORTH:
+				horz = true;
+				start = Random_Pick(1, LocalRect.Width) - 1; // RA2: as above
+				break;
+
+			case SOURCE_SOUTH:
+				horz = true;
+				y = 2 * LocalRect.Height + 2;
+				start = Random_Pick(1, LocalRect.Width) - 1; // RA2: as above
+				break;
 
 		/*
 		**	If no map edge can be inferred from the waypoint, then go with the
 		**	map edge specified by the edge parameter.
 		*/
-		if (!vert && !horz) {
-			switch (dir) {
-				default:
-				case SOURCE_NORTH:
-					horz = true;
-					y = 0;
-					x = Random_Pick(1, LocalRect.Width) - 1;
-					break;
+			case SOURCE_EAST:
+				vert = true;
+				x = LocalRect.Width;
+				start = Random_Pick(1, 2 * LocalRect.Height) - 1; // RA2: as above
+				break;
 
-				case SOURCE_SOUTH:
-					horz = true;
-					y = 2 * LocalRect.Height + 2;
-					x = Random_Pick(1, LocalRect.Width) - 1;
-					break;
-
-				case SOURCE_EAST:
-					vert = true;
-					x = LocalRect.Width;
-					y = Random_Pick(1, 2 * LocalRect.Height) - 1;
-					break;
-
-				case SOURCE_WEST:
-					vert = true;
-					x = 0;
-					y = Random_Pick(0, 2 * LocalRect.Height) - 1;
-					break;
-
-			}
+			case SOURCE_WEST:
+				vert = true;
+				start = Random_Pick(0, 2 * LocalRect.Height) - 1; // RA2: as above
+				break;
 		}
 	}
 
 	/*
 	**	Determine the default reinforcement cell if all else fails.
 	*/
-	punt = Cell(LocalRect_To_Cell_Point(Point2D(1, LocalRect.Width/2)));
+	Point2D defaultPoint = LocalRect_To_Cell_Point(Point2D(1, LocalRect.Width / 2)); // RA2: as above
+	fallback = Cell(defaultPoint.X, defaultPoint.Y); // RA2: as above
 
 	/*
 	**	Scan through the vertical and horizontal edges of the map looking for
@@ -1590,20 +1657,19 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
 	if (vert) {
 		int modifier = (dir != SOURCE_EAST) ? 1 : -1;
 
-		for (index = 0; index < LocalRect.Height * 2; index++) {
-			int yy = (y + index) % (LocalRect.Height * 2);
+		for (int index = 0; index < LocalRect.Height * 2; index++) { // RA2: as above
+			int yy = (start + index) % (LocalRect.Height * 2); // RA2: as above
 
-			Cell outcell(LocalRect_To_Cell_Point(Point2D(x, yy)));
-			Cell incell(LocalRect_To_Cell_Point(Point2D(x + modifier, yy)));
+			Point2D outcellPoint = LocalRect_To_Cell_Point(Point2D(x, yy)); // RA2: as above
+			Cell outcell(outcellPoint.X, outcellPoint.Y); // RA2: as above
+			Point2D incellPoint = LocalRect_To_Cell_Point(Point2D(x + modifier, yy)); // RA2: as above
 
-			if (Good_Reinforcement_Cell(outcell, incell, loco, zone, mzone)) {
-				return(outcell);
+			if (!In_Local_Radar(outcell, true) // RA2: as above
+				&& Good_Reinforcement_Cell(outcell, Cell(incellPoint.X, incellPoint.Y), loco, zone, mzone)) { // RA2: as above
+				return outcell; // RA2: as above
 			}
 		}
-		return(punt);
-	}
-
-	if (horz) {
+	} else if (horz) { // RA2: as above
 		int modifier = (dir == SOURCE_NORTH) ? 1 : -1;
 
 		if (dir == SOURCE_SOUTH) {
@@ -1611,40 +1677,47 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
 
 			for (x = 0; x < LocalRect.Width; x++) {
 				for (y = 0; y < 15; y++) {
-					Cell newcell(LocalRect_To_Cell_Point(Point2D(x, y + 2 * LocalRect.Height)));
-					if (!In_Local_Radar(newcell, true) && Good_Reinforcement_Cell(newcell, trycell, loco, zone, mzone)) {
+					Point2D newcellPoint = LocalRect_To_Cell_Point(Point2D(x, y + 2 * LocalRect.Height)); // RA2: as above
+					Cell newcell(newcellPoint.X, newcellPoint.Y); // RA2: as above
+					if (!In_Local_Radar(newcell, true) // RA2: as above
+						&& Good_Reinforcement_Cell(newcell, trycell, loco, zone, mzone)) { // RA2: as above
 						cells.Add(newcell);
 						break;
 					}
 				}
 			}
-			index = cells.Count();
+			int count = cells.Count(); // RA2: as above
 
 			if (trycell == CELL_NONE) {
-				punt = cells[Random_Pick(0, index)];
+				if (count > 0) { // RA2: as above
+					fallback = cells[Random_Pick(0, count - 1)]; // RA2: as above
+				} else {
+					fallback = CELL_NONE; // RA2: as above
+				}
 			} else {
 				int dist = -1;
 				Cell best = CELL_NONE;
-				for (int i = 0; i < cells.Count(); i++) {
+				for (int i = 0; i < count; i++) { // RA2: as above
 					int d = trycell.Distance_To(cells[i]);
 					if (dist == -1 || d < dist) {
 						best = cells[i];
 						dist = d;
 					}
 				}
-				punt = best;
+				fallback = best; // RA2: as above
 			}
 
-			return(punt);
 		} else {
-			for (index = 0; index < LocalRect.Width; index++) {
-				int xx = (x + index) % LocalRect.Width;
+			for (int index = 0; index < LocalRect.Width; index++) { // RA2: as above
+				int xx = (start + index) % LocalRect.Width; // RA2: as above
 
-				Cell outcell(LocalRect_To_Cell_Point(Point2D(xx, y)));
-				Cell incell(LocalRect_To_Cell_Point(Point2D(xx, y + modifier)));
+				Point2D outcellPoint = LocalRect_To_Cell_Point(Point2D(xx, y)); // RA2: as above
+				Cell outcell(outcellPoint.X, outcellPoint.Y); // RA2: as above
+				Point2D incellPoint = LocalRect_To_Cell_Point(Point2D(xx, y + modifier)); // RA2: as above
 
-				if (Good_Reinforcement_Cell(outcell, incell, loco, zone, mzone)) {
-					return(outcell);
+				if (!In_Local_Radar(outcell, true) // RA2: as above
+					&& Good_Reinforcement_Cell(outcell, Cell(incellPoint.X, incellPoint.Y), loco, zone, mzone)) { // RA2: as above
+					return outcell; // RA2: as above
 				}
 			}
 		}
@@ -1654,8 +1727,9 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
 	**	If there was no success in finding a suitable reinforcement edge cell, then return
 	**	with the default 'punt' cell location.
 	*/
-	return(punt);
+	return fallback; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -1685,6 +1759,10 @@ Cell DisplayClass::Calculated_Cell(SourceType dir, Cell const & waypoint, Cell c
  *=============================================================================================*/
 bool DisplayClass::Good_Reinforcement_Cell(Cell const & outcell, Cell const & incell, SpeedType loco, int zone, MZoneType mzone) const
 {
+	if (loco == SPEED_WINGED) { // RA2: as above
+		return(true);
+	}
+
 	/*
 	**	If the map edge location is not clear for object placement, then this is not
 	**	a good cell for reinforcement purposes.
@@ -1808,7 +1886,12 @@ void DisplayClass::Mouse_Right_Press(Point2D const & point)
 /// </summary>
 void DisplayClass::Mouse_Right_Release(Point2D const & point)
 {
-	if (PendingObjectPtr && PendingObjectPtr->Is_Techno()) {
+	ObjectClass * pending = PendingObjectPtr; // RA2: as above
+	bool techno; // RA2: as above
+	if (pending != NULL) { // RA2: as above
+		techno = (pending->AbstractFlags & 1); // RA2: as above
+	}
+	if (pending != NULL && techno) { // RA2: as above
 		//PendingObjectPtr->Transmit_Message(RADIO_OVER_OUT);
 		PendingObjectPtr = NULL;
 		PendingObject = NULL;
@@ -1829,6 +1912,8 @@ void DisplayClass::Mouse_Right_Release(Point2D const & point)
 					} else {
 						if (IsWaypointMode) {
 							Waypoint_Mode_Control(0);
+						} else if (IsBeaconMode) { // RA2: as above
+							Place_Beacon_Mode_Control(0); // RA2: as above
 						} else {
 							Unselect_All();
 						}
@@ -1962,10 +2047,6 @@ void DisplayClass::Mouse_Left_Up(Cell const & cell, bool shadow, ObjectClass * o
 				Set_Default_Mouse(MOUSE_AREA_GUARD, wsmall);
 				break;
 
-			case ACTION_CHEM_BOMB:
-				Set_Default_Mouse(MOUSE_CHEMBOMB, wsmall);
-				break;
-
 			case ACTION_NONE:
 				Set_Default_Mouse(MOUSE_NORMAL, wsmall);
 				break;
@@ -1989,19 +2070,6 @@ void DisplayClass::Mouse_Left_Up(Cell const & cell, bool shadow, ObjectClass * o
 			case ACTION_TOGGLE_POWER:
 			case ACTION_NO_TOGGLE_POWER:
 				Set_Default_Mouse(MOUSE_NO_TOGGLE_POWER, wsmall);
-				break;
-
-			case ACTION_EMPULSE:
-				Set_Default_Mouse(MOUSE_EM_PULSE, wsmall);
-				break;
-
-			case ACTION_ION_CANNON:
-			case ACTION_DROP_POD:
-				Set_Default_Mouse(MOUSE_AIR_STRIKE, wsmall);
-				break;
-
-			case ACTION_EMPULSE_RANGE:
-				Set_Default_Mouse(MOUSE_EM_PULSE_RANGE, wsmall);
 				break;
 
 			case ACTION_HEAL:
@@ -2094,12 +2162,7 @@ void DisplayClass::Mouse_Left_Up(Cell const & cell, bool shadow, ObjectClass * o
 				Set_Default_Mouse(MOUSE_AREA_GUARD, wsmall);
 				break;
 
-			case ACTION_CHEM_BOMB:
-				Set_Default_Mouse(MOUSE_CHEMBOMB, wsmall);
-				break;
-
 			case ACTION_MOVE:
-			case ACTION_RALLY_TO_POINT:
 				Set_Default_Mouse(MOUSE_CAN_MOVE, wsmall);
 				break;
 
@@ -2163,19 +2226,6 @@ void DisplayClass::Mouse_Left_Up(Cell const & cell, bool shadow, ObjectClass * o
 
 			case ACTION_NUKE_BOMB:
 				Set_Default_Mouse(MOUSE_NUCLEAR_BOMB, wsmall);
-				break;
-
-			case ACTION_EMPULSE:
-				Set_Default_Mouse(MOUSE_EM_PULSE, wsmall);
-				break;
-
-			case ACTION_EMPULSE_RANGE:
-				Set_Default_Mouse(MOUSE_EM_PULSE_RANGE, wsmall);
-				break;
-
-			case ACTION_ION_CANNON:
-			case ACTION_DROP_POD:
-				Set_Default_Mouse(MOUSE_AIR_STRIKE, wsmall);
 				break;
 
 			case ACTION_HEAL:
@@ -2444,28 +2494,26 @@ void DisplayClass::Mouse_Left_Release(Coord const & coord, Cell const & cell, Ob
 void Bandbox_Selection_Callback(ObjectClass *object)
 {
 	HouseClass *house = object->Owner_HouseClass();
-	BuildingClass *bptr = object->RTTI == RTTI_BUILDING ? (BuildingClass *)object : NULL;
+	BuildingClass *bptr = object->Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass *)object : NULL; // RA2: as above
 
-	if (house != NULL && house->Is_Player_Control()) {
-		if (object->Class_Of()->IsSelectable) {
-			bool selectable = false;
-			if (bptr != NULL) {
-				if (bptr->Class->UndeploysInto != NULL && !bptr->Class->IsConstructionYard && !bptr->Class->IsMobileWar) {
-					selectable = true;
-				}
-			} else {
-				selectable = true;
+	if (house != NULL && house->Is_Player_Control() && object->CanBeSelected()) { // RA2: as above
+		if (bptr != NULL) {
+			BuildingTypeClass * type = bptr->Class; // RA2: as above
+			if (type->UndeploysInto == NULL) { // RA2: as above
+				return;
 			}
-			if (selectable) {
-				if (!object->IsInLimbo) {
-					if (object->Select()) {
-						AllowVoice = false;
-					}
+			for (int index = 0; index < Rule->BuildConst.Count(); index++) { // RA2: as above
+				if (Rule->BuildConst[index] == type) { // RA2: as above
+					return;
 				}
 			}
 		}
+		if (!object->IsInLimbo && object->Select()) { // RA2: as above
+			AllowVoice = false;
+		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2530,7 +2578,7 @@ T Bound2(T original, T minval, T maxval)
  *=============================================================================================*/
 void DisplayClass::Mouse_Left_Held(Point2D const & point)
 {
-	if (IsRubberBand && !IsWaypointMode) {
+	if (IsRubberBand && !IsWaypointMode && !IsBeaconMode) { // RA2: as above
 		Rect rect = TacticalRect;
 		Point2D npoint = point;
 		int x = Bound2(npoint.X, 0, rect.Width);
@@ -2557,7 +2605,7 @@ void DisplayClass::Mouse_Left_Held(Point2D const & point)
 			if ((point - (Point2D &)BandX).Length() > 4) {
 				IsRubberBand = true;
 				IsTentative = false;
-				if (!IsWaypointMode) {
+				if (!IsWaypointMode && !IsBeaconMode) { // RA2: as above
 					TacticalMap->IsToRedraw = true;
 					TacticalMap->Start_Rubber_Band((Point2D &)BandX);
 					Map.Override_Mouse_Shape(MOUSE_NORMAL);
@@ -2608,6 +2656,9 @@ void DisplayClass::Compute_Start_Pos(void)
 	*/
 	if (num != 0) {
 		coord /= num;
+	} else {
+		coord.X = PlayerPtr->Center.X; // RA2: as above
+		coord.Y = PlayerPtr->Center.Y; // RA2: as above
 	}
 
 	/*
@@ -2662,6 +2713,7 @@ void DisplayClass::Sell_Mode_Control(int control)
 		IsRepairMode = false;
 		IsPowerMode = false;
 		IsWaypointMode = false;
+		IsBeaconMode = false; // RA2: as above
 		if (mode && PlayerPtr->CurBuildings > 0) {
 			IsSellMode = true;
 			Unselect_All();
@@ -2671,6 +2723,7 @@ void DisplayClass::Sell_Mode_Control(int control)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -2704,6 +2757,7 @@ void DisplayClass::Waypoint_Mode_Control(int control, bool edit_selected_path)
 		IsRepairMode = false;
 		IsSellMode = false;
 		IsPowerMode = false;
+		IsBeaconMode = false; // RA2: as above
 		PathType path = PlayerPtr->New_Waypoint_Path();
 		if (mode) {
 			if (path == PATH_NONE && (!edit_selected_path || PlayerPtr->SelectedPath == PATH_NONE)) {
@@ -2729,6 +2783,7 @@ void DisplayClass::Waypoint_Mode_Control(int control, bool edit_selected_path)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -2761,6 +2816,7 @@ void DisplayClass::Power_Mode_Control(int control)
 		IsRepairMode = false;
 		IsSellMode = false;
 		IsWaypointMode = false;
+		IsBeaconMode = false; // RA2: as above
 		if (mode && PlayerPtr->CurBuildings > 0) {
 			IsPowerMode = true;
 			Unselect_All();
@@ -2770,6 +2826,7 @@ void DisplayClass::Power_Mode_Control(int control)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2810,6 +2867,7 @@ void DisplayClass::Repair_Mode_Control(int control)
 		IsSellMode = false;
 		IsPowerMode = false;
 		IsWaypointMode = false;
+		IsBeaconMode = false; // RA2: as above
 		Set_Default_Mouse(MOUSE_NORMAL, false);
 		if (mode && PlayerPtr->CurBuildings > 0) {
 			IsRepairMode = true;
@@ -2820,6 +2878,44 @@ void DisplayClass::Repair_Mode_Control(int control)
 		}
 	}
 }
+
+
+void DisplayClass::Place_Beacon_Mode_Control(int control) // RA2: as above
+{
+	bool mode = IsRepairMode;
+	switch (control) {
+		case 0:
+			mode = false;
+			break;
+
+		case -1:
+			mode = (mode == false);
+			break;
+
+		case 1:
+			mode = true;
+			break;
+	}
+
+	if (mode != IsBeaconMode && !PendingObject) { // RA2: as above
+		if (mode && !BeaconManager.CanPlaceBeacon(PlayerPtr->HeapID)) { // RA2: as above
+			mode = false;
+		}
+		IsSellMode = false;
+		IsPowerMode = false;
+		IsWaypointMode = false;
+		IsRepairMode = false;
+		Set_Default_Mouse(MOUSE_NORMAL, false);
+		if (mode) {
+			IsBeaconMode = true; // RA2: as above
+			Unselect_All();
+		} else {
+			IsBeaconMode = false; // RA2: as above
+			Revert_Mouse_Shape();
+		}
+	}
+}
+
 
 
 /***********************************************************************************************
@@ -3267,6 +3363,8 @@ void DisplayClass::Read_INI(CCINIClass const & ini)
 
 	Map.Set_Local_Dimensions(LocalRect);
 
+	Map.Get_Max_Level(); // RA2: as above
+
 	LastTheater = Scen->Theater;
 }
 
@@ -3519,6 +3617,64 @@ void DisplayClass::Restore_Map_State(void * stash)
 	}
 }
 
+void DisplayClass::Reveal_Technos(bool units_only, bool is_fog) // RA2: as above
+{
+	int count = Technos.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		TechnoClass * tech = Technos[index]; // RA2: as above
+		if (tech != NULL && !tech->IsInLimbo) { // RA2: as above
+			if (tech->Fetch_RTTI() == RTTI_BUILDING && units_only) continue; // RA2: as above
+
+			if (tech->House->Is_Player_Control()) {
+				if (tech->IsDiscoveredByPlayer) {
+					tech->UpdateSight(false, false, false, NULL); // RA2: as above
+					Coord c = tech->Position; // RA2: as above
+					Map.RevealArea3(c, 0, tech->LastSightRange + 3, 0); // RA2: as above
+					if (tech->Techno_Type_Class()->GapGenerator) { // RA2: as above
+						tech->CreateGap(); // RA2: as above
+					}
+				}
+			} else if (tech->Fetch_RTTI() == RTTI_BUILDING && Rule->IsAllyReveal && tech->House->Is_Ally(PlayerPtr)) { // RA2: as above
+				tech->UpdateSight(false, is_fog, false, NULL); // RA2: as above
+				Coord c = tech->Position; // RA2: as above
+				Map.RevealArea3(c, 0, tech->LastSightRange + 3, 0); // RA2: as above
+			} else if (tech->Fetch_RTTI() == RTTI_BUILDING && tech->Techno_Type_Class()->RevealToAll && !tech->House->Is_Player_Control()) { // RA2: as above
+				tech->UpdateSight(false, false, true, PlayerPtr); // RA2: as above
+				Coord c = tech->Position; // RA2: as above
+				Map.RevealArea3(c, 0, tech->LastSightRange + 3, 0); // RA2: as above
+			} else if (tech->Techno_Type_Class()->GapGenerator) { // RA2: as above
+				tech->CreateGap(); // RA2: as above
+			}
+		}
+	}
+}
+
+void DisplayClass::Update_Technos_Visibility(bool units_only, bool is_fog) // RA2: as above
+{
+	int count = Technos.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		TechnoClass * tech = Technos[index]; // RA2: as above
+		if (tech != NULL && !tech->IsInLimbo) { // RA2: as above
+			if (tech->Fetch_RTTI() == RTTI_BUILDING && units_only) continue; // RA2: as above
+
+			if (tech->House->Is_Player_Control()) {
+				if (tech->IsDiscoveredByPlayer) {
+					tech->RemoveSight(false, false, false, NULL); // RA2: as above
+					if (tech->Techno_Type_Class()->GapGenerator) { // RA2: as above
+						tech->DestroyGap(); // RA2: as above
+					}
+				}
+			} else if (tech->Fetch_RTTI() == RTTI_BUILDING && Rule->IsAllyReveal && tech->House->Is_Ally(PlayerPtr)) { // RA2: as above
+				tech->RemoveSight(false, is_fog, false, NULL); // RA2: as above
+			} else if (tech->Techno_Type_Class()->GapGenerator) { // RA2: as above
+				tech->DestroyGap(); // RA2: as above
+			}
+		}
+	}
+}
+
+
+
 
 /***********************************************************************************************
  * DisplayClass::All_To_Look -- Direct all objects to look around for the player.              *
@@ -3539,22 +3695,22 @@ void DisplayClass::Restore_Map_State(void * stash)
 void DisplayClass::All_To_Look(bool units_only, bool is_fog)
 {
 	for (int index = 0; index < Layer[LAYER_GROUND].Count(); index++) {
-		TechnoClass * tech = Dynamic_Cast<TechnoClass *>(Layer[LAYER_GROUND][index]);
-		if (tech != NULL) {
-			if (tech->RTTI == RTTI_BUILDING && units_only) continue;
+		ObjectClass * object = Layer[LAYER_GROUND][index]; // RA2: as above
+		if (object != NULL && (object->AbstractFlags & 1)) { // RA2: as above
+			TechnoClass * tech = (TechnoClass *)object; // RA2: as above
+			if (tech->Fetch_RTTI() == RTTI_BUILDING && units_only) continue; // RA2: as above
 
 			if (tech->House->Is_Player_Control()) {
 				if (tech->IsDiscoveredByPlayer) {
 					tech->Look(false, is_fog);
 				}
-			} else {
-				if (tech->RTTI == RTTI_BUILDING && Rule->IsAllyReveal && tech->House->Is_Ally(PlayerPtr)) {
-					tech->Look(is_fog, false);
-				}
+			} else if (tech->Fetch_RTTI() == RTTI_BUILDING && Rule->IsAllyReveal && tech->House->Is_Ally(PlayerPtr)) { // RA2: as above
+				tech->Look(is_fog, false);
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -3632,7 +3788,8 @@ void DisplayClass::Center_Map(void)
 				}
 			}
 
-			center = (coord - bestc) / (CurrentObject.Count() - 1);
+			coord -= bestc; // RA2: as above
+			center = coord / (CurrentObject.Count() - 1); // RA2: as above
 		}
 
 		TacticalMap->Set_Tactical_Position(center);
@@ -3686,7 +3843,9 @@ void DisplayClass::Update_Cell_Colors(void)
 /// worth saying about this spot.</returns>
 char const * DisplayClass::Help_Text(int id)
 {
-	if (id < 500 || id > 900 || Is_Scrolling()) {
+	static wchar_t _buffer[100];		// RA2: the cursor cheat's coordinate text (0x00852848)
+
+	if (id < 500 || id > 900 || Is_Scrolling()) {	// RA2: only the map's tooltip ids, and not while scrolling
 		return(NULL);
 	}
 
@@ -3695,16 +3854,28 @@ char const * DisplayClass::Help_Text(int id)
 	ObjectClass * object;
 	bool fog, shadow;
 
-	Map.Resolve_Point(Get_Mouse_Point() - TacticalRect.TopLeft, cell, coord, object, fog, shadow);
+	int left = TacticalRect.X; // RA2: as above
+	int top = TacticalRect.Y; // RA2: as above
+	Point2D xy = MouseCursor->Get_Mouse_Point(); // RA2: as above
+	Point2D point(xy.X - left, xy.Y - top); // RA2: as above
+	Map.Resolve_Point(point, cell, coord, object, fog, shadow); // RA2: as above
+
+	if (CursorCheat) { // RA2: as above
+		swprintf(_buffer, L"(%d,%d)", coord.X / 256, coord.Y / 256); // RA2: as above
+		return((char const *)_buffer); // RA2: as above
+	}
 
 	/*
 	**	Give a generic help message when over shadow terrain.
 	*/
 	if (!Map[coord].IsMapped && MainWindow) {
-		return(Fetch_String(TXT_SHADOW));
+		return((char const *)StringTable::LoadString("TXT_SHADOW", NULL, "D:\\Ra2\\Display.CPP", 4976)); // RA2: as above
 	}
 
-	TechnoClass * techno = Dynamic_Cast<TechnoClass *>(object);
+	if (object == NULL) {
+		return(NULL);
+	}
+	TechnoClass * techno = (object != NULL && (object->AbstractFlags & 1)) ? (TechnoClass *)object : NULL; // RA2: as above
 	if (techno != NULL && !techno->IsOwnedByPlayer) {
 		if (techno->Cloak == CLOAKED && !Map[techno->Center_Coord()].Is_Sensed(PlayerPtr->HeapID)) {
 			return(NULL);
@@ -3720,49 +3891,16 @@ char const * DisplayClass::Help_Text(int id)
 	**	system of the text name for the object under the mouse.
 	*/
 	if (object != NULL) {
-		char const * text;
-
-		/*
-		**	Fetch the name of the object. If it is an enemy object, then
-		**	the exact identity is glossed over with a generic text.
-		*/
-		text = object->Full_Name();
-
-		if (techno != NULL) {
-			if (object->RTTI != RTTI_BUILDING || !((BuildingClass *)object)->IsNominal) {
-				if (!dynamic_cast<TechnoTypeClass const *>(object->Class_Of())->IsNominal) {
-
-					if (!techno->House->Is_Ally(PlayerPtr)) {
-						switch ((RTTIType)object->RTTI) {
-							case RTTI_INFANTRY:
-								text = Fetch_String(TXT_ENEMY_SOLDIER);
-								break;
-
-							case RTTI_UNIT:
-							case RTTI_AIRCRAFT:
-								text = Fetch_String(TXT_ENEMY_VEHICLE);
-								break;
-
-							case RTTI_BUILDING:
-								text = Fetch_String(TXT_ENEMY_STRUCTURE);
-								break;
-						}
-					}
-				}
-			}
-		} else {
-			/*
-			 * This reports the tiberium in the cell instead of the object, so the tiberium
-			 * name only ever appears when the cell holds a non-techno object such as a
-			 * terrain object.
-			 */
-			text = ((*this)[cell].Tiberium_Name());
+		wchar_t const * text = object->Full_Name(); // RA2: as above
+		if (techno == NULL) { // RA2: as above
+			text = (wchar_t const *)(*this)[cell].Tiberium_Name(); // RA2: as above
 		}
-		return(text);
+		return((char const *)text); // RA2: as above
 	}
 
 	return(NULL);
 }
+
 
 
 /// <summary>
@@ -3834,7 +3972,7 @@ HRESULT DisplayClass::Save(IStream * stream)
 void DisplayClass::Active_Click(ObjectClass * object, Cell cell, ActionType action)
 {
 	int index;
-
+	ObjectClass * selected; // RA2: as above
 	PathType waypoint_path = PATH_NONE;
 	char waypoint_id = 0;
 
@@ -3844,192 +3982,48 @@ void DisplayClass::Active_Click(ObjectClass * object, Cell cell, ActionType acti
 
 	cell = Map.Clip_To_Map(cell);
 	WaypointClass * waypoint = PlayerPtr->Waypoint_At(cell);
-	if (waypoint != NULL) {
+	if (waypoint) { // RA2: as above
 		PlayerPtr->Fetch_Waypoint_Data(waypoint, waypoint_path, waypoint_id);
 	}
 
 	for (index = 0; index < CurrentObject.Count(); index++) {
-		CurrentObject[index]->Set_Waypoint_Path(waypoint_path, waypoint_id);
-		if (CurrentObject[index]->Is_Foot()) {
-			((TechnoClass *)CurrentObject[index])->IsOnPatrol = false;
+		selected = CurrentObject[index]; // RA2: as above
+		selected->Set_Waypoint_Path(waypoint_path, waypoint_id); // RA2: as above
+		if (CurrentObject[index] && CurrentObject[index]->Is_Foot()) { // RA2: as above
+			selected = CurrentObject[index]; // RA2: as above
+			static_cast<TechnoClass *>(selected)->IsOnPatrol = false; // RA2: as above
 		}
 	}
-
-	if (object != NULL) {
+	if (object) {
 		for (index = 0; index < CurrentObject.Count(); index++) {
-			ObjectClass * tobject = CurrentObject[index];
-			tobject->Active_Click_With(tobject->What_Action(object), object, false);
+			selected = CurrentObject[index]; // RA2: as above
+			CurrentObject[index]->Active_Click_With(selected->What_Action(object), object, false); // RA2: as above
 			AllowVoice = false;
 		}
 	} else if (action == ACTION_MOVE || action == ACTION_PATROL_WAYPOINT) {
-		DynamicVectorClass<ObjectClass *> movers;
-
 		for (index = 0; index < CurrentObject.Count(); index++) {
-			if (CurrentObject[index]->Is_Foot()) {
-				FootClass *foot = (FootClass *)CurrentObject[index];
-				if (foot->CurrentTube >= 0) {
-					foot->Active_Click_With(foot->What_Action(cell), cell, false);
-					AllowVoice = false;
-				} else {
-					movers.Add(CurrentObject[index]);
-				}
-			} else {
-				ObjectClass * tobject = CurrentObject[index];
-				tobject->Active_Click_With(tobject->What_Action(cell), cell, false);
-				AllowVoice = false;
-			}
+			selected = CurrentObject[index]; // RA2: as above
+			CurrentObject[index]->Active_Click_With(selected->What_Action(cell), cell, cell, false); // RA2: as above
+			AllowVoice = false;
 		}
-
-		if (movers.Count() > 0) {
-			Coord center = Vector_Center(movers);
-			ObjectClass * anchor = Vector_Closest_Object(movers, center);
-
-			IndexClass<int, ObjectClass *> distance_sorted;
-
-			for (index = 0; index < movers.Count(); index++) {
-				distance_sorted.Add_Index(index + 1000 * Distance(movers[index]->Center_Coord(), anchor->PositionCoord), movers[index]);
-				if (action == ACTION_PATROL_WAYPOINT) {
-					((TechnoClass *)movers[index])->IsOnWaypointPatrol = true;
-				}
-			}
-
-			movers.Clear();
-
-			DynamicVectorClass<Cell> command_cells;
-			DynamicVectorClass<bool> command_issued;
-
-			for (index = 0; index < distance_sorted.Count(); index++) {
-				movers.Add(distance_sorted.Fetch_By_Position(index));
-				command_cells.Add(cell);
-				command_issued.Add(false);
-			}
-
-			Cell closest_cell = anchor->PositionCell;
-			int zone;
-			int diff1, diff2;
-
-			for (index = 0; index < movers.Count(); index++) {
-				FootClass * mover = (FootClass *)movers[index];
-				Cell assigned_cell = cell;
-
-				if (index == 0) {
-					movers[index]->Active_Click_With(movers[index]->What_Action(cell), cell, false);
-					Map[cell].IsToGrowVeins = true;
-					command_issued[index] = true;
-					AllowVoice = false;
-
-				} else if (!command_issued[index]) {
-
-					Coord const & dest = mover->Destination_Coord();
-					Cell destcell(Lepton_To_Cell(dest.X), Lepton_To_Cell(dest.Y));
-
-					int height = Map[cell].Height + BRIDGE_CELL_HEIGHT * Map[cell].IsUnderBridge;
-
-					Vector3 pos(cell.X + 0.5, cell.Y + 0.5, 0);
-					Vector3 dir(destcell.X - closest_cell.X, destcell.Y - closest_cell.Y, 0);
-					float len = dir.Length();
-					dir = (len != 0.0) ? dir / len : dir;
-
-					int tries = 0;
-					bool blocked = false;
-
-					const TechnoTypeClass *ttype = mover->TClass;
-					zone = Map.Get_Cell_Zone(cell, ttype->MZone, true);
-
-					Cell trycell;
-					Cell fallback_cell = cell;
-					Cell * chosen;
-
-					for (; tries < 6; tries++) {
-						pos = pos + dir;
-						trycell = Cell((int)pos.X, (int)pos.Y);
-						CellClass * cptr = &Map[trycell];
-
-						if (!In_Local_Radar(trycell, true)) {
-							chosen = &fallback_cell;
-							break;
-						}
-
-						int tryzone = Map.Get_Cell_Zone(trycell, ttype->MZone, cptr->IsUnderBridge);
-						MoveType move = mover->Can_Enter_Cell(cptr, FACING_NONE, height);
-
-						if (tryzone != zone) {
-							blocked = true;
-						} else if (cptr->IsToGrowVeins) {
-							fallback_cell = trycell;
-						} else {
-							if (cptr->IsUnderBridge) {
-								if (abs(height - cptr->Height - BRIDGE_CELL_HEIGHT) > 2) {
-									chosen = &fallback_cell;
-									break;
-								}
-							}
-							if (!cptr->IsUnderBridge) {
-								if (abs(height - cptr->Height) > 2) {
-									chosen = &fallback_cell;
-									break;
-								}
-							}
-							if (move < MOVE_FRIENDLY_DESTROYABLE || move == MOVE_TEMP) {
-								if (blocked) {
-									diff1 = abs(trycell.X - cell.X);
-									diff2 = abs(trycell.Y - cell.Y);
-									if (diff1 > diff2) diff2 = diff1;
-									zone = diff2 + 3;
-									Search.Test_Cell_Walk(trycell, cell, mover, Map[trycell].IsUnderBridge, Map[cell].IsUnderBridge, MZONE_NONE);
-									chosen = &fallback_cell;
-								} else {
-									trycell = Cell((int)pos.X, (int)pos.Y);
-									chosen = &trycell;
-								}
-								break;
-							}
-							blocked = true;
-						}
-					}
-
-					if (tries >= 6) {
-						chosen = &fallback_cell;
-					}
-
-					assigned_cell = *chosen;
-					command_cells[index] = assigned_cell;
-					FootClass * foot = dynamic_cast<FootClass *>(mover);
-					if (foot != NULL) {
-						foot->WaypointOffsetCell = assigned_cell - cell;
-					}
-					mover->Active_Click_With(mover->What_Action(assigned_cell), assigned_cell, false);
-					Map[assigned_cell].IsToGrowVeins = true;
-					command_issued[index] = true;
-				}
-
-				for (int scan = index + 1; scan < movers.Count(); scan++) {
-					if (!command_issued[scan]) {
-						if (mover->PositionCell == movers[scan]->PositionCell) {
-							movers[scan]->Active_Click_With(movers[scan]->What_Action(assigned_cell), assigned_cell, false);
-							command_issued[scan] = true;
-						}
-					}
-				}
-			}
-
-			for (index = 0; index < movers.Count(); index++) {
-				((TechnoClass *)movers[index])->IsOnWaypointPatrol = false;
-			}
-
-			for (index = 0; index < command_cells.Count(); index++) {
-				Map[command_cells[index]].IsToGrowVeins = false;
-			}
+	} else if (action == ACTION_NOMOVE) { // RA2: as above
+		int count = CurrentObject.Count(); // RA2: as above
+		for (index = 0; index < count; index++) { // RA2: as above
+			selected = CurrentObject[index]; // RA2: as above
+			CurrentObject[index]->Active_Click_With(selected->What_Action(cell), cell, cell, false); // RA2: as above
+			AllowVoice = false;
 		}
 	} else {
 		for (index = 0; index < CurrentObject.Count(); index++) {
-			ObjectClass * tobject = CurrentObject[index];
-			tobject->Active_Click_With(tobject->What_Action(cell), cell, false);
+			Cell empty(-1, -1); // RA2: as above
+			selected = CurrentObject[index]; // RA2: as above
+			CurrentObject[index]->Active_Click_With(selected->What_Action(cell), cell, empty, false); // RA2: as above
 			AllowVoice = false;
 		}
 	}
 	AllowVoice = true;
 }
+
 
 
 /// <summary>
@@ -4054,6 +4048,7 @@ ActionType DisplayClass::Action_To_Waypoint_Action(ActionType action, Cell const
 				return(ACTION_ATTACK_WAYPOINT);
 			case ACTION_ENTER:
 			case ACTION_CAPTURE:
+			case ACTION_EATEN: // RA2: as above
 				return(ACTION_ENTER_WAYPOINT);
 			default:
 				return(action);

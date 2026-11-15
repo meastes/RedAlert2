@@ -18,6 +18,7 @@ class BeaconManagerClass
 {
 	public:
 		BeaconClass * FindBeaconAt(Coord coord);
+		bool CanPlaceBeacon(int owner); // RA2: 0x0042E700; the house may place another beacon (YR: CanPlaceBeacon)
 		BeaconClass * FindSelected(int owner); // RA2: 0x0042E940; the house's beacon that is being edited, if any
 		void EditBeaconMessage(wchar_t const * text, int a, int b, bool done); // RA2: 0x0042EC20; text being typed for the beacon, or none to stop editing
 		void Draw_On_Radar(Surface * surface, Rect bounds); // RA2: 0x0042EED0; marks the beacons of allies on the radar
