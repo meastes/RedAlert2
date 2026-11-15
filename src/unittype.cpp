@@ -523,17 +523,19 @@ HRESULT STDMETHODCALLTYPE UnitTypeClass::GetClassID(CLSID * retval)
 /// </summary>
 void UnitTypeClass::Compute_CRC(CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
-	crc(MovementRestrictedTo);
+	TechnoTypeClass::Compute_CRC(crc); // RA2: RA2's form
+	crc((long)MovementRestrictedTo); // RA2: as above
 	crc(IsPassive);
 	crc(IsCrateGoodie);
 	crc(IsToHarvest);
 	crc(IsToVeinHarvest);
 	crc(IsFireAnim);
 	crc(IsLockTurret);
-	crc(IsTilter); // RA2: no IsNoFireWhileMoving (not in RA2's layout)
+	crc(IsTilter); // RA2: as above
+	crc(IsSimpleDeployer); // RA2: as above
 	crc(IsUseTurretShadow);
 }
+
 
 
 /// <summary>
