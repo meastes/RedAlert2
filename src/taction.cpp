@@ -613,6 +613,7 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 		INVOKE(LOCK_INPUT);
 		INVOKE(UNLOCK_INPUT);
 		INVOKE(CENTER_VIEWPOINT);
+		INVOKE(JUMP_VIEWPOINT); // RA2
 		INVOKE(ZOOM_IN);
 		INVOKE(ZOOM_OUT);
 		INVOKE(RESHROUD);
@@ -660,7 +661,7 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 /// The defense is toggled by firing the house's firestorm super weapon, so this
 /// action does nothing when the wall is already down.
 /// </summary>
-inline bool TActionClass::TAction_DEACTIVATE_FIRESTORM(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: only inlined in operator(), no copy of its own
+bool TActionClass::TAction_DEACTIVATE_FIRESTORM(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: a copy of its own at 0x6AF940
 {
 	return(true);
 }
@@ -1156,10 +1157,13 @@ bool TActionClass::TAction_BASE_BUILDING(HouseClass * house, ObjectClass * , Tri
 	if (Data.Bool) {
 		house->IsBaseBuilding = true;
 		if (house->ConYards.Count() > 0) {
-			BuildingClass *building = house->ConYards[0];
-			Cell base_cell = building->Get_Coord().As_Cell();
+			Coord coord = house->ConYards[0]->Get_Coord(); // RA2: as above
+			Cell base_cell = coord.As_Cell(); // RA2: as above
 			house->Center = Coord(base_cell);
 			house->Base.PlacementCenter = base_cell;
+		}
+		if (house->Base.Nodes.Count() == 0) { // RA2: a house with no base plan starts one
+			house->Begin_Construction(); // RA2: as above
 		}
 	} else {
 		house->IsBaseBuilding = false;
@@ -1168,12 +1172,13 @@ bool TActionClass::TAction_BASE_BUILDING(HouseClass * house, ObjectClass * , Tri
 }
 
 
+
 /// <summary>
 /// Creeps the shadow back in over the map.
 /// This routine handles the trigger action that re-shrouds terrain the player is no longer
 /// keeping an eye on.
 /// </summary>
-inline bool TActionClass::TAction_CREEP_SHADOW(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: only inlined in operator(), no copy of its own
+bool TActionClass::TAction_CREEP_SHADOW(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: a copy of its own at 0x6B0620
 {
 	Map.Encroach_Shadow();
 	return(true);
@@ -2047,6 +2052,24 @@ bool TActionClass::TAction_CENTER_VIEWPOINT(HouseClass * , ObjectClass * , Trigg
 	}
 
 	TacticalMap->Setup_Trigger_Scroll(coord, Data.Speed);
+	return(true);
+}
+
+
+/// <summary>
+/// Moves the tactical view to the effect waypoint at once.
+/// </summary>
+bool TActionClass::TAction_JUMP_VIEWPOINT(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: not in TibSun, at 0x6B1BC0
+{
+	Cell waypoint = Scen->Get_Waypoint_Cell(EffectLocation);
+	Coord coord = Coord (waypoint);
+	coord.Z = Map.Get_Height_GL(coord);
+
+	if (Map[waypoint].IsUnderBridge || Map[waypoint].WasUnderBridge) {
+		coord.Z += BRIDGE_LEPTON_HEIGHT;
+	}
+
+	TacticalMap->Set_Tactical_Position(coord);
 	return(true);
 }
 

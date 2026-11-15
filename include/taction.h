@@ -223,6 +223,7 @@ class TActionClass : public AbstractClass
 		bool TAction_LOCK_INPUT(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
 		bool TAction_UNLOCK_INPUT(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
 		bool TAction_CENTER_VIEWPOINT(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
+		bool TAction_JUMP_VIEWPOINT(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell); // RA2: 0x6B1BC0
 		bool TAction_ZOOM_IN(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
 		bool TAction_ZOOM_OUT(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
 		bool TAction_RESHROUD(HouseClass * house, ObjectClass * object, TriggerClass * trig, Cell const & cell);
