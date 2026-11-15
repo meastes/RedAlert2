@@ -7071,6 +7071,76 @@ void BuildingClass::Factory_AI(void)
 	}
 }
 
+/// <summary>
+/// RA2: an empty function nothing calls.
+/// </summary>
+void __cdecl Building_Empty_Function(void) // RA2: not in TibSun, at 0x44B760
+{
+}
+
+
+/// <summary>
+/// Counts down a delayed shot: at zero, stage 1 fires the recorded weapon at the target (each supporting
+/// prism tower raising its damage) and stage 2 sends the support beam to the recorded coordinate.
+/// </summary>
+void BuildingClass::Delayed_Fire_AI(void) // RA2: not in TibSun, at 0x44B770 (RA2 copies PrismTargetCoords field by field)
+{
+	if (PrismStage != 0) {
+		if (--DelayBeforeFiring <= 0) {
+			DelayBeforeFiring = 0;
+			switch (PrismStage) {
+				case 1:
+					if (TarCom != NULL && Can_Fire(TarCom, PrismTargetCoords.X, true) == FIRE_OK) {
+						BulletClass * bullet = Fire_At(TarCom, PrismTargetCoords.X);
+						if (bullet != NULL && SupportingPrisms != 0) {
+							bullet->DamageMultiplier = (unsigned)((Rule->PrismSupportModifier * SupportingPrisms + 100) * 256) / 100;
+							SupportingPrisms = 0;
+						}
+					}
+					break;
+				case 2:
+					Fire_Prism_Support(PrismTargetCoords);
+					break;
+			}
+			PrismStage = 0;
+		}
+	}
+}
+
+
+/// <summary>
+/// Records a delayed shot (the stage, the type's delay and the coordinate) and starts the delayed-fire
+/// animation in place of the idle one.
+/// </summary>
+void BuildingClass::Start_Delayed_Fire(int stage, Coord const & coord) // RA2: not in TibSun, at 0x44B870
+{
+	DelayBeforeFiring = Class->DelayedFireDelay;
+	PrismStage = stage;
+	memcpy(&PrismTargetCoords, &coord, sizeof(PrismTargetCoords));
+	End_Anim((BAnimType)3);
+	Begin_Anim((BAnimType)10, HealthRatio <= Rule->ConditionYellow, false, 0);
+}
+
+
+/// <summary>
+/// Drops overpowerers that no longer target this building; it is overpowered with three, or with one
+/// while switched on and its house at full power.
+/// </summary>
+void BuildingClass::Update_Overpowerers(void) // RA2: not in TibSun, at 0x44B910
+{
+	for (int index = Overpowerers.Count() - 1; index >= 0; index--) {
+		if (((TechnoClass *)Overpowerers[index])->TarCom != this) {
+			Overpowerers.Delete_Index(index);
+		}
+	}
+	int count = Overpowerers.Count();
+	if (count >= 3 || (House->Power_Fraction() == 1.0 && IsOn && count >= 1)) {
+		IsOverpowered = true;
+	} else {
+		IsOverpowered = false;
+	}
+}
+
 
 
 
