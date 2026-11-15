@@ -238,11 +238,16 @@ void RadarEventClass::Draw_Events(void)
 /// </summary>
 void RadarEventClass::Draw(void)
 {
+	RGBClass color1 = Get_Max_Color();
+	RGBClass color2 = Get_Min_Color();
+	if (color1 == RGBClass(0, 0, 0)) { // RA2: RA2's form
+		return; // RA2: as above
+	}
+
 	Point2D event_rect[4];
 	int i;
 
 	Get_Event_Rect(event_rect);
-
 	for (i = 0; i < ARRAY_SIZE(event_rect); i++) {
 		event_rect[i] += Offset;
 	}
@@ -255,11 +260,8 @@ void RadarEventClass::Draw(void)
 
 	float rate = (Radius * 2) * M_SQRT_2 / (float)maxdist * ColorSpeed;
 
-	RGBClass color1 = Get_Max_Color();
-	RGBClass color2 = Get_Min_Color();
-
 	for (i = 0; i < ARRAY_SIZE(event_rect); i++) {
-		Map.RadarSurface->Draw_Ping_Pong_Gradient_Line(Map.RadarSurface->Get_Rect(), event_rect[i], event_rect[(i + 1) % 4], color1, color2, rate, color_factor);
+		((DSurface *)Map.RadarSurface)->Draw_Ping_Pong_Gradient_Line(Map.RadarSurface->Get_Rect(), event_rect[i], event_rect[(i + 1) % 4], color1, color2, rate, color_factor); // RA2: as above
 	}
 
 	for (i = 0; i < ARRAY_SIZE(event_rect); i++) {
@@ -272,6 +274,8 @@ void RadarEventClass::Draw(void)
 		}
 	}
 }
+
+
 
 
 /// <summary>
