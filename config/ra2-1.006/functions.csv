@@ -944,7 +944,7 @@ address,size,evidence
 0x0044DDB0,400,"code of src/building.cpp, matched"
 0x0044DF40,128,"code of src/building.cpp, matched"
 0x0044DFC0,672,"code of src/building.cpp, matched"
-0x0044E260,,"inferred: target of the call at 0x0044DD7F in matched src/building.cpp; size not known"
+0x0044E260,480,"code of src/building.cpp, matched"
 0x0044E440,304,"code of src/building.cpp, matched"
 0x0044E570,48,"code of src/building.cpp, matched"
 0x0044E5A0,1168,"code of src/building.cpp, matched"
