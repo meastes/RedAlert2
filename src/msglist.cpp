@@ -179,34 +179,27 @@ void MessageListClass::Init(int x, int y, int max_msg, int maxchars,
 	int height, int edit_x, int edit_y, bool overflow_on, int over_start,
 	int over_end, int width)
 {
-	TextLabelClass * txtlabel;
-	int i;
-
 	Width = width - 8;
-	DebugString("MessageListClass::Init(Width: %d)\n", Width);
-
-	//------------------------------------------------------------------------
-	// Remove every entry in the list
-	//------------------------------------------------------------------------
-	txtlabel = MessageList;
-	while (txtlabel) {
-		MessageList = (TextLabelClass *)txtlabel->Remove();
-		delete txtlabel;
-		txtlabel = MessageList;
+	DebugString("MessageListClass::Init(Width: %d)\n", width - 8); // RA2: RA2's form
+	TextLabelClass *node = MessageList; // RA2: as above
+	while (node) { // RA2: as above
+		MessageList = (TextLabelClass *)node->Remove(); // RA2: as above
+		if (node) { // RA2: as above
+			delete node; // RA2: as above
+		}
+		node = MessageList; // RA2: as above
 	}
-
-	//------------------------------------------------------------------------
-	// Mark all buffers as available
-	//------------------------------------------------------------------------
-	for (i = 0; i < MAX_NUM_MESSAGES; i++) {
-		BufferAvail[i] = 1;
+	for (int i = 0; i < 7; i++) { // RA2: as above
+		((int *)BufferAvail)[i] = 0x10001; // RA2: as above
 	}
 
 	//------------------------------------------------------------------------
 	// Remove the editable message
 	//------------------------------------------------------------------------
 	if (IsEdit) {
-		delete EditLabel;
+		if (EditLabel) { // RA2: as above
+			delete EditLabel; // RA2: as above
+		}
 		EditLabel = 0;
 	}
 
@@ -216,16 +209,15 @@ void MessageListClass::Init(int x, int y, int max_msg, int maxchars,
 	MessageList = 0;
 	MessageX = x;
 	MessageY = y;
-
 	MaxMessages = max_msg;
-	if (MaxMessages > MAX_NUM_MESSAGES)
-		MaxMessages = MAX_NUM_MESSAGES;
-
+	if (max_msg > 14) { // RA2: as above
+		MaxMessages = 14; // RA2: as above
+	}
 	MaxChars = maxchars;
-	if (MaxChars > MAX_MESSAGE_LENGTH)
-		MaxChars = MAX_MESSAGE_LENGTH;
-
-	Height = height;
+	if (maxchars > 112) { // RA2: as above
+		MaxChars = 112; // RA2: as above
+	}
+	Height = 19; // RA2: as above
 
 	//------------------------------------------------------------------------
 	// Init the edit field variables.  If edit_x or edit_y is -1, place the
@@ -233,14 +225,13 @@ void MessageListClass::Init(int x, int y, int max_msg, int maxchars,
 	// coords.
 	//------------------------------------------------------------------------
 	EnableOverflow = overflow_on;
-	IsEdit = 0;
+	IsEdit = false; // RA2: as above
 	if (edit_x == -1 || edit_y == -1) {
-		AdjustEdit = 1;
+		AdjustEdit = true; // RA2: as above
 		EditX = x;
 		EditY = y;
-	}
-	else {
-		AdjustEdit = 0;
+	} else { // RA2: as above
+		AdjustEdit = false; // RA2: as above
 		EditX = edit_x;
 		EditY = edit_y;
 	}
@@ -262,8 +253,9 @@ void MessageListClass::Init(int x, int y, int max_msg, int maxchars,
 	if (OverflowStart >= OverflowEnd) {
 		OverflowStart = OverflowEnd - 1;
 	}
-
 }
+
+
 
 
 /***************************************************************************
