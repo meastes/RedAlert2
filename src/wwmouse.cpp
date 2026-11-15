@@ -1058,7 +1058,7 @@ void WWMouseClass::Process_Mouse(void)
 void WWMouseClass::Block_Mouse(void)
 {
 	if (WaitForSingleObject(MouseMutex, 10000) == WAIT_TIMEOUT) {
-		DebugString("Warning: Probable deadlock occurred on MouseMutex. %s, line %d\n", __FILE__, __LINE__);
+		DebugString("Warning: Probable deadlock occurred on MouseMutex. %s, line %d\n", __FILE__, 1277); // RA2: Block_Mouse's line in RA2's wwmouse.cpp
 
 	}
 }
