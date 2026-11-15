@@ -3764,7 +3764,7 @@ address,symbol,evidence
 0x0060AE80,??1ParticleSystemClass@@UAE@XZ,"compiled from src/partsys.cpp, matched"
 0x0060B090,?Draw_It@ParticleSystemClass@@UBEXABVPoint2D@@ABV?$TRect@H@@@Z,"compiled from src/partsys.cpp, matched"
 0x0060B190,?Spawn_Held_Particle@ParticleSystemClass@@QAEPAVParticleClass@@ABVCoord@@0@Z,"compiled from src/partsys.cpp, matched"
-0x0060B240,?Spawn_Particle@ParticleSystemClass@@QAEPAVParticleClass@@PAVParticleTypeClass@@ABVCoord@@@Z,"inferred: referenced by matched src/vein.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0060B240,?Spawn_Particle@ParticleSystemClass@@QAEPAVParticleClass@@PAVParticleTypeClass@@ABVCoord@@@Z,"compiled from src/partsys.cpp, matched"
 0x0060B2D0,?Spawn_Held_Particle_Random@ParticleSystemClass@@QAEPAVParticleClass@@ABVCoord@@0H@Z,"compiled from src/partsys.cpp, matched"
 0x0060B3E0,?Delete_Particle@ParticleSystemClass@@QAE_NH@Z,"compiled from src/partsys.cpp, matched"
 0x0060B460,?Clear_System@ParticleSystemClass@@QAEXXZ,"compiled from src/partsys.cpp, matched"
