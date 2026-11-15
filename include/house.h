@@ -807,7 +807,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		Cell Find_Cell_In_Zone(TechnoClass const * techno, ZoneType zone) const;
 		ProdFailType Begin_Production(RTTIType type, int id, bool naval, bool resume=false); // RA2: naval
 		ProdFailType Suspend_Production(RTTIType type);
-		ProdFailType Abandon_Production(RTTIType type, int id);
+		ProdFailType Abandon_Production(RTTIType type, int id, bool naval = false); // RA2: naval
 		bool Place_Object(RTTIType type, Cell const & cell);
 		bool Manual_Place(BuildingClass * builder, BuildingClass * object);
 		void Just_Built(TechnoClass * product);
@@ -889,6 +889,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 
 		// Factory controls.
 		FactoryClass * Fetch_Factory(RTTIType rtti) const;
+		FactoryClass * Fetch_Factory(RTTIType rtti, bool naval, int category) const; // RA2: 0x4EB580; the naval and defense factories apart
 		void Set_Factory(RTTIType rtti, FactoryClass * factory);
 		void Update_Production_Mode(RTTIType type);
 		void Production_Status_Changed(void) {IsRecalcNeeded = true;}

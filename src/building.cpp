@@ -148,6 +148,7 @@
 #include "ipiggy.h"
 #include "isotile.h"
 #include "isotype.h"
+#include "laser.h" // RA2
 #include "light.h"
 #include "lightcon.h"
 #include "mono.h"
@@ -387,6 +388,49 @@ BuildingClass::~BuildingClass(void)
 
 	Class = NULL;
 	IsActive = false;
+}
+
+
+/// <summary>
+/// Starts the damage fires at the building's DamageFireOffset points (up to eight, ending at the first unset offset),
+/// cycling through the DamageFireTypes animations from a random start.
+/// </summary>
+void BuildingClass::Create_Damage_Fires(void) // RA2: not in TibSun, at 0x4395F0
+{
+	int type_count = Rule->DamageFireTypes.Count();
+	if (type_count != 0) {
+		int type_index = Scen->RandomNumber(0, type_count - 1);
+		for (int index = 0; index < 8; index++) {
+			if (Class->DamageFireOffset[index] == COORD_NONE) return; // RA2: the X and Y of COORD_NONE end the list
+			if (DamageFireAnims[index] != NULL) return;
+			Coord coord = Coord(TacticalMap->Pixel_To_Lepton(Class->DamageFireOffset[index]), 0);
+			coord += Render_Coord();
+			AnimClass * fire = new AnimClass(Rule->DamageFireTypes[type_index], coord, 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
+			if (fire != NULL) {
+				DamageFireAnims[index] = fire;
+				fire->ZAdjust = ((Class->DamageFireOffset[index].Y - (Class->Height(false) + Class->Width()) * 15) * 3 >> 1) - 10;
+				if (fire->ZAdjust > 0) fire->ZAdjust = 0;
+				int stages = fire->Class->Stages;
+				if (stages > 0) fire->Set_Stage(Scen->RandomNumber(0, stages - 1));
+				type_index++;
+				if (type_index >= type_count) type_index = 0;
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Removes the building's damage fires.
+/// </summary>
+void BuildingClass::Remove_Damage_Fires(void) // RA2: not in TibSun, at 0x4397C0
+{
+	for (int index = 0; index < 8; index++) {
+		if (DamageFireAnims[index] != NULL) {
+			DamageFireAnims[index]->Delete_Me();
+			DamageFireAnims[index] = NULL;
+		}
+	}
 }
 
 
@@ -1095,6 +1139,52 @@ void BuildingClass::Draw_Extras(Point2D & xy, Rect & rect)
 					anim->Render(TacticalRect, true, false);
 					anim->Make_Invisible();
 				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Draws the informational overlays that sit on top of the building.
+/// This routine handles the selection text and, for a factory the player has managed to
+/// infiltrate, the cameo of whatever is currently being produced there.
+/// </summary>
+/// <param name="point">The pixel location to center the overlays about.</param>
+/// <param name="cliprect">The clipping rectangle to draw within.</param>
+void BuildingClass::Draw_Overlays(Point2D const & point, Rect const & cliprect) const // RA2: at 0x43B660; no repair or power-off shapes
+{
+	Cell cell = PositionCell;
+
+	if (IsSelected && (House->Is_Ally(PlayerPtr) || SpiedBy & (1<<(PlayerPtr->Class->House)))) {
+		Draw_Text_Overlay(point + Point2D(-10, 10), point, cliprect);
+	}
+
+	/*
+	**	If this is a factory that we're spying on, show what it's producing
+	*/
+	if (SpiedBy & (1<<(PlayerPtr->Class->House)) && IsSelected) {
+
+		/*
+		**	Fetch the factory that is associate with this building. For computer controlled buildings, the
+		**	factory pointer is integral to the building itself. For human controlled buildings, the factory
+		**	pointer is part of the house structure and must be retrieved from there.
+		*/
+		FactoryClass * factory = NULL;
+		if (House->Is_Human_Player()) {
+			factory = House->Fetch_Factory(Class->ToBuild, Class->Naval, 0); // RA2: naval factories apart
+		} else {
+			factory = Factory;
+		}
+
+		/*
+		**	If there is a factory associated with this building, then fetch any attached
+		**	object under production and display its cameo image over the top of this building.
+		*/
+		if (factory != NULL) {
+			TechnoClass * obj = factory->Get_Object();
+			if (obj != NULL) {
+				Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)obj->TClass->Get_Cameo_Data(), 0, point, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL);
 			}
 		}
 	}
@@ -2099,6 +2189,46 @@ void BuildingClass::Do_Destruction(TechnoClass *last_contact, TechnoClass *sourc
 	}
 
 	Drop_Debris(WhomToRepay);
+}
+
+
+/// <summary>
+/// Leaves the building's rubble behind: the cells it covered get the rubble overlay, the
+/// cell under its render coordinate remembers the building type, and a crate (money or
+/// random) appears there when the type says so.
+/// </summary>
+void BuildingClass::Leave_Rubble(void) // RA2: not in TibSun, at 0x43EBA0
+{
+	ShapeSet const * shape;
+	int frame;
+	if (Class->Get_Rubble_Shape(&shape, &frame)) {
+		Cell const * offset = Occupy_List();
+		Cell origin = Render_Coord();
+		while (*offset != REFRESH_EOL) {
+			Cell cell = origin + *offset++;
+			CellClass & cellptr = Map[cell];
+			cellptr.Register_For_Redraw();
+			cellptr.Overlay = OverlayType(239); // RA2: the overlay index that marks a rubble cell
+			cellptr.Rubble = NULL;
+			cellptr.Recalc_Attributes(-1);
+			Map.Update_Cell_Zone(cellptr.CellID);
+			Map.Update_Cell_Subzones(cellptr.CellID);
+			TechnoClass::Remove_Target(&cellptr);
+		}
+		CellClass & base = Map[origin];
+		base.Rubble = Class;
+		Rect area = Union(base.Overlay_Render_Rect(), base.Overlay_Shadow_Render_Rect());
+		TacticalMap->Register_Dirty_Area(area - TacticalRect.TopLeft);
+		TacticalMap->Flag_Cell(Map[origin]);
+	}
+	if (Class->CrateBeneath) {
+		Cell cell = Render_Coord();
+		if (Class->CrateBeneathIsMoney) {
+			Map.Place_Crate(cell, CRATE_MONEY);
+			return;
+		}
+		Map.Place_Crate(cell, CrateType(20)); // RA2: past the last crate type, a random one
+	}
 }
 
 
@@ -3891,6 +4021,17 @@ Coord BuildingClass::Docking_Coord(TechnoClass *) const // RA2: the docking obje
 }
 
 
+/// <summary>
+/// Fetches how far the docking object is from the point it docks at on this building.
+/// </summary>
+/// <param name="docker">The object that docks with the building.</param>
+/// <returns>Returns with the distance in leptons.</returns>
+int BuildingClass::DistanceToDockingCoord(TechnoClass * docker) const // RA2: not in TibSun, at 0x4442B0
+{
+	return(Docking_Coord(docker).Distance_To(docker->Center_Coord()));
+}
+
+
 
 
 
@@ -3982,6 +4123,40 @@ FireErrorType BuildingClass::Can_Fire(AbstractClass * target, int which, bool) c
 		}
 	}
 	return(canfire);
+}
+
+
+/// <summary>
+/// Makes this factory the primary one of its kind (land or naval) for its house, unless
+/// another one already is and the caller does not ask to take over from it.
+/// </summary>
+/// <param name="take">Should this building take the primary status from the current primary factory?</param>
+/// <returns>Returns with whether this building's primary status changed.</returns>
+bool BuildingClass::Become_Primary(bool take) // RA2: not in TibSun, at 0x4444B0
+{
+	RTTIType tobuild = Class->ToBuild;
+	if (tobuild == RTTI_NONE) {
+		return(false);
+	}
+
+	bool was = IsLeader;
+	int count = House->Buildings.Count();
+	for (int index = 0; index < count; index++) {
+		BuildingClass * building = House->Buildings[index];
+		if (!building->IsInLimbo && building->IsLeader && building->Class->ToBuild == tobuild) {
+			if ((Class->Naval && building->Class->Naval) || (!Class->Naval && !building->Class->Naval)) {
+				if (take) {
+					building->IsLeader = false;
+					IsLeader = true;
+				}
+				goto done;
+			}
+		}
+	}
+	IsLeader = true;
+
+done:
+	return(IsLeader != was);
 }
 
 
@@ -4911,6 +5086,24 @@ int BuildingClass::Do_MISSION_DECONSTRUCTION(void)
 			break;
 	}
 	return(1);
+}
+
+
+/// <summary>
+/// Draws this prism tower's support beam to the tower that fires and starts the tower's
+/// recharge.
+/// </summary>
+/// <param name="destination">The coordinate the support beam goes to.</param>
+void BuildingClass::Fire_Prism_Support(Coord destination) // RA2: not in TibSun, at 0x446820
+{
+	RGBClass black;
+	LaserDrawClass * laser = new LaserDrawClass(Fire_Coord(0), destination, 0, true, House->LaserColor, black, black, Rule->PrismSupportDuration, false, true, 1.0f, 0.0f);
+	if (laser != NULL) {
+		laser->IsHouseColor = true;
+		laser->Thickness = 3;
+	}
+	Arm = Rule->PrismSupportDelay;
+	SupportingPrisms = 0;
 }
 
 
@@ -6335,6 +6528,27 @@ InfantryTypeClass const * BuildingClass::Crew_Type(void) const
 }
 
 
+/// <summary>
+/// Abandons what the factory produces when, without this building, nothing of its house can
+/// build that type any more.
+/// </summary>
+/// <param name="factory">The factory to check; may be NULL.</param>
+void BuildingClass::Abandon_Orphaned_Production(FactoryClass * factory) // RA2: not in TibSun, at 0x44A000
+{
+	if (factory != NULL) {
+		TechnoClass * object = factory->Get_Object();
+		bool limbo = IsInLimbo;
+		IsInLimbo = true;
+		if (object != NULL) {
+			if (object->Techno_Type_Class()->Who_Can_Build_Me(true, false, false, House) == NULL) {
+				House->Abandon_Production(Class->ToBuild, object->Techno_Type_Class()->Fetch_Heap_ID(), false);
+			}
+		}
+		IsInLimbo = limbo;
+	}
+}
+
+
 
 
 
@@ -7662,6 +7876,28 @@ void BuildingClass::End_Anim(BAnimType anim)
 		if (animation != NULL) {
 			Anims[anim] = NULL;
 			delete animation;
+		}
+	}
+}
+
+
+/// <summary>
+/// Hides the building animation of the given type (or all of them) without removing it.
+/// </summary>
+/// <param name="anim">The animation to hide, or BANIM_ALL.</param>
+void BuildingClass::Hide_Anim(BAnimType anim) // RA2: not in TibSun, at 0x44D030
+{
+	if (anim == BANIM_ALL) {
+		for (int i = 0; i < 18; i++) { // RA2: all 18 animation slots
+			AnimClass * animation = Anims[i];
+			if (animation != NULL) {
+				animation->Make_Invisible();
+			}
+		}
+	} else {
+		AnimClass * animation = Anims[anim];
+		if (animation != NULL) {
+			animation->Make_Invisible();
 		}
 	}
 }
@@ -9317,6 +9553,66 @@ void BuildingClass::SensorArrayDeactivate(Cell) // RA2: Disable_Sensor_Array is 
 
 
 /// <summary>
+/// Turns on a disguise detector: the cells within its SensorsSight are sensed by the owner,
+/// and the units, infantry and aircraft standing in them are told they were sensed.
+/// </summary>
+/// <param name="cell">The cell to center on; CELL_NONE means the building's own cell.</param>
+void BuildingClass::DisguiseDetectorActivate(Cell cell) // RA2: not in TibSun, at 0x450550
+{
+	if (!IsPowerOnline()) {
+		return;
+	}
+
+	int radius = Class->SensorsSight;
+	int dist = radius * radius;
+	HousesType houseid = House->HeapID;
+	if (cell == CELL_NONE) {
+		cell = Center_Coord().As_Cell();
+	}
+	for (int y = -radius; y < radius; y++) {
+		for (int x = -radius; x < radius; x++) {
+			Cell newcell = Cell(cell.X + x, cell.Y + y);
+			if (x * x + y * y < dist) {
+				CellClass * cellptr = &Map[newcell];
+				cellptr->Sensed_By(houseid); // RA2: Sensed_By, where the deactivation calls Disguise_Unsensed_By
+				for (ObjectClass * occupier = cellptr->Cell_Occupier(); occupier != NULL; occupier = occupier->Next) {
+					RTTIType rtti = occupier->RTTI;
+					if (rtti == RTTI_UNIT || rtti == RTTI_INFANTRY || rtti == RTTI_AIRCRAFT) {
+						((TechnoClass *)occupier)->Sensed();
+					}
+				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Turns off a disguise detector: the cells within its DetectDisguiseRange are no longer
+/// disguise-sensed by the owner.
+/// </summary>
+/// <param name="cell">The cell to center on; CELL_NONE means the building's own cell.</param>
+void BuildingClass::DisguiseDetectorDeactivate(Cell cell) // RA2: not in TibSun, at 0x4506B0
+{
+	int radius = Class->DetectDisguiseRange;
+	int dist = radius * radius;
+	HousesType houseid = House->HeapID;
+	if (cell == CELL_NONE) {
+		cell = Center_Coord().As_Cell();
+	}
+	for (int y = -radius; y < radius; y++) {
+		for (int x = -radius; x < radius; x++) {
+			Cell newcell = Cell(cell.X + x, cell.Y + y);
+			if (x * x + y * y < dist) {
+				CellClass * cellptr = &Map[newcell];
+				cellptr->Disguise_Unsensed_By(houseid);
+			}
+		}
+	}
+}
+
+
+/// <summary>
 /// Switches this sensor array on.
 /// Every cell within the array's radius is marked as sensed by the owning house, which
 /// reveals cloaked objects standing there and forces any cloaked unit in the area to
@@ -9927,6 +10223,84 @@ void BuildingClass::Draw_Radial_Indicator(DWORD) // RA2: takes an argument; not 
 						LogicalSurface->Draw_Depth_Antialiased_Line(TacticalRect, center - TacticalRect.TopLeft, end - TacticalRect.TopLeft, Class->RadialColor, -500, -500, 0, 0, 1, 0, _transparencies[i]);
 					}
 				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Draws a radial indicator: an isometric ellipse (two pixels thick) around a coordinate and,
+/// optionally, four sweeping spokes whose brightness trails off.
+/// </summary>
+/// <param name="radius">The radius, in cells unless in_pixels is set.</param>
+/// <param name="sweep">Should the rotating spokes be drawn?</param>
+/// <param name="center">The coordinate the indicator is centered on.</param>
+/// <param name="color">The color of the indicator.</param>
+/// <param name="faded">Should the ellipse be drawn at half brightness?</param>
+/// <param name="in_pixels">Is the radius in pixels already?</param>
+void Draw_Radial_Ellipse(unsigned radius, bool sweep, Coord center, RGBClass color, bool faded, bool in_pixels) // RA2: not in TibSun, at 0x451BF0
+{
+	static double _transparencies[] = { 0.05, 0.2, 0.4, 1.0 };
+
+	int pixels;
+	if (in_pixels) {
+		pixels = radius;
+	} else {
+		pixels = (int)(((double)radius + 0.5) / fastmath::sqrt(2.0) * 60.0);
+	}
+
+	Point2D pixel;
+	TacticalMap->Coord_To_Pixel(center, pixel);
+	pixel += TacticalRect.TopLeft;
+
+	Rect bounds = Rect(pixel.X - pixels, pixel.Y - pixels / 2, pixels * 2, pixels);
+	Rect clipped = Intersect(bounds, TacticalRect);
+
+	if (clipped.Is_Valid()) {
+		RGBClass black(0, 0, 0);
+		RGBClass shade = color;
+		if (faded) {
+			shade.Adjust(50, black);
+		}
+		LogicalSurface->Draw_Ellipse(pixel, pixels, pixels / 2, TacticalRect, DSurface::Build_Hicolor_Pixel(shade.Get_Red(), shade.Get_Green(), shade.Get_Blue()));
+		LogicalSurface->Draw_Ellipse(pixel, pixels - 1, pixels / 2 - 1, TacticalRect, DSurface::Build_Hicolor_Pixel(shade.Get_Red(), shade.Get_Green(), shade.Get_Blue()));
+
+		if (sweep) {
+			double radius_x = pixels;
+			double radius_y = pixels / 2;
+
+			for (int i = 0; i < 4; i++) {
+
+				/// The subtracted term is (angle / (2 * PI)) truncated, so this wraps
+				/// the sweep angle back into a single revolution.
+				double angle = (double)(Frame + i) * 0.005;
+				angle = angle - (double)(int)(angle * (1.0 / DEG_TO_RAD(360))) * DEG_TO_RAD(360);
+				Point2D end;
+
+				if (fabs(angle - M_PI / 2) < 0.001) {
+					end = pixel + Point2D(0, -radius_y);
+				} else if (fabs(angle - 3 * M_PI / 2) < 0.001) {
+					end = pixel + Point2D(0, radius_y);
+				} else {
+
+					/// Intersect the spoke with the ellipse, then put the signs
+					/// back on according to which quadrant the angle lands in.
+					double slope = fastmath::tan(angle);
+					double radius_y_sq = radius_y * radius_y;
+					double radius_x_sq = radius_x * radius_x;
+					double xdist = fastmath::sqrt(1.0 / (slope * slope / radius_y_sq + 1.0 / radius_x_sq));
+					double ydist = fastmath::sqrt((1.0 - xdist * xdist / radius_x_sq) * radius_y_sq);
+					double xoffset = angle > M_PI / 2 && angle < 3 * M_PI / 2 ? -xdist : xdist;
+
+					if (angle < M_PI) {
+						ydist = -ydist;
+					}
+
+					end = pixel + Point2D(xoffset, ydist);
+				}
+
+				LogicalSurface->Draw_Depth_Antialiased_Line(TacticalRect, pixel - TacticalRect.TopLeft, end - TacticalRect.TopLeft, color, -500, -500, false, true, true, true, _transparencies[i]);
 			}
 		}
 	}
@@ -10888,85 +11262,6 @@ void BuildingClass::Debug_Dump(MonoClass * mono) const
 
 
 
-/// <summary>
-/// Draws the informational overlays that sit on top of the building.
-/// This routine handles the repair wrench, the power-off warning, the selection text
-/// and, for a factory the player has managed to infiltrate, the cameo of whatever is
-/// currently being produced there. Nothing is shown through shroud or fog.
-/// </summary>
-/// <param name="point">The pixel location to center the overlays about.</param>
-/// <param name="cliprect">The clipping rectangle to draw within.</param>
-void BuildingClass::Draw_Overlays(Point2D const & point, Rect const & cliprect) const
-{
-	Cell cell = PositionCell;
-
-	/*
-	**	Patch for adding overlay onto weapon factory.  Only add the overlay if
-	**	the building has more than 1 hp.  Also, if the building's in radio
-	**	contact, he must be unloading a constructed vehicle, so draw that
-	**	vehicle before drawing the overlay.
-	*/
-	if (BState != BSTATE_CONSTRUCTION) {
-
-		/*
-		**	Draw any repair feedback graphic required.
-		*/
-		if (IsRepairing) {
-			if (!Map.Is_Shrouded(Center_Coord()) && (!Scen->Special.IsFogOfWar || !IsFogged) && Visual_Character() != VISUAL_HIDDEN) {
-				Point2D drawpoint = point;
-				if (!IsOn) drawpoint = point - Point2D(5, 5);
-				int frame = Options.Normalize_Delay(14) / 4;
-				if (frame < 2) frame = 2;
-				Draw_Shape(*LogicalSurface, *MouseDrawer, (ShapeSet const *)BuildingTypeClass::WrenchShapes, 6 * (Frame % frame) / (frame - 1), drawpoint, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA));
-
-			}
-		}
-
-		if (!IsOn && House->Is_Player_Control()) {
-			if (!Map.Is_Shrouded(Center_Coord()) && (!Scen->Special.IsFogOfWar || !IsFogged)) {
-				Point2D drawpoint = point;
-				if (IsRepairing) drawpoint = point + Point2D(10, 10);
-				int frame = Options.Normalize_Delay(14) / 4;
-				if (frame < 2) frame = 2;
-				Draw_Shape(*LogicalSurface, *MouseDrawer, (ShapeSet const *)BuildingTypeClass::PowerOffShapes, 6 * (Frame % frame) / (frame - 1), drawpoint, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA));
-
-			}
-		}
-	}
-
-	if (IsSelected && (House->Is_Ally(PlayerPtr) || SpiedBy & (1<<(PlayerPtr->Class->House)))) {
-		Draw_Text_Overlay(point + Point2D(-10, 10), point, cliprect);
-	}
-
-	/*
-	**	If this is a factory that we're spying on, show what it's producing
-	*/
-	if (SpiedBy & (1<<(PlayerPtr->Class->House)) && IsSelected) {
-
-		/*
-		**	Fetch the factory that is associate with this building. For computer controlled buildings, the
-		**	factory pointer is integral to the building itself. For human controlled buildings, the factory
-		**	pointer is part of the house structure and must be retrieved from there.
-		*/
-		FactoryClass * factory = NULL;
-		if (House->Is_Human_Player()) {
-			factory = House->Fetch_Factory(Class->ToBuild);
-		} else {
-			factory = Factory;
-		}
-
-		/*
-		**	If there is a factory associated with this building, then fetch any attached
-		**	object under production and display its cameo image over the top of this building.
-		*/
-		if (factory != NULL) {
-			TechnoClass * obj = factory->Get_Object();
-			if (obj != NULL) {
-				Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)obj->TClass->Get_Cameo_Data(), 0, point, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL);
-			}
-		}
-	}
-}
 
 
 

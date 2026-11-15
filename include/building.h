@@ -611,6 +611,7 @@ class BuildingClass : public TechnoClass
 		void Create_Anim(char const * name, BAnimType anim, bool damaged, bool garrisoned, int delay); // RA2: garrisoned
 		void Detach_Anim(AnimClass * anim);
 		void End_Anim(BAnimType anim);
+		void Hide_Anim(BAnimType anim); // RA2: 0x44D030
 		void Enable_Powered_Anims(void); // RA2: 0x44F730
 		void Disable_Powered_Anims(void); // RA2: 0x44F800
 		void Update_Power_State(void); // RA2: 0x44F8E0
@@ -624,6 +625,11 @@ class BuildingClass : public TechnoClass
 		void Update_Overpowerers(void); // RA2: 0x44B910
 		void DisableTemporal(void); // RA2: 0x44D320
 		void EnableTemporal(void); // RA2: 0x44D380
+		void Create_Damage_Fires(void); // RA2: 0x4395F0
+		void Remove_Damage_Fires(void); // RA2: 0x4397C0
+		void Leave_Rubble(void); // RA2: 0x43EBA0
+		bool Become_Primary(bool take); // RA2: 0x4444B0
+		void Abandon_Orphaned_Production(FactoryClass * factory); // RA2: 0x44A000
 		bool Anim_Active(BAnimType anim) { return(Anims[anim] != NULL); }
 
 		/*
@@ -650,6 +656,7 @@ class BuildingClass : public TechnoClass
 };
 
 void Adjust_House_Power(HouseClass * house);
+void Draw_Radial_Ellipse(unsigned radius, bool sweep, Coord center, RGBClass color, bool faded, bool in_pixels); // RA2: 0x451BF0
 BuildingClass * Find_Unit_Repair_Facility(HouseClass * house, TechnoClass * obj);
 
 
