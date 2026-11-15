@@ -3831,7 +3831,7 @@ address,size,evidence
 0x005D3700,,"inferred: target of the call at 0x0068772A in matched src/smudge.cpp; size not known"
 0x005D3890,,"inferred: target of the call at 0x00687684 in matched src/smudge.cpp; size not known"
 0x005D3BD0,64,"code of src/object.cpp, matched"
-0x005D3CB0,,"inferred: target of the call at 0x0063695B in matched src/radio.cpp; size not known"
+0x005D3CB0,112,"code of src/object.cpp, matched"
 0x005D3D20,1088,"code of src/object.cpp, matched"
 0x005D4160,208,"code of src/object.cpp, matched"
 0x005D4230,16,"code of src/object.cpp, matched: too short for the match rule"
