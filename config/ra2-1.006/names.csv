@@ -910,6 +910,7 @@ address,symbol,evidence
 0x00453BF0,?Fetch_Object_Size@BuildingClass@@UBEHXZ,"compiled from src/building.cpp, matched"
 0x00453C00,?GetClassID@BuildingClass@@UAGJPAU_GUID@@@Z,"compiled from src/building.cpp, matched"
 0x00453C40,?Fetch_RTTI@BuildingClass@@UBE?AW4RTTIType@@XZ,"compiled from src/building.cpp, matched"
+0x00453C50,?Full_Name@BuildingClass@@UBEPBGXZ,"compiled from src/building.cpp, matched"
 0x00453C60,?Class_Of@BuildingClass@@UBEPBVObjectTypeClass@@XZ,"compiled from src/building.cpp, matched"
 0x00453C70,?Render_Coord@BuildingClass@@UBE?AVCoord@@XZ,"compiled from src/building.cpp, matched"
 0x00453E40,??0?$TRect@H@@QAE@ABV?$TPoint2D@H@@HH@Z,"inferred: referenced by matched src/xsurface.cpp (9 references); across all matched code never at another address, and no other symbol here"
