@@ -521,6 +521,44 @@ int TechnoClass::What_Weapon_Should_I_Use(AbstractClass * target) const
 	return(is_web_target == webby2);
 }
 
+/// <summary>
+/// Which weapon this object's naval targeting picks against the target: 0 the primary, 1 the secondary,
+/// -1 none.
+/// </summary>
+int TechnoClass::SelectNavalTargeting(AbstractClass * target) const // RA2: not in TibSun, at 0x6C15D0
+{
+	bool active = target != NULL && (target->AbstractFlags & 1);
+	if (!active) {
+		return(-1);
+	}
+	bool underwater = ((TechnoClass *)target)->Techno_Type_Class()->Underwater;
+	bool organic = ((TechnoClass *)target)->Techno_Type_Class()->Organic;
+	bool hover = ((TechnoClass *)target)->Techno_Type_Class()->Speed == SPEED_HOVER;
+	switch (Techno_Type_Class()->NavalTargeting) {
+		case 0:
+			if (underwater && ((TechnoClass *)target)->Cloak != UNCLOAKED) {
+				return(-1);
+			}
+			return(0);
+		case 1:
+			return(underwater ? 1 : 0);
+		case 2:
+			return(underwater ? 0 : -1);
+		case 3:
+			return(organic ? 1 : 0);
+		case 4:
+			if (!hover && !organic) {
+				return(1);
+			}
+			break;
+		case 5:
+			break;
+		case 6:
+			return(-1);
+	}
+	return(0);
+}
+
 
 
 
@@ -3760,6 +3798,14 @@ bool TechnoClass::Select(void)
 		return(true);
 	}
 	return(false);
+}
+
+/// <summary>
+/// Why the weapon cannot fire at the target, range aside.
+/// </summary>
+int TechnoClass::GetFireErrorWithoutRange(AbstractClass * target, int which) const // RA2: not in TibSun, at 0x6C9240
+{
+	return(Can_Fire(target, which, false));
 }
 
 
@@ -8566,6 +8612,33 @@ void TechnoClass::Draw_Pips(Point2D const & bottomleft, Point2D const & center, 
 		sprintf(group_text, "%d", group < 10 ? group : 0);
 
 		Plain_Text_Print(group_text, *LogicalSurface, rect, bottomleft + Point2D(-4, yval-3), WHITE, TBLACK, TextPrintType(TPF_FULLSHADOW|TPF_EFNT), 0, 1);
+	}
+}
+
+/// <summary>
+/// Draws the veteran, elite or dumbass pip at the object's corner.
+/// </summary>
+void TechnoClass::DrawVeterancyPips(Point2D const & point, Rect const & rect) const // RA2: not in TibSun, at 0x6D5440
+{
+	ObjectTypeClass const * type = Class_Of();
+	void const * pips = ObjectTypeClass::PipShapes;
+	int frame = -1;
+	if (Veterancy.Is_Veteran()) {
+		frame = 13;
+	}
+	if (Veterancy.Is_Elite()) {
+		frame = 14;
+	}
+	if (Veterancy.Is_Dumbass()) {
+		frame = 18;
+	}
+	if (frame != -1) {
+		Point2D position = Point2D(point.X + 5, point.Y + 2);
+		if (Fetch_RTTI() != RTTI_INFANTRY) {
+			position.X += 5;
+			position.Y += 4;
+		}
+		Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)pips, frame, position, rect, (ShapeFlags_Type)0xE00, NULL, -2, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0));
 	}
 }
 
