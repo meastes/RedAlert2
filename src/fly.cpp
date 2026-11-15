@@ -1328,91 +1328,49 @@ int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 /// <returns>Returns with the matrix to draw the aircraft with.</returns>
 Matrix3DStruct STDMETHODCALLTYPE FlyLocomotionClass::Draw_Matrix(int * key)
 {
-	Matrix3D mtx;
-	mtx.Make_Identity();
-
-	if (key && *key != -1) {
-		*key <<= 5;
-		*key |= LinkedTo->SecondaryFacing.Current().As_Dir32();
+	Matrix3D transform; // RA2: RA2's form
+	transform.Make_Identity(); // RA2: as above
+	if (key != NULL) { // RA2: as above
+		*key |= LinkedTo->SecondaryFacing.Current().As_Dir32() << 3; // RA2: as above
 	}
-
-	mtx.Rotate_Z(LinkedTo->SecondaryFacing.Current().As_Radian32());
-
-	if (LinkedTo->HeightAGL > 0 || LinkedTo->TClass->IsDropship) {
-
+	transform.Rotate_Z(LinkedTo->SecondaryFacing.Current().As_Radian32()); // RA2: as above
+	if (LinkedTo->HeightAGL > 0) { // RA2: as above
 		if (LinkedTo->IsRocking) {
-			mtx.Rotate_X(LinkedTo->AngleRotatedSideways);
-
-			if (CurrentSpeed > LinkedTo->TClass->PitchSpeed) {
-				mtx.Rotate_Y(float(LinkedTo->AngleRotatedForwards + LinkedTo->TClass->PitchAngle));
+			transform.Rotate_X(LinkedTo->AngleRotatedSideways); // RA2: as above
+			if (CurrentSpeed > LinkedTo->Techno_Type_Class()->PitchSpeed) { // RA2: as above
+				transform.Rotate_Y((float)(LinkedTo->AngleRotatedForwards + LinkedTo->Techno_Type_Class()->PitchAngle)); // RA2: as above
 			} else {
-				mtx.Rotate_Y(LinkedTo->AngleRotatedForwards);
+				transform.Rotate_Y(LinkedTo->AngleRotatedForwards); // RA2: as above
 			}
-			if (key) {
+			if (key != NULL) { // RA2: as above
 				*key = -1;
 			}
-			return((Matrix3DStruct &)mtx);
-		}
-
-		if (!LinkedTo->TClass->IsDropship) {
-			if (key && *key != -1) {
-				*key <<= 1;
-			}
-			if (CurrentSpeed > LinkedTo->TClass->PitchSpeed && !LinkedTo->TClass->IsHunterSeeker) {
-				if (key && *key != -1) {
-					*key |= 1;
+		} else if (CurrentSpeed > LinkedTo->Techno_Type_Class()->PitchSpeed) { // RA2: as above
+			if (LinkedTo->Techno_Type_Class()->PitchAngle != 0.0) { // RA2: as above
+				if (key != NULL) { // RA2: as above
+					*key |= 4; // RA2: as above
 				}
-				mtx.Rotate_Y(float(LinkedTo->TClass->PitchAngle));
+				transform.Rotate_Y((float)LinkedTo->Techno_Type_Class()->PitchAngle); // RA2: as above
 			}
-			if (key && *key != -1) {
-				*key <<= 2;
-			}
-
-			if (CurrentSpeed > LinkedTo->TClass->PitchSpeed) {
-
+			if (LinkedTo->Techno_Type_Class()->RollAngle != 0.0) { // RA2: as above
 				if (LinkedTo->SecondaryFacing.Is_Rotating_CW()) {
-					if (key && *key != -1) {
+					if (key != NULL) { // RA2: as above
 						*key |= 1;
 					}
-					mtx.Rotate_X(float(LinkedTo->TClass->RollAngle));
+					transform.Rotate_X((float)LinkedTo->Techno_Type_Class()->RollAngle); // RA2: as above
 				} else if (LinkedTo->SecondaryFacing.Is_Rotating_CCW()) {
-					if (key && *key != -1) {
+					if (key != NULL) { // RA2: as above
 						*key |= 2;
 					}
-					mtx.Rotate_X(float(-LinkedTo->TClass->RollAngle));
+					transform.Rotate_X((float)-LinkedTo->Techno_Type_Class()->RollAngle); // RA2: as above
 				}
-			}
-			return((Matrix3DStruct &)mtx);
-		}
-
-		if (LinkedTo->TClass->IsDropship) {
-			if (key) {
-				*key = -1;
-			}
-			int dist = (Point2D(LinkedTo->PositionCoord) - Point2D(DestinationCoord)).Length();
-			if (dist < LinkedTo->TClass->SlowdownDistance && !IsTakingOff && LinkedTo->Mission != MISSION_RETREAT) {
-				mtx.Rotate_Y(-LinkedTo->PitchAngle);
-			}
-		} else {
-			if (key) {
-				*key <<= 3;
-			}
-			if (LinkedTo->SecondaryFacing.Is_Rotating_CW()) {
-				if (key) {
-					*key |= 1;
-				}
-				mtx.Rotate_X(float(LinkedTo->TClass->RollAngle));
-			} else if (LinkedTo->SecondaryFacing.Is_Rotating_CCW()) {
-				if (key) {
-					*key |= 2;
-				}
-				mtx.Rotate_X(float(-LinkedTo->TClass->RollAngle));
 			}
 		}
 	}
-
-	return((Matrix3DStruct &)mtx);
+	return((Matrix3DStruct &)transform); // RA2: as above
 }
+
+
 
 
 /// <summary>
@@ -1478,11 +1436,24 @@ void FlyLocomotionClass::Take_Off(void)
 /// </summary>
 void FlyLocomotionClass::Land(void)
 {
-	IsTakingOff = false;
-	IsLanding = true;
-	CommencedLanding = false;
-	FlightLevel = 0;
+	if (LinkedTo->Get_Mission() == MISSION_ENTER || !LinkedTo->Next_Planning_Node()) { // RA2: RA2's form
+		if (LinkedTo->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+			AircraftClass *aircraft = (AircraftClass *)LinkedTo; // RA2: as above
+			if (aircraft->Class->IsAirportBound) { // RA2: as above
+				CellClass *cell = (CellClass *)aircraft->Get_Cell_Ptr(); // RA2: as above
+				if (!LinkedTo->ContainsLink((TechnoClass *)cell->Cell_Building())) { // RA2: as above
+					aircraft->Enter_Idle_Mode(false, true); // RA2: as above
+					return; // RA2: as above
+				}
+			}
+		}
+		IsTakingOff = false; // RA2: as above
+		IsLanding = true; // RA2: as above
+		CommencedLanding = false; // RA2: as above
+		FlightLevel = 0; // RA2: as above
+	}
 }
+
 
 
 /// <summary>
