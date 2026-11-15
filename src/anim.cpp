@@ -1330,8 +1330,19 @@ HRESULT STDMETHODCALLTYPE AnimClass::Load(IStream *stream)
 /// code.</returns>
 HRESULT STDMETHODCALLTYPE AnimClass::Save(IStream * stream, BOOL cleardirty)
 {
-	return(BASECLASS::Save(stream, cleardirty));
+	if (AlternativeDrawer != 0) { // RA2: RA2's form
+		for (int index = ColorSchemes.Count() - 1; index >= 0; index--) { // RA2: as above
+			if (AlternativeDrawer == ColorSchemes[index]->Converter) { // RA2: as above
+				LightConvertIndex = index; // RA2: as above
+				goto save; // RA2: as above
+			}
+		}
+	}
+	LightConvertIndex = -1; // RA2: as above
+save: // RA2: as above
+	return AbstractClass::Save(stream, cleardirty); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -1341,26 +1352,26 @@ HRESULT STDMETHODCALLTYPE AnimClass::Save(IStream * stream, BOOL cleardirty)
 /// </summary>
 void AnimClass::Compute_CRC(CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
-	if (xObject != NULL) {
+	ObjectClass::Compute_CRC(crc); // RA2: RA2's form
+	if (xObject != 0) { // RA2: as above
 		crc(xObject->Fetch_ID());
 	}
-	crc(OwnerHouse);
-	crc((int)AlternativeBrightness);
-	crc(ZAdjust);
-	crc(YSortAdjust);
-	crc(Delay);
+	crc((long)OwnerHouse); // RA2: as above
+	crc((long)AlternativeBrightness); // RA2: as above
+	crc((long)ZAdjust); // RA2: as above
+	crc((long)YSortAdjust); // RA2: as above
+	crc((long)Delay); // RA2: as above
 	crc(Accum);
-	crc(ShapeFlags);
+	crc((long)ShapeFlags); // RA2: as above
 	crc(IsBouncing);
-	crc(Loops);
+	crc((long)Loops); // RA2: as above
 	crc(IsAttachedToCell);
 	crc(IsToDeleteOnOverpass);
 	crc(IsToDelete);
 	crc(IsBrandNew);
-	crc(IsInvisible);
 	crc(IsDisabled);
 }
+
 
 
 /// <summary>
