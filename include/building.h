@@ -426,7 +426,7 @@ class BuildingClass : public TechnoClass
 		bool Remove_Upgrade(void);
 		void Sell_All_Upgrades(void);
 		virtual ObjectTypeClass const * Class_Of(void) const override;
-		virtual char const * Full_Name(void) const override;
+		virtual wchar_t const * Full_Name(void) const override; // RA2: wide
 		virtual DirType Fire_Direction(void) const override;
 		virtual bool Considered_Vehicle(void) const override;
 		virtual bool Is_Radar_Visible(DetectedType & detected) const override;

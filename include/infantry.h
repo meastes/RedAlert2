@@ -142,7 +142,7 @@ class InfantryClass : public FootClass
 		virtual void const * Get_Image_Data(void) const override;
 		int Shape_Number(void) const;
 		virtual ObjectTypeClass const * Class_Of(void) const override;
-		virtual const char * Full_Name(void) const override;
+		virtual wchar_t const * Full_Name(void) const override; // RA2: wide
 		virtual void Reacquire_Target(void) override; // RA2: 0x5061D0
 
 		/*

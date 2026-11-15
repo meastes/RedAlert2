@@ -139,6 +139,7 @@
 #include "weapon.h"
 
 #include "bench.hh"
+#include "stringtable.h" // RA2
 
 
 int const InfantryClass::HumanShape[32] = {7,7,6,6,6,6,5,5,5,5,4,4,4,4,3,3,3,3,2,2,2,2,1,1,1,1,0,0,0,0,7,7};
@@ -2905,14 +2906,17 @@ bool InfantryClass::Active_Click_With(ActionType action, Cell const & cell, Cell
  *   06/30/1995 JLB : Created.                                                                 *
  *   10/28/1996 JLB : Spy returns "enemy soldier" text name.                                   *
  *=============================================================================================*/
-const char * InfantryClass::Full_Name(void) const
+wchar_t const * InfantryClass::Full_Name(void) const // RA2: wide
 {
 	if (IsTechnician) {
-		return(Fetch_String(TXT_TECHNICIAN));
+		return(StringTable::LoadString("TXT_TECHNICIAN", NULL, "D:\\Ra2\\Infantry.CPP", 4221)); // RA2
 	}
 
+	if (IsDisguised() && !House->Is_Ally(PlayerPtr)) { // RA2
+		return(GetDisguise(true)->UIName); // RA2
+	}
 
-	return(Class->GivenName); // RA2: no IsDisguised, Disguise (TibSun's use does not compile against RA2's declaration)
+	return(Class->UIName); // RA2
 }
 
 

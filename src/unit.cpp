@@ -6287,9 +6287,9 @@ clear:
 /// Fetches the displayable name of this unit.
 /// </summary>
 /// <returns>Returns with a pointer to the name to present to the player.</returns>
-char const * UnitClass::Full_Name(void) const
+wchar_t const * UnitClass::Full_Name(void) const // RA2: wide; RA2 also names a turret passenger, not yet here
 {
-	return(Class->GivenName);
+	return(Class->UIName); // RA2
 }
 
 

@@ -115,7 +115,7 @@ class AircraftClass : public FootClass, public IFlyControl
 		virtual DirType Turret_Facing(void) const override;
 		virtual MoveType Can_Enter_Cell(CellClass const * cell, FacingType facing = FACING_NONE, int cell_height = -1, CellClass const * = 0, bool = true) const override;
 		virtual ObjectTypeClass const * Class_Of(void) const override;
-		virtual char const * Full_Name(void) const override;
+		virtual wchar_t const * Full_Name(void) const override; // RA2: wide
 		virtual ActionType What_Action(ObjectClass const *, bool disallow_force = false) const override;
 		virtual ActionType What_Action(Cell const &, bool check_fog = false, bool disallow_force = false) const override;
 		virtual FacingType Desired_Load_Dir(ObjectClass * passenger, Cell & moveto) const override;
