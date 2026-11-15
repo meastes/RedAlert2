@@ -611,10 +611,15 @@ class BuildingClass : public TechnoClass
 		void Create_Anim(char const * name, BAnimType anim, bool damaged, bool garrisoned, int delay); // RA2: garrisoned
 		void Detach_Anim(AnimClass * anim);
 		void End_Anim(BAnimType anim);
+		void Enable_Powered_Anims(void); // RA2: 0x44F730
+		void Disable_Powered_Anims(void); // RA2: 0x44F800
+		void Update_Power_State(void); // RA2: 0x44F8E0
 		void Set_Anim_Damage_State(bool damaged);
 		void Set_Anim_Drawer(ConvertClass * drawer, int brightness);
 		void Update_Anim_Appearance(void);
 		void Set_Anim_Translucency(int translucency);
+		void DisableTemporal(void); // RA2: 0x44D320
+		void EnableTemporal(void); // RA2: 0x44D380
 		bool Anim_Active(BAnimType anim) { return(Anims[anim] != NULL); }
 
 		/*

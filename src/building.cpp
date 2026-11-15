@@ -7681,6 +7681,40 @@ void BuildingClass::Set_Anim_Translucency(int translucency)
 	}
 }
 
+/// <summary>
+/// Freezes the building's powered animations while a temporal weapon holds the building.
+/// </summary>
+void BuildingClass::DisableTemporal(void) // RA2: not in TibSun, at 0x44D320
+{
+	IsOn = false;
+	for (int i = 0; i < 18; i++) {
+		AnimClass * anim;
+		if (Class->AnimData[i].Powered && (anim = Anims[i]) != NULL) {
+			anim->Paused = true;
+			anim->Unpaused = false;
+			anim->PausedAnimFrame = anim->Fetch_Stage();
+			anim->UnderTemporal = true;
+		}
+	}
+}
+
+
+/// <summary>
+/// Lets the building's powered animations run again once the temporal weapon lets go.
+/// </summary>
+void BuildingClass::EnableTemporal(void) // RA2: not in TibSun, at 0x44D380
+{
+	IsOn = true;
+	for (int i = 0; i < 18; i++) {
+		AnimClass * anim;
+		if (Class->AnimData[i].Powered && (anim = Anims[i]) != NULL) {
+			anim->Paused = false;
+			anim->Unpaused = true;
+			anim->UnderTemporal = false;
+		}
+	}
+}
+
 
 /// <summary>
 /// Answers an unidentified virtual query about the building.
@@ -8763,6 +8797,93 @@ VisualType BuildingClass::Visual_Character(bool raw, HouseClass const * house) c
 	}
 
 	return(BASECLASS::Visual_Character(raw, house));
+}
+
+/// <summary>
+/// Restarts the building's powered animations and brings back the ones that come and go with its power.
+/// </summary>
+void BuildingClass::Enable_Powered_Anims(void) // RA2: not in TibSun, at 0x44F730
+{
+	for (int index = 0; index < 18; index++) {
+		if (Class->AnimData[index].Powered) {
+			if (Anims[index] != NULL) {
+				Anims[index]->Enable();
+			}
+		} else if (Class->AnimData[index].PoweredLight && Anims[index] == NULL && HasOpened) {
+			if (!(Class->IsAnimDelayedFire && index == 10)) {
+				Begin_Anim((BAnimType)index, HealthRatio <= Rule->ConditionYellow, false, 0);
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Pauses the building's powered animations and removes the ones that come and go with its power.
+/// </summary>
+void BuildingClass::Disable_Powered_Anims(void) // RA2: not in TibSun, at 0x44F800
+{
+	for (int index = 0; index < 18; index++) {
+		if (Class->AnimData[index].Powered) {
+			if (Anims[index] != NULL) {
+				Anims[index]->Disable();
+			}
+		} else if (Class->AnimData[index].PoweredLight) {
+			if (Anims[index] != NULL) {
+				End_Anim((BAnimType)index);
+				if (index == 10 && Class->IsAnimDelayedFire && Class->AnimData[3].Powered) {
+					Begin_Anim((BAnimType)3, HealthRatio <= Rule->ConditionYellow, false, 0);
+				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Brings the cloak generator, gap generator and powered animations in line with whether the building
+/// has power.
+/// </summary>
+void BuildingClass::Update_Power_State(void) // RA2: not in TibSun, at 0x44F8E0
+{
+	if (IsPowerOnline()) {
+		if (Class->IsCloakGenerator) {
+			if (CloakGeneratorState <= 0) {
+				char radius = CurrentCloakRadius;
+				if (radius != Class->CloakRadiusInCells) {
+					CloakGeneratorState = 1;
+					if (radius == Class->CloakRadiusInCells) {
+						CurrentCloakRadius = 0;
+					}
+					IsToDisplay = true;
+				}
+			}
+		}
+		if (Class->GapGenerator && !GeneratingGap) {
+			CreateGap();
+		}
+		if (Class->IsPowered && Class->Drain > 0 && Class->IsCanTogglePower) {
+			Enable_Powered_Anims();
+		}
+	} else {
+		if (Class->IsCloakGenerator && CloakGeneratorState >= 0 && CurrentCloakRadius != 0) {
+			CloakGeneratorState = -1;
+			IsToDisplay = true;
+		}
+		if (Class->GapGenerator && GeneratingGap) {
+			DestroyGap();
+			if (GapSuperCharged) {
+				GapSuperCharged = false;
+				HasExtraPowerDrain = false;
+				House->RecalcPower = true;
+				GapRadius = Class->GapRadiusInCells;
+				CreateGap();
+			}
+		}
+		if (Class->IsPowered && Class->Drain > 0 && Class->IsCanTogglePower) {
+			Disable_Powered_Anims();
+		}
+	}
 }
 
 
