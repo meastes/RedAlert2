@@ -25,9 +25,11 @@
 #include "builtype.h"
 #include "ccfile.h"
 #include "coord.h"
+#include "data.h"
 #include "globals.h"
 #include "house.h"
 #include "mixfile.h"
+#include "rawfile.h"
 #include "rules.h"
 #include "scenario.h"
 #include "shapeset.h"
@@ -45,6 +47,11 @@ void const * ObjectTypeClass::PipShapes = 0;
 void const * ObjectTypeClass::Pip2Shapes = 0;
 
 void const * ObjectTypeClass::TalkBubbleShapes = 0;
+
+bool ObjectTypeClass::SelectShapesAllocated = false; // RA2: whether One_Time allocated the shapes
+bool ObjectTypeClass::PipShapesAllocated = false; // RA2: as above
+bool ObjectTypeClass::Pip2ShapesAllocated = false; // RA2: as above
+bool ObjectTypeClass::TalkBubbleShapesAllocated = false; // RA2: as above
 
 DynamicVectorClass<ObjectTypeClass *> ObjectTypeClass::ObjectTypes;
 
@@ -309,6 +316,72 @@ Cell const * ObjectTypeClass::Occupy_List(bool) const
  * HISTORY:                                                                                    *
  *   11/01/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
+void ObjectTypeClass::One_Time(void)
+{
+	/*
+	**	RA2: each shape file is read from a loose file first, and only taken from the mix
+	**	files when there is none. A shape read from a loose file was allocated here, so it
+	**	is remembered to be freed again by Free_One_Time.
+	*/
+	if (SelectShapes == NULL) { // RA2: loaded once
+		RawFileClass file("PIPBRD.SHP"); // RA2: the selection box art is PIPBRD.SHP
+		SelectShapes = Load_Alloc_Data(file); // RA2: from a loose file
+		SelectShapesAllocated = (SelectShapes != NULL); // RA2: remembered for freeing
+		if (SelectShapes == NULL) { // RA2: else from the mix files
+			SelectShapes = MFCD::Retrieve("PIPBRD.SHP"); // RA2: as above
+		}
+	}
+	if (PipShapes == NULL) { // RA2: as above
+		RawFileClass file("PIPS.SHP"); // RA2: as above
+		PipShapes = Load_Alloc_Data(file); // RA2: as above
+		PipShapesAllocated = (PipShapes != NULL); // RA2: as above
+		if (PipShapes == NULL) { // RA2: as above
+			PipShapes = MFCD::Retrieve("PIPS.SHP"); // RA2: as above
+		}
+	}
+	if (Pip2Shapes == NULL) { // RA2: as above
+		RawFileClass file("PIPS2.SHP"); // RA2: as above
+		Pip2Shapes = Load_Alloc_Data(file); // RA2: as above
+		Pip2ShapesAllocated = (Pip2Shapes != NULL); // RA2: as above
+		if (Pip2Shapes == NULL) { // RA2: as above
+			Pip2Shapes = MFCD::Retrieve("PIPS2.SHP"); // RA2: as above
+		}
+	}
+	if (TalkBubbleShapes == NULL) { // RA2: as above
+		RawFileClass file("TALKBUBL.SHP"); // RA2: as above
+		TalkBubbleShapes = Load_Alloc_Data(file); // RA2: as above
+		TalkBubbleShapesAllocated = (TalkBubbleShapes != NULL); // RA2: as above
+		if (TalkBubbleShapes == NULL) { // RA2: as above
+			TalkBubbleShapes = MFCD::Retrieve("TALKBUBL.SHP"); // RA2: as above
+		}
+	}
+}
+
+
+/// <summary>
+/// Frees the shapes that One_Time read from loose files.
+/// This routine is called when the game shuts down. Shapes that One_Time took from the mix
+/// files belong to the mix files and are left alone.
+/// </summary>
+void ObjectTypeClass::Free_One_Time(void) // RA2: not in TibSun, at 0x005D5F40
+{
+	if (SelectShapesAllocated) {
+		delete (void *)SelectShapes;
+		SelectShapesAllocated = false;
+	}
+	if (PipShapesAllocated) {
+		delete (void *)PipShapes;
+		PipShapesAllocated = false;
+	}
+	if (Pip2ShapesAllocated) {
+		delete (void *)Pip2Shapes;
+		Pip2ShapesAllocated = false;
+	}
+	if (TalkBubbleShapesAllocated) {
+		delete (void *)TalkBubbleShapes;
+		TalkBubbleShapesAllocated = false;
+	}
+}
 
 
 
@@ -386,6 +459,139 @@ BuildingClass * ObjectTypeClass::Who_Can_Build_Me(bool intheory, bool needsnopow
 		return(freebuilding);
 	}
 	return(NULL); // RA2: none
+}
+
+
+/// <summary>
+/// Loads the turret voxel of one of a charger's weapons.
+/// An object type with several weapons can give each weapon its own turret, named after the
+/// type's image with "TUR" and the weapon index (no index for the first weapon). The voxel and
+/// its motion data both have to load, or neither is kept.
+/// </summary>
+/// <param name="image">The image name the turret's file names are built from.</param>
+/// <param name="index">The weapon whose turret to load.</param>
+/// <returns>Whether the turret loaded; false when there is no turret file.</returns>
+bool ObjectTypeClass::Load_Charger_Turret(char const * image, int index) // RA2: not in TibSun, at 0x005D6150
+{
+	char buffer[256];
+	char name[260];
+
+	if (index == 0) {
+		sprintf(buffer, "%sTUR", image);
+	} else {
+		sprintf(buffer, "%sTUR%d", image, index);
+	}
+	_makepath(name, NULL, NULL, buffer, ".VXL");
+	CCFileClass vxl(name);
+	if (!vxl.Is_Available()) {
+		return(false);
+	}
+
+	bool voxelok = false;
+	ChargerTurrets[index].VoxLib = new VoxelLibrary(vxl);
+	if (ChargerTurrets[index].VoxLib != NULL && !ChargerTurrets[index].VoxLib->Load_Failed()) {
+		voxelok = true;
+	}
+
+	if (index == 0) {
+		sprintf(buffer, "%sTUR", image);
+	} else {
+		sprintf(buffer, "%sTUR%d", image, index);
+	}
+	_makepath(name, NULL, NULL, buffer, ".HVA");
+	CCFileClass hva(name);
+	bool motionok = false;
+	ChargerTurrets[index].MotLib = new MotionLibrary(hva);
+	if (ChargerTurrets[index].MotLib != NULL && !ChargerTurrets[index].MotLib->Load_Failed()) {
+		motionok = true;
+	}
+
+	if (voxelok && motionok) {
+		ChargerTurrets[index].MotLib->Scale(ChargerTurrets[index].VoxLib->Get_Layer_Info(0, 0).Scale);
+		return(true);
+	}
+	delete ChargerTurrets[index].VoxLib;
+	delete ChargerTurrets[index].MotLib;
+	return(false);
+}
+
+
+/// <summary>
+/// Loads the barrel voxel of one of a charger's weapons.
+/// This works as Load_Charger_Turret does, with "BARL" in place of "TUR", except that a
+/// missing barrel file is no failure: a turret need not have a barrel.
+/// </summary>
+/// <param name="image">The image name the barrel's file names are built from.</param>
+/// <param name="index">The weapon whose barrel to load.</param>
+/// <returns>Whether the barrel loaded or there is none; false when its files would not load.</returns>
+bool ObjectTypeClass::Load_Charger_Barrel(char const * image, int index) // RA2: not in TibSun, at 0x005D63F0
+{
+	char buffer[256];
+	char name[260];
+
+	if (index == 0) {
+		sprintf(buffer, "%sBARL", image);
+	} else {
+		sprintf(buffer, "%sBARL%d", image, index);
+	}
+	_makepath(name, NULL, NULL, buffer, ".VXL");
+	CCFileClass vxl(name);
+	if (!vxl.Is_Available()) {
+		return(true);
+	}
+
+	bool voxelok = false;
+	ChargerBarrels[index].VoxLib = new VoxelLibrary(vxl);
+	if (ChargerBarrels[index].VoxLib != NULL && !ChargerBarrels[index].VoxLib->Load_Failed()) {
+		voxelok = true;
+	}
+
+	if (index == 0) {
+		sprintf(buffer, "%sBARL", image);
+	} else {
+		sprintf(buffer, "%sBARL%d", image, index);
+	}
+	_makepath(name, NULL, NULL, buffer, ".HVA");
+	CCFileClass hva(name);
+	bool motionok = false;
+	ChargerBarrels[index].MotLib = new MotionLibrary(hva);
+	if (ChargerBarrels[index].MotLib != NULL && !ChargerBarrels[index].MotLib->Load_Failed()) {
+		motionok = true;
+	}
+
+	if (voxelok && motionok) {
+		ChargerBarrels[index].MotLib->Scale(ChargerBarrels[index].VoxLib->Get_Layer_Info(0, 0).Scale);
+		return(true);
+	}
+	delete ChargerBarrels[index].VoxLib;
+	delete ChargerBarrels[index].MotLib;
+	return(false);
+}
+
+
+/// <summary>
+/// Frees the turret and barrel voxels of every charger weapon.
+/// </summary>
+void ObjectTypeClass::Free_Charger_Voxels(void) // RA2: not in TibSun, at 0x005D66A0
+{
+	for (int index = 0; index < ARRAY_SIZE(ChargerTurrets); index++) {
+		if (ChargerTurrets[index].VoxLib != NULL) {
+			delete ChargerTurrets[index].VoxLib;
+			ChargerTurrets[index].VoxLib = NULL;
+		}
+		if (ChargerTurrets[index].MotLib != NULL) {
+			delete ChargerTurrets[index].MotLib;
+			ChargerTurrets[index].MotLib = NULL;
+		}
+		if (ChargerBarrels[index].VoxLib != NULL) {
+			delete ChargerBarrels[index].VoxLib;
+			ChargerBarrels[index].VoxLib = NULL;
+		}
+		if (ChargerBarrels[index].MotLib != NULL) {
+			delete ChargerBarrels[index].MotLib;
+			ChargerBarrels[index].MotLib = NULL;
+		}
+	}
 }
 
 
@@ -879,30 +1085,6 @@ void ObjectTypeClass::Clear_Voxel_Indexes(void)
 	}
 
 	VoxelStaticBuffer.Reset();
-}
-
-
-/***********************************************************************************************
- * ObjectTypeClass::One_Time -- Handles one time processing for object types.                  *
- *                                                                                             *
- *    This routine is used to handle the once per game processing required for object types.   *
- *    This consists of loading any data and initializing any data tables the game requires.    *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   This routine goes to disk.                                                      *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   11/01/1994 JLB : Created.                                                                 *
- *=============================================================================================*/
-void ObjectTypeClass::One_Time(void) // RA2: defined here
-{
-	SelectShapes = MFCD::Retrieve("SELECT.SHP");
-	PipShapes = MFCD::Retrieve("PIPS.SHP");
-	Pip2Shapes = MFCD::Retrieve("PIPS2.SHP");
-	TalkBubbleShapes = MFCD::Retrieve("TALKBUBL.SHP");
 }
 
 

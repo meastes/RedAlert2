@@ -213,6 +213,7 @@ class ObjectTypeClass : public AbstractTypeClass
 		virtual HRESULT STDMETHODCALLTYPE GetSizeMax(ULARGE_INTEGER *pcbSize) override;
 
 		static void One_Time(void);
+		static void Free_One_Time(void); // RA2
 
 		char const * Graphic_Name(void) const {return(GraphicName);}
 		char const * Alpha_Graphic_Name(void) const {return(AlphaGraphicName);}
@@ -237,6 +238,9 @@ class ObjectTypeClass : public AbstractTypeClass
 		void Fetch_Voxel_Image(void);
 		void Fetch_Aux_Voxel_Image(void);
 		void Fetch_Normal_Image(void);
+		bool Load_Charger_Turret(char const * image, int index); // RA2
+		bool Load_Charger_Barrel(char const * image, int index); // RA2
+		void Free_Charger_Voxels(void); // RA2
 
 		void Theater_Naming_Convention(char * name, TheaterType theater) const;
 
@@ -264,6 +268,15 @@ class ObjectTypeClass : public AbstractTypeClass
 		 * these bubbles over a character for a while, so the player can see who is speaking.
 		 */
 		static void const * TalkBubbleShapes;
+
+		/*
+		 * RA2: these record which of the shapes above One_Time read from a loose file and
+		 * so allocated itself; Free_One_Time frees just those.
+		 */
+		static bool SelectShapesAllocated;
+		static bool PipShapesAllocated;
+		static bool Pip2ShapesAllocated;
+		static bool TalkBubbleShapesAllocated;
 
 		/*
 		 * This is the list of every object type in the game, in the order the types were
