@@ -166,7 +166,7 @@ void Audio_Pause_All(void); // RA2
 void Audio_Resume_All(void); // RA2
 bool Wait_For_Players_To_Load(void); // RA2: defined after Read_Scenario
 
-namespace Game { extern bool IsActive; extern HWND hWnd; bool __cdecl CallBack(void); }
+namespace Game { extern HWND hWnd; bool __cdecl CallBack(void); }
 namespace CopyProtection { bool CheckProtectedData(void); }
 
 

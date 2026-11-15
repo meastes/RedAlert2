@@ -132,7 +132,6 @@
 #include "tracker.h"
 
 namespace Unsorted { extern bool ArmageddonMode; }
-namespace Game { extern bool IsActive; }
 
 
 

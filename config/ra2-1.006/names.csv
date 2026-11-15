@@ -8112,7 +8112,7 @@ address,symbol,evidence
 0x007CDCC8,??_C@_06NMFG@Action?$AA@,"inferred: referenced by matched src/suprtype.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x007CDCD0,??_C@_08EAIC@Tiberium?$AA@,"inferred: referenced by matched src/warhead.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x007CDD70,??_C@_07GALJ@Special?$AA@,"inferred: referenced by matched src/mapgen.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x007CDD8C,??_C@_04LJDI@Side?$AA@,"inferred: referenced by matched src/theme.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007CDD8C,??_C@_04LJDI@Side?$AA@,"inferred: referenced by matched src/theme.cpp (1 references); across all matched code never at another address, and no other symbol here"
 0x007CDDDC,??_C@_08FFNH@Particle?$AA@,"inferred: referenced by matched src/warhead.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007CDEA0,??_C@_04LFDA@Anim?$AA@,"inferred: referenced by matched src/weapon.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x007CDEB8,??_C@_08KGJO@Aircraft?$AA@,"inferred: referenced by matched src/rules.cpp (1 reference); across all matched code never at another address, and no other symbol here"
