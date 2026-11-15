@@ -169,6 +169,8 @@ class Tactical : public AbstractClass
 		 * Object selection and the rubber band.
 		 */
 		void Select_These(Rect const & rect, void (*select_callback)(ObjectClass * object) = NULL);
+		void Unselect_All(void); // RA2
+		bool Unselect_Foreign_Object(void); // RA2
 		ObjectClass * Get_Selectable_Object(Point2D const & point);
 
 		bool Contains_Selectable_Buildings(Rect rect);
@@ -204,6 +206,7 @@ class Tactical : public AbstractClass
 		void Draw_Overlays(Rect const & area);
 		void Draw_Shroud(Rect const & area);
 		void Draw_Tiles(Rect const & area, Rect const & cliprect);
+		void Draw_Pixel_Effects(Rect const & area, Rect const & cliprect); // RA2
 		void Draw_Tile_Shadows(Rect const & area, Rect const & cliprect);
 		void Draw_Tiles(Cell const & cell, Rect const & cliprect);
 		void Draw_Tile_Shadows(int, Rect const & area);
@@ -432,6 +435,9 @@ class Tactical : public AbstractClass
 		static DynamicVectorClass<ShadowControlClass *> ShadowControls;
 };
 
+
+class ColorScheme; // RA2
+void Draw_Timer(int line, ColorScheme * scheme, int value, wchar_t const * text, unsigned __int64 * flash_time, bool * flash); // RA2: not in TibSun, at 0x6A5280
 
 #ifdef _DEBUG
 extern bool DrawOccupierLinks;

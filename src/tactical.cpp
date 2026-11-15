@@ -16,6 +16,7 @@
 
 #include "tactical.h"
 #include "bitfont.h"
+#include "audtimer.h" // RA2: Draw_Timer flashes by the audio clock
 
 #include "_alpha.h"
 #include "_convert.h"
@@ -43,6 +44,7 @@
 #include "fog.h"
 #include "font.h"
 #include "globals.h"
+#include "goptions.h" // RA2: Draw_Pixel_Effects reads the detail level
 #include "house.h"
 #include "incdec.h"
 #include "inline.h"
@@ -54,6 +56,7 @@
 #include "mouse.h"
 #include "overtype.h"
 #include "ovrlight.h"
+#include "pixelfx.h" // RA2: Draw_Pixel_Effects
 #include "rules.h"
 #include "scheme.h"
 #include "session.h"
@@ -72,6 +75,8 @@
 #include "scrspeed.hh"
 #include "bittext.h"
 
+namespace FPSCounter { extern unsigned CurrentFrameRate; } // RA2: declared as RA2's code uses it
+namespace Detail { unsigned GetMinFrameRate(void); } // RA2: declared as RA2's code uses it
 static inline void World_To_View_Pixel(Tactical const & view, Coord const & coord, Point2D & relative); // RA2: defined after its first caller
 static inline void Set_Ground_Position(Coord & coord, Point2D const & point); // RA2: defined after its first caller
 
@@ -1278,6 +1283,46 @@ void Tactical::Render(Surface & surface, bool fullredraw, int drawpass)
 
 
 
+/// <summary>
+/// Draws one of the countdown timers in the bottom right corner of the tactical view.
+/// The timers stack upwards from the bottom edge, one font line per timer. A timer that has run
+/// out can be made to flash: it then alternates between its own colour scheme and the first
+/// scheme once a second.
+/// </summary>
+/// <param name="line">The line of the timer, counted upwards from the bottom of the view.</param>
+/// <param name="scheme">The colour scheme to draw the timer in.</param>
+/// <param name="value">The time left, in seconds.</param>
+/// <param name="text">The label to put in front of the time.</param>
+/// <param name="flash_time">When the timer next flips its flash state, or NULL for no flashing.</param>
+/// <param name="flash">The flash state of the timer, or NULL for no flashing.</param>
+void Draw_Timer(int line, ColorScheme * scheme, int value, wchar_t const * text, unsigned __int64 * flash_time, bool * flash) // RA2: not in TibSun, at 0x6A5280
+{
+	wchar_t buffer[256];
+	BitFont * font = Font_From_TPF(TextPrintType(TPF_METAL12|TPF_NOSHADOW|TPF_RIGHT|TPF_BLACK_BACKGROUND|TPF_USE_GRAD_PAL));
+
+	int hours = value / 60 / 60;
+	int seconds = value % 60;
+	int minutes = value / 60 % 60;
+	if (hours) {
+		swprintf(buffer, L"%s  %d:%02d:%02d", text, hours, minutes, seconds);
+	} else {
+		swprintf(buffer, L"%s  %02d:%02d", text, minutes, seconds);
+	}
+
+	if (value == 0 && flash_time != NULL && flash != NULL) {
+		if (*flash_time <= AudioGetTime()) {
+			*flash_time = AudioGetTime() + 1000;
+			*flash = !*flash;
+		}
+		if (*flash) {
+			scheme = ColorSchemes[0];
+		}
+	}
+
+	Fancy_Text_Print(buffer, *CompositeSurface, CompositeSurface->Get_Rect(), Point2D(TacticalRect.Width - 3, TacticalRect.Height - (font->LineHeight + 2) * (line + 1)), scheme, 0, TextPrintType(TPF_METAL12|TPF_NOSHADOW|TPF_RIGHT|TPF_BLACK_BACKGROUND|TPF_USE_GRAD_PAL));
+}
+
+
 
 
 
@@ -2240,6 +2285,134 @@ void Tactical::Draw_Tiles(Rect const & area, Rect const & cliprect)
 
 
 /// <summary>
+/// Draws the glinting pixels over the water and ore cells in a region of the view.
+/// Each visible, unoccupied water or ore cell gets a pixel effect of its own the first time
+/// it is drawn; the effect is advanced by the real time since the previous call and plotted
+/// straight into the locked logical surface. Only done at the highest detail level, on a
+/// 16-bit surface, while the game keeps up the minimum frame rate.
+/// </summary>
+/// <param name="area">The pixel rectangle whose cells are scanned.</param>
+/// <param name="cliprect">The rectangle the pixels are clipped to.</param>
+void Tactical::Draw_Pixel_Effects(Rect const & area, Rect const & cliprect) // RA2: not in TibSun, at 0x6A7E80
+{
+	static unsigned LastTime;
+
+	if (FPSCounter::CurrentFrameRate < Detail::GetMinFrameRate()) return;
+	if (LogicalSurface->Bytes_Per_Pixel() != 2) return;
+	if (!Options.DetailLevel) return;
+
+	char * buffer = (char *)LogicalSurface->Lock();
+	if (buffer == NULL) return;
+
+	unsigned now = timeGetTime();
+	unsigned elapsed = now - LastTime;
+	LastTime = now;
+	if (elapsed > 1000) {
+		elapsed = 1000;
+	}
+	int pitch = LogicalSurface->Stride();
+
+	Point2D point = Pixel_To_Ground_Point(PixelToCoordMatrix, area.Top_Left() + Point2D(TacPixelX, TacPixelY) - TacticalRect.Top_Left());
+	Cell origin(point.X / CELL_LEPTON_W, point.Y / CELL_LEPTON_H);
+	Cell base = origin;
+
+	int ycount = area.Height / (ISO_TILE_PIXEL_H / 2) + 17;
+	int xcount = area.Width / ISO_TILE_PIXEL_W + 4;
+
+	base.X -= 2;
+	int ix, iy;
+	Cell cell;
+	for (iy = 0; iy < ycount; iy++) {
+		Cell step(iy / 2, (iy + 1) / 2);
+		cell = base + step;
+
+		for (ix = xcount; ix > 0; ix--) {
+			if (Map.In_Radar(cell)) {
+				CellClass * cellptr = &Map[cell];
+				int value = cellptr->Tiberium_Value();
+				if (cellptr->IsVisible && !cellptr->Is_Shrouded() && (cellptr->Land_Type() == LAND_WATER || value != 0) && cellptr->Cell_Occupier() == NULL && !cellptr->IsBridgeSurface) {
+					PixelFXClass * effect = cellptr->PixelFX;
+					int type = (value != 0);
+					if (effect == NULL) {
+						effect = new PixelFXClass(type);
+						cellptr->PixelFX = effect;
+					} else if (effect->Phase >= 0x2000) {
+						effect->Init(type);
+					}
+					if (effect != NULL && effect->Expire(elapsed)) {
+						Rect render = cellptr->Cell_Render_Rect();
+						int x = render.X + render.Width / 2 + effect->OffsetX;
+						int y = render.Y + render.Height / 2 + effect->OffsetY;
+						if (x >= cliprect.X && x < cliprect.X + cliprect.Width && y >= cliprect.Y && y < cliprect.Y + cliprect.Height) {
+							effect->Update(elapsed);
+							*(unsigned short *)(buffer + pitch * y + x * 2) = DSurface::Build_Hicolor_Pixel(effect->Current[0], effect->Current[1], effect->Current[2]);
+						}
+					}
+				}
+			}
+			cell += Cell(1, -1);
+		}
+	}
+	LogicalSurface->Unlock();
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline Coord Tile_Center(Cell const & cell)
+{
+	Coord center;
+	center.X = cell.X * CELL_LEPTON_W + CELL_LEPTON_W / 2;
+	center.Y = cell.Y * CELL_LEPTON_H + CELL_LEPTON_H / 2;
+	center.Z = 0;
+	return(center);
+}
+
+
+/// <summary>
+/// Draws the cast shadows for the iso tiles whose visual footprint falls within the given
+/// pixel rectangle. The rectangle is projected back into cell space (the start cell is
+/// computed twice; the first result is unused), and the resulting diagonal band of cells is
+/// scanned ascending so each cell's tile shadow caster is drawn into the clip rectangle.
+/// </summary>
+/// <param name="area">The pixel rectangle to draw shadows within.</param>
+/// <param name="cliprect">The clip rectangle passed to each cell's shadow caster.</param>
+void Tactical::Draw_Tile_Shadows(Rect const & area, Rect const & cliprect)
+{
+	Coord lepton(Pixel_To_Lepton(area.Top_Left() + Point2D(TacPixelX, TacPixelY) - TacticalRect.Top_Left()), 0); // RA2: Draw_Tile_Shadows at 0x6A88A0 matches only so
+	Cell base = lepton.As_Cell(); // RA2: as above
+	base.X -= 2; // RA2: as above
+	Cell cell = base; // RA2: as above
+
+	lepton = Coord(Pixel_To_Lepton(area.Top_Left() + Point2D(TacPixelX, TacPixelY) - TacticalRect.Top_Left()), 0); // RA2: as above
+	base = Map[lepton].Fetch_CellID(); // RA2: as above
+	int ycount = area.Height / (ISO_TILE_PIXEL_H / 2) + 20;
+	int xcount = area.Width / ISO_TILE_PIXEL_W + 7;
+	base.X -= 2; // RA2: as above
+	base.Y += 3; // RA2: as above
+
+	int ix, iy;
+	for (iy = 0; iy < ycount; iy++) {
+		Cell step(iy / 2, (iy + 1) / 2);
+		cell = base + step; // RA2: as above
+
+		for (ix = xcount; ix > 0; ix--) {
+			if (Map.In_Radar(cell)) {
+				Coord coord = Coord_Whole(Tile_Center(cell)); // RA2: as above
+				Point2D pixel;
+				Coord_To_Pixel(coord, pixel);
+				pixel.X += ISO_TILE_PIXEL_W / -2;
+				Map[cell].Draw_Shadow_Cast(pixel, cliprect);
+			}
+			++cell.X; // RA2: as above
+			--cell.Y; // RA2: as above
+		}
+	}
+}
+
+
+/// <summary>
 /// Draws the iso tile of a cell along with any taller tiles that overhang it.
 /// This routine is used to refresh a single dirty cell of the terrain. Artwork standing on
 /// higher ground hangs down over the cells in front of it, so those tiles have to be redrawn
@@ -2341,61 +2514,6 @@ void Tactical::Draw_Tiles(Cell const & cell, Rect const & cliprect)
 		}
 		x++;
 		y++;
-	}
-}
-
-
-/// <summary>
-/// RA2
-/// </summary>
-static inline Coord Tile_Center(Cell const & cell)
-{
-	Coord center;
-	center.X = cell.X * CELL_LEPTON_W + CELL_LEPTON_W / 2;
-	center.Y = cell.Y * CELL_LEPTON_H + CELL_LEPTON_H / 2;
-	center.Z = 0;
-	return(center);
-}
-
-
-/// <summary>
-/// Draws the cast shadows for the iso tiles whose visual footprint falls within the given
-/// pixel rectangle. The rectangle is projected back into cell space (the start cell is
-/// computed twice; the first result is unused), and the resulting diagonal band of cells is
-/// scanned ascending so each cell's tile shadow caster is drawn into the clip rectangle.
-/// </summary>
-/// <param name="area">The pixel rectangle to draw shadows within.</param>
-/// <param name="cliprect">The clip rectangle passed to each cell's shadow caster.</param>
-void Tactical::Draw_Tile_Shadows(Rect const & area, Rect const & cliprect)
-{
-	Coord lepton(Pixel_To_Lepton(area.Top_Left() + Point2D(TacPixelX, TacPixelY) - TacticalRect.Top_Left()), 0); // RA2: Draw_Tile_Shadows at 0x6A88A0 matches only so
-	Cell base = lepton.As_Cell(); // RA2: as above
-	base.X -= 2; // RA2: as above
-	Cell cell = base; // RA2: as above
-
-	lepton = Coord(Pixel_To_Lepton(area.Top_Left() + Point2D(TacPixelX, TacPixelY) - TacticalRect.Top_Left()), 0); // RA2: as above
-	base = Map[lepton].Fetch_CellID(); // RA2: as above
-	int ycount = area.Height / (ISO_TILE_PIXEL_H / 2) + 20;
-	int xcount = area.Width / ISO_TILE_PIXEL_W + 7;
-	base.X -= 2; // RA2: as above
-	base.Y += 3; // RA2: as above
-
-	int ix, iy;
-	for (iy = 0; iy < ycount; iy++) {
-		Cell step(iy / 2, (iy + 1) / 2);
-		cell = base + step; // RA2: as above
-
-		for (ix = xcount; ix > 0; ix--) {
-			if (Map.In_Radar(cell)) {
-				Coord coord = Coord_Whole(Tile_Center(cell)); // RA2: as above
-				Point2D pixel;
-				Coord_To_Pixel(coord, pixel);
-				pixel.X += ISO_TILE_PIXEL_W / -2;
-				Map[cell].Draw_Shadow_Cast(pixel, cliprect);
-			}
-			++cell.X; // RA2: as above
-			--cell.Y; // RA2: as above
-		}
 	}
 }
 
@@ -3332,6 +3450,48 @@ void Tactical::Select_These(Rect const & rect, void (*select_callback)(ObjectCla
 	}
 	AllowVoice = true;
 }
+
+
+void Set_Type_Select_Mode(unsigned mode); // RA2: 0x6F6780 in the user interface commands (not in main yet)
+
+/// <summary>
+/// Unselects every currently selected object and resets the type selection command, so the
+/// next type selection starts over from the screen.
+/// </summary>
+void Tactical::Unselect_All(void) // RA2: not in TibSun, at 0x6AAD40
+{
+	while (CurrentObject.Count()) {
+		CurrentObject[0]->Unselect();
+	}
+	Set_Type_Select_Mode(0);
+}
+
+
+/// <summary>
+/// Drops a lone selected object the player does not control from the selection.
+/// The type selection commands call this first, so that clicking on an enemy unit and then
+/// pressing a type select key selects the player's own units rather than adding to the enemy.
+/// </summary>
+/// <returns>Returns true if an object was unselected.</returns>
+bool Tactical::Unselect_Foreign_Object(void) // RA2: not in TibSun, at 0x6AAD70
+{
+	if (CurrentObject.Count() == 1) {
+		ObjectClass * object = CurrentObject[0];
+		if (object->Owner_HouseClass() != NULL) {
+			if (Session.Type == GAME_NORMAL) {
+				if (!object->Owner_HouseClass()->IsPlayerControl) {
+					object->Unselect();
+					return(true);
+				}
+			} else if (!object->Owner_HouseClass()->Is_Player_Control()) {
+				object->Unselect();
+				return(true);
+			}
+		}
+	}
+	return(false);
+}
+
 
 
 
