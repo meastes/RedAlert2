@@ -579,8 +579,8 @@ class SessionClass
 
 		GameType Type;
 		MultiplayerGameMode * MPGameMode;
-		int unknown_08;
-		int unknown_0C;
+		int TournamentTerritory; // RA2: +0x08, index of the tournament territory being fought over
+		int TournamentState; // RA2: +0x0C, 2 while a tournament game is played
 		int unknown_10;
 
 		CommProtocolType CommProtocol;

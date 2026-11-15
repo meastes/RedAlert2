@@ -4210,8 +4210,8 @@ void MapSeedClass::Randomize(void)
 void MapSeedClass::Fixup_WDT_Settings(void)
 {
 	rc_ptr<WDTTerritory> territory; // RA2: RA2's form (the territory comes from the tour by index)
-	if (Session.Type == GAME_INTERNET && Session.unknown_0C == 2) { // RA2: as above
-		territory = Find_WDT_Territory(Session.unknown_08); // RA2: as above
+	if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: as above
+		territory = Find_WDT_Territory(Session.TournamentTerritory); // RA2: as above
 	} // RA2: as above
 
 	if (territory.Get() != NULL) { // RA2: as above
@@ -4236,7 +4236,7 @@ void MapSeedClass::Fixup_WDT_Settings(void)
 
 		NumPlayers = 4; // RA2: as above
 
-		switch (territory->Unused_1E) { // RA2: as above; RA2 keeps the time of day here
+		switch (territory->Time) { // RA2: as above
 			case 2: Time = 0; break; // RA2: as above
 			case 1: Time = 2; break; // RA2: as above
 			case 3: Time = 3; break; // RA2: as above
@@ -4244,8 +4244,8 @@ void MapSeedClass::Fixup_WDT_Settings(void)
 			default: Time = 1; break; // RA2: as above
 		} // RA2: as above
 
-		MapType = territory->Biome; // RA2: as above; RA2 keeps the map type at +0x1C
-		Biome = territory->Time; // RA2: as above; RA2 keeps the theater at +0x1D
+		MapType = territory->MapType; // RA2: as above
+		Biome = territory->Theater; // RA2: as above
 		Cliffs = territory->CliffsDefault; // RA2: as above
 		Accessibility = territory->AccessibilityDefault; // RA2: as above
 		Hills = territory->HillsDefault; // RA2: as above
@@ -4254,7 +4254,7 @@ void MapSeedClass::Fixup_WDT_Settings(void)
 		TiberiumLayout = territory->TiberiumFieldsDefault; // RA2: as above
 		Vegetation = territory->VegetationDefault; // RA2: as above
 		Cities = territory->CitiesDefault; // RA2: as above
-		Resources = territory->Veinholes; // RA2: as above; RA2 keeps the resources setting at +0x18
+		Resources = territory->Resources; // RA2: as above
 	} // RA2: as above
 }
 

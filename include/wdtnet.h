@@ -82,23 +82,24 @@ class WDTTerritory : public ReferenceCounted { // RA2: ReferenceCounted
 		unsigned char NumPlayers;
 
 		/*
-		 * This is the number of veinhole monsters seeded into the battlefield (0 - 5).
+		 * This is the amount of ore and gems the battlefield is seeded with (0 - 3).
 		 */
-		int Veinholes; // RA2: +0x18, an int
+		int Resources; // RA2: +0x18, replaces Veinholes
 
 		/*
-		 * This specifies the terrain the battlefield is generated from -- tundra, desert,
-		 * taiga, temperate or mutated. The mutated setting needs the Firestorm addon.
+		 * This specifies the kind of map the battlefield is generated as (0 - 4).
 		 */
-		unsigned char Biome;
+		unsigned char MapType; // RA2: +0x1C, replaces Biome
 
 		/*
-		 * This specifies the time of day the battle is lit by -- afternoon, dusk, morning
-		 * or night.
+		 * This specifies the theater the battlefield is generated in.
 		 */
-		unsigned char Time;
+		unsigned char Theater; // RA2: +0x1D, replaces Time
 
-		unsigned char Unused_1E; // RA2: read from the territory data after Biome and Time, never used
+		/*
+		 * This specifies the time of day the battle is lit by.
+		 */
+		unsigned char Time; // RA2: +0x1E
 
 		/*
 		 * These are the limits the tour places on how much of the battlefield is broken up
@@ -290,12 +291,12 @@ enum {
 							+ size_of(WDTTerritory, UnitCount)
 							+ size_of(WDTTerritory, TechLevel)
 							+ size_of(WDTTerritory, StartingCredits)
-							+ size_of(WDTTerritory, Biome)
-							+ size_of(WDTTerritory, Time)
+							+ size_of(WDTTerritory, MapType) // RA2: was Biome
+							+ size_of(WDTTerritory, Theater) // RA2: was Time
 							+ size_of(WDTTerritory, Width)
 							+ size_of(WDTTerritory, Height)
 							+ size_of(WDTTerritory, NumPlayers)
-							+ size_of(WDTTerritory, Veinholes)
+							+ size_of(WDTTerritory, Resources) // RA2: was Veinholes
 							+ size_of(WDTTerritory, CliffsDefault)
 							+ size_of(WDTTerritory, AccessibilityDefault)
 							+ size_of(WDTTerritory, HillsDefault)
