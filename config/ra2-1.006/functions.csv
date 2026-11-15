@@ -5493,6 +5493,7 @@ address,size,evidence
 0x006E7CD0,,"inferred: target of the call at 0x00406EFB in matched src/audio.cpp; size not known"
 0x006E7D80,160,"code of src/theme.cpp, matched"
 0x006E7E20,,"inferred: target of the call at 0x0046E72A in matched src/cd.cpp; size not known"
+0x006E8110,64,"code of src/theme.cpp, matched"
 0x006E8150,48,"code of src/theme.cpp, matched"
 0x006E8180,32,"code of src/theme.cpp, matched"
 0x006E81A0,208,"code of src/theme.cpp, matched"
