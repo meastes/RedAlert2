@@ -5733,6 +5733,7 @@ address,size,evidence
 0x0070B320,112,"code of src/unittype.cpp, matched"
 0x0070B390,16,"code of src/unittype.cpp, matched: too short for the match rule"
 0x0070B3A0,64,"code of src/unittype.cpp, matched"
+0x0070B3E0,160,"code of src/unittype.cpp, matched"
 0x0070B480,160,"code of src/unittype.cpp, matched"
 0x0070B520,32,"code of src/unittype.cpp, matched"
 0x0070B540,144,"code of src/unittype.cpp, matched"
