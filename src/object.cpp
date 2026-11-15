@@ -266,6 +266,17 @@ void const * ObjectClass::Get_Image_Data(void) const
 }
 
 
+/// <summary>
+/// Checks whether this object's type has the specified name.
+/// </summary>
+/// <param name="name">The type name to compare against.</param>
+/// <returns>Is this object's type the one with that name?</returns>
+bool ObjectClass::Is_Type_Named(char const * name) const // RA2: not in TibSun, at 0x5D27D0
+{
+	return(*Class_Of() == name);
+}
+
+
 /***********************************************************************************************
  * ObjectClass::AI -- Handles generic object AI processing.                                    *
  *                                                                                             *
@@ -1999,6 +2010,62 @@ void ObjectClass::Set_Health_Ratio(double health)
 	} else {
 		Strength = 0;
 	}
+}
+
+
+/// <summary>
+/// Checks whether this object is alive but damaged into the red condition band.
+/// </summary>
+/// <returns>Is the health ratio at or below ConditionRed while some strength remains?</returns>
+int ObjectClass::Is_Red_Health(void) const // RA2: not in TibSun, at 0x5D45B0
+{
+	if (HealthRatio <= Rule->ConditionRed && Strength > 0) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Checks whether this object is damaged into the yellow condition band.
+/// </summary>
+/// <returns>Is the health ratio above ConditionRed and at or below ConditionYellow?</returns>
+int ObjectClass::Is_Yellow_Health(void) const // RA2: not in TibSun, at 0x5D4600
+{
+	if (HealthRatio > Rule->ConditionRed && HealthRatio <= Rule->ConditionYellow) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Checks whether this object is healthy enough to be in the green condition band.
+/// </summary>
+/// <returns>Is the health ratio above ConditionYellow?</returns>
+int ObjectClass::Is_Green_Health(void) const // RA2: not in TibSun, at 0x5D4670
+{
+	if (HealthRatio > Rule->ConditionYellow) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Fetches the condition band this object's health falls in.
+/// A destroyed object (no strength) fails the red test and reports green.
+/// </summary>
+/// <returns>Returns 0 for red, 1 for yellow and 2 for green.</returns>
+int ObjectClass::Health_Status(void) const // RA2: not in TibSun, at 0x5D46B0
+{
+	if (HealthRatio <= Rule->ConditionRed && Strength > 0) {
+		return(0);
+	}
+	if (HealthRatio > Rule->ConditionRed && HealthRatio <= Rule->ConditionYellow) {
+		return(1);
+	}
+	return(2);
 }
 
 

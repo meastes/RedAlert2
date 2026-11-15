@@ -306,6 +306,10 @@ class ObjectClass : public AbstractClass
 		void Set_Health_Ratio(double health);
 
 		__declspec( property( get=Get_Health_Ratio, put=Set_Health_Ratio ) ) double HealthRatio;
+		int Is_Red_Health(void) const; // RA2: 0x5D45B0
+		int Is_Yellow_Health(void) const; // RA2: 0x5D4600
+		int Is_Green_Health(void) const; // RA2: 0x5D4670
+		int Health_Status(void) const; // RA2: 0x5D46B0; 0 red, 1 yellow, 2 green
 
 		virtual void Draw_Pre_Render(Point2D const & point, Rect const & cliprect) const { }
 		virtual void Draw_Post_Render(Point2D const & point, Rect const & cliprect) const { }
