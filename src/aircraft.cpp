@@ -376,52 +376,36 @@ ULONG STDMETHODCALLTYPE AircraftClass::Release(void)
  *=============================================================================================*/
 bool AircraftClass::Unlimbo(Coord const & coord, Dir256 dir)
 {
-	Coord ucoord = coord;
-	if (IsALoaner || !Map.In_Local_Radar(coord)) {
-		ucoord.Z = Class->Flight_Level() + Map.Get_Height_GL(coord);
-	} else {
-		ucoord.Z = Map.Get_Height_GL(coord);
+	Coord placed = coord; // RA2: RA2's form
+	if (!Class->MissileSpawn) { // RA2: as above
+		if (!IsALoaner && Map.In_Local_Radar(coord)) { // RA2: as above
+			placed.Z = Map.Get_Height_GL(coord); // RA2: as above
+		} else {
+			AircraftTypeClass *type = Class; // RA2: as above
+			placed.Z = Map.Get_Height_GL(coord) + type->Flight_Level(); // RA2: as above
+		}
 	}
-
-	if (BASECLASS::Unlimbo(ucoord, dir)) {
-
-		if (!Class->IsSelectable || !Class->IsLandable || (PrimaryWeapon != NULL && PrimaryWeapon->IsCamera)) {
+	if (BASECLASS::Unlimbo(placed, dir)) { // RA2: as above
+		if (!(Class->IsSelectable && Class->IsLandable) || // RA2: as above
+			(Get_Class_Weapon_Data(0)->Weapon && Get_Class_Weapon_Data(0)->Weapon->IsCamera)) // RA2: as above
 			IsALoaner = true;
-		}
-
-		/*
-		**	Hack it so that aircraft that are both passenger and cargo carrying
-		**	will carry passengers at the expense of ammo.
-		*/
-		if (Cargo.Is_Something_Attached()) {
-			Ammo = 0;
-			Passenger = true;
-		}
+		if (Cargo.Is_Something_Attached()) Passenger = true; // RA2: as above
 
 		/*
 		**	Forces the body of the helicopter to face the correct direction.
 		*/
 		SecondaryFacing.Set(dir);
-
-		/*
-		**	Start rotor animation.
-		*/
-		Set_Rate(1);
+		StageClass::Set_Rate(1); // RA2: as above
 		Set_Stage(0);
-
-		/*
-		**	When starting at flight level, then give it speed. When landed
-		**	then it must be stationary.
-		*/
-		if (HeightAGL == Class->Flight_Level()) {
-			Set_Speed(1);
-		} else {
-			Set_Speed(0);
-		}
+		int altitude = Class->Flight_Level(); // RA2: as above
+		if (HeightAGL == altitude) Set_Speed(1.0); // RA2: as above
+		else Set_Speed(0.0); // RA2: as above
 		return(true);
 	}
 	return(false);
 }
+
+
 
 
 /***********************************************************************************************
@@ -1699,132 +1683,123 @@ bool AircraftClass::Enter_Idle_Mode(bool initial, bool resume_waypoint)
 		}
 		return(false);
 	}
-
-	bool result = BASECLASS::Enter_Idle_Mode(initial, resume_waypoint);
-
-	MissionType mission = (House->Is_Human_Player() || Team || !Is_Weapon_Equipped()) ? MISSION_GUARD : MISSION_GUARD_AREA;
-
-	int landingalt = Landing_Altitude();
-	if (In_Which_Layer() == LAYER_GROUND || HeightAGL <= landingalt) {
+	int current_mission = CurrentMission; // RA2: RA2's form
+	bool mission_blocks_selection = current_mission == MISSION_RETREAT || (current_mission > MISSION_PATROL && current_mission <= MISSION_PARADROP_OVERFLY); // RA2: as above
+	if (mission_blocks_selection) { // RA2: as above
+		return(false);
+	}
+	if (MissionQueue == MISSION_PARADROP_APPROACH) { // RA2: as above
+		Commence();
+		return(false);
+	}
+	bool result = FootClass::Enter_Idle_Mode(initial, resume_waypoint); // RA2: as above
+	int mission = !House->Is_Human_Player() && !Team && Is_Weapon_Equipped() ? MISSION_GUARD_AREA : MISSION_GUARD; // RA2: as above
+	int landing_altitude = Landing_Altitude(); // RA2: as above
+	if (In_Which_Layer() == LAYER_GROUND || HeightAGL <= landing_altitude || Class->MissileSpawn) { // RA2: as above
+		/* // RA2: as above
+		**	Weapon equipped helicopters that run out of ammo and were // RA2: as above
+		**	brought in as reinforcements will leave the map. // RA2: as above
+		*/ // RA2: as above
 		if (IsALoaner) {
 			if (Cargo.Is_Something_Attached()) {
-
-				/*
-				**	In the case of a computer controlled helicopter that hold passengers,
-				**	don't unload when landing. Wait for specific instructions from the
-				**	controlling team.
-				*/
-				if (Team != NULL) {
-					mission = MISSION_GUARD;
-				} else {
-					mission = MISSION_UNLOAD;
-				}
-			} else if (Team == NULL) {
+				mission = Team ? MISSION_GUARD : MISSION_UNLOAD; // RA2: as above
+			} else if (!Team) { // RA2: as above
+				Assign_Target(0); // RA2: as above
+				Assign_Destination(0, true); // RA2: as above
 				mission = MISSION_RETREAT;
 			}
 		} else {
-			Assign_Destination(NULL);
-			Assign_Target(NULL);
-			if (!House->Is_Human_Player() && Team == NULL && Is_Weapon_Equipped()) {
+			Assign_Destination(0, true); // RA2: as above
+			Assign_Target(0); // RA2: as above
+			if (!House->Is_Human_Player() && !Team && Is_Weapon_Equipped()) { // RA2: as above
 				mission = MISSION_GUARD_AREA;
 			} else {
 				mission = MISSION_GUARD;
 			}
 		}
 	} else {
-		bool assign_move = false;
-		MissionType move_mission;
 		if (Cargo.Is_Something_Attached()) {
-			if (IsALoaner) {
-				if (Team != NULL) {
-					mission = MISSION_GUARD;
-				} else {
-					mission = MISSION_UNLOAD;
-					Assign_Destination(Good_LZ());
-				}
-			} else {
-				move_mission = MISSION_MOVE;
-				assign_move = true;
+			if (!IsALoaner) { // RA2: as above
+				goto select_destination; // RA2: as above
 			}
+			if (!Team) { // RA2: as above
+				mission = MISSION_UNLOAD; // RA2: as above
+				Assign_Destination(Good_LZ(), true); // RA2: as above
+			} else {
+				mission = MISSION_GUARD;
+			}
+			goto choose_mission; // RA2: as above
 		} else {
-
-			/*
-			**	If this transport is a loaner and part of a team, then remove it from
-			**	the team it is attached to.
-			*/
-			if ((IsALoaner && House->Is_Human_Player()) || (!House->Is_Human_Player() && !Class->MaxAmmo)) {
-				if (Team != NULL && Team->Has_Entered_Map()) {
-					Team->Remove(this);
+			if ((IsALoaner && House->Is_Human_Player()) || (!House->Is_Human_Player() && Class->MaxAmmo == 0)) { // RA2: as above
+				if (Team && Team->Has_Entered_Map()) { // RA2: as above
+					Team->Remove(this, -1, 0); // RA2: as above
 				}
 			}
-
-			if (PrimaryWeapon != NULL) {
-
-				/*
-				**	Weapon equipped helicopters that run out of ammo and were
-				**	brought in as reinforcements will leave the map.
-				*/
+			if (Get_Class_Weapon_Data(0)->Weapon) { // RA2: as above
 				if (IsALoaner) {
-
-					/*
-					**	If it has no ammo, then break off of the team and leave the map.
-					**	If it can fight, then give it fighting orders.
-					*/
-					if (Ammo == 0) {
-						if (Team != NULL) Team->Remove(this);
+					if (!Ammo) { // RA2: as above
+						if (Team) { // RA2: as above
+							Team->Remove(this, -1, 0); // RA2: as above
+						}
+						Assign_Target(0); // RA2: as above
+						Assign_Destination(0, true); // RA2: as above
 						mission = MISSION_RETREAT;
-					} else {
-						if (Team == NULL) {
-							mission = MISSION_HUNT;
-						}
+					} else if (!Team) { // RA2: as above
+						mission = MISSION_HUNT; // RA2: as above
 					}
-
-				} else if (Ammo && TarCom != NULL && Mission == MISSION_ATTACK || MissionQueue == MISSION_ATTACK) {
+				} else if ((Ammo && TarCom && Get_Mission() == MISSION_ATTACK) || MissionQueue == MISSION_ATTACK) { // RA2: as above
 					mission = MISSION_ATTACK;
-				} else if (In_Air()) {
-					if (NavCom == NULL || (CurrentMission != MISSION_MOVE && CurrentMission != MISSION_ENTER)) {
-						if (Class->Dock.Count() > 0 && (IsLocked || Team == NULL)) {
-
-							/*
-							**	Normal aircraft try to find a good landing spot to rest.
-							*/
-							BuildingClass * building = NULL;
-							for (int i = 0; i < Class->Dock.Count(); i++) {
-								building = Find_Docking_Bay(Class->Dock[i], false, false);
-								if (building) break;
-							}
-							Assign_Destination(NULL);
-							if (building && Transmit_Message(RADIO_HELLO, building) == RADIO_ROGER) {
-								Assign_Destination(building);
-								mission = MISSION_ENTER;
-							} else {
-								move_mission = MISSION_MOVE;
-								assign_move = true;
-							}
+				} else if (!In_Air() || (NavCom && CurrentMission == MISSION_ENTER) || Class->Dock.Count() <= 0 || // RA2: as above
+					(!IsLocked && Team)) { // RA2: as above
+				} else {
+					TechnoClass *dock = TryNearestDockBuilding((TypeList<BuildingTypeClass *> *)&Class->Dock, 0, 0); // RA2: as above
+					Assign_Destination(0, true); // RA2: as above
+					if (dock && Transmit_Message(RADIO_HELLO, dock) == RADIO_ROGER) { // RA2: as above
+						Assign_Destination(dock, true); // RA2: as above
+						mission = MISSION_ENTER; // RA2: as above
+					} else {
+						if (Class->IsAirportBound) { // RA2: as above
+							Crash(0); // RA2: as above
+							return(false); // RA2: as above
 						}
+						Assign_Destination(Good_LZ(), true); // RA2: as above
+						mission = MISSION_MOVE; // RA2: as above
 					}
 				}
-			} else {
-				if (Team != NULL) return(false);
-
-				move_mission = MISSION_MOVE;
-				assign_move = true;
+				goto choose_mission; // RA2: as above
+			}
+			if (Team) { // RA2: as above
+				return(false); // RA2: as above
 			}
 		}
-
-		if (assign_move) {
-			Assign_Destination(Good_LZ());
-			mission = move_mission;
+select_destination: // RA2: as above
+		Assign_Destination(Good_LZ(), true); // RA2: as above
+		mission = MISSION_MOVE; // RA2: as above
+	}
+choose_mission: // RA2: as above
+	if (!Ammo && Is_Weapon_Equipped() && !HasAnyLink()) { // RA2: as above
+		TechnoClass *dock = TryNearestDockBuilding((TypeList<BuildingTypeClass *> *)&Class->Dock, 0, 0); // RA2: as above
+		if (dock) { // RA2: as above
+			Assign_Destination(dock, true); // RA2: as above
+			Assign_Target(0); // RA2: as above
+			mission = MISSION_ENTER; // RA2: as above
+		} else if (Class->IsAirportBound) { // RA2: as above
+			Crash(0); // RA2: as above
+			return(false); // RA2: as above
 		}
 	}
-
-	Assign_Mission(mission);
+	if (HasAnyLink()) { // RA2: as above
+		mission = MISSION_ENTER; // RA2: as above
+	}
+	QueueMission((MissionType)mission, false); // RA2: as above
 	if (Ready_To_Commence()) {
 		Commence();
 	}
-
-	return(result);
+	return result; // RA2: as above
 }
+
+
+
 
 
 #ifdef _DEBUG
@@ -3416,27 +3391,24 @@ int AircraftClass::Do_MISSION_GUARD_AREA(void)
  *=============================================================================================*/
 FireErrorType AircraftClass::Can_Fire(AbstractClass * target, int which, bool ignoreRange) const // RA2: ignoreRange
 {
-	if (IonStormClass::Is_Ion_Storm_Active()) {
-		return(FIRE_CANT);
+	FireErrorType result = TechnoClass::Can_Fire(target, which, ignoreRange); // RA2: as above
+	if (result == FIRE_OK) { // RA2: as above
+		if (Passenger && !Cargo.Is_Something_Attached()) { // RA2: as above
+			return(FIRE_AMMO); // RA2: as above
+		}
+		DirType facing = SecondaryFacing.Current(); // RA2: as above
+		if (!const_cast<AircraftClass *>(this)->Is_Fighter()) { // RA2: as above
+			short difference = (short)(facing.Raw - Direction(target).Raw); // RA2: as above
+			if (abs(0x800) < abs(difference)) { // RA2: as above
+				return(FIRE_FACING); // RA2: as above
+			}
+		}
+		result = FIRE_OK; // RA2: as above
 	}
-
-	if (Passenger && !Cargo.Is_Something_Attached()) {
-		return(FIRE_AMMO);
-	}
-
-	/*
-	**	Double check to make sure that the facing is roughly toward
-	**	the target. If the difference is too great, then firing is
-	**	temporarily postponed.
-	*/
-	DirType dir = SecondaryFacing.Current();
-	dir -= Direction(target);
-	if (DIR_STEP_32 < dir) {
-		return(FIRE_FACING);
-	}
-
-	return(BASECLASS::Can_Fire(target, which));
+	return result; // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -3639,22 +3611,25 @@ LayerType AircraftClass::In_Which_Layer(void) const
  *=============================================================================================*/
 void AircraftClass::Look(bool incremental, bool dont_map)
 {
-	assert(!IsInLimbo);
-
-	int sight_range = Class->SightRange;
+	Coord coord; // RA2: RA2's form
+	int sight = Class->SightRange; // RA2: as above
 	if (HeightAGL == 0) {
-		sight_range = 1;
+		sight = 1; // RA2: as above
 	}
-
-	if (sight_range) {
-		Map.Sight_From(PositionCoord, sight_range, House, incremental, dont_map);
-	} else {
-		if (Scen->Special.IsFogOfWar) {
-			sight_range = Rule->AircraftFogReveal;
-			Map.Sight_From(PositionCoord, sight_range, House, false, false, true, HeightAGL < (Rule->FlightLevel / 2));
-		}
+	if (sight != 0) { // RA2: as above
+		coord = PositionCoord; // RA2: as above
+		Map.Sight_From(coord, sight, House, incremental, dont_map, 0, 1, 0); // RA2: as above
+		coord = PositionCoord; // RA2: as above
+		Map.Sight_From(coord, sight, House, incremental, dont_map, 0, 1, 1); // RA2: as above
+	} else if (*(int *)&Scen->Special & 0x1000) { // RA2: as above
+		sight = Rule->AircraftFogReveal; // RA2: as above
+		coord = PositionCoord; // RA2: as above
+		Map.Sight_From(coord, sight, House, 0, 0, 1, HeightAGL < Rule->FlightLevel / 2, 0); // RA2: as above
+		coord = PositionCoord; // RA2: as above
+		Map.Sight_From(coord, sight, House, 0, 0, 1, HeightAGL < Rule->FlightLevel / 2, 1); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -4172,6 +4147,10 @@ void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0
 
 
 
+
+
+
+
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4184,6 +4163,10 @@ void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in
 
 
 
+
+
+
+
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4191,6 +4174,10 @@ void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom
 	}
 	BASECLASS::Override_Mission(mission, tarcom, navcom); // RA2: as above
 }
+
+
+
+
 
 
 /// <summary>
