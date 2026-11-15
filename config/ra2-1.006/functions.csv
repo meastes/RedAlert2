@@ -2780,6 +2780,7 @@ address,size,evidence
 0x0052FB70,48,"code of src/jumpjet.cpp, matched"
 0x0052FBA0,64,"code of src/jumpjet.cpp, matched"
 0x0052FBE0,48,"code of src/jumpjet.cpp, matched"
+0x00530940,400,"code of src/jumpjet.cpp, matched"
 0x00530AD0,16,"code of src/jumpjet.cpp, matched: too short for the match rule"
 0x00530AE0,32,"code of src/jumpjet.cpp, matched"
 0x005310A0,160,"code of src/jumpjet.cpp, matched"
