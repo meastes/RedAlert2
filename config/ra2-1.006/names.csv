@@ -4186,7 +4186,7 @@ address,symbol,evidence
 0x006202C0,?Add_Progress_Percent@ProgressScreenClass@@QAEXHNVPoint2D@@@Z,"compiled from src/progress.cpp, matched"
 0x006203C0,?Has_Dialog@ProgressScreenClass@@QAE_NXZ,"compiled from src/progress.cpp, matched"
 0x006203D0,?Clear_Dialog@ProgressScreenClass@@QAEXXZ,"compiled from src/progress.cpp, matched"
-0x006203F0,?Get_Current_Progress@ProgressScreenClass@@QBENH@Z,"inferred: referenced by matched src/session.cpp (3 references); across all matched code never at another address, and no other symbol here"
+0x006203F0,?Get_Current_Progress@ProgressScreenClass@@QBENH@Z,"compiled from src/progress.cpp, matched"
 0x00620410,?Fetch_Record_Pointer@ShapeSet@@IBEPBVShapeRecord@1@H@Z,"inferred: referenced by matched src/progress.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00620600,??0ParticleSystemTypeClass@@QAE@PBD@Z,"compiled from src/psystype.cpp, matched"
 0x00620780,??0ParticleSystemTypeClass@@QAE@ABVNoInitClass@@@Z,"compiled from src/psystype.cpp, matched; code at 15 addresses, placed by the gap"
