@@ -183,9 +183,8 @@ int TabClass::Get_Command_Position(int command)	// RA2: the button position of a
 
 ShapeButtonClass * TabClass::Get_Button(int command)	// RA2: the button a command is on, or none when its position is out of range
 {
-	int position = SlotButton[command];	// RA2: as above
-	if (position >= 0 && position < BUTTON_COUNT) {	// RA2: as above
-		return(&CommandButtons[position]);	// RA2: as above
+	if (SlotButton[command] >= 0 && SlotButton[command] < BUTTON_COUNT) {	// RA2: the position is read three times in the source; the extra source size is what keeps this call out of line in AI's inlined Hide_Buttons loop
+		return(&CommandButtons[SlotButton[command]]);	// RA2: as above
 	}
 	return(NULL);	// RA2: as above
 }
