@@ -953,6 +953,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		bool Is_Player_Control(void) const;
 		bool Is_Human_Player(void) const;
 		float Armor_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F58A0, the house type's armor factor for the kind
+		float Income_Multiplier(void) const; // RA2: 0x4F5B30, the house type's income factor (Class->IncomeMult)
 		float Cost_Multiplier(TechnoTypeClass const * type) const; // RA2: 0x4F5960, the house type's cost factor for the kind
 
 		bool Can_Build_Here(BuildingTypeClass *building,  Cell const & cell);
