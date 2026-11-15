@@ -498,9 +498,12 @@ void JumpjetLocomotionClass::Process_Crashing(void) // RA2: at 0x530940
 {
 	Coord coord = LinkedTo->Position;
 	coord.Z -= Crash;
-	Facing.Set_Desired(Facing.Current() + DirType((Dir256)0x2D));
+	{
+		DirType dir = DirType((unsigned short)(Facing.Current().Raw + 0x2D00)); // RA2: as above
+		Facing.Set_Desired(dir); // RA2: as above
+	}
 	Map.Get_Height_GL(coord);
-
+	Map[coord]; // RA2: as above
 	if (Map.In_Radar(coord.As_Cell())) {
 		Map.Remove(LinkedTo);
 		LinkedTo->Mark(MARK_UP);
@@ -508,17 +511,17 @@ void JumpjetLocomotionClass::Process_Crashing(void) // RA2: at 0x530940
 		LinkedTo->Mark(MARK_DOWN);
 		Map.Submit(LinkedTo);
 	}
-
 	if (LinkedTo->HeightAGL <= 0) {
-		if (LinkedTo->Get_Cell_Ptr()->Jumpjet == LinkedTo) {
-			LinkedTo->Get_Cell_Ptr()->TryAssignJumpjet(NULL);
+		if (((CellClass *)LinkedTo->Get_Cell_Ptr())->Jumpjet == LinkedTo) { // RA2: as above
+			((CellClass *)LinkedTo->Get_Cell_Ptr())->TryAssignJumpjet(NULL); // RA2: as above
 		}
 		AircraftTracker.Remove(LinkedTo);
-		CurrentSpeed = 0;
 		CurrentState = UNKNOWN;
-		((INoticeSink *)LinkedTo)->Unknown_Virtual_0(0x117C, 0);
+		TargetSpeed = 0; // RA2: as above
+		LinkedTo->Unknown_Virtual_0(0x117C, 0); // RA2: as above
 	}
 }
+
 
 
 
