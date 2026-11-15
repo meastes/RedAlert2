@@ -48,6 +48,7 @@
 #include "always.h"
 
 #include "theme.h"
+#include "audio.h" // RA2
 #include "audplay.h" // RA2
 #include "goptions.h" // RA2
 
@@ -290,28 +291,34 @@ wchar_t const * ThemeClass::Full_Name(ThemeType theme) const // RA2: wide
  *=============================================================================================*/
 void ThemeClass::AI(void)
 {
-	if (Audio_Available() && !Debug_Quiet) {
-		if (ScoresPresent && Volume > 0 && !Still_Playing()) {
-			if (Pending != THEME_NONE && Pending != THEME_QUIET && !ScenarioInit) {
-				/*
-				**	If the pending song needs to be picked, then pick it now.
-				*/
-				if (Pending == THEME_PICK_ANOTHER) {
-					Pending = Next_Song(Score);
-					DebugString("Theme::AI(Next song = %d)\n", Pending);
-				}
-
-				/*
-				**	Start the song playing and then flag it so that a new song will
-				**	be picked when this one ends.
-				*/
-				Play_Song(Pending);
-				Pending = THEME_PICK_ANOTHER;
+	if (AudioDeviceAvailable() && !Debug_Quiet && ScoresPresent && Volume > 0) { // RA2: RA2's form
+		bool ready = false; // RA2: as above
+		if (Stream != 0) { // RA2: as above
+			if (IsFading && !AudioStreamerIsFading(Stream)) { // RA2: as above
+				AudioStreamerStop(Stream); // RA2: as above
 			}
+			ready = AudioStreamerIsPlaying(Stream); // RA2: as above
 		}
-		Audio.Sound_Callback();
+		if (ready) { // RA2: as above
+			return; // RA2: as above
+		}
+		ThemeType theme = Pending; // RA2: as above
+		if (theme != THEME_NONE && theme != THEME_QUIET && ScenarioInit == 0) { // RA2: as above
+			if (theme == THEME_PICK_ANOTHER) { // RA2: as above
+				Pending = Next_Song(Score); // RA2: as above
+				DebugString("Theme::AI(Next song = %d)\n", Pending); // RA2: as above
+			}
+
+			/* // RA2: as above
+			**	Start the song playing and then flag it so that a new song will // RA2: as above
+			**	be picked when this one ends. // RA2: as above
+			*/ // RA2: as above
+			Play_Song(Pending); // RA2: as above
+			Pending = THEME_PICK_ANOTHER; // RA2: as above
+		}
 	}
 }
+
 
 
 /***********************************************************************************************
