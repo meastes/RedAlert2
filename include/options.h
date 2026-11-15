@@ -149,8 +149,6 @@ class OptionsClass {
 		bool IsScoreRepeat;				// Score should repeat?
 		bool IsInGameMusic; // RA2: +0x39
 		bool IsScoreShuffle;			// Score list should shuffle?
-		int LastUnlockedSovMovie; // RA2: +0x3C
-		int LastUnlockedAllMovie; // RA2: +0x40
 
 		/*
 		 * This is how far ahead of the movie the sound card is assumed to be running, expressed
@@ -164,6 +162,9 @@ class OptionsClass {
 		 * into the dynamic range before use, and 0xFFFF means to take the default socket.
 		 */
 		unsigned short Socket;
+
+		int LastUnlockedSovMovie; // RA2: +0x40, after SoundLatency and Socket (Load_Settings 0x5D8B00 reads them from NetID)
+		int LastUnlockedAllMovie; // RA2: +0x44
 
 		/*
 		 * This is which network adapter to send over on a machine that has more than one,
