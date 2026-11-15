@@ -367,38 +367,39 @@ HRESULT UnregisterServer(void)
 void Reset_Surfaces(void)
 {
 	static bool surfaces_reset = false;
-
+	if (UseDirect3D) { // RA2: RA2's form
+		Release_Direct3D(); // RA2: as above
+	}
 	if (!surfaces_reset) {
-		if (HiddenSurface) {
+		if (HiddenSurface != 0) { // RA2: as above
 			delete HiddenSurface;
-			HiddenSurface = NULL;
+			HiddenSurface = 0; // RA2: as above
 		}
-		if (AlternateSurface) {
+		if (AlternateSurface != 0) { // RA2: as above
 			delete AlternateSurface;
-			AlternateSurface = NULL;
+			AlternateSurface = 0; // RA2: as above
 		}
-		if (TileSurface) {
+		if (TileSurface != 0) { // RA2: as above
 			delete TileSurface;
-			TileSurface = NULL;
+			TileSurface = 0; // RA2: as above
 		}
-		if (SidebarSurface) {
+		if (SidebarSurface != 0) { // RA2: as above
 			delete SidebarSurface;
-			SidebarSurface = NULL;
+			SidebarSurface = 0; // RA2: as above
 		}
-		if (CompositeSurface) {
+		if (CompositeSurface != 0) { // RA2: as above
 			delete CompositeSurface;
-			CompositeSurface = NULL;
+			CompositeSurface = 0; // RA2: as above
 		}
-		if (VisibleSurface) {
+		if (VisibleSurface != 0) { // RA2: as above
 			delete VisibleSurface;
-			VisibleSurface = NULL;
+			VisibleSurface = 0; // RA2: as above
 		}
-
 		Reset_Video_Mode();
-
 		surfaces_reset = true;
 	}
 }
+
 
 
 /// <summary>
