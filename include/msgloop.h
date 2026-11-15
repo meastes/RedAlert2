@@ -50,6 +50,7 @@ extern bool (*Message_Intercept_Handler)(MSG &msg);
 
 // RA2: message queue wrappers; the get waits by peeking with removal and returns zero on WM_QUIT.
 int Peek_Windows_Message(MSG * msg, HWND window, unsigned filter_min, unsigned filter_max, unsigned remove);
+int Get_Input_Record_Mode(void); // RA2: the input recording mode that Peek_Windows_Message and Get_Key_State follow (0 none, 1 recording, 2 playing back), the global at 0x00A522AC, at 0x00522E80
 int Get_Windows_Message(MSG * msg, HWND window, unsigned filter_min, unsigned filter_max);
 extern int MessageLoopCount; // RA2: counts the calls of Windows_Message_Handler
 
