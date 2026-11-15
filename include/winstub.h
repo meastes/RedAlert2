@@ -26,6 +26,7 @@ void Build_Info(void);
 void Build_Date_String(char * buffer, int buflen);
 char *Build_Number_String(char * buffer, int buflen);
 unsigned int Build_Number(void);
+void IME_Stub1(void); // RA2: an empty stub, at 0x00738100
 char *Build_By_String(char * buffer, int buflen);
 char *Build_By_Initials(char * buffer, int buflen);
 char *Build_Version_String(char * buffer, int buflen);
