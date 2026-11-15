@@ -98,8 +98,24 @@ CoordStruct STDMETHODCALLTYPE TeleportLocomotionClass::Destination(void)
 /// <param name="to">The coordinate to teleport the object to.</param>
 void STDMETHODCALLTYPE TeleportLocomotionClass::Move_To(CoordStruct to)
 {
-	DestinationCoord = to;
+	if (LinkedTo->IsUnderEMP() || LinkedTo->IsParalyzed() || LinkedTo->IsBeingWarpedOut() || LinkedTo->IsWarpingIn()) { // RA2: RA2's form
+		LinkedTo->NavCom = 0; // RA2: as above
+		return; // RA2: as above
+	}
+	Coord coord = Coord(to.X, to.Y, to.Z); // RA2: as above
+	if (LinkedTo->UnlimboingInfantry && LinkedTo->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+		CellClass &cell = Map[coord]; // RA2: as above
+		cell.Incoming(COORD_NONE, true, true, false); // RA2: as above
+	}
+	Pick_Arrival(coord); // RA2: as above
+	if (LastCoords != COORD_NONE) { // RA2: as above
+		IsMoving = true; // RA2: as above
+		DestinationCoord = LastCoords; // RA2: as above
+	} else { // RA2: as above
+		LinkedTo->Assign_Destination(0, true); // RA2: as above
+	}
 }
+
 
 
 /// <summary>
@@ -203,34 +219,33 @@ bool TeleportLocomotionClass::Clear_Arrival(Coord to, bool arrive)
 /// </summary>
 void TeleportLocomotionClass::Check_Landing(Coord to)
 {
-	for (ObjectClass * obj = Map[to].Cell_Occupier(); obj != NULL; obj = obj->Next) {
-		if (obj->IsIronCurtained()) {
+	for (ObjectClass *object = Map[to].Cell_Occupier(); object != NULL; object = object->Next) { // RA2: RA2's form
+		if (object->IsIronCurtained()) { // RA2: as above
 			int damage = LinkedTo->Techno_Type_Class()->MaxStrength;
 			LinkedTo->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, false);
 		}
 	}
-
-	bool bridge = false;
+	bool kill = false; // RA2: as above
 	if (LinkedTo->Techno_Type_Class()->Naval && (Map[to].IsUnderBridge || Map[to].Land_Type() == LAND_ROAD)) {
-		bridge = true;
+		kill = true; // RA2: as above
 	}
-
-	if (Map[to.As_Cell()].Land_Type() == LAND_WATER && !LinkedTo->Techno_Type_Class()->Naval && LinkedTo->Fetch_RTTI() != RTTI_INFANTRY && !Map[to].IsUnderBridge && Map[to].Land_Type() != LAND_ROAD) {
+	if (Map[to.As_Cell()].Land_Type() == LAND_WATER && !LinkedTo->Techno_Type_Class()->Naval && LinkedTo->Fetch_RTTI() != RTTI_INFANTRY // RA2: as above
+		&& !Map[to].IsUnderBridge && Map[to].Land_Type() != LAND_ROAD) { // RA2: as above
 		LinkedTo->IsSinking = true;
 		LinkedTo->Stun();
 		return;
 	}
-
-	if (LinkedTo->Can_Enter_Cell(&Map[to.As_Cell()], FACING_NONE, -1, NULL, true) == MOVE_NO || bridge) {
-		if (Map[to.As_Cell()].Is_Tile_Clear() && LinkedTo->Fetch_RTTI() != RTTI_INFANTRY) {
+	if (LinkedTo->Can_Enter_Cell(&Map[to.As_Cell()], FACING_NONE, -1, NULL, true) == MOVE_NO || kill) { // RA2: as above
+		if (!Map[to.As_Cell()].Is_Tile_Clear() || LinkedTo->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+			int damage = LinkedTo->Techno_Type_Class()->MaxStrength;
+			LinkedTo->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, false);
+		} else { // RA2: as above
 			LinkedTo->IsSinking = true;
 			LinkedTo->Stun();
-			return;
 		}
-		int damage = LinkedTo->Techno_Type_Class()->MaxStrength;
-		LinkedTo->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, false);
 	}
 }
+
 
 
 /// <summary>
