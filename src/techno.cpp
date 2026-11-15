@@ -7994,6 +7994,233 @@ void TechnoClass::Response_Attack(void)
 	}
 }
 
+extern int TargetScanDelay; // RA2: a global no code sets, so the scan delay is 0
+
+
+/// <summary>
+/// Whether this object may look for an opportunity target now: the scan delay has passed, it is not
+/// warping something out, its type acquires targets on its own, an occupiable building has occupants,
+/// and it is armed without a mind-controlled unit or (as a human player's renovator) other duties.
+/// </summary>
+bool TechnoClass::Can_Scan_For_Target(void) // RA2: not in TibSun, at 0x6D40C0
+{
+	if ((unsigned)(Frame - LastTargetScanFrame) >= (unsigned)TargetScanDelay) {
+		if (!IsWarpingSomethingOut()) {
+			if (Techno_Type_Class()->CanPassiveAquire) {
+				if (Fetch_RTTI() != RTTI_BUILDING || !((BuildingClass *)this)->Class->CanBeOccupied || ((BuildingClass *)this)->GetOccupantCount() != 0) {
+					bool busy = CaptureManager != NULL && CaptureManager->Unit != NULL;
+					if ((!Is_Renovator() || !House->Is_Human_Player()) && !busy && Is_Weapon_Equipped()) {
+						return(true);
+					}
+				}
+			}
+		}
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// Whether this object should look for an opportunity target now: always for an aggressive team member
+/// moving without a target, otherwise when it may scan, is not a hovering balloon still on its way, and
+/// fires on opportunity or guards without an area-fire weapon already chosen for its target.
+/// </summary>
+bool TechnoClass::Should_Scan_For_Target(void) // RA2: not in TibSun, at 0x6D4180
+{
+	if ((unsigned)(Frame - LastTargetScanFrame) < (unsigned)TargetScanDelay) {
+		return(false);
+	}
+	bool foot;
+	bool foot2;
+	if (TarCom == NULL && !House->Is_Human_Player() && this != NULL) {
+		if (this != NULL) foot = (AbstractFlags & 4) != 0;
+		if (foot && ((FootClass *)this)->Team != NULL) {
+			TeamTypeClass const * team_type = ((FootClass *)this)->Team->Class;
+			if (!team_type->IsSuicide && team_type->IsAggressive && CurrentMission == MISSION_MOVE) {
+				return(true);
+			}
+		}
+	}
+	if (!Can_Scan_For_Target()) {
+		return(false);
+	}
+	if (CurrentMission == MISSION_MOVE && Techno_Type_Class()->BalloonHover) {
+		foot2 = false;
+		if (this != NULL) foot2 = (AbstractFlags & 4) != 0;
+		if (!foot2) {
+			return(false);
+		}
+		if (((FootClass *)this)->NavCom == Get_Cell_Ptr()) {
+			if (PlanningToken == NULL) {
+				return(true);
+			}
+			if (PlanningToken->Node_Count() <= 0) {
+				return(true);
+			}
+		}
+	}
+	if (!Techno_Type_Class()->OpportunityFire) {
+		if (CurrentMission != MISSION_GUARD) {
+			return(false);
+		}
+		int which = IsNotSprayAttack();
+		WeaponDataStruct const * wdata = Get_Class_Weapon_Data(which);
+		bool flagged;
+		if (wdata == NULL || wdata->Weapon == NULL || !wdata->Weapon->AreaFire) {
+			flagged = false;
+		} else {
+			flagged = true;
+		}
+		int best = What_Weapon_Should_I_Use(TarCom);
+		bool same = best == which;
+		if (flagged && same) {
+			return(false);
+		}
+	}
+	return(true);
+}
+
+
+/// <summary>
+/// Whether objects of this kind are not animation types, buildings or bullets.
+/// </summary>
+int __stdcall Is_Not_AnimType_Building_Bullet(RTTIType rtti) // RA2: not in TibSun, at 0x6D42F0
+{
+	if (rtti != RTTI_ANIMTYPE && rtti != RTTI_BUILDING && rtti != RTTI_BULLET) {
+		return(1);
+	}
+	return(0);
+}
+
+
+/// <summary>
+/// Looks for an opportunity target when the object should; a new target makes it drop the old one.
+/// </summary>
+bool TechnoClass::Scan_For_Target(void) // RA2: not in TibSun, at 0x6D4310
+{
+	bool result = false;
+	if (Should_Scan_For_Target()) {
+		LastTargetScanFrame = Frame;
+		AbstractClass * target = TarCom;
+		Coord coord = PositionCoord;
+		result = Target_Something_Nearby(coord, (ThreatType)1);
+		if (result && TarCom != target) {
+			ShouldLoseTargetNow = true;
+		}
+	}
+	return(result);
+}
+
+
+/// <summary>
+/// Whether the object is moving, guarding or harvesting.
+/// </summary>
+int TechnoClass::Is_Moving_Guarding_Or_Harvesting(void) const // RA2: not in TibSun, at 0x6D4390
+{
+	MissionType mission = CurrentMission;
+	if (mission != MISSION_MOVE && mission != MISSION_HARVEST && mission != MISSION_GUARD) {
+		return(0);
+	}
+	return(1);
+}
+
+
+/// <summary>
+/// Whether the object is on a mission that keeps it from looking for targets.
+/// </summary>
+int TechnoClass::Is_Passive_Mission(void) const // RA2: not in TibSun, at 0x6D43B0
+{
+	MissionType mission = CurrentMission;
+	if (mission != MISSION_SLEEP && mission != MISSION_ENTER && mission != MISSION_STOP && mission != MISSION_AMBUSH
+		&& mission != MISSION_UNLOAD && mission != MISSION_CONSTRUCTION && mission != MISSION_DECONSTRUCTION
+		&& mission != MISSION_REPAIR && mission != MISSION_MISSILE && mission != MISSION_HARMLESS && mission != MISSION_WAIT
+		&& mission != MISSION_OPEN) {
+		return(0);
+	}
+	return(1);
+}
+
+
+/// <summary>
+/// RA2's DistributedFire: spreads the object's fire over its current targets, the most threatening one
+/// not yet fired on first, and all of them again once each was fired on.
+/// </summary>
+void TechnoClass::Distribute_Fire(void) // RA2: not in TibSun, at 0x6D4400
+{
+	if (CurrentTargets.Count() == 0) {
+		AttackedTargets.Clear();
+		return;
+	}
+	for (int index = AttackedTargets.Count() - 1; index >= 0; index--) {
+		AbstractClass * target = AttackedTargets[index];
+		bool found = false;
+		for (int k = 0; k < CurrentTargets.Count(); k++) {
+			if (target == CurrentTargets[k]) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			AttackedTargets.Delete_Index(index);
+		}
+	}
+	DynamicVectorClass<AbstractClass *> targets;
+	DynamicVectorClass<int> values;
+	int fired = AttackedTargets.Count();
+	if (fired > 0) {
+		int count = CurrentTargets.Count();
+		for (int i = 0; i < count; i++) {
+			AbstractClass * target = CurrentTargets[i];
+			bool found = false;
+			for (int k = 0; k < fired; k++) {
+				if (target == AttackedTargets[k]) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				targets.Add(target);
+				values.Add(CurrentTargetThreatValues[i]);
+			}
+		}
+	}
+	if (targets.Count() == 0) {
+		AttackedTargets.Clear();
+		int best = 0;
+		AbstractClass * best_target = NULL;
+		for (int i = 0; i < CurrentTargets.Count(); i++) {
+			if (CurrentTargetThreatValues[i] > best) {
+				best = CurrentTargetThreatValues[i];
+				best_target = CurrentTargets[i];
+			}
+		}
+		Assign_Target(best_target);
+	} else {
+		int best = 0;
+		AbstractClass * best_target = NULL;
+		for (int i = 0; i < targets.Count(); i++) {
+			AbstractClass * target = targets[i];
+			if (values[i] > best) {
+				best_target = target;
+				best = values[i];
+			}
+		}
+		Assign_Target(best_target);
+	}
+}
+
+
+/// <summary>
+/// Whether the mission is neither guard nor sticky.
+/// </summary>
+int TechnoClass::Is_Not_Guard_Or_Sticky(MissionType mission) // RA2: not in TibSun, at 0x6D46B0
+{
+	if (mission != MISSION_GUARD && mission != MISSION_STICKY) {
+		return(1);
+	}
+	return(0);
+}
+
 
 
 
