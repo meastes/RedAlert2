@@ -324,6 +324,7 @@ int OD_Draw_Text(unsigned color, BitFont * font, Rect const & rect, wchar_t cons
 void OD_Draw_Rect(Surface & surf, Rect const & rect, int offset, int color);
 
 void On_WM_NCDESTROY(HWND window);
+void Slide_Pending_Dialog(HWND window); // RA2: when the dialog's record has its notify flag set, tells control 0x71A (0x4E2), slides the dialog and clears the flag, at 0x005E5F20
 
 int Build_Hotkey_String(KeyNumType key, char * buffer);
 
