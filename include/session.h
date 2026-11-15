@@ -164,6 +164,7 @@ enum NetCommandType {
 	NET_PROPOSE_KICK,
 
 	NET_IM_STILL_HERE = 39,
+	NET_COMMAND_28 = 40, // RA2: 0x28, the host reminds the joiner to accept (Handle_Start_Reminder, 0x005C3C20)
 	NET_PORT_PROBE = 41,
 	NET_MANGLER_REQUEST = 43,
 	NET_MANGLER_RESPONSE = 44,
@@ -353,6 +354,9 @@ struct GlobalPacketType {
 			int Color;
 			unsigned int NameCRC;
 		} Message;
+		struct {
+			wchar_t Names[(0x1C7 - 0x2F) / 2]; // RA2: the slot names, written by Get_Slot_Names (0x005C8CF0)
+		} Slots; // RA2: command NET_COMMAND_16
 		struct {
 			int OneWay;
 		} ResponseTime;

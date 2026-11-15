@@ -16,16 +16,15 @@
 struct GlobalPacketType;
 class IPXAddressClass;
 
-int Net2FirstFreeColor(int reqcolor, int index);
 bool Net2Callback(void);
 void Net2DisplayUsers(void);
 bool Net2Init_Network(void);
 void Net2Shutdown_Network(void);
 void Net2EncodeGameopt(char *out);
-void Net2SetAccept(char *who, int status);
-int Net2GetAccept(char *who);
-int Net2SetHouseAndColor(char *who, int house, int color);
-bool Decrypt_Serial(char *buffer);
-bool Net2Remote_Connect(void);
+void Net2SetAccept(char const *who, int status); // RA2: the name is const
+int Net2GetAccept(char const *who); // RA2: the name is const
+bool Decrypt_Serial(char *buffer); // RA2: 0x005BCE90, reads the registry itself
+bool Net2ReadyToGo(int load_game);
 bool Process_Global_Packet(GlobalPacketType *packet, IPXAddressClass *address);
 void Net2DisplayGameList(void);
+void Net2ServiceGameList(void);
