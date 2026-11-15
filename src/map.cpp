@@ -1541,13 +1541,13 @@ void MapClass::Set_Local_Dimensions(Rect const & size)
 }
 
 
-void MapClass::RevealArea0(int, int, Coord const & coord, int sightrange, HouseClass * house, bool incremental, bool dont_map, bool unfog, bool byheight) // RA2: as above
+void MapClass::RevealArea0(int, int, Coord const & coord, int sightrange, HouseClass * house, bool incremental, bool dont_map, bool unfog, bool byheight) // RA2: RA2's form
 {
 	RevealArea1(coord, sightrange, house, incremental, dont_map, unfog, byheight, true); // RA2: as above
 }
 
 
-void MapClass::RevealArea1(Coord const & xcoord, int sightrange, HouseClass * house, bool incremental, bool dont_map, bool unfog, bool byheight, bool increase) // RA2: as above
+void MapClass::RevealArea1(Coord const & xcoord, int sightrange, HouseClass * house, bool incremental, bool dont_map, bool unfog, bool byheight, bool increase) // RA2: RA2's form
 {
 	int xx;				// Center cell X coordinate (bounds checking).
 	Cell const * ptr;	// Offset pointer.
@@ -1803,7 +1803,7 @@ void MapClass::Sight_From(Coord const & xcoord, int sightrange, HouseClass * hou
 }
 
 
-void MapClass::RevealArea3(Coord const & coord, int start, int sightrange, int skip) // RA2: as above
+void MapClass::RevealArea3(Coord const & coord, int start, int sightrange, int skip) // RA2: RA2's form
 {
 	if (sightrange > 11) { // RA2: as above
 		sightrange = 11; // RA2: as above
@@ -1819,18 +1819,18 @@ void MapClass::RevealArea3(Coord const & coord, int start, int sightrange, int s
 
 	if (!skip) { // RA2: as above
 		Coord center = coord; // RA2: as above
-		center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
-		center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
+		center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
+		center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
 		Cell cell = center.As_Cell(); // RA2: as above
 
-		Cell const * ptr = &RadiusOffset[0]; // RA2: as above
+		Cell const *ptr = &RadiusOffset[0]; // RA2: as above
 		if (start) { // RA2: as above
 			ptr += RadiusCount[start - 1]; // RA2: as above
 		}
 		while (count--) {
 			Cell newcell = *ptr++ + cell; // RA2: as above
-			CellClass & cellptr = (*this)[newcell]; // RA2: as above
-			char frame = TacticalMap->Cell_Shadow(newcell, false); // RA2: as above
+			CellClass &cellptr = (*this)[newcell]; // RA2: as above
+			signed char frame = TacticalMap->Cell_Shadow(newcell, 0); // RA2: as above
 			if (frame != cellptr.ShadowFrame) { // RA2: as above
 				cellptr.ShadowFrame = frame; // RA2: as above
 				cellptr.VisibilityChanged = true; // RA2: as above
@@ -1841,11 +1841,11 @@ void MapClass::RevealArea3(Coord const & coord, int start, int sightrange, int s
 }
 
 
-void MapClass::Shroud_Gap_Area(Coord const & coord, int radius) // RA2: as above
+void MapClass::Shroud_Gap_Area(Coord const & coord, int radius) // RA2: RA2's form
 {
 	Coord center = coord; // RA2: as above
-	center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
-	center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
+	center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
+	center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
 	Cell cell = center.As_Cell(); // RA2: as above
 
 	for (int x = -2 - radius; x < radius + 2; x++) { // RA2: as above
@@ -1863,11 +1863,11 @@ void MapClass::Shroud_Gap_Area(Coord const & coord, int radius) // RA2: as above
 }
 
 
-void MapClass::Unshroud_Gap_Area(Coord const & coord, int radius) // RA2: as above
+void MapClass::Unshroud_Gap_Area(Coord const & coord, int radius) // RA2: RA2's form
 {
 	Coord center = coord; // RA2: as above
-	center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
-	center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -CELL_PIXEL_W) * CELL_LEPTON; // RA2: as above
+	center.X += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
+	center.Y += (TacticalMap->Z_Lepton_To_Pixel(center.Z) / -30) * 256; // RA2: as above
 	Cell cell = center.As_Cell(); // RA2: as above
 
 	for (int x = -2 - radius; x < radius + 2; x++) { // RA2: as above
@@ -1957,7 +1957,7 @@ void MapClass::Place_Down(Cell const & cell, ObjectClass * object)
 		List_Copy(object->Occupy_List(), ARRAY_SIZE(xlist), xlist);
 		Cell const * list = xlist;
 		while (*list != REFRESH_EOL) {
-			Cell newcell = cell + *list; // RA2: as above
+			Cell newcell = cell + *list; // RA2: RA2's form
 			if (Is_Valid(newcell)) {
 				(*this)[newcell].Occupy_Down(object, object->IsOnBridge);
 				(*this)[newcell].Recalc_Attributes();
@@ -2047,7 +2047,7 @@ void MapClass::Pick_Up(Cell const & cell, ObjectClass * object)
 		List_Copy(object->Occupy_List(), ARRAY_SIZE(xlist), xlist);
 		Cell const * list = xlist;
 		while (*list != REFRESH_EOL) {
-			Cell newcell = cell + *list; // RA2: as above
+			Cell newcell = cell + *list; // RA2: RA2's form
 			if (Is_Valid(newcell)) {
 				(*this)[newcell].Occupy_Up(object, object->IsOnBridge);
 				(*this)[newcell].Recalc_Attributes();
@@ -3326,7 +3326,7 @@ bool MapClass::Place_Random_Crate(void)
 }
 
 
-bool MapClass::Place_Crate(Cell cell, CrateType type) // RA2: as above
+bool MapClass::Place_Crate(Cell cell, CrateType type) // RA2: RA2's form
 {
 	if (Map[cell].Land_Type() == LAND_WATER) { // RA2: as above
 		cell = Map.Nearby_Location(cell, SPEED_FLOAT); // RA2: as above
@@ -4323,75 +4323,32 @@ bool MapClass::Register_Subzone_Connections(Cell const & cell)
  * HISTORY:                                                                                    *
  *   10/05/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZoneType check, bool checkbridge, Point2D dimensions, bool checkoverlay, bool checkheight, bool checkburrow, bool allowunderbridge, Cell const & nearto, bool flag) const // RA2: as above
+Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZoneType check, bool checkbridge, Point2D dimensions, bool checkoverlay, bool checkheight, bool checkburrow, bool allowunderbridge, Cell const & nearto, bool flag) const // RA2: RA2's form
 {
-	Cell topten[24];
+	Cell candidates[24]; // RA2: as above
 	int count = 0;
-
 	int xx = cell.X;
 	int yy = cell.Y;
-
 	bool found = false;
-
-	if (zone == 0xFFFF) {
-		zone = -1;
-	}
-
-	/*
-	 * Determine the starting cell's ground height. If bridge scanning is enabled
-	 * and the start cell is under a bridge, raise the reference height to the
-	 * bridge deck.
-	 */
+	if (zone == 0xffff) zone = -1; // RA2: as above
 	int height = Map[cell].Height;
 	if (checkbridge) {
-		if (Map[cell].IsUnderBridge) {
-			height += BRIDGE_CELL_HEIGHT;
-		}
+		if (Map[cell].IsUnderBridge) height += 4; // RA2: as above
 	}
-
-	/*
-	 * Limit the radius of the scan to the size of the visible play area, but never
-	 * larger than 32 cells.
-	 */
-	int maxradius = PlayRect.Height + PlayRect.Width;
-	if (maxradius > 32) {
-		maxradius = 32;
-	}
-
-	/*
-	**	Radiate outward from the specified location, looking for the closest
-	**	location that is generally clear.
-	*/
-	int negradius = 0;
-	for (int radius = 0; radius < maxradius; radius++, negradius--) {
-
-		/*
-		**	Scan the top and bottom rows of the "box".
-		*/
-		for (int x = negradius; x <= radius; x++) {
-
-			Cell newcell = Cell(xx + x, yy - radius);
-			CellClass * cellptr = &Map[newcell];
-			if (((MapClass *)this)->In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) {
-				if (!checkheight || abs(int(height - BRIDGE_CELL_HEIGHT * cellptr->IsUnderBridge - cellptr->Height)) < 2) {
-					if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
-						topten[count++] = newcell;
-						if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
-							found = true;
-						}
-					}
-				}
-			}
-			if (count == ARRAY_SIZE(topten)) break;
-
-			newcell = Cell(xx + x, yy + radius);
-			cellptr = &Map[newcell];
-			if (((MapClass *)this)->In_Local_Radar(cellptr, true)) {
+	int const maxradius = PlayRect.Height + PlayRect.Width > 32 ? 32 : PlayRect.Height + PlayRect.Width; // RA2: as above
+	for (int radius = 0; radius < maxradius; ++radius) { // RA2: as above
+		int negative_radius = -radius; // RA2: as above
+		for (int x = negative_radius; x <= radius; ++x) { // RA2: as above
+			Cell newcell; // RA2: as above
+			CellClass *cellptr; // RA2: as above
+			// The existing int formal carries a scan flag observed only through its low byte.
+			if ((unsigned char)flag == 0) { // RA2: as above
+				newcell = Cell(xx + x, yy - radius); // RA2: as above
 				cellptr = &Map[newcell];
-				if (((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) {
-					if (!checkheight || abs(int(height - BRIDGE_CELL_HEIGHT * cellptr->IsUnderBridge - cellptr->Height)) < 2) {
+				if (In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) { // RA2: as above
+					if (!checkheight || abs(height - 4 * cellptr->IsUnderBridge - cellptr->Height) < 2) { // RA2: as above
 						if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
-							topten[count++] = newcell;
+							candidates[count++] = newcell; // RA2: as above
 							if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
 								found = true;
 							}
@@ -4399,106 +4356,95 @@ Cell MapClass::Nearby_Location(Cell const & cell, SpeedType speed, int zone, MZo
 					}
 				}
 			}
-			if (count == ARRAY_SIZE(topten)) break;
-		}
-
-		if (count == ARRAY_SIZE(topten)) break;
-
-		/*
-		**	Scan the left and right columns of the "box".
-		*/
-		for (int y = negradius + 1; y <= radius - 1; y++) {
-
-			Cell newcell = Cell(xx - radius, yy + y);
-			CellClass * cellptr = &Map[newcell];
-			if (((MapClass *)this)->In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) {
-				if (!checkheight || abs(int(height - BRIDGE_CELL_HEIGHT * cellptr->IsUnderBridge - cellptr->Height)) < 2) {
-					if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
-						topten[count++] = newcell;
-						if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
-							found = true;
+			if (count == 24) break; // RA2: as above
+			if ((unsigned char)flag == 0 || x > negative_radius) { // RA2: as above
+				int bottom_y = yy + radius; // RA2: as above
+				newcell = Cell(xx + x, bottom_y); // RA2: as above
+				cellptr = &Map[newcell];
+				if (In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) { // RA2: as above
+					if (!checkheight || abs(height - 4 * cellptr->IsUnderBridge - cellptr->Height) < 2) { // RA2: as above
+						if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
+							candidates[count++] = newcell; // RA2: as above
+							if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
+								found = true;
+							}
 						}
 					}
 				}
 			}
-			if (count == ARRAY_SIZE(topten)) break;
-
+			if (count == 24) break; // RA2: as above
+		}
+		if (count == 24) break; // RA2: as above
+		for (int y = negative_radius + 1; y <= radius - 1; ++y) { // RA2: as above
+			Cell newcell; // RA2: as above
+			CellClass *cellptr; // RA2: as above
+			if ((unsigned char)flag == 0) { // RA2: as above
+				newcell = Cell(xx - radius, yy + y); // RA2: as above
+				cellptr = &Map[newcell];
+				if (In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) { // RA2: as above
+					if (!checkheight || abs(height - 4 * cellptr->IsUnderBridge - cellptr->Height) < 2) { // RA2: as above
+						if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
+							candidates[count++] = newcell; // RA2: as above
+							if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
+								found = true;
+							}
+						}
+					}
+				}
+			}
+			if (count == 24) break; // RA2: as above
 			newcell = Cell(xx + radius, yy + y);
 			cellptr = &Map[newcell];
-			if (((MapClass *)this)->In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) {
-				if (!checkheight || abs(int(height - BRIDGE_CELL_HEIGHT * cellptr->IsUnderBridge - cellptr->Height)) < 2) {
+			if (In_Local_Radar(cellptr, true) && ((MapClass *)this)->Is_Clear_To_Move(newcell, dimensions.X, dimensions.Y, speed, zone, check, -1, checkbridge, checkoverlay)) { // RA2: as above
+				if (!checkheight || abs(height - 4 * cellptr->IsUnderBridge - cellptr->Height) < 2) { // RA2: as above
 					if ((!checkburrow || cellptr->Can_Burrow_Here()) && (allowunderbridge || !cellptr->IsUnderBridge)) {
-						topten[count++] = newcell;
+						candidates[count++] = newcell; // RA2: as above
 						if (checkbridge || newcell == TacticalMap->Coord_To_Cell(Coord(newcell, 0))) {
 							found = true;
 						}
 					}
 				}
 			}
-			if (count == ARRAY_SIZE(topten)) break;
+			if (count == 24) break; // RA2: as above
 		}
-
-		if (count == ARRAY_SIZE(topten)) break;
+		if (count == 24) break; // RA2: as above
 		if (found) break;
 	}
-
 	if (count > 0) {
-
-		/*
-		 * Partition the gathered cells into those that are currently visible on the
-		 * tactical display and those that are not.
-		 */
-		Cell visible[ARRAY_SIZE(topten)];
-		Cell hidden[ARRAY_SIZE(topten)];
-		int visiblecount = 0;
-		int hiddencount = 0;
-
+		Cell visible[24]; // RA2: as above
+		Cell hidden[24]; // RA2: as above
+		int visible_count = 0; // RA2: as above
+		int hidden_count = 0; // RA2: as above
 		int index;
-		for (index = 0; index < count; index++) {
-			if (TacticalMap->Coord_To_Cell(Coord(topten[index], 0)) == topten[index]) {
-				visible[visiblecount++] = topten[index];
+		for (index = 0; index < count; ++index) { // RA2: as above
+			Cell projected = TacticalMap->Coord_To_Cell(Coord(candidates[index], 0)); // RA2: as above
+			if (projected == candidates[index]) { // RA2: as above
+				visible[visible_count++] = candidates[index]; // RA2: as above
 			} else {
-				hidden[hiddencount++] = topten[index];
+				hidden[hidden_count++] = candidates[index]; // RA2: as above
 			}
 		}
-
-		/*
-		 * If no preferred destination was supplied, pick a pseudo-random cell from the
-		 * visible list (or the hidden list if nothing was visible).
-		 */
 		if (nearto == CELL_NONE) {
-			if (visiblecount != 0) {
-				return(visible[Frame % visiblecount]);
-			}
-			return(hidden[Frame % hiddencount]);
+			if (visible_count != 0) return visible[Frame % visible_count]; // RA2: as above
+			return hidden[Frame % hidden_count]; // RA2: as above
 		}
-
-		/*
-		 * A preferred destination was supplied, so return the gathered cell that lies
-		 * closest to it.
-		 */
-		int total = visiblecount;
-		if (visiblecount == 0) {
-			total = hiddencount;
-		}
-
+		int total = visible_count; // RA2: as above
+		if (visible_count == 0) total = hidden_count; // RA2: as above
+		double best_distance = 100000.0; // RA2: as above
 		Cell best = CELL_NONE;
-		double bestdist = 100000.0;
-		for (index = 0; index < total; index++) {
-			Cell trycell = visible[index];
-			if (visiblecount == 0) {
-				trycell = hidden[index];
-			}
-			double dist = fastmath::sqrt((double)((trycell.Y - nearto.Y) * (trycell.Y - nearto.Y) + (trycell.X - nearto.X) * (trycell.X - nearto.X)));
-			if (dist < bestdist) {
-				bestdist = dist;
-				best = trycell;
+		for (index = 0; index < total; ++index) { // RA2: as above
+			Cell candidate = visible_count != 0 ? visible[index] : hidden[index]; // RA2: as above
+			int dx = candidate.X - nearto.X; // RA2: as above
+			int dy = candidate.Y - nearto.Y; // RA2: as above
+			double distance = fastmath::sqrt((double)(dy * dy + dx * dx)); // RA2: as above
+			if (distance < best_distance) { // RA2: as above
+				best_distance = distance; // RA2: as above
+				best = candidate; // RA2: as above
 			}
 		}
-		return(best);
+		return best; // RA2: as above
 	}
-
-	return(CELL_NONE);
+	return CELL_NONE; // RA2: as above
 }
 
 
@@ -6429,7 +6375,7 @@ void MapClass::Repair_Bridge(Cell const & cell)
 }
 
 
-void MapClass::Destroy_Bridge2_Near(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Bridge2_Near(Cell const &cell) // RA2: RA2's form
 {
 	for (int x = -2; x < 3; ++x) { // RA2: as above
 		for (int y = -2; y < 3; ++y) { // RA2: as above
@@ -6536,7 +6482,7 @@ finished: // RA2: as above
 }
 
 
-bool __fastcall Is_Bridge_Span_End(int tile, int kind, CellClass const *cell) // RA2: as above
+bool __fastcall Is_Bridge_Span_End(int tile, int kind, CellClass const *cell) // RA2: RA2's form
 {
 	if (kind == 2) { // RA2: as above
 		if (tile == IsometricTileTypeClass::BridgeBottomRight1 && cell->SubTile == 4) { // RA2: as above
@@ -6567,7 +6513,7 @@ bool __fastcall Is_Bridge_Span_End(int tile, int kind, CellClass const *cell) //
 }
 
 
-void MapClass::Destroy_Low_Bridge_Span(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge_Span(Cell const &cell) // RA2: RA2's form
 {
 	int overlay = Map[cell].Overlay; // RA2: as above
 
@@ -6595,7 +6541,7 @@ void MapClass::Destroy_Low_Bridge_Span(Cell const &cell) // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge2_Span(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge2_Span(Cell const &cell) // RA2: RA2's form
 {
 	int overlay = Map[cell].Overlay; // RA2: as above
 
@@ -6623,7 +6569,7 @@ void MapClass::Destroy_Low_Bridge2_Span(Cell const &cell) // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge_Near(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge_Near(Cell const &cell) // RA2: RA2's form
 {
 	for (int x = -2; x < 3; ++x) { // RA2: as above
 		for (int y = -2; y < 3; ++y) { // RA2: as above
@@ -6730,7 +6676,7 @@ finished: // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge_EW(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge_EW(Cell const &cell) // RA2: RA2's form
 {
 	Cell cellnum = cell;
 	Cell center = cellnum; // RA2: as above
@@ -6796,7 +6742,7 @@ void MapClass::Destroy_Low_Bridge_EW(Cell const &cell) // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge_NS(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge_NS(Cell const &cell) // RA2: RA2's form
 {
 	Cell cellnum = cell;
 	Cell center = cellnum; // RA2: as above
@@ -6862,7 +6808,7 @@ void MapClass::Destroy_Low_Bridge_NS(Cell const &cell) // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge2_EW(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge2_EW(Cell const &cell) // RA2: RA2's form
 {
 	Cell cellnum = cell;
 	Cell center = cellnum; // RA2: as above
@@ -6928,7 +6874,7 @@ void MapClass::Destroy_Low_Bridge2_EW(Cell const &cell) // RA2: as above
 }
 
 
-void MapClass::Destroy_Low_Bridge2_NS(Cell const &cell) // RA2: as above
+void MapClass::Destroy_Low_Bridge2_NS(Cell const &cell) // RA2: RA2's form
 {
 	Cell cellnum = cell;
 	Cell center = cellnum; // RA2: as above
