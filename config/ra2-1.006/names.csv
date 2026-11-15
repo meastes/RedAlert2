@@ -5311,6 +5311,7 @@ address,symbol,evidence
 0x00709D50,?IsDisguisedAs@UnitClass@@UBE_NPAVHouseClass@@@Z,"compiled from src/unit.cpp, matched; code at 2 addresses, the others matched by src/infantry.cpp"
 0x00709E10,?Init@UnitClass@@UAEXXZ,"compiled from src/unit.cpp, matched"
 0x00709EC0,?UpdateDisguise@UnitClass@@QAEXXZ,"compiled from src/unit.cpp, matched"
+0x0070A240,?Is_Immobilized@UnitClass@@QBE_NXZ,"compiled from src/unit.cpp, matched"
 0x0070A260,?CanUseWaypoint@UnitClass@@UBE_NXZ,"compiled from src/unit.cpp, matched; code at 104 addresses, placed by the gap"
 0x0070A270,?CanAttackOnTheMove@UnitClass@@UBE_NXZ,"compiled from src/unit.cpp, matched; code at 104 addresses, placed by the gap"
 0x0070A280,?Fetch_Object_Size@UnitClass@@UBEHXZ,"compiled from src/unit.cpp, matched"

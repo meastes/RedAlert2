@@ -5613,6 +5613,7 @@ address,size,evidence
 0x00709D50,192,"code of src/unit.cpp, matched: its code occurs at 2 addresses; the others are matched code of src/infantry.cpp"
 0x00709E10,176,"code of src/unit.cpp, matched"
 0x00709EC0,544,"code of src/unit.cpp, matched"
+0x0070A240,32,"code of src/unit.cpp, matched"
 0x0070A260,16,"code of src/unit.cpp, matched: its code occurs at 104 addresses; placed by the gap the other functions of the file leave"
 0x0070A270,16,"code of src/unit.cpp, matched: its code occurs at 104 addresses; placed by the gap the other functions of the file leave"
 0x0070A280,16,"code of src/unit.cpp, matched: too short for the match rule"
