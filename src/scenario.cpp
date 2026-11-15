@@ -1149,7 +1149,7 @@ void Post_Load_Game(void)
 
 	Search.Update_Map_Dimensions(Map.PlayRect);
 
-	IonStormClass::Apply_Secondary_Effect(false);
+	IonStormClass::Apply_Secondary_Effect(); // RA2: takes no argument (0x520770)
 
 	AnimClass::Post_Load_Game();
 

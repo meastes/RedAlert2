@@ -837,6 +837,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		bool Is_Ally(HouseClass const * house) const;
 		bool Is_Ally(ObjectClass const * object) const;
 		bool Ion_Sensitives_Should_Be_Offline(void); // RA2: always false (0x0051FC80 is xor al, al; ret)
+		void Begin_Radar_Blackout(int frames); // RA2: 0x004F5840; RadarBlackoutTimer (+0x1F8) = frames, and the radar is redrawn (RecalcRadar)
 		bool Is_Ally(AbstractClass const * target) const;
 #ifdef _DEBUG
 		void Debug_Dump(MonoClass *mono) const;
