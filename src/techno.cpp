@@ -3833,11 +3833,18 @@ bool TechnoClass::Should_Uncloak(void) const
  *=============================================================================================*/
 bool TechnoClass::Is_Ready_To_Cloak(void) const
 {
-	/*
-	**	If the object cannot recloak, then it certainly is not allowed to start.
-	*/
-	if (!Is_Allowed_To_Recloak() && !Has_Ability(ABILITY_CLOAK)) {
-		if (!Map[Center_Coord().As_Cell()].Is_Cloaked(House->HeapID) && !IsCloakable) {
+	if (!Is_Allowed_To_Recloak()) { // RA2: RA2's form
+		bool allowed = true; // RA2: as above
+		if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) { // RA2: as above
+			const TechnoTypeClass *type = Techno_Type_Class(); // RA2: as above
+			if (Veterancy.Is_Veteran() && ((const bool *)&type->VeteranAbilities)[6]) { // RA2: as above
+				allowed = false; // RA2: as above
+			} else if (Veterancy.Is_Elite() && (((const bool *)&type->VeteranAbilities)[6] || ((const bool *)&type->EliteAbilities)[6])) { // RA2: as above
+				allowed = false; // RA2: as above
+			}
+		}
+		if (allowed && !((CellClass *)&Map[Center_Coord().As_Cell()])->Is_Cloaked(House->HeapID) // RA2: as above
+			&& !IsCloakable) { // RA2: as above
 			return(false);
 		}
 	}
@@ -3848,19 +3855,10 @@ bool TechnoClass::Is_Ready_To_Cloak(void) const
 	if (Cloak == CLOAKED) {
 		return(false);
 	}
-
-	/*
-	**	If the object is currently rearming, then don't begin to recloak.
-	*/
-	if (Arm != 0) {
+	if (Arm.Value() != 0) { // RA2: as above
 		return(false);
 	}
-
-	/*
-	**	If it seems like this object is about to fire on a target, then don't begin
-	**	cloaking either.
-	*/
-	if (TarCom != NULL && In_Range(TarCom)) {
+	if (TarCom != 0 && IsCloseEnoughToAttack(TarCom)) { // RA2: as above
 		return(false);
 	}
 
@@ -3870,12 +3868,7 @@ bool TechnoClass::Is_Ready_To_Cloak(void) const
 	if (RTTI != RTTI_BUILDING && CloakingDevice.Fetch_Stage() != 0) {
 		return(false);
 	}
-
-	/*
-	**	If the arbitrary cloak delay value is still counting down, then don't
-	**	allow recloaking just yet.
-	*/
-	if (CloakDelay != 0) {
+	if (CloakDelay.Value() != 0) { // RA2: as above
 		return(false);
 	}
 
@@ -3884,6 +3877,8 @@ bool TechnoClass::Is_Ready_To_Cloak(void) const
 	*/
 	return(true);
 }
+
+
 
 
 /***********************************************************************************************
@@ -4505,22 +4500,30 @@ void TechnoClass::Rad_Eruption(int spread) // RA2: not in TibSun, at 0x6CA340
 /// <returns>Returns with the pitch to set the barrel to.</returns>
 DirType TechnoClass::Barrel_Pitch(AbstractClass * target) const
 {
-	DirType pitch(Dir256(TClass->FireAngle));
-	if (target != NULL) {
-		Coord predicted = Predict_Target_Coord();
-		Coord coord = predicted - Turret_Coord();
-		WeaponTypeClass const * weapon = PrimaryWeapon;
-		double gravity = Rule->Gravity;
-		BulletTypeClass const * bullet = weapon->Bullet;
-		if (bullet != NULL && bullet->IsFloater) {
-			gravity = Get_Floater_Gravity();
+	DirType dir((unsigned short)(Techno_Type_Class()->FireAngle << 8)); // RA2: RA2's form
+	if (target != 0) { // RA2: as above
+		Coord end = Predict_Target_Coord(); // RA2: as above
+		int weapon; // RA2: as above
+		if (Techno_Type_Class()->Has_Turret_Weapons()) { // RA2: as above
+			weapon = CurrentWeaponNumber; // RA2: as above
+		} else { // RA2: as above
+			weapon = 0; // RA2: as above
 		}
-		if (!Calculate_Projectile_Pitch(Should_Use_High_Arc(0), weapon->MaxSpeed, fastmath::sqrt(pow(coord.X, 2) + pow(coord.Y, 2)), coord.Z, gravity, pitch)) {
-			pitch = DIR_NW;
+		Coord delta = end - Turret_Coord(weapon); // RA2: as above
+		WeaponTypeClass *type = Get_Class_Weapon_Data(weapon)->Weapon; // RA2: as above
+		double speed = Rule->Gravity; // RA2: as above
+		if (type->Bullet != 0 && type->Bullet->IsFloater) { // RA2: as above
+			speed = Get_Floater_Gravity(); // RA2: as above
+		}
+		int distance = (int)fastmath::sqrt(pow(delta.X, 2.0) + pow(delta.Y, 2.0)); // RA2: as above
+		int velocity = type->Get_Speed(distance); // RA2: as above
+		if (!Calculate_Projectile_Pitch(Should_Use_High_Arc(weapon), velocity, distance, delta.Z, speed, dir)) { // RA2: as above
+			dir = DIR_NW; // RA2: as above
 		}
 	}
-	return(pitch);
+	return dir; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -9431,26 +9434,25 @@ void TechnoClass::Rocking_AI(void)
 Coord TechnoClass::Predict_Target_Coord(void) const
 {
 	Coord coord = COORD_NONE;
-
-	if (TarCom != NULL) {
+	if (TarCom != 0) { // RA2: RA2's form
 		coord = TarCom->As_Coord();
-		if (TarCom != NULL && TarCom->RTTI == RTTI_UNIT) {
-			UnitClass * unit = (UnitClass *)TarCom;
-			if (unit != NULL && unit->Locomotion->Is_Moving()) {
+		if (TarCom != 0 && TarCom->Fetch_RTTI() == RTTI_UNIT) { // RA2: as above
+			FootClass *unit = (FootClass *)TarCom; // RA2: as above
+			if (unit != 0 && unit->Locomotion->Is_Moving()) { // RA2: as above
 				int speed = unit->Current_Speed();
 				int distance = Distance(TarCom);
-				WeaponTypeClass const * weapon = PrimaryWeapon;
-				if (weapon != NULL) {
-					int travel = (distance / (weapon->MaxSpeed * 0.9) * speed);
-					double dir = unit->PrimaryFacing.Current().As_Radian();
-					coord.Y -= fastmath::sin(dir) * travel;
-					coord.X += fastmath::cos(dir) * travel;
+				WeaponDataStruct const *weapon = GetTurretWeapon(); // RA2: as above
+				if (weapon != 0 && weapon->Weapon != 0) { // RA2: as above
+					double range = distance; // RA2: as above
+					int lead = (int)(range / (weapon->Weapon->Get_Speed(distance) * 0.9) * speed); // RA2: as above
+					coord = Move_Coord(coord, unit->PrimaryFacing.Current(), lead); // RA2: as above
 				}
 			}
 		}
 	}
-	return(coord);
+	return coord; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -10001,36 +10003,32 @@ int TechnoClass::Apparent_Brightness(int brightness) const
 /// <returns>bool; Should the object appear on the radar?</returns>
 bool TechnoClass::Is_Radar_Visible(DetectedType & detected) const
 {
-	TechnoTypeClass const * ttype = TClass;
-	if (!ttype->IsInvisible) {
-		if (ttype->IsRadarVisible) {
-			return(true);
-		}
-
-		if (House->Is_Player_Control()) {
-			return(IsDiscoveredByPlayer ? true : false);
-		}
-
-		int height = HeightAGL;
-		bool ability_radar_invisible = Has_Ability(ABILITY_RADAR_INVISIBLE);
-		bool is_shrouded = Map.Is_Shrouded(Get_Coord()) && MainWindow;
-		bool is_fogged = Scen->Special.IsFogOfWar && Map.Is_Fogged(Get_Coord());
-
-		if (!is_fogged && Cloak != CLOAKED && height >= -20 && !ability_radar_invisible && !is_shrouded) {
-			return(true);
-		}
-
-		if (!Is_Sensed_By_Player()) {
-			return(false);
-		}
-
-		if (!PlayerPtr->Is_Ally(House) && !ability_radar_invisible && !is_fogged && !is_shrouded && !IsSinking) {
-			detected = (height < -20) ? DETECTED_SUBTERRANEAN : DETECTED_CLOAKED;
-		}
+	TechnoTypeClass const *type = TClass; // RA2: RA2's form
+	if (type->IsInvisible || IsSinking) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (type->IsRadarVisible) { // RA2: as above
 		return(true);
 	}
-	return(false);
+	if (House->Is_Player_Control()) { // RA2: as above
+		return IsDiscoveredByPlayer ? true : false; // RA2: as above
+	}
+	int value = HeightAGL; // RA2: as above
+	bool ability = Has_Ability(ABILITY_RADAR_INVISIBLE); // RA2: as above
+	bool hidden = Map.Is_Shrouded(Get_Coord()) && MainWindow != 0; // RA2: as above
+	bool tunnel = (Scen->Special.IsFogOfWar) && Map.Is_Fogged(Get_Coord()); // RA2: as above
+	if (!tunnel && Cloak != CLOAKED && value >= -20 && !ability && !hidden) { // RA2: as above
+		return(true);
+	}
+	if (!Is_Sensed_By_Player()) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (!PlayerPtr->Is_Ally(House) && !ability && !tunnel && !hidden) { // RA2: as above
+		detected = value < -20 ? DETECTED_SUBTERRANEAN : DETECTED_CLOAKED; // RA2: as above
+	}
+	return(true); // RA2: as above
 }
+
 
 
 /// <summary>
