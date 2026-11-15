@@ -5021,6 +5021,7 @@ address,size,evidence
 0x006B2D60,144,"code of src/taction.cpp, matched"
 0x006B2DF0,144,"code of src/taction.cpp, matched"
 0x006B2E80,64,"code of src/taction.cpp, matched"
+0x006B2EC0,96,"code of src/taction.cpp, matched"
 0x006B2F20,16,"code of src/taction.cpp, matched: too short for the match rule"
 0x006B2F30,32,"code of src/taction.cpp, matched"
 0x006B2F50,64,"code of src/taction.cpp, matched"
