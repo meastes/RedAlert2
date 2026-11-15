@@ -179,6 +179,7 @@ TeamTypeClass::~TeamTypeClass(void)
 {
 	Detach_This_From_All(this, true);
 	TeamTypes.Delete(this);
+	AbstractTypePtrTracker.Delete(this); // RA2: out of the abstract type pointer tracker too
 }
 
 
