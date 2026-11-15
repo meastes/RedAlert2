@@ -51,6 +51,8 @@
 #include "_keyboar.h"
 #include "_map.h"
 #include "_rules.h"
+#include "ownertalk.h" // RA2
+#include "_timer.h" // RA2
 #include "addon.h"
 #include "ccini.h"
 #include "conquer.h"
@@ -59,7 +61,25 @@
 #include "globals.h"
 #include "ipxmgr.h"
 #include "language\language.h"
+#include "mixfile.h" // RA2: MixFileClass
+#include "cd.h" // RA2: CD
+#include "_pk.h" // RA2
+#include "stringtable.h" // RA2
+#include "firewall.h" // RA2: FirewallHelperClass
+#include "_rand.h" // RA2: NonCriticalRandomNumber
+#include "houstype.h" // RA2
+#include "goptions.h" // RA2
+#include "auddsnd.h" // RA2
+#include "audlevel.h" // RA2
+#include "audattr.h" // RA2
+#include "movie.h" // RA2
+#include "vox.h" // RA2
+#include "voc.h" // RA2
+#include "_tooltip.h" // RA2
+#include "cctooltip.h" // RA2
+#include "tooltip.h" // RA2
 #include "msgloop.h"
+#include "multiplayer.h" // RA2: MultiplayerGameMode
 #include "nullmgr.h"
 #include "phone.h"
 #include "progress.h"
@@ -69,9 +89,70 @@
 #include "special.h"
 #include "wonline.h"
 #include "xstraw.h"
+#include "wstring.h"
 
 #include <ctime> // for station ID computation
 #include <dos.h> // for station ID computation
+#include "ftimer.h"
+
+extern char ManglerAddresses[64][128]; // RA2: 0xB26CBC, WOL mangler server addresses (filled from the server list)
+extern int ManglerPorts[64]; // RA2: 0xB291A4, their ports
+
+char * __fastcall Wide_To_Narrow(wchar_t const * text); // RA2: 0x6FA120, static buffer
+wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x6FA180, static buffer
+
+void __fastcall Char_To_Wide(wchar_t * dest, char const * source, int limit); // RA2: 0x6FA0C0
+extern DynamicVectorClass<MixFileClass *> ScenarioMixFiles; // RA2: 0x837480, the .mmx archives opened for the multiplayer maps
+void __fastcall Read_Map_Header(char const * filename, wchar_t * description, char * digest, char * game_modes, bool * official, int * min_players, int * max_players); // RA2: 0x6707D0, reads a .mpr file's header
+
+extern char Squad1Names[]; // RA2: 0xB2A820, comma-separated names of the first fixed squad (filled by the lobby)
+extern char Squad2Names[]; // RA2: 0xB293D8, the second squad
+
+extern bool PortsRead; // RA2: 0xAB9178, set once the port numbers have been read from RA2.INI
+extern FirewallHelperClass FirewallHelper; // RA2: 0xA71B18, the firewall detection settings
+MultiplayerGameMode * First_Game_Mode(void); // RA2: 0x5B6EC0
+
+namespace OwnerDraw { // RA2: RA2's form, as in ipxmgr.cpp
+char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x6FA... narrows the player name
+}
+
+extern int SavedGameSpeed; // RA2: 0x7F3230, the game speed from before the game was left (-1 when none)
+extern int UnlockInputFrame; // RA2: 0x00AB9174, as in mainloop.cpp
+
+void Leave_Game_Hook(void); // RA2: 0x005173A0, an empty function that Leave_Game calls first
+
+namespace Game { extern int PlayerColor; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /***************************** Globals *************************************/
@@ -148,12 +229,71 @@ char const * SessionClass::DialMethodCheck[ DIAL_METHODS ] = {
 	"P"
 };
 
-const int SessionClass::CallWaitStringIDs[ CALL_WAIT_STRINGS_NUM ] = {
-	TXT_CWAIT_STAR70,
-	TXT_CWAIT_70NUM,
-	TXT_CWAIT_1170,
-	TXT_CUSTOM,
+char const * const SessionClass::CallWaitStringIDs[ CALL_WAIT_STRINGS_NUM ] = { // RA2: string-table labels (0x7F3214)
+	"TXT_CWAIT_STAR70",
+	"TXT_CWAIT_70NUM",
+	"TXT_CWAIT_1170",
+	"TXT_CUSTOM",
 };
+
+int NodeNameType::Get_Country(void) // RA2: RA2's signature
+{
+	return (Slot.InitialCountry == -2) ? -2 : Slot.Country; // RA2: 0x0066E290
+}
+
+int NodeNameType::Get_Color(void) // RA2: RA2's signature
+{
+	return (Slot.InitialColor == -2) ? -2 : Slot.ColorIdx; // RA2: 0x0066E2A0
+}
+
+int NodeNameType::Get_Color_Or_Random(void) // RA2: RA2's signature
+{
+	if (Slot.InitialColor == -2 && Slot.ColorIdx == -1) { // RA2: 0x0066E2B0
+		return -2; // RA2: RA2's form of NodeNameType::Get_Color_Or_Random
+	}
+	return Slot.ColorIdx; // RA2: as above
+}
+
+void NodeNameType::Set_Country(int value) // RA2: RA2's signature
+{
+	if (value == -2) { // RA2: 0x0066E2D0
+		Slot.Country = 0; // RA2: RA2's form of NodeNameType::Set_Country
+		Slot.InitialCountry = -2; // RA2: as above
+	} else {
+		Slot.Country = value; // RA2: as above
+		Slot.InitialCountry = -1; // RA2: as above
+	}
+}
+
+void NodeNameType::Set_Color(int value) // RA2: RA2's signature
+{
+	if (value == -2) { // RA2: 0x0066E300
+		Slot.ColorIdx = -1; // RA2: RA2's form of NodeNameType::Set_Color
+		Slot.InitialColor = -2; // RA2: as above
+	} else {
+		Slot.ColorIdx = value; // RA2: as above
+		Slot.InitialColor = -1; // RA2: as above
+	}
+}
+
+SessionOptionsClass::SessionOptionsClass(void) // RA2: RA2's signature
+{
+	MPGameMode = 0; // RA2: 0x0066E330
+	ScenIndex = 0; // RA2: RA2's form of SessionOptionsClass::SessionOptionsClass
+	GameSpeed = 0; // RA2: as above
+	Credits = 10000; // RA2: as above
+	UnitCount = 10; // RA2: as above
+	ShortGame = true; // RA2: as above
+	SuperWeaponsAllowed = true; // RA2: as above
+	BuildOffAlly = true; // RA2: as above
+	MCVRepacks = true; // RA2: as above
+	CratesAppear = true; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		SlotData[i][0] = 0; // RA2: as above
+		SlotData[i][1] = 0; // RA2: as above
+		SlotData[i][2] = 0; // RA2: as above
+	}
+}
 
 /***************************************************************************
  * SessionClass::SessionClass -- Constructor                               *
@@ -170,50 +310,78 @@ const int SessionClass::CallWaitStringIDs[ CALL_WAIT_STRINGS_NUM ] = {
  * HISTORY:                                                                *
  *   11/30/1995 BRR : Created.                                             *
  *=========================================================================*/
-SessionClass::SessionClass(void)
+SessionClass::SessionClass(void) : // RA2: RA2's signature
+	MPGameMode(NULL) // RA2: initialized before the body
 {
-	Type = GAME_NORMAL;
-	CommProtocol = DEFAULT_COMM_PROTOCOL;
+	Type = GAME_NORMAL; // RA2: statement order and values of 0x0066E380
+	CommProtocol = DEFAULT_COMM_PROTOCOL; // RA2: as above
 
-	Options.ScenarioIndex = 0;
-	Options.Bases = false;
-	Options.Credits = 0;
-	//Options.Tiberium = 0;
-	Options.BridgeDestruction = 0;
-	Options.Goodies = 0;
-	Options.Ghosts = 0;
-	Options.UnitCount = 0;
-	Options.ShortGame = 0;
-	Options.GameSpeed = 0;
-	Options.CrapEngineers = 0;
-
-	Options.AlliesAllowed=0;
-	Options.HarvTruce=0;
-	Options.CTF=0;
-	Options.FogOfWar=false;
-	Options.MCVRedeploy=false;
-	Options.AIDifficulty = DIFF_NORMAL;
+	Options.ScenarioIndex = 0; // RA2: as above
+	Options.Bases = true; // RA2: as above
+	Options.Credits = 0; // RA2: as above
+	Options.BridgeDestruction = false; // RA2: as above
+	Options.Goodies = false; // RA2: as above
+	Options.Ghosts = false; // RA2: as above
+	Options.UnitCount = 0; // RA2: as above
+	Options.ShortGame = false; // RA2: as above
+	Options.SWAllowed = false; // RA2: as above
+	Options.BuildOffAlly = false; // RA2: as above
+	Options.GameSpeed = 0; // RA2: as above
+	Options.CrapEngineers = false; // RA2: as above
+	Options.AlliesAllowed = false; // RA2: as above
+	Options.HarvTruce = false; // RA2: as above
+	Options.CTF = false; // RA2: as above
+	Options.FogOfWar = false; // RA2: as above
+	Options.MCVRedeploy = false; // RA2: as above
+	Options.AIDifficulty = DIFF_NORMAL; // RA2: as above
 
 	UniqueID = 0;
-
 	Handle[0] = 0;
-	PrefColor = 0;
-	ColorIdx = 0;
-	House = HOUSE_FIRST;
+	House = 0; // RA2: as above
+	idxSide2 = -1; // RA2: as above
+	PrefColor = 2; // RA2: as above
+	ColorIdx = -1; // RA2: as above
+	Side = House; // RA2: as above
+	Side2 = idxSide2; // RA2: as above
+	Color = PrefColor; // RA2: as above
+	Color2 = ColorIdx; // RA2: as above
 
-	ObiWan = 0;
-	Solo = 0;
+	WOLTaunts = true; // RA2: as above
+	LANTaunts = true; // RA2: as above
+	WOLScrollText = true; // RA2: as above
+	LANScrollText = true; // RA2: as above
 
-	PreferredServer = NULL;
+	for (int p = 0; p < 8; p++) { // RA2: RA2's form of SessionClass::SessionClass
+		PlayerPorts[p] = 0; // RA2: as above
+	}
+	unknown_3078 = false; // RA2: as above
+	unknown_306C = false; // RA2: as above
+	unknown_306E = 0; // RA2: as above
+	unknown_3070 = 0; // RA2: as above
+	PortBase = 1250; // RA2: as above
+	ForcePortBase = 0; // RA2: as above
+	unknown_3018 = true; // RA2: as above
+	unknown_2F48 = false; // RA2: as above
+	unknown_301C = 0; // RA2: as above
+	memset(ManglerAddresses, 0, sizeof(ManglerAddresses)); // RA2: 0xB26CBC, the WOL mangler server addresses
+	memset(ManglerPorts, 0, sizeof(ManglerPorts)); // RA2: 0xB291A4
 
-	Locale = 0;
-	LastLocale = 0;
-
-	StoreNickname = true;
-	LastNicknameSlot = -1;
-
+	MultiplayerObserver = 0; // RA2: as above
+	Unknown_304 = 0; // RA2: as above
+	LastNicknameSlot = -1; // RA2: as above
+	WOLLimitResolution = false; // RA2: as above
+	ViaPacketRouter = false; // RA2: as above
 	MasterPlayerID = -1;
 	memset(MasterPlayerName, 0, sizeof(MasterPlayerName));
+	unknown_308C = 0; // RA2: as above
+	unknown_3090 = true; // RA2: as above
+	unknown_3094 = -1; // RA2: as above
+	unknown_3098 = false; // RA2: as above
+	unknown_309C = 20; // RA2: as above
+	unknown_30A0 = 0; // RA2: as above
+	unknown_30A4 = 0; // RA2: as above
+	unknown_30A8 = -1; // RA2: as above
+	PacketRouterPort = 0; // RA2: as above
 
 	SquadAlliances = false;
 	SawGameCompletion = false;
@@ -231,9 +399,8 @@ SessionClass::SessionClass(void)
 
 	PrecalcMaxAhead = 0;
 	PrecalcDesiredFrameRate = 0;
-
-	ShowInternetDebug = false;
-
+	EnableMultiplayerDebug = false; // RA2: as above
+	DrawMPDebugStats = false; // RA2: as above
 	LoadGame = 0;
 	EmergencySave = 0;
 
@@ -241,14 +408,14 @@ SessionClass::SessionClass(void)
 	WWChat = 0;
 
 	RecordFile.Set_Name("RECORD.BIN");  // always uses this name
-	Record= 0;                          // set via command line
+	Record = 0;                          // set via command line // RA2: as above
 	Play = 0;                           // set via command line
 	Attract = 0;                        // set via command line
 
 	IsBridge = 0;
-	NetStealth = 0;
-	NetProtect = 1;
-	NetOpen = 0;
+	NetStealth = false; // RA2: as above
+	NetProtect = true; // RA2: as above
+	NetOpen = false; // RA2: as above
 	GameName[0] = 0;
 	GProductID = 0;
 	Suspended = 0;
@@ -256,8 +423,6 @@ SessionClass::SessionClass(void)
 	LatencyFudge = 1;
 
 	MetaSize = MAX_IPX_PACKET_SIZE;
-
-	PlayerIsGDI = true;
 
 	memset(KickVoteCount, 0, sizeof(KickVoteCount));
 	memset(KickVoteWho, -1, sizeof(KickVoteWho));
@@ -270,7 +435,7 @@ SessionClass::SessionClass(void)
 	SerialDefaults.DialMethod = DIAL_TOUCH_TONE;        // set from INI file
 	SerialDefaults.InitStringIndex = -1;                // set from INI file
 	SerialDefaults.CallWaitStringIndex = 0;             // set from INI file
-	strcpy(SerialDefaults.CallWaitString,"");
+	strcpy(SerialDefaults.CallWaitString, ""); // RA2: set from INI file
 	ModemType = MODEM_NULL_HOST;						// set from INI file
 
 	TrapFrame = 0x7fffffff;     // frame to start trapping object values at
@@ -282,8 +447,24 @@ SessionClass::SessionClass(void)
 	TrapCheckHeap = 0;          // start checking the Heap
 	TrapPrintCRC = 0;           // output CRC file
 
+	unknown_2878 = false; // RA2: as above
+	Options.AIPlayers = 0; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		Options.AISlots.Countries[i] = -1; // RA2: as above
+		Options.AISlots.Colors[i] = -1; // RA2: as above
+	}
+	TournamentState = 0; // RA2: +0x0C
+	unknown_10 = 0; // RA2: as above
+	ScenarioFileName[0] = 0; // RA2: as above
+	ScenarioFileLength = 0; // RA2: as above
+	ScenarioIsOfficial = false; // RA2: as above
+	unknown_8D4 = 0; // RA2: as above
+}
+
+void SessionClass::Load_Call_Wait_Strings(void) // RA2: RA2's signature
+{
 	for (int i = 0; i < CALL_WAIT_STRINGS_NUM; i++) {
-		CallWaitStrings.Add(strdup(Fetch_String(CallWaitStringIDs[i])));
+		CallWaitStrings.Add(_wcsdup(StringTable::LoadString(CallWaitStringIDs[i], NULL, "D:\\Ra2\\Session.CPP", 536))); // RA2: 0x0066EAA0
 	}
 }	// end of SessionClass
 
@@ -314,11 +495,6 @@ SessionClass::~SessionClass(void)
 		free((void *)CallWaitStrings[0]);
 		CallWaitStrings.Delete_Index(0);
 	}
-
-	if (PreferredServer != NULL) {
-		delete [] PreferredServer;
-		PreferredServer = NULL;
-	}
 }	// end of ~SessionClass
 
 
@@ -340,11 +516,11 @@ SessionClass::~SessionClass(void)
 void SessionClass::One_Time(void)
 {
 	//Read_MultiPlayer_Settings();
-	Read_Scenario_Descriptions();
+    Read_Scenario_Descriptions();
+    UniqueID = Compute_Unique_ID();
+    DebugString("Session one time init. UniqueID is %08x\n", UniqueID);
+}
 
-	UniqueID = Compute_Unique_ID();
-	DebugString("Session one time init. UniqueID is %08x\n", UniqueID);
-}	// end of One_Time
 
 
 /***************************************************************************
@@ -393,64 +569,84 @@ void SessionClass::Init(void)
  *=========================================================================*/
 int SessionClass::Create_Connections(void)
 {
-	int i;
-	NetNumType net;
-	NetNodeType node;
+    NetNumType net;
+    NetNodeType node;
 
-	DebugString("Entering Create_Connections\n");
+    DebugString("Entering Create_Connections\n");
+    if (Session.Type != GAME_IPX && Session.Type != GAME_INTERNET) {
+        return(0);
+    }
 
+    for (int i = 0; i < Players.Count(); i++) { // RA2: RA2's form of SessionClass::Create_Connections
+        DebugString("Player %d, Name: %s, ID %d\n", i, Players[i]->Name, Players[i]->Player.ID);
+        if (wcsicmp(Players[i]->Name, Houses[Players[i]->Player.ID]->UIName) != 0) { // RA2: as above
+            return(0);
+        }
+        if (wcsicmp(Players[i]->Name, MasterPlayerName) == 0) { // RA2: as above
+            MasterPlayerID = Players[i]->Player.ID;
+            Session.Players[i]->Address.Get_Address(net, node);
+            Session.PacketRouterAddress.Set_Address(net, node, 0); // RA2: as above
+            Ipx.Set_Lobby_Address(&Session.PacketRouterAddress); // RA2: as above
+        }
+        Houses[Players[i]->Player.ID]->SquadID = Players[i]->Player.SquadID;
+        Session.Players[i]->Address.Get_Address(net, node);
+        unsigned long ip = 0; // RA2: as above
+        for (int j = 0; j < 4; j++) { // RA2: as above
+            ip = (ip << 8) | node[j]; // RA2: as above
+        }
+        DebugString("House[%d] IP = %X  Clan=%d\n", Players[i]->Player.ID, ip, Players[i]->Player.SquadID); // RA2: as above
+        Houses[Players[i]->Player.ID]->IPAddress = ip;
+        Houses[Players[i]->Player.ID]->LostConnection = false;
+        if (i > 0) {
+            Ipx.Create_Connection(Players[i]->Player.ID, Players[i]->Name, &Players[i]->Address); // RA2: as above
+            Players[i]->Player.ProcessTime = -1;
+        }
+    }
 
-	if (Session.Type != GAME_IPX && Session.Type != GAME_INTERNET) {
-		return(0);
-	}
+    for (int k = 0; k < 8; k++) { // RA2: as above
+        Session.unknown_304C[k] = TickCount; // RA2: as above
+    }
 
 	//------------------------------------------------------------------------
 	// Loop through all entries in 'Players'
 	//------------------------------------------------------------------------
-	for (i = 0; i < Players.Count(); i++) {
-		DebugString("Player %d, Name: %s, ID %d\n", i, Players[i]->Name, Players[i]->Player.ID);
+    if (Type == GAME_INTERNET && unknown_3090) { // RA2: as above
+        NetNumType net2; // RA2: as above
+        NetNodeType node2; // RA2: as above
+        net2[0] = 0; // RA2: as above
+        net2[1] = 0; // RA2: as above
+        net2[2] = 0; // RA2: as above
+        net2[3] = 0; // RA2: as above
+        node2[0] = 0; // RA2: as above
+        node2[1] = 0; // RA2: as above
+        node2[2] = 0; // RA2: as above
+        node2[3] = 0; // RA2: as above
+        node2[4] = 0; // RA2: as above
+        node2[5] = 0; // RA2: as above
+        Session.unknown_2978.Set_Address(net2, node2, 0); // RA2: as above
+        ViaPacketRouter = true; // RA2: as above
+        unknown_308C = 0; // RA2: as above
+        unknown_309C = 20; // RA2: as above
+        unknown_3094 = -1; // RA2: as above
+        Ipx.Create_Multicast_Connection(); // RA2: as above
+        OwnerTalk.Build_Connection_List(); // RA2: as above
+        if (Session.Am_I_Master(0)) { // RA2: as above
+            bool connected = OwnerTalk.Start_Router(NULL); // RA2: as above
+            if (connected) { // RA2: as above
+                connected = OwnerTalk.Send_Player_List(); // RA2: as above
+            }
+            if (!connected) { // RA2: as above
+                Session.ViaPacketRouter = false; // RA2: as above
+            }
+        }
+    } else {
+        Session.ViaPacketRouter = false; // RA2: as above
+    }
+    DebugString("Session.ViaPacketRouter = %s\n", Session.ViaPacketRouter ? "true" : "false"); // RA2: as above
+    DebugString("Leaving Create_Connections\n");
+    return(1);
+}
 
-		//.....................................................................
-		// Make sure the name matches before creating the connection
-		//.....................................................................
-		if (!stricmp(Players[i]->Name,
-			Houses[Players[i]->Player.ID]->IniName)) {
-
-			if (stricmp(Players[i]->Name, MasterPlayerName) == 0) {
-				MasterPlayerID = Players[i]->Player.ID;
-			}
-
-			Houses[Players[i]->Player.ID]->SquadID = Players[i]->Player.SquadID;
-
-			Session.Players[i]->Address.Get_Address(net, node);
-
-			unsigned int ip=0;
-			for (int k = 0; k < 4; k++) {
-				ip <<= 8;
-				ip |= node[k];
-			}
-
-			DebugString("House[%d] IP = %X  Clan=%d\n",Players[i]->Player.ID, ip, Players[i]->Player.SquadID);
-
-			Houses[Players[i]->Player.ID]->IPAddress = ip;
-			Houses[Players[i]->Player.ID]->LostConnection = false;
-
-			// To avoid connecting to myself, skip the 1st entry.
-			if (i > 0) {
-				Ipx.Create_Connection((int)Players[i]->Player.ID, Players[i]->Name,
-					&(Players[i]->Address) );
-				Players[i]->Player.ProcessTime = -1;
-			}
-		} else {
-			return(0);
-		}
-	}
-
-	DebugString("Leaving Create_Connections\n");
-
-	return(1);
-
-}	// end of Create_Connections
 
 
 /***************************************************************************
@@ -468,66 +664,67 @@ int SessionClass::Create_Connections(void)
  * HISTORY:                                                                *
  *   11/29/1995 BRR : Created.                                             *
  *=========================================================================*/
-bool SessionClass::Am_I_Master(void)
+bool SessionClass::Am_I_Master(HouseClass *house) // RA2: RA2's signature
 {
-	int i;
-	HouseClass *hptr;
+    if (house == 0) { // RA2: RA2's form of SessionClass::Am_I_Master
+        house = PlayerPtr; // RA2: as above
+    }
+    if (Session.Type == GAME_INTERNET && house != 0) { // RA2: as above
+        if (MasterPlayerID != -1) {
+            return house->HeapID == MasterPlayerID; // RA2: as above
+        }
+        if (_wcsicmp(house->UIName, MasterPlayerName) == 0) { // RA2: as above
+            return(true);
+        }
+    }
+    for (int i = 0; i < Houses.Count(); i++) { // RA2: as above
+        HouseClass *player = Houses[i]; // RA2: as above
+        if (player->IsHuman && !player->IsDefeated) { // RA2: as above
+            if (house == player) { // RA2: as above
+                return(true);
+            } else {
+                return(false);
+            }
+        }
+    }
+    return(false);
+}
 
+void SessionOptionsClass::Read(CCINIClass & ini, char const * section, int default_slot, int default_first_slot) // RA2: RA2's signature
+{
+	char entry[16]; // RA2: RA2's form of SessionOptionsClass::Read
 
-	if (Session.Type == GAME_INTERNET) {
-		if (MasterPlayerID != -1) {
-			return(PlayerPtr->HeapID == MasterPlayerID);
-		}
+	MPGameMode = ini.Get_Int(section, "GameMode", First_Game_Mode()->MPModeIndex); // RA2: 0x0066F1F0
+	ScenIndex = ini.Get_Int(section, "ScenIndex", 0); // RA2: as above
+	GameSpeed = ini.Get_Int(section, "GameSpeed", Rule->GameSpeed); // RA2: as above
+	Credits = ini.Get_Int(section, "Credits", Rule->MPMoney); // RA2: as above
+	UnitCount = ini.Get_Int(section, "UnitCount", Rule->MPUnitCount); // RA2: as above
+	ShortGame = ini.Get_Bool(section, "ShortGame", Rule->ShortGame); // RA2: as above
+	SuperWeaponsAllowed = ini.Get_Bool(section, "SuperWeaponsAllowed", Rule->SuperWeaponsAllowed); // RA2: as above
+	BuildOffAlly = ini.Get_Bool(section, "BuildOffAlly", Rule->BuildOffAlly); // RA2: as above
+	MCVRepacks = ini.Get_Bool(section, "MCVRepacks", Rule->MCVRedeploys); // RA2: as above
+	CratesAppear = ini.Get_Bool(section, "CratesAppear", Rule->IsMPCrates); // RA2: as above
 
-		if (PlayerPtr && stricmp(PlayerPtr->IniName, MasterPlayerName) == 0) {
-			return(true);
-		}
+	for (int i = 1; i < 8; i++) { // RA2: as above
+		sprintf(entry, "Slot%02d", i); // RA2: as above
+		int first = (i == 1) ? default_first_slot : default_slot; // RA2: as above
+		int second = -2; // RA2: as above
+		int third = -2; // RA2: as above
+		ini.Get_Int3(section, entry, &first, &second, &third); // RA2: as above
+		SlotData[i][0] = first; // RA2: as above
+		SlotData[i][1] = second; // RA2: as above
+		SlotData[i][2] = third; // RA2: as above
 	}
-
-	//------------------------------------------------------------------------
-	// Check every house; if PlayerPtr points to the first human house, we're
-	// the master.
-	//------------------------------------------------------------------------
-	for (i = 0; i < Houses.Count(); i++) {
-		hptr = Houses[i];
-		if (hptr->IsHuman) {
-			if (PlayerPtr == hptr) {
-				return(true);
-			}
-			else {
-				return(false);
-			}
-		}
-	}
-
-	return(false);
-
 }	// end of Am_I_Master
-
-
-/***************************************************************************
- * SessionClass::Read_MultiPlayer_Settings -- reads settings INI           *
- *                                                                         *
- * INPUT:                                                                  *
- *      none.                                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   02/14/1995 BR : Created.                                              *
- *=========================================================================*/
 void SessionClass::Read_MultiPlayer_Settings(void)
 {
-	char *tokenptr;         // ptr to token
-	PhoneEntryClass *phone; // a phone book entry
-	char *entry;            // a phone book entry
-	char buf[128];          // buffer for parsing INI entry
+	char * tokenptr; // RA2: RA2's form of SessionClass::Read_MultiPlayer_Settings
+	PhoneEntryClass * phone; // RA2: as above
+	char * entry; // RA2: as above
+	char buf[0x400]; // RA2: as above
 	int i;
 
+	// RA2: Read_MultiPlayer_Settings reads RA2.INI
 	Rule->Do_HouseTypes(*RuleINI);
 
 	//------------------------------------------------------------------------
@@ -545,37 +742,59 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 	PhoneBook.Clear();
 
 	// Create filename and read the file.
-	CCFileClass file(CONFIG_FILE_NAME);
+	CCFileClass file("RA2.INI"); // RA2: as above
 
 	// Get the player's last-used Handle
-	ConfigINI.Get_String("MultiPlayer", "Handle", Fetch_String(TXT_NONAME), Handle, sizeof(Handle));
+	if (!PortsRead) { // RA2: as above
+		PortBase = ConfigINI.Get_Int("MultiPlayer", "PortBase", 0x4E2); // RA2: as above
+		ForcePortBase = ConfigINI.Get_Int("MultiPlayer", "ForcePortBase", 0); // RA2: as above
+		FirewallHelper.Port = // RA2: as above
+			ConfigINI.Get_Int("MultiPlayer", "PortPool", NonCriticalRandomNumber(0, 0x8000) + 0x1000); // RA2: as above
+		PortsRead = true; // RA2: as above
+		FirewallHelper.Read_Settings(); // RA2: as above
+	}
+	Session.unknown_2F48 = ConfigINI.Get_Bool("MultiPlayer", "SendDelay", false); // RA2: as above
+	Session.unknown_301C = ConfigINI.Get_Int("MultiPlayer", "PortNumberOverride", 0); // RA2: as above
 
 	// Get the player's last-used Color
-	PrefColor = ConfigINI.Get_Int("MultiPlayer", "Color", 0);
-
-	if (!Session.IsWDT) {
-		House = (int)ConfigINI.Get_HousesType("MultiPlayer", "Side", (HousesType)House);
-	}
-
+	buf[0] = 0;
 	CurPhoneIdx = ConfigINI.Get_Int("MultiPlayer", "PhoneIndex", -1);
 	TrapCheckHeap = ConfigINI.Get_Int("MultiPlayer", "CheckHeap", 0);
-
-	buf[0] = 0;
-	ConfigINI.Get_String("MultiPlayer", "PreferredServer", "", buf, sizeof(buf));
-	if (strlen(buf) != 0) {
-		PreferredServer = new char [strlen(buf) + 1];
-		strcpy(PreferredServer, buf);
-	}
-
-	Locale = ConfigINI.Get_Int("MultiPlayer", "Locale", 0);
-	LastLocale = Locale;
-
-	StoreNickname = ConfigINI.Get_Bool("MultiPlayer", "StoreNick", true);
+	WOLLimitResolution = ConfigINI.Get_Bool("MultiPlayer", "WOLLimitResolution", WOLLimitResolution); // RA2: as above
 	LastNicknameSlot = ConfigINI.Get_Int("MultiPlayer", "LastNickSlot", -1);
 
 	// Read in default serial settings
-	ConfigINI.Get_String("SerialDefaults", "ModemName", Fetch_String(TXT_NONAME), SerialDefaults.ModemName, MODEM_NAME_MAX);
-	if (strcmp(SerialDefaults.ModemName, Fetch_String(TXT_NONAME)) == 0) {
+	wchar_t handle[20]; // RA2: as above
+	ConfigINI.Get_UnicodeString( // RA2: as above
+		"MultiPlayer", "Handle", // RA2: as above
+		StringTable::LoadString("TXT_NONAME", 0, "D:\\Ra2\\Session.CPP", 0x4b2), handle, 20); // RA2: as above
+	OwnerDraw::WideToCharString(Handle, handle, -1); // RA2: as above
+
+	Color = ConfigINI.Get_Int("MultiPlayer", "Color", Color); // RA2: as above
+	Color2 = ConfigINI.Get_Int("MultiPlayer", "ColorEx", Color2); // RA2: as above
+	Side = ConfigINI.Get_HousesType("MultiPlayer", "Side", (HousesType)Side); // RA2: as above
+	Side2 = ConfigINI.Get_Int("MultiPlayer", "SideEx", Side2); // RA2: as above
+	WOLTaunts = ConfigINI.Get_Bool("MultiPlayer", "WOLTaunts", WOLTaunts); // RA2: as above
+	LANTaunts = ConfigINI.Get_Bool("MultiPlayer", "LANTaunts", LANTaunts); // RA2: as above
+	WOLScrollText = ConfigINI.Get_Bool("MultiPlayer", "WOLScrollText", WOLScrollText); // RA2: as above
+	LANScrollText = ConfigINI.Get_Bool("MultiPlayer", "LANScrollText", LANScrollText); // RA2: as above
+
+	House = Side; // RA2: as above
+	if (House == -2) { // RA2: as above
+		House = 0; // RA2: as above
+	}
+	idxSide2 = Side2; // RA2: as above
+
+	MPGameMode = MultiplayerGameMode::Get(ConfigINI.Get_Int("MultiPlayer", "GameMode", 1)); // RA2: as above
+	if (!MPGameMode) { // RA2: as above
+		MPGameMode = First_Game_Mode(); // RA2: as above
+	}
+	Skirmish.Read(ConfigINI, "Skirmish", 1, 6); // RA2: as above
+	LAN.Read(ConfigINI, "LAN", 2, 2); // RA2: as above
+	WOL.Read(ConfigINI, "WonlinePref", 2, 2); // RA2: as above
+
+	ConfigINI.Get_String("SerialDefaults", "ModemName", buf, SerialDefaults.ModemName, 0x3F); // RA2: as above
+	if (strcmp(SerialDefaults.ModemName, buf) == 0) { // RA2: as above
 		SerialDefaults.ModemName[0] = 0;
 	}
 	SerialDefaults.Port = ConfigINI.Get_Int("SerialDefaults", "Port", 0);
@@ -585,25 +804,19 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 	SerialDefaults.ErrorCorrection = ConfigINI.Get_Int("SerialDefaults", "ErrorCorrection", 0);
 
 	ConfigINI.Get_String("SerialDefaults", "DialMethod", "T", buf, 2);
-
-	// find dial method
-	for (i = 0; i < DIAL_METHODS; i++) {
-		if ( !strcmpi( buf, DialMethodCheck[ i ]) ) {
+	for (i = 0; i < 2; i++) { // RA2: as above
+		if (!_stricmp(buf, DialMethodCheck[i])) { // RA2: as above
 			SerialDefaults.DialMethod = (DialMethodType)i;
 			break;
 		}
 	}
-
-	// if method not found set to touch tone
-	if (i == DIAL_METHODS) {
+	if (i == 2) { // RA2: as above
 		SerialDefaults.DialMethod = DIAL_TOUCH_TONE;
 	}
 
 	SerialDefaults.InitStringIndex = ConfigINI.Get_Int("SerialDefaults", "InitStringIndex", -1);
-
-	SerialDefaults.CallWaitStringIndex = ConfigINI.Get_Int("SerialDefaults", "CallWaitStringIndex", CALL_WAIT_CUSTOM);
-
-	ConfigINI.Get_String("SerialDefaults", "CallWaitString", "", SerialDefaults.CallWaitString, CWAITSTRBUF_MAX);
+	SerialDefaults.CallWaitStringIndex = ConfigINI.Get_Int("SerialDefaults", "CallWaitStringIndex", 3); // RA2: as above
+	ConfigINI.Get_String("SerialDefaults", "CallWaitString", "", SerialDefaults.CallWaitString, 0x10); // RA2: as above
 
 	if (SerialDefaults.IRQ == 0 || SerialDefaults.Baud == 0) {
 		SerialDefaults.Port = 0;
@@ -615,80 +828,71 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 
 	int index;
 	for (index = 0; index < initcount; index++) {
-		entry = new char[ INITSTRBUF_MAX ];
-
-		if (entry != NULL) {
+		entry = new char[0x29]; // RA2: as above
+		if (entry) { // RA2: as above
 			entry[0] = 0;
-			ConfigINI.Get_String("InitStrings", ConfigINI.Get_Entry("InitStrings", index), NULL, entry, INITSTRBUF_MAX);
-			strupr( entry );
-			InitStrings.Add( entry );
+			ConfigINI.Get_String("InitStrings", ConfigINI.Get_Entry("InitStrings", index), 0, entry, // RA2: as above
+									0x29); // RA2: as above
+			_strupr(entry); // RA2: as above
+			InitStrings.Add(entry); // RA2: as above
 		}
 	}
+	SerialDefaults.InitStringIndex = initcount ? 0 : -1; // RA2: as above
 
-	//	if no entries then have at least one
-	if (initcount == 0) {
-		SerialDefaults.InitStringIndex = -1;
-	} else {
-		SerialDefaults.InitStringIndex = 0;
-	}
-
-	// Read the entry names in
 	int phonecount = ConfigINI.Entry_Count("PhoneBook");
 	for (index = 0; index < phonecount; index++) {
 		// Create a new phone book entry
-		phone = new PhoneEntryClass();
+		phone = new PhoneEntryClass; // RA2: as above
+		ConfigINI.Get_String("PhoneBook", ConfigINI.Get_Entry("PhoneBook", index), 0, buf, sizeof(buf)); // RA2: as above
 
 		// Read the entire entry in
-		ConfigINI.Get_String("PhoneBook", ConfigINI.Get_Entry("PhoneBook", index), NULL, buf, sizeof(buf));
-
-		//	Extract name, phone # & serial port settings
-		tokenptr = strtok( buf, "|" );
+		tokenptr = strtok(buf, "|"); // RA2: as above
 		if (tokenptr) {
-			strcpy( phone->Name, tokenptr );
-			strupr( phone->Name );
+			Char_To_Wide(phone->Name, tokenptr, -1); // RA2: as above
+			_wcsupr(phone->Name); // RA2: as above
 		} else {
 			phone->Name[0] = 0;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			strcpy( phone->Number, tokenptr );
-			strupr( phone->Number );
+			strcpy(phone->Number, tokenptr); // RA2: as above
+			_strupr(phone->Number); // RA2: as above
 		} else {
 			phone->Number[0] = 0;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			sscanf( tokenptr, "%x", &phone->Settings.Port );
+			sscanf(tokenptr, "%x", &phone->Settings.Port); // RA2: as above
 		} else {
 			phone->Settings.Port = 0;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.IRQ = atoi( tokenptr );
+			phone->Settings.IRQ = atoi(tokenptr); // RA2: as above
 		} else {
 			phone->Settings.IRQ = -1;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.Baud = atoi( tokenptr );
+			phone->Settings.Baud = atoi(tokenptr); // RA2: as above
 		} else {
 			phone->Settings.Baud = -1;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.Compression = atoi( tokenptr );
+			phone->Settings.Compression = atoi(tokenptr); // RA2: as above
 		} else {
 			phone->Settings.Compression = -1;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.ErrorCorrection = atoi( tokenptr );
+			phone->Settings.ErrorCorrection = atoi(tokenptr); // RA2: as above
 		} else {
 			phone->Settings.ErrorCorrection = 0;
 		}
@@ -697,41 +901,37 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 		**	Find out if this phonebook entry has the new settings included. If not
 		**	then we need to skip this section.
 		*/
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			strcpy( buf, tokenptr );
-
-			// find dial method
-			for (i = 0; i < DIAL_METHODS; i++) {
-				if ( !strcmpi( buf, DialMethodCheck[ i ]) ) {
+			strcpy(buf, tokenptr); // RA2: as above
+			for (i = 0; i < 2; i++) { // RA2: as above
+				if (!_stricmp(buf, DialMethodCheck[i])) { // RA2: as above
 					phone->Settings.DialMethod = (DialMethodType)i;
 					break;
 				}
 			}
-
-			//	if method not found set to touch tone
-			if (i == DIAL_METHODS) {
+			if (i == 2) { // RA2: as above
 				phone->Settings.DialMethod = DIAL_TOUCH_TONE;
 			}
 		} else {
 			phone->Settings.DialMethod = DIAL_TOUCH_TONE;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.InitStringIndex = atoi( tokenptr );
+			phone->Settings.InitStringIndex = atoi(tokenptr); // RA2: as above
 		} else {
 			phone->Settings.InitStringIndex = -1;
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
-			phone->Settings.CallWaitStringIndex = atoi( tokenptr );
+			phone->Settings.CallWaitStringIndex = atoi(tokenptr); // RA2: as above
 		} else {
-			phone->Settings.CallWaitStringIndex = CALL_WAIT_CUSTOM;
+			phone->Settings.CallWaitStringIndex = 3; // RA2: as above
 		}
 
-		tokenptr = strtok( NULL, "|" );
+		tokenptr = strtok(0, "|"); // RA2: as above
 		if (tokenptr) {
 			strcpy(phone->Settings.CallWaitString, tokenptr);
 		} else {
@@ -744,44 +944,46 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 
 	// Read special recording playback values, to help find sync bugs
 	if (Session.Play) {
-		TrapFrame = ConfigINI.Get_Int("SyncBug", "Frame", 0x7fffffff);
-
-		ConfigINI.Get_String("SyncBug", "Type", "NONE", buf, 80);
-
-		if (!stricmp(buf,"AIRCRAFT"))
+		TrapFrame = ConfigINI.Get_Int("SyncBug", "Frame", 0x7FFFFFFF); // RA2: as above
+		ConfigINI.Get_String("SyncBug", "Type", "NONE", buf, 0x50); // RA2: as above
+		if (!_stricmp(buf, "AIRCRAFT")) { // RA2: as above
 			TrapObjType = RTTI_AIRCRAFT;
-		else if (!stricmp(buf,"ANIM"))
+		} else if (!_stricmp(buf, "ANIM")) { // RA2: as above
 			TrapObjType = RTTI_ANIM;
-		else if (!stricmp(buf,"BUILDING"))
+		} else if (!_stricmp(buf, "BUILDING")) { // RA2: as above
 			TrapObjType = RTTI_BUILDING;
-		else if (!stricmp(buf,"BULLET"))
+		} else if (!_stricmp(buf, "BULLET")) { // RA2: as above
 			TrapObjType = RTTI_BULLET;
-		else if (!stricmp(buf,"INFANTRY"))
+		} else if (!_stricmp(buf, "INFANTRY")) { // RA2: as above
 			TrapObjType = RTTI_INFANTRY;
-		else if (!stricmp(buf,"UNIT"))
+		} else if (!_stricmp(buf, "UNIT")) { // RA2: as above
 			TrapObjType = RTTI_UNIT;
-		else {
+		} else {
 			TrapObjType = RTTI_NONE;
 		}
 
-		ConfigINI.Get_String("SyncBug", "Coord", "0", buf, 80);
+		ConfigINI.Get_String("SyncBug", "Coord", "0", buf, 0x50); // RA2: as above
 		int x;
 		int y;
 		int z;
-		sscanf(buf,"%d,%d,%d", &x, &y, &z);
+		sscanf(buf, "%d,%d,%d", &x, &y, &z); // RA2: as above
 		int target = ConfigINI.Get_Int("SyncBug", "Target", -1);
 		TrapTarget.Decode(target);
 
-		ConfigINI.Get_String("SyncBug", "Cell", "0,0", buf, 80);
+		ConfigINI.Get_String("SyncBug", "Cell", "0,0", buf, 0x50); // RA2: as above
 		sscanf(buf, "%d,%d", &x, &y);
 		Cell cell(x, y);
 		if (cell != CELL_NONE) {
-			TrapCell = &(Map[cell]);
+			TrapCell = &Map[cell]; // RA2: as above
 		}
 
-		TrapPrintCRC = ConfigINI.Get_Int("SyncBug", "PrintCRC", 0x7fffffff);
+		TrapPrintCRC = ConfigINI.Get_Int("SyncBug", "PrintCRC", 0x7FFFFFFF); // RA2: as above
 	}
 }
+
+
+
+
 
 
 /// <summary>
@@ -791,7 +993,7 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 /// alongside it.
 /// </summary>
 /// <param name="out">The file to write the report to.</param>
-bool SessionClass::Log_To_File(FILE *out)
+bool SessionClass::Log_To_File(FILE * out) // RA2: RA2's signature
 {
 	int i;
 	int j;
@@ -807,12 +1009,12 @@ bool SessionClass::Log_To_File(FILE *out)
 	fprintf(out, "Handle = %s\n", Handle);
 
 	for (i = 0; i < NumPlayers; i++) {
-		Session.Players[i]->Address.Get_Address(net,node);
+		Session.Players[i]->Address.Get_Address(net, node);
 		fprintf(out, "Player Addr[%d] = ", i);
 		for (j = 0; j < sizeof(NetNumType); j++) {
 			fprintf(out, "%02X", net[j]);
 		}
-		fprintf(out,":");
+		fprintf(out, ":"); // RA2: RA2's form of SessionClass::Log_To_File
 		for (j = 0; j < sizeof(NetNodeType); j++) {
 			fprintf(out, "%02X", node[j]);
 		}
@@ -826,27 +1028,27 @@ bool SessionClass::Log_To_File(FILE *out)
 		fprintf(out, "%02X", net[i]);
 	}
 
-	fprintf(out,":");
+	fprintf(out, ":"); // RA2: as above
 	for (i = 0; i < sizeof(NetNodeType); i++) {
 		fprintf(out, "%02X", node[i]);
 	}
 
-	fprintf(out,"\n\n");
-	fprintf(out,"MaxAhead = %d\n", MaxAhead);
-	fprintf(out,"LoadGame = %d\n", LoadGame);
-	fprintf(out,"PrefColor = %d\n", PrefColor);
-	fprintf(out,"ColorIdx = %d\n", ColorIdx);
-	fprintf(out,"House = %d\n", House);
-	fprintf(out,"NumPlayers = %d\n", NumPlayers);
-	fprintf(out,"Options.Bases = %d\n", Options.Bases);
-	fprintf(out,"Options.Credits = %d\n", Options.Credits);
-	fprintf(out,"Options.BridgeDestruction = %d\n", Options.BridgeDestruction);
-	fprintf(out,"Options.Goodies = %d\n", Options.Goodies);
-	fprintf(out,"Options.Ghosts = %d\n", Options.Ghosts);
-	fprintf(out,"Options.UnitCount = %d\n", Options.UnitCount);
-	fprintf(out,"Options.AIPlayers = %d\n", Options.AIPlayers);
-	fprintf(out,"Options.AIDifficulty = %d\n", Options.AIDifficulty);
-	fprintf(out,"ObiWan = %d\n", ObiWan);
+	fprintf(out, "\n\n"); // RA2: as above
+	fprintf(out, "MaxAhead = %d\n", MaxAhead); // RA2: as above
+	fprintf(out, "LoadGame = %d\n", LoadGame); // RA2: as above
+	fprintf(out, "PrefColor = %d\n", Color); // RA2: as above
+	fprintf(out, "ColorIdx = %d\n", PrefColor); // RA2: as above
+	fprintf(out, "House = %d\n", House); // RA2: as above
+	fprintf(out, "NumPlayers = %d\n", NumPlayers); // RA2: as above
+	fprintf(out, "Options.Bases = %d\n", Options.Bases); // RA2: as above
+	fprintf(out, "Options.Credits = %d\n", Options.Credits); // RA2: as above
+	fprintf(out, "Options.BridgeDestruction = %d\n", Options.BridgeDestruction); // RA2: as above
+	fprintf(out, "Options.Goodies = %d\n", Options.Goodies); // RA2: as above
+	fprintf(out, "Options.Ghosts = %d\n", Options.Ghosts); // RA2: as above
+	fprintf(out, "Options.UnitCount = %d\n", Options.UnitCount); // RA2: as above
+	fprintf(out, "Options.AIPlayers = %d\n", Options.AIPlayers); // RA2: as above
+	fprintf(out, "Options.AIDifficulty = %d\n", Options.AIDifficulty); // RA2: as above
+	fprintf(out, "ObiWan = %d\n", MultiplayerObserver); // RA2: as above
 
 	if (Session.Type == GAME_IPX) {
 		fprintf(out, "Type = IPX\n");
@@ -858,6 +1060,30 @@ bool SessionClass::Log_To_File(FILE *out)
 
 	return(true);
 }
+void SessionOptionsClass::Write(CCINIClass & ini, char const * section) // RA2: RA2's signature
+{
+	char entry[16]; // RA2: RA2's form of SessionOptionsClass::Write
+
+	ini.Put_Int(section, "GameMode", MPGameMode); // RA2: 0x00670270
+	ini.Put_Int(section, "ScenIndex", ScenIndex); // RA2: as above
+	ini.Put_Int(section, "GameSpeed", GameSpeed); // RA2: as above
+	ini.Put_Int(section, "Credits", Credits); // RA2: as above
+	ini.Put_Int(section, "UnitCount", UnitCount); // RA2: as above
+	ini.Put_Bool(section, "ShortGame", ShortGame); // RA2: as above
+	ini.Put_Bool(section, "SuperWeaponsAllowed", SuperWeaponsAllowed); // RA2: as above
+	ini.Put_Bool(section, "BuildOffAlly", BuildOffAlly); // RA2: as above
+	ini.Put_Bool(section, "MCVRepacks", MCVRepacks); // RA2: as above
+	ini.Put_Bool(section, "CratesAppear", CratesAppear); // RA2: as above
+
+	for (int i = 1; i < 8; i++) { // RA2: as above
+		sprintf(entry, "Slot%02d", i); // RA2: as above
+		ini.Put_Int3(section, entry, SlotData[i][0], SlotData[i][1], SlotData[i][2]); // RA2: as above
+	}
+}
+
+
+
+
 
 
 /***************************************************************************
@@ -877,79 +1103,108 @@ bool SessionClass::Log_To_File(FILE *out)
  *=========================================================================*/
 void SessionClass::Write_MultiPlayer_Settings(void)
 {
-	RawFileClass file(CONFIG_FILE_NAME);
-	{
-		// Save the player's last-used Handle & Color
-		ConfigINI.Put_Int("MultiPlayer", "PhoneIndex", CurPhoneIdx);
-		ConfigINI.Put_Int("MultiPlayer", "Color", (int)PrefColor);
-		ConfigINI.Put_HousesType("MultiPlayer", "Side", (HousesType)House);
-		ConfigINI.Put_String("MultiPlayer", "Handle", Handle);
+    RawFileClass file("RA2.INI"); // RA2: RA2's form of SessionClass::Write_MultiPlayer_Settings
 
-		if (PreferredServer) {
-			ConfigINI.Put_String("MultiPlayer", "PreferredServer", PreferredServer);
+    ConfigINI.Put_Int("MultiPlayer", "PhoneIndex", CurPhoneIdx);
+    ConfigINI.Put_Bool("MultiPlayer", "WOLLimitResolution", WOLLimitResolution); // RA2: as above
+    ConfigINI.Put_Int("MultiPlayer", "LastNickSlot", LastNicknameSlot);
+    ConfigINI.Put_UnicodeString("MultiPlayer", "Handle", Narrow_To_Wide(Handle)); // RA2: as above
+    ConfigINI.Put_Int("MultiPlayer", "Color", Color); // RA2: as above
+    ConfigINI.Put_Int("MultiPlayer", "ColorEx", Color2); // RA2: as above
+    ConfigINI.Put_HousesType("MultiPlayer", "Side", (HousesType)Side); // RA2: as above
+    ConfigINI.Put_Int("MultiPlayer", "SideEx", Side2); // RA2: as above
+    if (MPGameMode) { // RA2: as above
+        ConfigINI.Put_Int("MultiPlayer", "GameMode", MPGameMode->MPModeIndex); // RA2: as above
+    } else {
+        ConfigINI.Put_Int("MultiPlayer", "GameMode", 0); // RA2: as above
+    }
+    Skirmish.Write(ConfigINI, "Skirmish"); // RA2: as above
+    LAN.Write(ConfigINI, "LAN"); // RA2: as above
+    WOL.Write(ConfigINI, "WonlinePref"); // RA2: as above
+
+    ConfigINI.Clear("SerialDefaults");
+    ConfigINI.Put_String("SerialDefaults", "CallWaitString", SerialDefaults.CallWaitString);
+    ConfigINI.Put_Int("SerialDefaults", "CallWaitStringIndex", SerialDefaults.CallWaitStringIndex);
+    ConfigINI.Put_Int("SerialDefaults", "InitStringIndex", SerialDefaults.InitStringIndex);
+    ConfigINI.Put_String("SerialDefaults", "DialMethod", DialMethodCheck[SerialDefaults.DialMethod]); // RA2: as above
+    ConfigINI.Put_Int("SerialDefaults", "Baud", SerialDefaults.Baud);
+    ConfigINI.Put_Int("SerialDefaults", "IRQ", SerialDefaults.IRQ);
+    ConfigINI.Put_Int("SerialDefaults", "Port", SerialDefaults.Port, 1);
+    ConfigINI.Put_Int("SerialDefaults", "Compression", SerialDefaults.Compression); // RA2: as above
+    ConfigINI.Put_Int("SerialDefaults", "ErrorCorrection", SerialDefaults.ErrorCorrection); // RA2: as above
+    ConfigINI.Put_String("SerialDefaults", "ModemName", SerialDefaults.ModemName);
+
+    ConfigINI.Clear("InitStrings");
+    for (int index = 0; index < InitStrings.Count(); index++) {
+        char buf[10];
+        wsprintfA(buf, "%03d", index); // RA2: as above
+        ConfigINI.Put_String("InitStrings", buf, InitStrings[index]);
+    }
+
+    ConfigINI.Clear("PhoneBook");
+    for (int i = PhoneBook.Count() - 1; i >= 0; i--) { // RA2: as above
+        char buf[128];
+        char entrytext[10];
+        wsprintfA(buf, "%s|%s|%x|%d|%d|%d|%d|%s|%d|%d|%s", // RA2: as above
+                  PhoneBook[i]->Name,
+                  PhoneBook[i]->Number,
+                  PhoneBook[i]->Settings.Port,
+                  PhoneBook[i]->Settings.IRQ,
+                  PhoneBook[i]->Settings.Baud,
+                  PhoneBook[i]->Settings.Compression,
+                  PhoneBook[i]->Settings.ErrorCorrection,
+                  DialMethodCheck[PhoneBook[i]->Settings.DialMethod], // RA2: as above
+                  PhoneBook[i]->Settings.InitStringIndex,
+                  PhoneBook[i]->Settings.CallWaitStringIndex,
+                  PhoneBook[i]->Settings.CallWaitString);
+        wsprintfA(entrytext, "%03d", i); // RA2: as above
+        ConfigINI.Put_String("PhoneBook", entrytext, buf);
+    }
+
+    ConfigINI.Save(file, false);
+}
+
+void SessionClass::Write_Chat_Settings(void) // RA2: RA2's signature
+{
+	RawFileClass file("RA2.INI"); // RA2: 0x00670730
+
+	ConfigINI.Put_Bool("MultiPlayer", "WOLTaunts", WOLTaunts); // RA2: RA2's form of SessionClass::Write_Chat_Settings
+	ConfigINI.Put_Bool("MultiPlayer", "LANTaunts", LANTaunts); // RA2: as above
+	ConfigINI.Put_Bool("MultiPlayer", "WOLScrollText", WOLScrollText); // RA2: as above
+	ConfigINI.Put_Bool("MultiPlayer", "LANScrollText", LANScrollText); // RA2: as above
+	ConfigINI.Save(file, false);
+}
+
+
+
+
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void Add_Missions(DynamicVectorClass<MultiMission *> & scenarios, INIClass & ini, char * name_buffer)
+{
+	int count = ini.Entry_Count("MultiMaps");
+	for (int index = 0; index < count; index++) {
+		if (ini.Get_String("MultiMaps", ini.Get_Entry("MultiMaps", index), "", name_buffer, 64)) {
+			scenarios.Add(new MultiMission(ini, name_buffer));
 		}
-
-		if (Locale == 0) {
-			Locale = LastLocale;
-		}
-
-		ConfigINI.Put_Int("MultiPlayer", "Locale", Locale);
-		ConfigINI.Put_Bool("MultiPlayer", "StoreNick", StoreNickname);
-		ConfigINI.Put_Int("MultiPlayer", "LastNickSlot", LastNicknameSlot);
-
-		// Clear all existing Settings.SerialDefault entries.
-		ConfigINI.Clear("SerialDefaults");
-
-		// Save default serial settings in opposite order you want to see them
-		ConfigINI.Put_String("SerialDefaults", "CallWaitString", SerialDefaults.CallWaitString);
-		ConfigINI.Put_Int("SerialDefaults", "CallWaitStringIndex", SerialDefaults.CallWaitStringIndex);
-		ConfigINI.Put_Int("SerialDefaults", "InitStringIndex", SerialDefaults.InitStringIndex);
-		ConfigINI.Put_String("SerialDefaults", "DialMethod", DialMethodCheck[ SerialDefaults.DialMethod ]);
-		ConfigINI.Put_Int("SerialDefaults", "Baud", SerialDefaults.Baud);
-		ConfigINI.Put_Int("SerialDefaults", "IRQ", SerialDefaults.IRQ);
-		ConfigINI.Put_Int("SerialDefaults", "Port", SerialDefaults.Port, 1);
-		ConfigINI.Put_Int("SerialDefaults", "Compression", SerialDefaults.Compression );
-		ConfigINI.Put_Int("SerialDefaults", "ErrorCorrection", SerialDefaults.ErrorCorrection );
-		ConfigINI.Put_String("SerialDefaults", "ModemName", SerialDefaults.ModemName);
-
-		// Clear all existing InitString entries.
-		ConfigINI.Clear("InitStrings");
-
-		// Save all InitString entries.
-		for (int index = 0; index < InitStrings.Count(); index++) {
-			char buf[10];
-			wsprintf( buf, "%03d", index);
-			ConfigINI.Put_String("InitStrings", buf, InitStrings[index]);
-		}
-
-		// Clear all existing Phone Book entries.
-		ConfigINI.Clear("PhoneBook");
-
-		// Save all Phone Book entries.
-		//	Format: Entry=Name,PhoneNum,Port,IRQ,Baud,InitString
-		for (int i = (PhoneBook.Count() - 1); i >= 0; i--) {
-			char buf[128];
-			char entrytext[10];
-			wsprintf(buf,"%s|%s|%x|%d|%d|%d|%d|%s|%d|%d|%s",
-				PhoneBook[i]->Name,
-				PhoneBook[i]->Number,
-				PhoneBook[i]->Settings.Port,
-				PhoneBook[i]->Settings.IRQ,
-				PhoneBook[i]->Settings.Baud,
-				PhoneBook[i]->Settings.Compression,
-				PhoneBook[i]->Settings.ErrorCorrection,
-				DialMethodCheck[ PhoneBook[i]->Settings.DialMethod ],
-				PhoneBook[i]->Settings.InitStringIndex,
-				PhoneBook[i]->Settings.CallWaitStringIndex,
-				PhoneBook[i]->Settings.CallWaitString);
-			wsprintf( entrytext, "%03d", i );
-			ConfigINI.Put_String("PhoneBook", entrytext, buf);
-		}
-
-		// Write the INI data out to a file.
-		ConfigINI.Save(file, false);
 	}
 }
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline bool Next_File(HANDLE handle, WIN32_FIND_DATA & block)
+{
+	return(FindNextFile(handle, &block) != 0);
+}
+
+
+
+
 
 /***************************************************************************
  * SessionClass::Read_Scenario_Descriptions -- reads scen. descriptions    *
@@ -971,86 +1226,43 @@ void SessionClass::Read_Scenario_Descriptions(void)
 {
 	INIClass ini;
 	char name_buffer[64];
+	WIN32_FIND_DATA block;
+	HANDLE handle; // RA2: RA2's form of SessionClass::Read_Scenario_Descriptions
 
-	// Clear the scenario description lists
-	for (int index = 0; index < Scenarios.Count(); index++) {
-		delete Scenarios[index];
-	}
 	Scenarios.Clear();
 
 	/*
 	**	Fetch the main multiplayer scenario packet data.
 	*/
-	CCFileClass file("MISSIONS.PKT");
+	CCFileClass file("MISSIONSMD.PKT"); // RA2: as above
 	if (file.Is_Available()) {
-		ini.Load(file);
-		int count = ini.Entry_Count("MultiMaps");
-//DebugString( "Found %i missions in Missions.pkt\n", count );
-		for (int index = 0; index < count; index++) {
-			if (ini.Get_String("MultiMaps", ini.Get_Entry("MultiMaps", index), "", name_buffer, sizeof(name_buffer))) {
-				Scenarios.Add(new MultiMission(ini, name_buffer));
+		ini.Load(file, false); // RA2: as above
+		Add_Missions(Scenarios, ini, name_buffer); // RA2: as above
+	}
+	ini.Clear();
+	file.Close();
+
+	handle = FindFirstFile("*.PKT", &block); // RA2: as above
+	while (handle != INVALID_HANDLE_VALUE) {
+		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_TEMPORARY)) == 0) { // RA2: as above
+			char const * name = &block.cAlternateFileName[0];
+			if (strlen(name) == 0) { // RA2: as above
+				name = &block.cFileName[0]; // RA2: as above
 			}
-		}
-/*		//	ajw Copy file for viewing.
-		CCFileClass fileCopy( "msns_pkt.txt" );
-		file.Seek( 0, SEEK_SET );
-		long lSize = file.Size();
-		char * pData = new char[ lSize + 1 ];
-		file.Read( pData, lSize );
-		fileCopy.Write( pData, lSize );
-		fileCopy.Close();
-*/	}
 
 	/*
 	**	Fetch any scenario packet lists and apply them first.
 	*/
-	for (AddonType addon = ADDON_COUNT; addon > ADDON_BASE_GAME; --addon) {
-		if (Addon_Enabled(addon) == true) {
-			sprintf(name_buffer, "MULTI%02d.PKT", addon);
-			file.Close();
-			file.Set_Name(name_buffer);
-			if (CCFileClass(name_buffer).Is_Available()) {
-				ini.Clear();
-				ini.Load(file);
-
-				int count = ini.Entry_Count("MultiMaps");
-				for (int index = 0; index < count; index++) {
-					if (ini.Get_String("MultiMaps", ini.Get_Entry("MultiMaps", index), "", name_buffer, sizeof(name_buffer))) {
-						Scenarios.Add(new MultiMission(ini, name_buffer));
-					}
-				}
-			}
-		}
-	}
-
-	WIN32_FIND_DATA block;
-	HANDLE handle = FindFirstFile("*.PKT", &block);
-	while (handle != INVALID_HANDLE_VALUE) {
-		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_TEMPORARY)) == 0) {
-			char const * name = &block.cAlternateFileName[0];
-			if (strlen(name) == 0) name = &block.cFileName[0];
-//Mono_Printf("Found file '%s'.\n", block.cAlternateFileName);
-//Mono_Printf("Found file '%s'.\n", block.cFileName);
-//DebugString("Found file '%s'.\n", block.cAlternateFileName);
-//DebugString("Found file '%s'.\n", block.cFileName);
-//DebugString( "Found alternate PKT file.\n" );
-
-			if (stricmp(name, "MISSIONS.PKT")) {
-				file.Close();
+			if (stricmp(name, "MISSIONSMD.PKT")) { // RA2: as above
 				file.Set_Name(name);
-				ini.Clear();
-				ini.Load(file);
-
-				int count = ini.Entry_Count("MultiMaps");
-				for (int index = 0; index < count; index++) {
-					if (ini.Get_String("MultiMaps", ini.Get_Entry("MultiMaps", index), "", name_buffer, sizeof(name_buffer))) {
-						Scenarios.Add(new MultiMission(ini, name_buffer));
-					}
-				}
+				ini.Load(file, false); // RA2: as above
+				Add_Missions(Scenarios, ini, name_buffer); // RA2: as above
 			}
 		}
 
-		if (FindNextFile(handle, &block) == 0) break;
+		if (!Next_File(handle, block)) { // RA2: as above
+			break;
+		}
 	}
 
 	if (handle != INVALID_HANDLE_VALUE) {
@@ -1060,36 +1272,117 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	ini.Clear();
 	file.Close();
 
+	handle = FindFirstFile("*.YRO", &block); // RA2: as above
+	int previous_disk = CD::Get_Required_Disk(); // RA2: as above
+	CD::Set_Required_Disk((DiskID)-2); // RA2: as above
+	while (handle != INVALID_HANDLE_VALUE) {
+		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_TEMPORARY)) == 0) { // RA2: as above
+			char const * name = &block.cAlternateFileName[0];
+			if (strlen(name) == 0) { // RA2: as above
+				name = &block.cFileName[0]; // RA2: as above
+			}
 
 	/*
 	**	Scan the current directory for any loose .MPR files and build the appropriate entries
 	**	into the scenario list list
 	*/
-	char const * file_name;
-	char digest_buffer[32];
+			if (stricmp(name, "MISSIONS.YRO")) { // RA2: as above
+				MixFileClass * mix = new MixFileClass(name, &FastKey); // RA2: as above
+				if (mix != NULL) { // RA2: as above
+					ScenarioMixFiles.Add(mix); // RA2: as above
 
-	handle = FindFirstFile( "*.MPR" , &block );
-	while (handle != INVALID_HANDLE_VALUE) {
-		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_TEMPORARY)) == 0) {
-			file_name = &block.cAlternateFileName[0];
-			if (strlen(file_name) == 0) file_name = &block.cFileName[0];
-//DebugString( "Found MPR '%s'\n", file_name );
-			file.Set_Name(file_name);
-			ini.Load(file);
+					char pkt_name[260]; // RA2: as above
+					int length = strlen(name); // RA2: as above
+					strncpy(pkt_name, name, length - 3); // RA2: as above
+					pkt_name[length - 3] = 0; // RA2: as above
+					strcat(pkt_name, "PKT"); // RA2: as above
+					pkt_name[length] = 0; // RA2: as above
+					file.Set_Name(pkt_name); // RA2: as above
+					if (file.Is_Available()) {
+						ini.Load(file, false); // RA2: as above
 
-			ini.Get_String("Basic", "Name", "No Name", name_buffer, sizeof(name_buffer) );
-			ini.Get_String("Digest", "1", "No Digest", digest_buffer, sizeof(digest_buffer) );
-			Scenarios.Add(new MultiMission(file_name, name_buffer, digest_buffer,ini.Get_Bool("Basic", "Official", false)));
+						int count = ini.Entry_Count("MultiMaps");
+						for (int index = 0; index < count; index++) {
+							if (ini.Get_String("MultiMaps", ini.Get_Entry("MultiMaps", index), "", name_buffer, sizeof(name_buffer))) {
+								MultiMission * mission = new MultiMission(ini, name_buffer); // RA2: as above
+								if (mission != NULL) { // RA2: as above
+									wchar_t players[64]; // RA2: as above
+									wchar_t text[44]; // RA2: as above
+									int max_count = mission->MaxPlayers; // RA2: as above
+									int min_count = mission->MinPlayers; // RA2: as above
+									if (min_count != max_count) { // RA2: as above
+										swprintf(players, L"%c%d-%d%c", L'(', min_count, max_count, L')'); // RA2: as above
+									} else {
+										swprintf(players, L"%c%d%c", L'(', min_count, L')'); // RA2: as above
+									}
+									int length = wcslen(mission->ScenarioDescription); // RA2: as above
+									int & used = length; // RA2: as above
+									wcscpy(text, mission->ScenarioDescription); // RA2: as above
+									wcsncat(text, L" ", 44 - used); // RA2: as above
+									used++; // RA2: as above
+									wcsncat(text, players, 44 - used); // RA2: as above
+									mission->Set_Description(text); // RA2: as above
+									Scenarios.Add(mission); // RA2: as above
+								}
+							}
+						}
+						ini.Clear();
+					} else {
+						DebugString("Can't see .pkt inside .yro!\n"); // RA2: as above
+					}
+				}
+			}
 		}
 
-		if (FindNextFile(handle, &block) == 0) break;
+		if (!Next_File(handle, block)) { // RA2: as above
+			break;
+		}
+	}
+
+	CD::Set_Required_Disk((DiskID)previous_disk); // RA2: as above
+	if (handle != INVALID_HANDLE_VALUE) {
+		FindClose(handle);
+	}
+
+	ini.Clear();
+	file.Close();
+
+	char digest_buffer[32];
+	wchar_t description[64]; // RA2: as above
+	char game_modes[256]; // RA2: as above
+	bool official = false; // RA2: as above
+	int min_players; // RA2: as above
+	int max_players; // RA2: as above
+
+	handle = FindFirstFile("*.YRM", &block); // RA2: as above
+	official = false; // RA2: as above
+	while (handle != INVALID_HANDLE_VALUE) {
+		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_TEMPORARY)) == 0) { // RA2: as above
+			char const * file_name = &block.cAlternateFileName[0]; // RA2: as above
+			if (strlen(file_name) == 0) { // RA2: as above
+				file_name = &block.cFileName[0]; // RA2: as above
+			}
+
+			ini.Get_String("Basic", "Name", "No Name", name_buffer, sizeof(name_buffer)); // RA2: as above
+			ini.Get_String("Digest", "1", "No Digest", digest_buffer, sizeof(digest_buffer)); // RA2: as above
+			Char_To_Wide(description, name_buffer, -1); // RA2: as above
+			official = ini.Get_Bool("Basic", "Official", false); // RA2: as above
+			min_players = 2; // RA2: as above
+			max_players = 4; // RA2: as above
+
+			Read_Map_Header(file_name, description, digest_buffer, game_modes, &official, &min_players, &max_players); // RA2: as above
+			MultiMission * mission = new MultiMission(file_name, description, digest_buffer, official, game_modes, min_players, max_players); // RA2: as above
+			Scenarios.Add(mission); // RA2: as above
+		}
+
+		if (!Next_File(handle, block)) { // RA2: as above
+			break;
+		}
 	}
 
 	if (handle != INVALID_HANDLE_VALUE) {
 		FindClose(handle);
 	}
-
-	Options.ScenarioIndex = 0;
 }
 
 
@@ -1132,14 +1425,12 @@ void SessionClass::Free_Scenario_Descriptions(void)
 	//------------------------------------------------------------------------
 	// Clear the dialing entries
 	//------------------------------------------------------------------------
-	for (i = 0; i < PhoneBook.Count(); i++) {
-		if (PhoneBook[i] != NULL) {
-			delete PhoneBook[i];
-		}
-	}
-	PhoneBook.Clear();
+    for (i = 0; i < PhoneBook.Count(); i++) {
+        delete PhoneBook[i];
+    }
+    PhoneBook.Clear();
+}
 
-}	/* end of Free_Scenario_Descriptions */
 
 
 /***************************************************************************
@@ -1159,136 +1450,6 @@ void SessionClass::Free_Scenario_Descriptions(void)
  *=========================================================================*/
 void SessionClass::Trap_Object(void)
 {
-#ifdef TRAP_OBJECTS
-	int i;
-
-	//------------------------------------------------------------------------
-	// Initialize
-	//------------------------------------------------------------------------
-	TrapObject.Ptr.All = NULL;
-
-	//------------------------------------------------------------------------
-	// Search for the object based upon its type, then its coordinate or
-	// 'this' pointer value.
-	//------------------------------------------------------------------------
-	switch (TrapObjType) {
-		case RTTI_AIRCRAFT:
-			for (i = 0; i < Aircraft.Count(); i++) {
-				if (Aircraft[i]->Coord == TrapCoord ||
-					Aircraft[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Aircraft = Aircraft[i];
-					break;
-				}
-			}
-			break;
-
-		case RTTI_ANIM:
-			for (i = 0; i < Anims.Count(); i++) {
-				if (Anims[i]->Coord == TrapCoord ||
-					Anims[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Anim = Anims[i];
-					break;
-				}
-			}
-			break;
-
-		case RTTI_BUILDING:
-			for (i = 0; i < Buildings.Count(); i++) {
-				if (Buildings[i]->Coord == TrapCoord ||
-					Buildings[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Building = Buildings[i];
-					break;
-				}
-			}
-			break;
-
-		case RTTI_BULLET:
-			for (i = 0; i < Bullets.Count(); i++) {
-				if (Bullets[i]->Coord == TrapCoord ||
-					Bullets[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Bullet = Bullets[i];
-					break;
-				}
-			}
-			break;
-
-		case RTTI_INFANTRY:
-			for (i = 0; i < Infantry.Count(); i++) {
-				if (Infantry[i]->Coord == TrapCoord ||
-					Infantry[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Infantry = Infantry[i];
-					break;
-				}
-			}
-			break;
-
-		case RTTI_UNIT:
-			for (i = 0; i < Units.Count(); i++) {
-				if (Units[i]->Coord == TrapCoord ||
-					Units[i]->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Unit = Units[i];
-					break;
-				}
-			}
-			break;
-
-		//.....................................................................
-		// Last-ditch find-the-object-right-now-darnit loop
-		//.....................................................................
-		case RTTI_NONE:
-			for (i = 0; i < Aircraft.Count(); i++) {
-				if (Aircraft.Raw_Ptr(i)->Coord == TrapCoord ||
-					Aircraft.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Aircraft = Aircraft.Raw_Ptr(i);
-					TrapObjType = RTTI_AIRCRAFT;
-					return;
-				}
-			}
-			for (i = 0; i < Anims.Count(); i++) {
-				if (Anims.Raw_Ptr(i)->Coord == TrapCoord ||
-					Anims.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Anim = Anims.Raw_Ptr(i);
-					TrapObjType = RTTI_ANIM;
-					return;
-				}
-			}
-			for (i = 0; i < Buildings.Count(); i++) {
-				if (Buildings.Raw_Ptr(i)->Coord == TrapCoord ||
-					Buildings.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Building = Buildings.Raw_Ptr(i);
-					TrapObjType = RTTI_BUILDING;
-					return;
-				}
-			}
-			for (i = 0; i < Bullets.Count(); i++) {
-				if (Bullets.Raw_Ptr(i)->Coord == TrapCoord ||
-					Bullets.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Bullet = Bullets.Raw_Ptr(i);
-					TrapObjType = RTTI_BULLET;
-					return;
-				}
-			}
-			for (i = 0; i < Infantry.Count(); i++) {
-				if (Infantry.Raw_Ptr(i)->Coord == TrapCoord ||
-					Infantry.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Infantry = Infantry.Raw_Ptr(i);
-					TrapObjType = RTTI_INFANTRY;
-					return;
-				}
-			}
-			for (i = 0; i < Units.Count(); i++) {
-				if (Units.Raw_Ptr(i)->Coord == TrapCoord ||
-					Units.Raw_Ptr(i)->As_Target()==TrapTarget) {
-					TrapObject.Ptr.Unit = Units.Raw_Ptr(i);
-					TrapObjType = RTTI_UNIT;
-					return;
-				}
-			}
-
-		default:
-			break;
-	}
-#endif
 }
 
 
@@ -1300,28 +1461,23 @@ void SessionClass::Trap_Object(void)
 /// </summary>
 /// <param name="id">The multiplayer color the player has chosen.</param>
 /// <returns>Returns with the color scheme to draw that player with.</returns>
-int SessionClass::Color_Index_To_Scheme(int id)
+static char const ColorSchemes[9] = {3, 11, 21, 29, 13, 25, 17, 15, 5}; // RA2: 0x7F3224, the color scheme of each player color
+
+int SessionClass::Color_Index_To_Scheme(int color) // RA2: RA2's signature
 {
 	/*
 	 * The list holds each scheme twice, and the odd entry of each pair is the lighting-aware
 	 * one, so the index is doubled and stepped one past the plain copy.
 	 */
-	static char _table[] = {
-		(2 *  1) + 1,
-		(2 * 10) + 1,
-		(2 * 23) + 1,
-		(2 * 36) + 1,
-		(2 * 13) + 1,
-		(2 * 27) + 1,
-		(2 * 19) + 1,
-		(2 * 16) + 1,
-	};
-
-	if (id < sizeof(_table)) {
-		return(_table[id]);
-	}
-	return(id);
+    if (color == -2) { // RA2: RA2's form of SessionClass::Color_Index_To_Scheme
+        color = 8; // RA2: as above
+    }
+    if ((unsigned)color < 9) { // RA2: as above
+        return ColorSchemes[color]; // RA2: as above
+    }
+    return color; // RA2: as above
 }
+
 
 
 /***************************************************************************
@@ -1342,36 +1498,18 @@ int SessionClass::Color_Index_To_Scheme(int id)
 unsigned int SessionClass::Compute_Unique_ID(void)
 {
 //	time_t tm;
-	unsigned int id;
-//	struct diskfree_t dtable;
-	char *path;
-	unsigned i;
+    unsigned int id = timeGetTime(); // RA2: RA2's form of SessionClass::Compute_Unique_ID
+    unsigned int free = Disk_Space_Available(); // RA2: as above
+    Add_CRC(&id, free); // RA2: as above
+    char *path = getenv("PATH"); // RA2: as above
+    if (path != 0) { // RA2: as above
+        for (unsigned i = 0; i < strlen(path); i++) { // RA2: as above
+            Add_CRC(&id, path[i]); // RA2: as above
+        }
+    }
+    return id; // RA2: as above
+}
 
-	//------------------------------------------------------------------------
-	// Start with the seconds since Jan 1, 1970 (system local time)
-	//------------------------------------------------------------------------
-//	time(&tm);
-//	id = (unsigned long)tm;
-	id = timeGetTime();
-
-	//------------------------------------------------------------------------
-	// Now add in the free space on the hard drive
-	//------------------------------------------------------------------------
-	unsigned int space_available = Disk_Space_Available();
-	Add_CRC(&id, space_available);
-
-	//------------------------------------------------------------------------
-	// Add in every byte in the user's path environment variable
-	//------------------------------------------------------------------------
-	path = getenv("PATH");
-	if (path) {
-		for (i = 0; i < strlen(path); i++) {
-			Add_CRC(&id, (unsigned int)path[i]);
-		}
-	}
-
-	return(id);
-}	// end of Compute_Unique_ID
 
 
 /// <summary>
@@ -1385,64 +1523,74 @@ unsigned int SessionClass::Compute_Unique_ID(void)
 /// <param name="name">Name of the section that describes this mission.</param>
 MultiMission::MultiMission(INIClass const & ini, char const * name)
 {
-	char buffer[128];
-	char *token;
-
-	assert(name != NULL);
-
-	ScenarioDescription[0] = '0';
-	Digest[0] = '0';
-	Set_Digest(NULL);
-	IsOfficial = true;
-	MinPlayers = 2;
-	MaxPlayers = 4;
-	Disks.Clear();
-
-	if (name != NULL) {
-
-		strcpy(Filename, name);
-		strcat(Filename, ".MAP");
-
-		ini.Get_String(name, "Description", "", ScenarioDescription, sizeof(ScenarioDescription));
-		MinPlayers = ini.Get_Int(name, "MinPlayers", MinPlayers);
-		MaxPlayers = ini.Get_Int(name, "MinPlayers", MaxPlayers);
-
-		if (ini.Get_String(name, "CD", "", buffer, sizeof(buffer))) {
-			token = strtok(buffer, ",");
-
-			while (token != NULL && *token != '\0') {
-				Disks.Add((DiskID)atoi(token));
-				token = strtok(NULL, ",");
-			}
-		}
-
-		CCFileClass file(Filename);
-
-		if (!file.Is_Available()) {
-			DebugString("Unable to locate scenario %s - No digest info will be loaded\n", Filename);
-		}else{
-			if (!file.Open()) {
-				return;
-			}
-			char digestbuf[128];
-
-			file.Seek(-((int)sizeof(digestbuf) - 28), SEEK_END);
-			memset(digestbuf, 0, sizeof(digestbuf));
-			file.Read(digestbuf, sizeof(digestbuf) - 28);
-			file.Close();
-
-			char *digest = strstr(digestbuf, "[Digest]");
-
-			if (digest != NULL) {
-				CCINIClass mapini;
-				BufferStraw straw(digestbuf, sizeof(digestbuf) - 28);
-				mapini.Load(straw, false, false);
-				mapini.Get_String("Digest", "1", NULL, digestbuf, sizeof(digestbuf));
-				Set_Digest(digestbuf);
-			}
-		}
-	}
+    ScenarioDescription[0] = 0; // RA2: RA2's form of MultiMission::MultiMission
+    Filename[sizeof(Filename) - 1] = '\0'; // RA2: as above
+    strcpy(Digest, "No Digest");
+    IsOfficial = true;
+    MinPlayers = 2;
+    MaxPlayers = 4;
+    Disks.Clear();
+    if (!name) { // RA2: as above
+        return;
+    }
+    strcpy(Filename, name);
+    strcat(Filename, ".MAP");
+    if (ini.Is_Present(name, "DescriptionText")) { // RA2: as above
+        char text[0x2C]; // RA2: as above
+        ini.Get_String(name, "DescriptionText", "", text, 0x2C); // RA2: as above
+        Char_To_Wide(ScenarioDescription, text, -1); // RA2: as above
+    } else {
+        ini.ReadStringtableEntry(name, "Description", ScenarioDescription, 0x2C); // RA2: as above
+    }
+    MinPlayers = ini.Get_Int(name, "MinPlayers", MinPlayers);
+    MaxPlayers = ini.Get_Int(name, "MaxPlayers", MaxPlayers); // RA2: as above
+    char disks[0x80]; // RA2: as above
+    if (ini.Get_String(name, "CD", "", disks, 0x80)) { // RA2: as above
+        char *token = strtok(disks, ","); // RA2: as above
+        while (token && *token) { // RA2: as above
+            Disks.Add((DiskID)atoi(token));
+            token = strtok(0, ","); // RA2: as above
+        }
+    }
+    Wstring modes; // RA2: as above
+    bool found = ini.Get_String(name, "GameMode", "", modes) > 0; // RA2: as above
+    if (found) { // RA2: as above
+        Wstring token; // RA2: as above
+        int position = modes.getToken(0, ",", token); // RA2: as above
+        while (position != -1) { // RA2: as above
+            token.trimLeading(" "); // RA2: as above
+            token.trimTrailing(" "); // RA2: as above
+            GameModes.Add(token); // RA2: as above
+            position = modes.getToken(position, ",", token); // RA2: as above
+        }
+    }
+    CCFileClass file(Filename);
+    if (!file.Is_Available()) {
+        DebugString("Unable to locate scenario %s - No digest info will be loaded\n", Filename);
+    } else {
+        if (!file.Open(FileClass::READ)) { // RA2: as above
+            return;
+        }
+        file.Seek(-100, 2); // RA2: as above
+        char tail[0x80]; // RA2: as above
+        memset(tail, 0, sizeof(tail)); // RA2: as above
+        file.Read(tail, 0x64); // RA2: as above
+        file.Close();
+        if (strstr(tail, "[Digest]")) { // RA2: as above
+            CCINIClass digest_ini; // RA2: as above
+            BufferStraw straw(tail, 0x64); // RA2: as above
+            digest_ini.Load(straw, false, false); // RA2: as above
+            digest_ini.Get_String("Digest", "1", 0, tail, 0x80); // RA2: as above
+            if (tail) { // RA2: as above
+                strncpy(Digest, tail, 0x20); // RA2: as above
+                Digest[0x1F] = '\0'; // RA2: as above
+            } else {
+                strcpy(Digest, "No Digest");
+            }
+        }
+    }
 }
+
 
 
 /// <summary>
@@ -1455,45 +1603,45 @@ MultiMission::MultiMission(INIClass const & ini, char const * name)
 /// <param name="description">The description to show in the scenario list.</param>
 /// <param name="digest">The digest the other players' copies are checked against.</param>
 /// <param name="official">Is this one of the missions that shipped with the game?</param>
-MultiMission::MultiMission(char const * filename, char const * description, char const * digest, bool official)
+MultiMission::MultiMission(char const * filename, wchar_t const * description, char const * digest, bool official, // RA2: RA2's signature
+                           char const * game_modes, int min_players, int max_players) // RA2: RA2's form of MultiMission::MultiMission
 {
-	Set_Filename(filename);
-	Set_Description(description);
-	Set_Digest(digest);
-	Set_Official(official);
-	MinPlayers = 2;
-	MaxPlayers = 4;
-	Disks.Clear();
-
-	CCFileClass file(filename);
-
-	if (file.Is_Available() == true) {
-		char buffer[256];
-
-		CCINIClass ccini;
-		ccini.Load(file, false, false);
-		ccini.Get_String( "Multiplay", "Description", "", buffer, sizeof(buffer));
-
-		if (strlen(buffer) != 0) {
-			Set_Description(buffer);
-		}
-
-		MinPlayers = ccini.Get_Int("Multiplay", "MinPlayers", MinPlayers);
-		MaxPlayers = ccini.Get_Int("Multiplay", "MinPlayers", MaxPlayers);
-
-		if (ccini.Get_String("Multiplay", "CD", "", buffer, sizeof(buffer))) {
-			char *tok = strtok(buffer, ",");
-			while (tok != NULL && tok[0] != '\0') {
-				Disks.Add((DiskID)atoi(tok));
-
-				tok = strtok(NULL, ",");
-			}
-		}
-	}
-
-	if (Disks.Count() == 0) {
-		Disks.Add(DISK_LOCAL);
-	}
+    if (filename) { // RA2: as above
+        strncpy(Filename, filename, sizeof(Filename)); // RA2: as above
+        Filename[sizeof(Filename) - 1] = '\0'; // RA2: as above
+    } else {
+        strcpy(Filename, "No File Name");
+    }
+    if (description) { // RA2: as above
+        wcsncpy(ScenarioDescription, description, 0x2C); // RA2: as above
+        ScenarioDescription[0x2B] = 0; // RA2: as above
+    } else {
+        wcscpy(ScenarioDescription, StringTable::LoadString("MSG:NoDescription", 0, "D:\\Ra2\\Session.CPP", 0xb0a)); // RA2: as above
+    }
+    if (digest) { // RA2: as above
+        strncpy(Digest, digest, sizeof(Digest)); // RA2: as above
+        Digest[sizeof(Digest) - 1] = '\0'; // RA2: as above
+    } else {
+        strcpy(Digest, "No Digest");
+    }
+    IsOfficial = official;
+    MinPlayers = min_players; // RA2: as above
+    MaxPlayers = max_players; // RA2: as above
+    Disks.Clear();
+    Disks.Add((DiskID)-2); // RA2: as above
+    if (game_modes) { // RA2: as above
+        Wstring list(game_modes); // RA2: as above
+        if (list.length() > 0) { // RA2: as above
+            Wstring token; // RA2: as above
+            int position = list.getToken(0, ",", token); // RA2: as above
+            while (position != -1) { // RA2: as above
+                token.trimLeading(" "); // RA2: as above
+                token.trimTrailing(" "); // RA2: as above
+                GameModes.Add(token); // RA2: as above
+                position = list.getToken(position, ",", token); // RA2: as above
+            }
+        }
+    }
 }
 
 
@@ -1507,18 +1655,13 @@ MultiMission::MultiMission(char const * filename, char const * description, char
 bool MultiMission::Is_On_CD(DiskID cd) const
 {
 	if (cd == DISK_LOCAL) {
-		return(RawFileClass(Filename).Is_Available());
+		return RawFileClass(Filename).Is_Available(); // RA2: RA2's form of MultiMission::Is_On_CD
 	}
 
 	if (Disks.Is_In_List(DISK_ANY) == true) {
-		return(true);
+		return true; // RA2: as above
 	}
-
-	if (Disks.Is_In_List(DISK_GDI) == true || Disks.Is_In_List(DISK_NOD) == true) {
-		return(true);
-	}
-
-	return(Disks.Is_In_List(cd));
+	return Disks.Is_In_List(cd); // RA2: as above
 }
 
 
@@ -1528,7 +1671,7 @@ bool MultiMission::Is_On_CD(DiskID cd) const
 /// <returns>Returns with the first disk the mission was registered against.</returns>
 DiskID MultiMission::On_Which_CD(void) const
 {
-	return(Disks[0]);
+	return Disks[0]; // RA2: RA2's form of MultiMission::On_Which_CD
 }
 
 
@@ -1538,15 +1681,16 @@ DiskID MultiMission::On_Which_CD(void) const
 /// without one is given a placeholder rather than an empty line.
 /// </summary>
 /// <param name="description">The description to record, or NULL if the mission has none.</param>
-void MultiMission::Set_Description(char const * description)
+void MultiMission::Set_Description(wchar_t const * description) // RA2: RA2's signature
 {
 	if (description != NULL) {
-		strncpy(ScenarioDescription, description, ARRAY_SIZE(ScenarioDescription));
-		ScenarioDescription[ARRAY_SIZE(ScenarioDescription) - 1] = '\0';
+		wcsncpy(ScenarioDescription, description, ARRAY_SIZE(ScenarioDescription)); // RA2: copies 44 and ends the string at 43
+		ScenarioDescription[ARRAY_SIZE(ScenarioDescription) - 1] = L'\0'; // RA2: RA2's form of MultiMission::Set_Description
 	} else {
-		strcpy(ScenarioDescription, "No Description");
+		wcscpy(ScenarioDescription, StringTable::LoadString("MSG:NoDescription", NULL, "D:\\Ra2\\Session.CPP", 2826)); // RA2: the placeholder text
 	}
 }
+
 
 
 /// <summary>
@@ -1589,6 +1733,47 @@ void MultiMission::Set_Official(bool official)
 {
 	IsOfficial = official;
 }
+bool MultiMission::Is_Random_Map(void) const // RA2: RA2's signature
+{
+	return stricmp(Filename, "RandMap.Sed") == 0; // RA2: 0x006720C0
+}
+
+bool MultiMission::Supports_Game_Mode(Wstring & mode) const // RA2: RA2's signature
+{
+	if (GameModes.Count() == 0) { // RA2: 0x006720E0
+		return mode == "standard"; // RA2: RA2's form of MultiMission::Supports_Game_Mode
+	}
+	for (int index = 0; index < GameModes.Count(); index++) { // RA2: as above
+		if (mode == GameModes[index]) { // RA2: as above
+			return true; // RA2: as above
+		}
+	}
+	return false; // RA2: as above
+}
+
+bool SessionClass::Is_Random_Map(void) const // RA2: RA2's signature
+{
+	return stricmp(ScenarioFileName, "RandMap.Sed") == 0; // RA2: 0x00672140
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void Copy_Player_Name(char * destination, wchar_t const * name)
+{
+	strcpy(destination, Wide_To_Narrow(name));
+}
 
 
 /// <summary>
@@ -1600,7 +1785,9 @@ void MultiMission::Set_Official(bool official)
 /// <param name="percent">How much of the load has been completed, as a percentage.</param>
 void SessionClass::Update_Progress(int percent)
 {
-	if (Debug_Map) return;
+	if (Debug_Map) { // RA2: RA2's form of SessionClass::Update_Progress
+		return;
+	}
 
 	int new_percent = percent;
 	if (Scen->IsRandom) {
@@ -1611,9 +1798,11 @@ void SessionClass::Update_Progress(int percent)
 		Progress.Set_Progress_Percent(0, new_percent);
 	}
 
-	if ( Players.Count() == 1 ) return;
+	if (Players.Count() == 1) { // RA2: as above
+		return;
+	}
 
-	CDTimerClass<SystemTimerClass> timer = 4 * TIMER_SECOND;
+	CDTimerClass<SystemTimerClass> timer = 240; // RA2: as above
 
 	switch (Type) {
 		case GAME_IPX:
@@ -1624,11 +1813,14 @@ void SessionClass::Update_Progress(int percent)
 				prog_packet.Command = NET_PROGRESS_REPORT;
 				prog_packet.Progress.Percent = int(100.0 * Progress.Get_Current_Progress(0));
 
+				strcpy(prog_packet.Name, Wide_To_Narrow(Session.Players[0]->Name)); // RA2: as above
+
 				if (prog_packet.Progress.Percent < 99.95) {
-					Ipx.Send_Global_Message(&prog_packet, sizeof(prog_packet), 0, NULL);
-				}else{
-					for (int p=1 ; p<Session.Players.Count() ; p++) {
-						Ipx.Send_Global_Message(&prog_packet, sizeof(prog_packet), 1, &Session.Players[p]->Address);
+					Ipx.Send_Global_Message(&prog_packet, 0x33, 0, NULL); // RA2: as above
+				} else {
+					for (int p = 1; p < Session.Players.Count(); p++) { // RA2: as above
+						DebugString("Sending guarenteed progress message to all players\n"); // RA2: as above
+						Ipx.Send_Global_Message_To_Name(&prog_packet, 0x33, 1, Session.Players[p]->Name); // RA2: as above
 					}
 				}
 
@@ -1678,84 +1870,75 @@ void SessionClass::Update_Progress(int percent)
 /// </summary>
 void SessionClass::Init_Fixed_Alliances(void)
 {
-	HouseClass *hptr;
-	int i;
-	int j;
-
-	SquadAlliances = false;
-
-	if (Type != GAME_INTERNET) {
-		return;
-	}
-
-	Scen->Special.IsAllianceFixed = false;
-
-	char * names1 = WestwoodOnline_Clan1_Players;
-	char * names2 = WestwoodOnline_Clan2_Players;
-
-	DebugString("Squad 1 = %s\n", names1);
-	DebugString("Squad 2 = %s\n", names2);
-
-	if (strlen(names1) == 0 || strlen(names2) == 0) {
-		return;
-	}
-
-	DynamicVectorClass<HouseClass *> squad1;
-	DynamicVectorClass<HouseClass *> squad2;
-
-	char * buffer = new char [MAX(strlen(names1), strlen(names2)) + 32];
-
-	strcpy(buffer, names1);
-	char * token = strtok(buffer, ",");
-
-	while (token != NULL && *token != '\0') {
-		for (i = 0; i < Houses.Count(); i++) {
-			hptr = Houses[i];
-			if (hptr->IsHuman && (_stricmp(hptr->IniName, token) == 0)) {
-				squad1.Add(hptr);
-			}
-		}
-		token = strtok(NULL, ",");
-	}
-
-	strcpy(buffer, names2);
-	token = strtok(buffer, ",");
-
-	while (token != NULL && *token != '\0') {
-		for (i = 0; i < Houses.Count(); i++) {
-			hptr = Houses[i];
-			if (hptr->IsHuman && (_stricmp(hptr->IniName, token) == 0)) {
-				squad2.Add(hptr);
-			}
-		}
-		token = strtok(NULL, ",");
-	}
-
-	if (squad1.Count() > 1) {
-		for (i = 0; i<squad1.Count(); i++) {
-			for (j = 0; j < squad1.Count(); j++) {
-				if (squad1[i]->HeapID != squad1[j]->HeapID) {
-					squad1[i]->Make_Ally(squad1[j]);
-				}
-			}
-		}
-	}
-
-	if (squad2.Count() > 1) {
-		for (i = 0; i<squad2.Count(); i++) {
-			for (j = 0; j < squad2.Count(); j++) {
-				if (squad2[i]->HeapID != squad2[j]->HeapID) {
-					squad2[i]->Make_Ally(squad2[j]);
-				}
-			}
-		}
-	}
-
-	delete [] buffer;
-
-	SquadAlliances = true;
-	Scen->Special.IsAllianceFixed = true;
+    SquadAlliances = false;
+    if (Type != GAME_INTERNET) {
+        return;
+    }
+    Scen->Special.IsAllianceFixed = false;
+    DebugString("Squad 1 = %s\n", Squad1Names); // RA2: RA2's form of SessionClass::Init_Fixed_Alliances
+    DebugString("Squad 2 = %s\n", Squad2Names); // RA2: as above
+    if (strlen(Squad1Names) == 0 || strlen(Squad2Names) == 0) { // RA2: as above
+        return;
+    }
+    int i;
+    int j;
+    char *name; // RA2: as above
+    DynamicVectorClass<HouseClass *> squad1;
+    DynamicVectorClass<HouseClass *> squad2;
+    char *names = new char[(strlen(Squad1Names) > strlen(Squad2Names) ? strlen(Squad1Names) : strlen(Squad2Names)) + 0x20]; // RA2: as above
+    strcpy(names, Squad1Names); // RA2: as above
+    for (name = strtok(names, ","); name && *name; name = strtok(0, ",")) { // RA2: as above
+        for (i = 0; i < Houses.Count(); i++) {
+            HouseClass *house = Houses[i]; // RA2: as above
+            if (house->IsHuman && stricmp(house->IniName, name) == 0) { // RA2: as above
+                squad1.Add(house); // RA2: as above
+            }
+        }
+    }
+    strcpy(names, Squad2Names); // RA2: as above
+    for (name = strtok(names, ","); name && *name; name = strtok(0, ",")) { // RA2: as above
+        for (i = 0; i < Houses.Count(); i++) {
+            HouseClass *house = Houses[i]; // RA2: as above
+            if (house->IsHuman && stricmp(house->IniName, name) == 0) { // RA2: as above
+                squad2.Add(house); // RA2: as above
+            }
+        }
+    }
+    if (squad1.Count() > 1) {
+        for (i = 0; i < squad1.Count(); i++) { // RA2: as above
+            for (j = 0; j < squad1.Count(); j++) {
+                if (squad1[i]->HeapID != squad1[j]->HeapID) {
+                    squad1[i]->Make_Ally(squad1[j]);
+                }
+            }
+        }
+    }
+    if (squad2.Count() > 1) {
+        for (i = 0; i < squad2.Count(); i++) { // RA2: as above
+            for (j = 0; j < squad2.Count(); j++) {
+                if (squad2[i]->HeapID != squad2[j]->HeapID) {
+                    squad2[i]->Make_Ally(squad2[j]);
+                }
+            }
+        }
+    }
+    delete [] names; // RA2: as above
+    SquadAlliances = true;
+    Scen->Special.IsAllianceFixed = true;
 }
+
+void GameOptionsType::Reset_AI(void) // RA2: RA2's signature
+{
+	AIPlayers = 0; // RA2: 0x00672810
+	for (int index = 0; index < 8; index++) { // RA2: RA2's form of GameOptionsType::Reset_AI
+		AISlots.Countries[index] = -1; // RA2: as above
+		AISlots.Colors[index] = -1; // RA2: as above
+	}
+}
+
+
+
+
 
 
 /// <summary>
@@ -1806,5 +1989,319 @@ bool GameOptionsType::Load(IStream * stream)
 
 	return(false);
 }
+bool SessionClass::Is_Color_Used(int color) // RA2: RA2's signature
+{
+	if (color == -2) { // RA2: 0x006728D0
+		return false; // RA2: RA2's form of SessionClass::Is_Color_Used
+	}
+	for (int index = 0; index < Players.Count(); index++) { // RA2: as above
+		if (Players[index]->Get_Color_Or_Random() == color) { // RA2: as above
+			return true; // RA2: as above
+		}
+	}
+	for (int slot = 0; slot < 8; slot++) { // RA2: as above
+		if (Options.AISlots.Colors[slot] == color) { // RA2: as above
+			return true; // RA2: as above
+		}
+	}
+	return false; // RA2: as above
+}
+
+int SessionClass::Random_Side(void) // RA2: RA2's signature
+{
+	int last = HouseTypes.Count() - 1; // RA2: 0x00672940, a random house that is allowed in multiplayer and is not passive
+	int index;
+	do { // RA2: RA2's form of SessionClass::Random_Side
+		index = Scen->RandomNumber(0, last); // RA2: as above
+	} while (!HouseTypes[index]->IsMultiplay || HouseTypes[index]->IsMultiplayPassive); // RA2: as above
+	return index; // RA2: as above
+}
+
+int SessionClass::Random_Color(void) // RA2: RA2's signature
+{
+	int color; // RA2: 0x00672980
+	do { // RA2: RA2's form of SessionClass::Random_Color
+		color = Scen->RandomNumber(0, 7); // RA2: as above
+	} while (Is_Color_Used(color)); // RA2: as above
+	return color; // RA2: as above
+}
+
+int SessionClass::Chosen_House(void) const // RA2: RA2's signature
+{
+	return (idxSide2 == -2) ? -2 : House; // RA2: 0x006729F0
+}
+
+int SessionClass::Chosen_Color(void) const // RA2: RA2's signature
+{
+	return (ColorIdx == -2) ? -2 : PrefColor; // RA2: 0x00672A10
+}
+
+void SessionClass::Set_Side(int side, bool random) // RA2: RA2's signature
+{
+	if (side == -2) { // RA2: 0x00672A30
+		if (random) { // RA2: RA2's form of SessionClass::Set_Side
+			Side = Random_Side(); // RA2: as above
+		} else {
+			Side = 0; // RA2: as above
+		}
+		Side2 = -2; // RA2: as above
+	} else {
+		Side = side; // RA2: as above
+		Side2 = -1; // RA2: as above
+	}
+	House = Side; // RA2: as above
+	idxSide2 = Side2; // RA2: as above
+}
+
+void SessionClass::Set_Color(int color, bool random) // RA2: RA2's signature
+{
+	if (color == -2) { // RA2: 0x00672AE0
+		if (random) { // RA2: RA2's form of SessionClass::Set_Color
+			Color = Random_Color(); // RA2: as above
+		} else {
+			Color = 0; // RA2: as above
+		}
+		Color2 = -2; // RA2: as above
+	} else {
+		Color = color; // RA2: as above
+		Color2 = -1; // RA2: as above
+	}
+	PrefColor = Color; // RA2: as above
+	ColorIdx = Color2; // RA2: as above
+}
+
+void SessionClass::Assign_Random_Choices(void) // RA2: RA2's signature
+{
+	int count = Session.Players.Count(); // RA2: 0x00672BB0, settles every random country and color of the players and the computer players
+	int i;
+	for (i = 0; i < count; i++) { // RA2: RA2's form of SessionClass::Assign_Random_Choices
+		NodeNameType * player = Session.Players[i]; // RA2: as above
+		if (player->Slot.InitialCountry == -3 || player->Slot.Country == -3) { // RA2: as above
+			player->Slot.Country = -3; // RA2: as above
+			player->Slot.InitialCountry = -1; // RA2: as above
+			player->Slot.ColorIdx = 8; // RA2: as above
+			player->Slot.InitialColor = -1; // RA2: as above
+		} else {
+			if (player->Slot.InitialCountry == -2) { // RA2: as above
+				player->Slot.InitialCountry = -1; // RA2: as above
+				if (MPGameMode) { // RA2: as above
+					player->Slot.Country = MPGameMode->RandomHumanCountryIndex(); // RA2: as above
+				} else {
+					player->Slot.Country = Session.Random_Side(); // RA2: as above
+				}
+			}
+			if (player->Slot.InitialColor == -2) { // RA2: as above
+				player->Slot.InitialColor = -1; // RA2: as above
+				player->Slot.ColorIdx = -1; // RA2: as above
+				player->Slot.ColorIdx = Session.Random_Color(); // RA2: as above
+			}
+		}
+		if (i == 0) { // RA2: as above
+			Game::PlayerColor = player->Slot.ColorIdx; // RA2: as above
+		}
+	}
+	for (i = 0; i < 8; i++) { // RA2: as above
+		if (Session.Options.AISlots.Countries[i] == -2) { // RA2: as above
+			if (MPGameMode) { // RA2: as above
+				Session.Options.AISlots.Countries[i] = MPGameMode->RandomAICountryIndex(); // RA2: as above
+			} else {
+				Session.Options.AISlots.Countries[i] = Session.Random_Side(); // RA2: as above
+			}
+		}
+		if (Session.Options.AISlots.Colors[i] == -2) { // RA2: as above
+			Session.Options.AISlots.Colors[i] = Session.Random_Color(); // RA2: as above
+		}
+	}
+}
+
+void SessionClass::Resume(void) // RA2: RA2's signature
+{
+	if (!CurrentlyInGame && GameActive) { // RA2: 0x00672DE0
+		CurrentlyInGame = true; // RA2: RA2's form of SessionClass::Resume
+		if (SavedGameSpeed == -1) { // RA2: as above
+			SavedGameSpeed = ::Options.GameSpeed; // RA2: as above
+		}
+		if (Type == GAME_NORMAL) { // RA2: as above
+			::Options.GameSpeed = 2; // RA2: as above
+		}
+		if (!Scen->IsInputLocked) { // RA2: as above
+			Lock_Scenario_Input(); // RA2: as above
+			UnlockInputFrame = Frame + 3; // RA2: as above
+		}
+		if (!MouseCursor->Is_Captured()) { // RA2: as above
+			MouseCursor->Capture_Mouse(); // RA2: as above
+		}
+		AudioLevelSet(&AudioGroupAttribs1->VolumeLevel, 0x4000); // RA2: as above
+	}
+}
+
+void SessionClass::Leave_Game(void) // RA2: RA2's signature
+{
+	if (CurrentlyInGame) { // RA2: 0x00672E70
+		CurrentlyInGame = false; // RA2: RA2's form of SessionClass::Leave_Game
+		if (SavedGameSpeed != -1) { // RA2: as above
+			::Options.GameSpeed = SavedGameSpeed; // RA2: as above
+			SavedGameSpeed = -1; // RA2: as above
+		}
+		Leave_Game_Hook(); // RA2: as above
+		Stop_Ingame_Movie(); // RA2: as above
+		Audio_Stop_Events(); // RA2: as above
+		Sound_Clear_Static(); // RA2: as above
+		Speech_Reset(); // RA2: as above
+		Aux_Stream_Stop(); // RA2: as above
+		AudioLevelSet(&AudioGroupAttribs1->VolumeLevel, 0x4000); // RA2: as above
+		if (ToolTips) { // RA2: as above
+			ToolTips->Activate(false); // RA2: as above
+		}
+		if (MouseCursor->Is_Captured()) { // RA2: as above
+			MouseCursor->Release_Mouse(); // RA2: as above
+		}
+		MouseCursor->Hide_Mouse(); // RA2: as above
+		UnlockInputFrame = 0; // RA2: as above
+	}
+}
+
+bool SessionClass::Is_In_Game(void) const // RA2: RA2's signature
+{
+	return CurrentlyInGame; // RA2: 0x00672F10
+}
+
+void SessionClass::Remove_Player_Port(int index) // RA2: RA2's signature
+{
+	for (int i = index; i < MAX_PLAYERS - 1; i++) { // RA2: 0x00672F20
+		PlayerPorts[i] = PlayerPorts[i + 1]; // RA2: RA2's form of SessionClass::Remove_Player_Port
+	}
+}
+
+unsigned short SessionClass::Player_Port(int connection_id) // RA2: RA2's signature
+{
+	int count = Session.Players.Count(); // RA2: 0x00672F50
+	for (int i = 0; i < count; i++) { // RA2: RA2's form of SessionClass::Player_Port
+		if (Session.Players[i]->Player.ID == connection_id) { // RA2: as above
+			return PlayerPorts[i]; // RA2: as above
+		}
+	}
+	return 0; // RA2: as above
+}
+
+int SessionClass::Player_To_Slot(int index) // RA2: RA2's signature
+{
+	int i = 0; // RA2: 0x00672F90
+	NodeNameType * node; // RA2: RA2's form of SessionClass::Player_To_Slot
+	char * a; // RA2: as above
+	char * b; // RA2: as above
+
+	for (NodeNameType ** slot = Session.Slots; // RA2: as above
+		 (int)slot < (int)&Session.Slots[8]; // RA2: as above
+		 i++, slot++) { // RA2: as above
+		node = *slot; // RA2: as above
+		a = Wide_To_Narrow(Session.Players[index]->Name); // RA2: as above
+		b = Wide_To_Narrow(node->Name); // RA2: as above
+		if (stricmp(a, b) == 0) { // RA2: as above
+			return i; // RA2: as above
+		}
+	}
+	return 0; // RA2: as above
+}
+
+int SessionClass::Name_To_Slot(char const * name) // RA2: RA2's signature
+{
+	int i = 0; // RA2: 0x00672FF0
+	for (NodeNameType ** slot = Session.Slots; (int)slot < (int)&Session.Slots[8]; slot++, i++) { // RA2: RA2's form of SessionClass::Name_To_Slot
+		if (stricmp(name, Wide_To_Narrow((*slot)->Name)) == 0) { // RA2: as above
+			return i; // RA2: as above
+		}
+	}
+	return 0; // RA2: as above
+}
+
+int SessionClass::Slot_To_Player(int slot) // RA2: RA2's signature
+{
+	for (int i = 0; i < Session.Players.Count(); i++) { // RA2: 0x00673030
+		NodeNameType * node = Session.Slots[slot]; // RA2: RA2's form of SessionClass::Slot_To_Player
+		char * a = Wide_To_Narrow(Session.Players[i]->Name); // RA2: as above
+		if (stricmp(a, Wide_To_Narrow(node->Name)) == 0) { // RA2: as above
+			return i; // RA2: as above
+		}
+	}
+	return 0; // RA2: as above
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/***************************************************************************
+ * SessionClass::Read_MultiPlayer_Settings -- reads settings INI           *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      none.                                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   02/14/1995 BR : Created.                                              *
+ *=========================================================================*/
+
+
 
 /************************** end of session.cpp *****************************/

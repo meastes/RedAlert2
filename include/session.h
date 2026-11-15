@@ -212,11 +212,11 @@ struct NodeNameType {
 		} Chat;
 		struct {
 			char SerialPad[SERIAL_MAX];
-			int Country; // RA2: no initial country, colour, start or team (YR); SpectatorFlag is at +0x5B
-			int ColorIdx;
-			int Start;
-			int Team;
-			int SpectatorFlag;
+			int Country; // RA2: +0x4B; Get_Country/Set_Country (0x0066E290, 0x0066E2D0) read and write it with InitialCountry
+			int InitialCountry; // RA2: +0x4F, -2 while the country is still "random"
+			int ColorIdx; // RA2: +0x53 (0x0066E2A0)
+			int InitialColor; // RA2: +0x57, -2 while the color is still "random"
+			int SpectatorFlag; // RA2: +0x5B
 			int HouseIndex;
 			int Time;
 			int Unknown77;
@@ -229,12 +229,8 @@ struct NodeNameType {
 	int Get_Country(void);
 	int Get_Color(void);
 	int Get_Color_Or_Random(void);
-	int Get_Start(void);
-	int Get_Team(void);
 	void Set_Country(int value);
 	void Set_Color(int value);
-	void Set_Start(int value);
-	void Set_Team(int value);
 };
 
 struct SerialPacketType {
@@ -493,7 +489,7 @@ struct GameOptionsType {
 	bool		MCVRedeploy;
 	wchar_t		ScenarioDescription [45];
 
-	void FUN_0069B540(void);
+	void Reset_AI(void); // RA2: 0x00672810, no computer players and their country and color undecided (-1)
 	bool Save(IStream * stream) const;
 	bool Load(IStream * stream);
 
@@ -556,23 +552,21 @@ class SessionClass
 		void Init_Fixed_Alliances(void);
 		void Trap_Object(void);
 		int Color_Index_To_Scheme(int id);
-		bool Is_Random_Map(void) const;
-		bool FUN_0069B600(int color) const;
-		int FUN_0069B670(void);
-		int FUN_0069B690(void);
-		int FUN_0069B700(void) const;
-		int FUN_0069B720(void) const;
-		int FUN_0069B740(void) const;
-		void FUN_0069B760(int side, bool random);
-		void FUN_0069B7E0(int color, bool random);
-		void FUN_0069B8C0(void);
+		bool Is_Random_Map(void) const; // RA2: 0x00672140
+		bool Is_Color_Used(int color); // RA2: 0x006728D0, a player or computer player already has the color
+		int Random_Side(void); // RA2: 0x00672940
+		int Random_Color(void); // RA2: 0x00672980
+		int Chosen_House(void) const; // RA2: 0x006729F0
+		int Chosen_Color(void) const; // RA2: 0x00672A10
+		void Set_Side(int side, bool random); // RA2: 0x00672A30
+		void Set_Color(int color, bool random); // RA2: 0x00672AE0
+		void Assign_Random_Choices(void); // RA2: 0x00672BB0
 		void Resume(void); // RA2: 0x672DE0; back into the game (the counterpart of Leave_Game)
 		void Leave_Game(void); // RA2: 0x672E70
-		unsigned short FUN_0069BC20(int connection_id);
-		int FUN_0069BC60(int index);
-		int FUN_0069BCC0(char const * name);
-		int FUN_0069BD00(int slot);
-		void FUN_0069BD60(void);
+		void Remove_Player_Port(int index); // RA2: 0x00672F20, drops the port of the player at index
+		int Player_To_Slot(int index); // RA2: 0x00672F90
+		int Name_To_Slot(char const * name); // RA2: 0x00672FF0
+		int Slot_To_Player(int slot); // RA2: 0x00673030
 		bool Is_In_Game(void) const; // RA2: 0x672F10
 
 		bool Log_To_File(FILE *out);
