@@ -192,6 +192,20 @@ UnitType UnitTypeClass::From_Name(char const * name)
 }
 
 
+// RA2: not in TibSun, at 0x70A8E0; as the base class.
+bool UnitTypeClass::CanUseWaypoint(void) const
+{
+	return(BASECLASS::CanUseWaypoint());
+}
+
+
+// RA2: not in TibSun, at 0x70A8F0; as the base class.
+bool UnitTypeClass::CanAttackMove(void) const
+{
+	return(BASECLASS::CanAttackMove());
+}
+
+
 
 
 
