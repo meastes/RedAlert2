@@ -522,6 +522,7 @@ address,symbol,evidence
 0x00426140,?Load@AnimTypeClass@@UAGJPAUIStream@@@Z,"compiled from src/animtype.cpp, matched"
 0x004262A0,?Save@AnimTypeClass@@UAGJPAUIStream@@H@Z,"compiled from src/animtype.cpp, matched"
 0x004262C0,?GetClassID@AnimTypeClass@@UAGJPAU_GUID@@@Z,"compiled from src/animtype.cpp, matched"
+0x00426300,?Compute_CRC@AnimTypeClass@@UBEXAAVCRCEngine@@@Z,"compiled from src/animtype.cpp, matched"
 0x004264A0,?Find_Or_Make@AnimTypeClass@@SIPAV1@PBD@Z,"compiled from src/animtype.cpp, matched"
 0x00426530,?Detach@AnimTypeClass@@UAEXPBVAbstractClass@@_N@Z,"compiled from src/animtype.cpp, matched"
 0x00426700,?Free_Image@AnimTypeClass@@QAEXXZ,"compiled from src/animtype.cpp, matched"
