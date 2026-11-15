@@ -22,5 +22,6 @@ class EBolt
 
 		EBolt(void); // RA2: 0x4C1E10 in YR
 		void Set_Owner(TechnoClass * owner, int which); // RA2: 0x4B2580
+		void Clear_Owner(void); // RA2: 0x4B25C0 (YR name ClearOwner); clears Owner's ElectricBolt pointer and Owner
 		void Fire(Coord source, Coord target, int zadjust); // RA2: 0x4B2430
 };
