@@ -175,21 +175,29 @@ class IPXManagerClass : public ConnManClass
 		These routines control creation of the "Connections" (data queues) for
 		each remote system.
 		.....................................................................*/
-		int Create_Connection(int id, char *name, IPXAddressClass *address);
+		int Create_Connection(int id, wchar_t const *name, IPXAddressClass *address); // RA2: wide name
+		int Create_Multicast_Connection(void); // RA2: 0x005255B0, the multicast connection to the first session player
 		int Delete_Connection(int id);
 		virtual int Num_Connections(void) override;
 		virtual int Connection_ID(int index) override;
-		char *Connection_Name(int id);
+		wchar_t *Connection_Name(int id); // RA2: wide name
 		IPXAddressClass * Connection_Address(int id);
 		virtual int Connection_Index(int id) override;
-		int Index_Of_Connection(IPXConnClass * connection); // RA2: the index of the connection, or a negative value
-		void Set_Connection_Parms(int index, int id, char *name);
+		void Set_Connection_Parms(int index, int id, wchar_t const *name); // RA2: wide name
+		void Set_Connection_Address(int id, IPXAddressClass *address); // RA2: 0x005269F0
 
 		/*.....................................................................
 		This is how the application sends & receives messages.
 		.....................................................................*/
 		int Send_Global_Message (void *buf, int buflen, int ack_req = 0,
-			IPXAddressClass *address = NULL);
+			IPXAddressClass *address = NULL, unsigned short port = 0, unsigned long packet_id = 0); // RA2: port and packet ID
+		int Send_Global_Message_To_Player(void *buf, int buflen, int ack_req, int id); // RA2: 0x005258B0, to the session player with this ID
+		int Send_Global_Message_To_Name(void *buf, int buflen, int ack_req, wchar_t const *name); // RA2: 0x005259A0, to the session player with this name
+		int Peek_Global_Message(int index, void *buf, int *buflen, IPXAddressClass *address,
+			unsigned short *product_id, unsigned long *packet_id); // RA2: 0x00525AF0
+		void Mark_Global_Message_Read(int index); // RA2: 0x00525B30
+		int Send_Lobby_Message(void *buf, int buflen, bool ack_req); // RA2: 0x00525B50, on the lobby channel
+		int Get_Lobby_Message(void *buf, int *buflen, IPXAddressClass *address, unsigned short *product_id); // RA2: 0x00525BC0
 		int Get_Global_Message (void *buf, int *buflen, IPXAddressClass *address,
 			unsigned short *product_id);
 
@@ -232,7 +240,8 @@ class IPXManagerClass : public ConnManClass
 		unsigned int Global_Response_Time(void);
 		virtual void Reset_Response_Time(bool zero) override;
 
-		virtual unsigned int Avg_Response_Time(int index);
+		unsigned int Lobby_Response_Time(void); // RA2: 0x00526C50
+		unsigned int Multicast_Response_Time(void); // RA2: 0x00526C70
 
 		/*.....................................................................
 		This routine returns a pointer to the oldest non-ACK'd buffer I've sent.
@@ -242,7 +251,21 @@ class IPXManagerClass : public ConnManClass
 		/*.....................................................................
 		Debug routines
 		.....................................................................*/
-		virtual void Store_Stats(void);
+		bool Forward_Router_Packet(CommHeaderType *packet, void *buf, int buflen, IPXAddressClass *from, unsigned short port); // RA2: 0x00525DC0
+		// RA2: vtable slots 16-24 in this order (ConnManClass ends at slot 15 in release builds)
+		virtual void Save_Timing(void); // RA2: slot 16, 0x00525480
+		virtual void Restore_Timing(void); // RA2: slot 17, 0x005254A0
+		virtual void Set_Lobby_Timing(unsigned int retrydelta, unsigned int maxretries, unsigned int timeout); // RA2: slot 18, 0x005254C0
+		virtual int Index_Of_Connection(IPXConnClass * connection); // RA2: slot 19, 0x005257B0; the index, -2 global, -3 lobby, -4 multicast channel, -1 none
+		virtual int Lobby_Num_Send(void); // RA2: slot 20, 0x00526A80
+		virtual int Lobby_Num_Receive(void); // RA2: slot 21, 0x00526AA0
+		virtual unsigned int Avg_Response_Time(int index); // RA2: slot 22
+		virtual void Store_Stats(void); // RA2: slot 23
+		void Set_Lobby_Address(IPXAddressClass *address); // RA2: 0x005277C0
+		void Clear_Global_Routed(void); // RA2: 0x005277F0
+		void Set_Global_Routed(void); // RA2: 0x00527800
+		void Discard_Global_Packets_To(IPXAddressClass *address, unsigned short port); // RA2: 0x00527810
+		void Discard_Old_Global_Packets(int age); // RA2: 0x00527830
 		virtual void Configure_Debug(int index, int type_offset, int type_size,
 			char **names, int namestart, int namecount) override;
 

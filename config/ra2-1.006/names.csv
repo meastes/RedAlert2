@@ -2581,7 +2581,6 @@ address,symbol,evidence
 0x00524DB0,?Get_Packet@IPXGlobalConnClass@@UAEHPAXPAH@Z,"compiled from src/ipxgconn.cpp, matched; code at 5 addresses, placed by the gap"
 0x005256D0,?Num_Connections@IPXManagerClass@@UAEHXZ,"inferred: referenced by matched src/ipxconn.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005256E0,?Connection_ID@IPXManagerClass@@UAEHH@Z,"inferred: referenced by matched src/ipxconn.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x005257B0,?Index_Of_Connection@IPXManagerClass@@QAEHPAVIPXConnClass@@@Z,"inferred: referenced by matched src/ipxconn.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00526BA0,?Set_Socket@IPXManagerClass@@QAEXG@Z,"inferred: referenced by matched src/options.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00527A80,?Mark@IsometricTileClass@@UAE_NW4MarkType@@@Z,"compiled from src/isotile.cpp, matched"
 0x00527ED0,??0IsometricTileClass@@QAE@W4IsometricTileType@@ABVCell@@@Z,"compiled from src/isotile.cpp, matched"

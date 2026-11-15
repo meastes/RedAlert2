@@ -79,6 +79,16 @@
 #include "vector.h"
 #include "wspipx.h"
 #include "wsproto.h"
+#include "wspudp.h"	// RA2
+
+wchar_t * __fastcall Narrow_To_Wide(char const * narrow);	// RA2: 0x006FA180, a static buffer
+
+extern unsigned int RouterResponseTimes[];	// RA2: 0x00A76C88, the packet router round trip per connection (Multiplayer_Debug_Print "Rout resp")
+
+wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, a static buffer
+
+extern unsigned int RouterResponseTimes[]; // RA2: 0x00A76C88, the packet router round trip per connection (Multiplayer_Debug_Print "Rout resp")
+#include "ownertalk.h"	// RA2
 
 
 /***************************************************************************
@@ -114,7 +124,6 @@ IPXManagerClass::IPXManagerClass (int glb_maxlen, int pvt_maxlen,
 		PacketTransport = NULL;
 	}
 	PacketTransport = new IPXInterfaceClass;
-	assert ( PacketTransport != NULL );
 
 	if ( PacketTransport->Init() ){
 		IPXStatus = 1;
@@ -136,6 +145,8 @@ IPXManagerClass::IPXManagerClass (int glb_maxlen, int pvt_maxlen,
 	Glb_NumPackets = glb_num_packets;
 	Pvt_MaxPacketLen = pvt_maxlen;
 	Pvt_NumPackets = pvt_num_packets;
+	Lobby_MaxPacketLen = glb_maxlen; // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+	Lobby_NumPackets = pvt_num_packets; // RA2: as above
 
 	//........................................................................
 	// Save the app's product ID
@@ -162,6 +173,8 @@ IPXManagerClass::IPXManagerClass (int glb_maxlen, int pvt_maxlen,
 		Connection[i] = 0;
 	}
 	GlobalChannel = 0;
+	LobbyChannel = 0; // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+	MulticastChannel = 0; // RA2: as above
 
 	SendOverflows = 0;
 	ReceiveOverflows = 0;
@@ -211,6 +224,14 @@ IPXManagerClass::~IPXManagerClass(void)
 		delete GlobalChannel;
 		GlobalChannel = 0;
 	}
+	if (LobbyChannel) { // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+		delete LobbyChannel; // RA2: as above
+		LobbyChannel = 0; // RA2: as above
+	}
+	if (MulticastChannel) { // RA2: as above
+		delete MulticastChannel; // RA2: as above
+		MulticastChannel = 0; // RA2: as above
+	}
 	for (i = 0; i < NumConnections; i++) {
 		delete Connection[i];
 		Connection[i] = 0;
@@ -239,6 +260,12 @@ IPXManagerClass::~IPXManagerClass(void)
 int IPXManagerClass::Init(void)
 {
 	int i;
+
+	DebugString("**** IPXManagerClass::Init ***\n"); // RA2: RA2 flushes the transport buffers here
+	if (PacketTransport) { // RA2: as above
+		PacketTransport->Discard_In_Buffers(); // RA2: as above
+		PacketTransport->Discard_Out_Buffers(); // RA2: as above
+	}
 
 	if (Session.Type != GAME_INTERNET) {
 
@@ -270,6 +297,14 @@ int IPXManagerClass::Init(void)
 		delete GlobalChannel;
 		GlobalChannel = 0;
 	}
+	if (LobbyChannel) { // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+		delete LobbyChannel; // RA2: as above
+		LobbyChannel = 0; // RA2: as above
+	}
+	if (MulticastChannel) { // RA2: as above
+		delete MulticastChannel; // RA2: as above
+		MulticastChannel = 0; // RA2: as above
+	}
 	for (i = 0; i < NumConnections; i++) {
 		delete Connection[i];
 		Connection[i] = 0;
@@ -280,7 +315,7 @@ int IPXManagerClass::Init(void)
 	// Allocate the Global Channel
 	//------------------------------------------------------------------------
 	GlobalChannel = new IPXGlobalConnClass (Glb_NumPackets, Glb_NumPackets * 2,
-		Glb_MaxPacketLen, ProductID);
+		Glb_MaxPacketLen, ProductID, 0x1236); // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	if (!GlobalChannel) {
 		return(0);
 	}
@@ -292,8 +327,18 @@ int IPXManagerClass::Init(void)
 	//------------------------------------------------------------------------
 	// Configure the IPX Connections
 	//------------------------------------------------------------------------
-	IPXConnClass::Configure(Socket, ConnectionNum, /*ListenECB, SendECB,*/
-		FirstHeaderBuf, SendHeader, FirstDataBuf, SendBuf, /*Handler,*/ PacketLen);
+	LobbyChannel = new IPXGlobalConnClass (Lobby_NumPackets, Lobby_NumPackets * 2, // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+		Lobby_MaxPacketLen, ProductID, 0xCDEF); // RA2: as above
+	if (!LobbyChannel) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	LobbyChannel->Init(); // RA2: as above
+	LobbyChannel->Set_Retry_Delta (RetryDelta); // RA2: as above
+	LobbyChannel->Set_Max_Retries (MaxRetries); // RA2: as above
+	LobbyChannel->Set_TimeOut (Timeout); // RA2: as above
+
+	IPXConnClass::Configure(Socket, ConnectionNum, // RA2: as above
+		FirstHeaderBuf, SendHeader, FirstDataBuf, SendBuf, PacketLen); // RA2: as above
 
 	if (PacketTransport == NULL) {
 		return(0);
@@ -377,7 +422,12 @@ void IPXManagerClass::Set_Timing (unsigned int retrydelta,
 		Connection[i]->Set_TimeOut (Timeout);
 	}
 
-}	/* end of Set_Timing */
+	if (MulticastChannel) { // RA2: the multicast channel is part of the RA2 class
+		MulticastChannel->Set_Retry_Delta (RetryDelta); // RA2: as above
+		MulticastChannel->Set_Max_Retries (MaxRetries); // RA2: as above
+		MulticastChannel->Set_TimeOut (Timeout); // RA2: as above
+	}
+}
 
 
 /// <summary>
@@ -399,6 +449,50 @@ void IPXManagerClass::Set_External_Timing (unsigned int retrydelta,
 	}
 }
 
+void IPXManagerClass::Save_Timing(void) // RA2: 0x00525480 keeps the global channel's timing
+{
+	if (GlobalChannel) { // RA2: as above
+		SavedRetryDelta = GlobalChannel->Retry_Delta(); // RA2: as above
+		SavedMaxRetries = GlobalChannel->Max_Retries(); // RA2: as above
+		SavedTimeout = GlobalChannel->Time_Out(); // RA2: as above
+	}
+}
+
+
+void IPXManagerClass::Restore_Timing(void) // RA2: 0x005254A0 puts the saved timing back
+{
+	if (GlobalChannel) { // RA2: as above
+		GlobalChannel->Set_Retry_Delta(SavedRetryDelta); // RA2: as above
+		GlobalChannel->Set_Max_Retries(SavedMaxRetries); // RA2: as above
+		GlobalChannel->Set_TimeOut(SavedTimeout); // RA2: as above
+	}
+}
+
+
+void IPXManagerClass::Set_Lobby_Timing(unsigned int retrydelta, unsigned int maxretries, unsigned int timeout) // RA2: 0x005254C0 timing of the lobby and multicast channels
+{
+	if (LobbyChannel) { // RA2: as above
+		LobbyChannel->Set_Retry_Delta(retrydelta); // RA2: as above
+		LobbyChannel->Set_Max_Retries(maxretries); // RA2: as above
+		LobbyChannel->Set_TimeOut(timeout); // RA2: as above
+	}
+	if (MulticastChannel) { // RA2: as above
+		MulticastChannel->Set_Retry_Delta(retrydelta); // RA2: as above
+		MulticastChannel->Set_Max_Retries(maxretries); // RA2: as above
+		MulticastChannel->Set_TimeOut(timeout); // RA2: as above
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
 
 /***************************************************************************
  * IPXManagerClass::Create_Connection -- creates a new connection          *
@@ -417,7 +511,7 @@ void IPXManagerClass::Set_External_Timing (unsigned int retrydelta,
  * HISTORY:                                                                *
  *   12/20/1994 BR : Created.                                              *
  *=========================================================================*/
-int IPXManagerClass::Create_Connection(int id, char *name,
+int IPXManagerClass::Create_Connection(int id, wchar_t const * name,	// RA2: wide connection name
 	IPXAddressClass *address)
 {
 	//------------------------------------------------------------------------
@@ -452,7 +546,33 @@ int IPXManagerClass::Create_Connection(int id, char *name,
 
 	return(1);
 
-}	/* end of Create_Connection */
+}
+
+
+
+int IPXManagerClass::Create_Multicast_Connection(void) // RA2: 0x005255B0 the multicast connection, addressed like the first session player
+{
+	if (!IPXStatus) { // RA2: as above
+		return(0); // RA2: as above
+	}
+
+	MulticastChannel = new IPXConnClass(Pvt_NumPackets, // RA2: as above
+		Pvt_NumPackets, Pvt_MaxPacketLen, ProductID, // RA2: as above
+		&Session.Players[0]->Address, -1, Narrow_To_Wide("Multicast")); // RA2: as above
+	if (!MulticastChannel) { // RA2: as above
+		return(0); // RA2: as above
+	}
+
+	MulticastChannel->Init (); // RA2: as above
+	MulticastChannel->Set_Retry_Delta (RetryDelta); // RA2: as above
+	MulticastChannel->Set_Max_Retries (MaxRetries); // RA2: as above
+	MulticastChannel->Set_TimeOut (Timeout); // RA2: as above
+	return(1); // RA2: as above
+}
+
+
+
+
 
 
 /***************************************************************************
@@ -540,9 +660,8 @@ int IPXManagerClass::Delete_Connection(int id)
  *=========================================================================*/
 int IPXManagerClass::Num_Connections(void)
 {
-	return(NumConnections);
-
-}	/* end of Num_Connections */
+	return NumConnections; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
 
 /***************************************************************************
@@ -563,12 +682,10 @@ int IPXManagerClass::Num_Connections(void)
 int IPXManagerClass::Connection_ID(int index)
 {
 	if (index >= 0 && index < NumConnections) {
-		return(Connection[index]->ID);
+		return Connection[index]->ID; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	}
-	else {
-		return(CONNECTION_NONE);
-	}
-}	/* end of Connection_ID */
+	return CONNECTION_NONE; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
 
 /***************************************************************************
@@ -586,19 +703,17 @@ int IPXManagerClass::Connection_ID(int index)
  * HISTORY:                                                                *
  *   01/19/1995 BR : Created.                                              *
  *=========================================================================*/
-char *IPXManagerClass::Connection_Name(int id)
+wchar_t *IPXManagerClass::Connection_Name(int id) // RA2: RA2's form, as in YR's body; TibSun's form does not match
 {
 	int i;
 
 	for (i = 0; i < NumConnections; i++) {
-		if (Connection[i]->ID==id) {
-			return(Connection[i]->Name);
+		if (Connection[i]->ID == id) {
+			return Connection[i]->Name; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		}
 	}
-
-	return(NULL);
-
-}	/* end of Connection_Name */
+	return NULL; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
 
 /***************************************************************************
@@ -621,14 +736,12 @@ IPXAddressClass * IPXManagerClass::Connection_Address(int id)
 	int i;
 
 	for (i = 0; i < NumConnections; i++) {
-		if (Connection[i]->ID==id) {
-			return(&Connection[i]->Address);
+		if (Connection[i]->ID == id) {
+			return &Connection[i]->Address; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		}
 	}
-
-	return(NULL);
-
-}	/* end of Connection_Address */
+	return NULL; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
 
 /***************************************************************************
@@ -651,14 +764,35 @@ int IPXManagerClass::Connection_Index(int id)
 	int i;
 
 	for (i = 0; i < NumConnections; i++) {
-		if (Connection[i]->ID==id) {
-			return(i);
+		if (Connection[i]->ID == id) {
+			return i; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		}
 	}
+	return CONNECTION_NONE; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
-	return(CONNECTION_NONE);
+int IPXManagerClass::Index_Of_Connection(IPXConnClass * connection) // RA2: 0x005257B0 vtable slot 19
+{
+	for (int i = 0; i < NumConnections; i++) { // RA2: as above
+		if (Connection[i] == connection) { // RA2: as above
+			return i; // RA2: as above
+		}
+	}
+	if (connection == MulticastChannel) { // RA2: as above
+		return -4; // RA2: as above
+	}
+	if (connection == LobbyChannel) { // RA2: as above
+		return -3; // RA2: as above
+	}
+	if (connection == GlobalChannel) { // RA2: as above
+		return -2; // RA2: as above
+	}
+	return -1; // RA2: as above
+}
 
-}	/* end of Connection_Index */
+
+
+
 
 
 /***************************************************************************
@@ -678,15 +812,16 @@ int IPXManagerClass::Connection_Index(int id)
  * HISTORY:                                                                *
  *   01/25/1995 BR : Created.                                              *
  *=========================================================================*/
-void IPXManagerClass::Set_Connection_Parms(int index, int id, char *name)
+void IPXManagerClass::Set_Connection_Parms(int index, int id, wchar_t const * name)	// RA2: wide name
 {
 	if (index >= NumConnections)
 		return;
 
 	Connection[index]->ID = id;
-	strcpy(Connection[index]->Name,name);
+	wcscpy(Connection[index]->Name,name);	// RA2: wcscpy
 
-}	/* end of Set_Connection_Parms */
+}
+	/* end of Set_Connection_Parms */
 
 
 /***************************************************************************
@@ -708,7 +843,7 @@ void IPXManagerClass::Set_Connection_Parms(int index, int id, char *name)
  *   01/25/1995 BR : Created.                                              *
  *=========================================================================*/
 int IPXManagerClass::Send_Global_Message(void *buf, int buflen,
-	int ack_req, IPXAddressClass *address)
+	int ack_req, IPXAddressClass *address, unsigned short port, unsigned long packet_id)	// RA2: port and packet ID
 {
 	int rc;
 
@@ -721,7 +856,7 @@ int IPXManagerClass::Send_Global_Message(void *buf, int buflen,
 		ack_req = 0;
 	}
 
-	rc = GlobalChannel->Send_Packet (buf, buflen, address, ack_req);
+	rc = GlobalChannel->Send_Packet (buf, buflen, address, ack_req, port, packet_id);	// RA2: port and packet ID
 	if (!rc) {
 		SendOverflows++;
 		DebugString("Send overflow %d\n", SendOverflows);
@@ -729,7 +864,46 @@ int IPXManagerClass::Send_Global_Message(void *buf, int buflen,
 
 	return(rc);
 
-}	/* end of Send_Global_Message */
+}
+
+
+
+int IPXManagerClass::Send_Global_Message_To_Player(void *buf, int buflen, int ack_req, int id) // RA2: 0x005258B0
+{
+	int count = Session.Players.Count(); // RA2: as above
+	if (count && Session.Players[0]->Player.ID == id) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	for (int i = 1; i < count; i++) { // RA2: as above
+		if (Session.Players[i]->Player.ID == id) { // RA2: as above
+			IPXAddressClass address = Session.Players[i]->Address; // RA2: as above
+			return Send_Global_Message(buf, buflen, ack_req, &address, Session.PlayerPorts[i], 0); // RA2: as above
+		}
+	}
+	return(0); // RA2: as above
+}
+
+
+int IPXManagerClass::Send_Global_Message_To_Name(void *buf, int buflen, int ack_req, wchar_t const *name) // RA2: 0x005259A0
+{
+	if (Session.Players.Count() && !wcsicmp(Session.Players[0]->Name, name)) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	for (int i = 1; i < Session.Players.Count(); i++) { // RA2: as above
+		if (!wcsicmp(Session.Players[i]->Name, name)) { // RA2: as above
+			IPXAddressClass address = Session.Players[i]->Address; // RA2: as above
+			return Send_Global_Message(buf, buflen, ack_req, &address, Session.PlayerPorts[i], 0); // RA2: as above
+		}
+	}
+	return(0); // RA2: as above
+}
+
+
+
+
+
+
+
 
 
 /***************************************************************************
@@ -756,11 +930,63 @@ int IPXManagerClass::Get_Global_Message(void *buf, int *buflen,
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-	if (!IPXStatus || !Listening) return(0);
+	if (!IPXStatus || !Listening) return 0; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 
-	return(GlobalChannel->Get_Packet (buf, buflen, address, product_id));
+	return GlobalChannel->Get_Packet(buf, buflen, address, product_id); // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
-}	/* end of Get_Global_Message */
+int IPXManagerClass::Peek_Global_Message(int index, void *buf, int *buflen, IPXAddressClass *address, // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+	unsigned short *product_id, unsigned long *packet_id) // RA2: 0x00525AF0 looks at a queued global packet without removing it
+{
+	if (!IPXStatus || !Listening) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	return GlobalChannel->Peek_Packet(index, (int)buf, (int)buflen, (int)address, (int)product_id, (int)packet_id); // RA2: as above
+}
+
+
+void IPXManagerClass::Mark_Global_Message_Read(int index) // RA2: 0x00525B30
+{
+	if (IPXStatus && Listening) { // RA2: as above
+		GlobalChannel->Mark_Packet_Read(index); // RA2: as above
+	}
+}
+
+
+int IPXManagerClass::Send_Lobby_Message(void *buf, int buflen, bool ack_req) // RA2: 0x00525B50 to the lobby channel's own address
+{
+	if (!IPXStatus || !Listening || !LobbyChannel) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	int rc = LobbyChannel->Send_Packet(buf, buflen, &LobbyChannel->Address, ack_req, 0, 0); // RA2: as above
+	if (!rc) { // RA2: as above
+		SendOverflows++; // RA2: as above
+		DebugString("Send overflow %d\n", SendOverflows); // RA2: as above
+	}
+	return(rc); // RA2: as above
+}
+
+
+int IPXManagerClass::Get_Lobby_Message(void *buf, int *buflen, IPXAddressClass *address, unsigned short *product_id) // RA2: 0x00525BC0
+{
+	if (!IPXStatus || !Listening) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	return LobbyChannel->Get_Packet(buf, buflen, address, product_id); // RA2: as above
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /***************************************************************************
@@ -790,23 +1016,24 @@ int IPXManagerClass::Send_Private_Message(void *buf, int buflen, int ack_req,
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-
-	if (!IPXStatus || !Listening || (NumConnections==0)) {
-		return(0);
+	if (!IPXStatus || !Listening || (NumConnections == 0)) {
+		return 0; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	}
 
 	//------------------------------------------------------------------------
 	// Send the message to all connections
 	//------------------------------------------------------------------------
-	if (conn_id==CONNECTION_NONE) {
-		//.....................................................................
-		// Check for room in all connections
-		//.....................................................................
+	if (conn_id == CONNECTION_NONE) {
+		if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) { // RA2: the multicast channel is part of the RA2 class
+			if (MulticastChannel->Queue->Num_Send() >= MulticastChannel->Queue->Max_Send()) { // RA2: as above
+				{ SendOverflows++; return 0; } // RA2: as above
+			}
+			return MulticastChannel->Send_Packet(buf, buflen, ack_req, 0xff); // RA2: as above
+		}
+
 		for (i = 0; i < NumConnections; i++) {
-			if (Connection[i]->Queue->Num_Send() ==
-				Connection[i]->Queue->Max_Send()) {
-				SendOverflows++;
-				return(0);
+			if (Connection[i]->Queue->Num_Send() == Connection[i]->Queue->Max_Send()) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
+				{ SendOverflows++; return 0; } // RA2: as above
 			}
 		}
 
@@ -814,38 +1041,24 @@ int IPXManagerClass::Send_Private_Message(void *buf, int buflen, int ack_req,
 		// Send packet to all connections
 		//.....................................................................
 		for (i = 0; i < NumConnections; i++) {
-			Connection[i]->Send_Packet (buf, buflen, ack_req);
+			Connection[i]->Send_Packet(buf, buflen, ack_req, 0); // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		}
-		return(1);
+		return 1; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	}
 
 	//------------------------------------------------------------------------
 	// Send the message to the specified connection
 	//------------------------------------------------------------------------
-	else {
-		connect_idx = Connection_Index (conn_id);
-		if (connect_idx == CONNECTION_NONE) {
-			SendOverflows++;
-			return(0);
-		}
-
-		//.....................................................................
-		// Check for room in the connection
-		//.....................................................................
-		if (Connection[connect_idx]->Queue->Num_Send() ==
-			Connection[connect_idx]->Queue->Max_Send()) {
-			SendOverflows++;
-			return(0);
-		}
-
-		//.....................................................................
-		// Send the packet to that connection
-		//.....................................................................
-		Connection[connect_idx]->Send_Packet (buf, buflen, ack_req);
-		return(1);
+	connect_idx = Connection_Index(conn_id);
+	if (connect_idx == CONNECTION_NONE) {
+		{ SendOverflows++; return 0; } // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	}
-
-}	/* end of Send_Private_Message */
+	if (Connection[connect_idx]->Queue->Num_Send() == Connection[connect_idx]->Queue->Max_Send()) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
+		{ SendOverflows++; return 0; } // RA2: as above
+	}
+	Connection[connect_idx]->Send_Packet(buf, buflen, ack_req, 0); // RA2: RA2's form, as in YR's body; TibSun's form does not match
+	return 1; // RA2: as above
+}
 
 
 /***************************************************************************
@@ -874,8 +1087,8 @@ int IPXManagerClass::Get_Private_Message(void *buf, int *buflen, int *conn_id)
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-	if (!IPXStatus || !Listening || (NumConnections==0)) {
-		return(0);
+	if (!IPXStatus || !Listening || (NumConnections == 0)) {
+		return 0; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 	}
 
 	//------------------------------------------------------------------------
@@ -889,11 +1102,7 @@ int IPXManagerClass::Get_Private_Message(void *buf, int *buflen, int *conn_id)
 	// Scan all connections for a received packet, starting with 'CurConnection'
 	//------------------------------------------------------------------------
 	for (i = 0; i < NumConnections; i++) {
-
-		//.....................................................................
-		// Check this connection for a packet
-		//.....................................................................
-		rc = Connection[CurConnection]->Get_Packet (buf, buflen);
+		rc = Connection[CurConnection]->Get_Packet(buf, buflen);
 		c_id = Connection[CurConnection]->ID;
 
 		//.....................................................................
@@ -909,13 +1118,50 @@ int IPXManagerClass::Get_Private_Message(void *buf, int *buflen, int *conn_id)
 		//.....................................................................
 		if (rc) {
 			(*conn_id) = c_id;
-			return(1);
+			return 1; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		}
 	}
 
-	return(0);
+	return 0; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
-}	/* end of Get_Private_Message */
+bool IPXManagerClass::Forward_Router_Packet(CommHeaderType *packet, void *buf, int buflen, // RA2: RA2's form, as in YR's body; TibSun's form does not match
+	IPXAddressClass *from, unsigned short port) // RA2: 0x00525DC0 an internet game's packet that came through (or is for) the packet router
+{
+	static unsigned long loopback[2] = {0, htonl(0x7F000001)}; // RA2: as above
+
+	if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter && OwnerTalk.RouterProcess) { // RA2: as above
+		if (packet->ForwardPort == LoopbackPort) { // RA2: as above
+			packet->ForwardPort = port; // RA2: as above
+			memcpy(&packet->ForwardAddress, (char *)from + 4, 4); // RA2: as above
+			DebugString("Forwarding packet from %s ; %d to forwarder\n", from->As_String(), port); // RA2: as above
+			PacketTransport->WriteTo(buf, buflen, loopback, 12, false, true, LoopbackPort); // RA2: as above
+			return true; // RA2: as above
+		}
+		if (packet->ForwardPort) { // RA2: as above
+			NetNodeType node; // RA2: as above
+			Session.Players[0]->Address.Get_Node(node); // RA2: as above
+			if (memcmp(node, &packet->ForwardAddress, 4) == 0 && Session.PlayerPorts[0] == packet->ForwardPort) { // RA2: as above
+				DebugString("Packet is supposed to be forwarded to us - just adding it to our queue\n"); // RA2: as above
+				return false; // RA2: as above
+			}
+			if (packet->ForwardAddress) { // RA2: as above
+				unsigned short oldport = packet->ForwardPort; // RA2: as above
+				IPXAddressClass address; // RA2: as above
+				NetNodeType dest; // RA2: as above
+				memcpy(dest, &packet->ForwardAddress, 4); // RA2: as above
+				address.Set_Node(dest); // RA2: as above
+				address.Set_Port(oldport); // RA2: as above
+				packet->ForwardPort = 0; // RA2: as above
+				memset(&packet->ForwardAddress, 0, 4); // RA2: as above
+				DebugString("Forwarding packet from router to %s\n", address.As_String()); // RA2: as above
+				PacketTransport->WriteTo(buf, buflen, &address, 12, false, true, oldport); // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+	}
+	return false; // RA2: as above
+}
 
 
 /***************************************************************************
@@ -947,13 +1193,14 @@ int IPXManagerClass::Service(void)
 
 
 	char temp_address [128];
+	unsigned short port = 0; // RA2: the sender's port
 
 	if ( PacketTransport ) {
 
 		do {
 			temp_receive_buffer_len = sizeof (temp_receive_buffer);
 			temp_address_len = sizeof (temp_address);
-			packetlen = PacketTransport->Read ( temp_receive_buffer, temp_receive_buffer_len, temp_address, temp_address_len );
+			packetlen = PacketTransport->Read ( temp_receive_buffer, temp_receive_buffer_len, temp_address, temp_address_len, port ); // RA2: port out
 			if ( packetlen ) {
 				CurDataBuf = (char*)temp_receive_buffer;
 				address = *((IPXAddressClass*) temp_address);
@@ -964,7 +1211,7 @@ int IPXManagerClass::Service(void)
 					/*
 					**	Put the packet in the Global Queue
 					*/
-					if (!GlobalChannel->Receive_Packet (packet, packetlen, &address)) {
+					if (!GlobalChannel->Receive_Packet (packet, packetlen, &address, port)	/* RA2: port */) {
 						ReceiveOverflows++;
 						DebugString("GlobalChannel recive buffer overflow %d\n", ReceiveOverflows);
 						break;
@@ -1067,7 +1314,22 @@ int IPXManagerClass::Service(void)
 
 	return(rc);
 
-}	/* end of Service */
+}
+void IPXManagerClass::Set_Connection_Address(int id, IPXAddressClass *address) // RA2: 0x005269F0
+{
+	int index = Connection_Index(id); // RA2: as above
+	if (index != CONNECTION_NONE && index < NumConnections) { // RA2: as above
+		Connection[index]->Address = *address; // RA2: as above
+	}
+}
+
+
+
+
+
+
+
+
 
 /***************************************************************************
  * IPXManagerClass::Get_Bad_Connection -- returns bad connection ID        *
@@ -1086,9 +1348,8 @@ int IPXManagerClass::Service(void)
  *=========================================================================*/
 int IPXManagerClass::Get_Bad_Connection(void)
 {
-	return(BadConnection);
-
-}	/* end of Get_Bad_Connection */
+	return BadConnection; // RA2: RA2's form, as in YR's body; TibSun's form does not match
+}
 
 
 /***************************************************************************
@@ -1111,13 +1372,10 @@ int IPXManagerClass::Global_Num_Send(void)
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-	if (!IPXStatus || !Listening) {
-		return(0);
-	}
+	if (!IPXStatus || !Listening) return 0; // RA2: RA2's form, as in YR's body; TibSun's form does not match
 
-	return(GlobalChannel->Queue->Num_Send());
-
-}	/* end of Global_Num_Send */
+	return GlobalChannel->Queue->Num_Send(); // RA2: as above
+}
 
 
 /***************************************************************************
@@ -1140,13 +1398,34 @@ int IPXManagerClass::Global_Num_Receive(void)
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-	if (!IPXStatus || !Listening) {
-		return(0);
+	if (!IPXStatus || !Listening) return 0; // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+
+	return GlobalChannel->Queue->Num_Receive(); // RA2: as above
+}
+
+int IPXManagerClass::Lobby_Num_Send(void) // RA2: 0x00526A80 vtable slot 20
+{
+	if (!IPXStatus || !Listening || !LobbyChannel) { // RA2: as above
+		return(0); // RA2: as above
 	}
+	return LobbyChannel->Queue->Num_Send(); // RA2: as above
+}
 
-	return(GlobalChannel->Queue->Num_Receive());
 
-}	/* end of Global_Num_Receive */
+int IPXManagerClass::Lobby_Num_Receive(void) // RA2: 0x00526AA0 vtable slot 21
+{
+	if (!IPXStatus || !Listening || !LobbyChannel) { // RA2: as above
+		return(0); // RA2: as above
+	}
+	return LobbyChannel->Queue->Num_Receive(); // RA2: as above
+}
+
+
+
+
+
+
+
 
 
 /***************************************************************************
@@ -1229,8 +1508,9 @@ int IPXManagerClass::Private_Num_Receive(int id)
 	//------------------------------------------------------------------------
 	// Error if IPX not installed or not Listening
 	//------------------------------------------------------------------------
-	if (!IPXStatus || !Listening || (NumConnections==0))
+	if (!IPXStatus || !Listening || (NumConnections==0)) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		return(0);
+	}
 
 	//------------------------------------------------------------------------
 	//	If connection ID specified, return that connection's # of packets
@@ -1316,6 +1596,13 @@ unsigned int IPXManagerClass::Response_Time(void)
 		}
 	}
 
+	if (MulticastChannel) { // RA2: the multicast channel is part of the RA2 class
+		resp = MulticastChannel->Queue->Avg_Response_Time(); // RA2: as above
+		if (resp > maxresp) { // RA2: as above
+			maxresp = resp; // RA2: as above
+		}
+	}
+
 	return(maxresp);
 
 }	/* end of Response_Time */
@@ -1357,8 +1644,31 @@ unsigned int IPXManagerClass::Global_Response_Time(void)
 	else {
 		return(0);
 	}
+}
 
-}	/* end of Global_Response_Time */
+unsigned int IPXManagerClass::Lobby_Response_Time(void) // RA2: 0x00526C50
+{
+	if (LobbyChannel) { // RA2: as above
+		return LobbyChannel->Queue->Avg_Response_Time(); // RA2: as above
+	}
+	return(0); // RA2: as above
+}
+
+
+unsigned int IPXManagerClass::Multicast_Response_Time(void) // RA2: 0x00526C70
+{
+	if (MulticastChannel) { // RA2: as above
+		return MulticastChannel->Queue->Avg_Response_Time(); // RA2: as above
+	}
+	return(0); // RA2: as above
+}
+
+
+
+
+
+
+
 
 
 /// <summary>
@@ -1367,6 +1677,10 @@ unsigned int IPXManagerClass::Global_Response_Time(void)
 /// the session statistics, so that the end of game screen can report on how well the
 /// network behaved. The local player's own connection is passed over.
 /// </summary>
+namespace OwnerDraw { // RA2: RA2's form, as in YR's body; TibSun's form does not match
+char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: as above
+}
+
 void IPXManagerClass::Store_Stats(void)
 {
 	for (int i = 0; i < NumConnections; i++) {
@@ -1375,7 +1689,7 @@ void IPXManagerClass::Store_Stats(void)
 		if (house != NULL && house != PlayerPtr) {
 			MPStatsType & stats = Session.ConnectionStats[i];
 			if (stats.Name[0] == '\0') {
-				strcpy(stats.Name, Connection[i]->Name);
+				OwnerDraw::WideToCharString(stats.Name, Connection[i]->Name, -1); // RA2: wide name
 				stats.Address = Connection[i]->Address;
 			}
 
@@ -1393,6 +1707,8 @@ void IPXManagerClass::Store_Stats(void)
 }
 
 
+
+
 /// <summary>
 /// Draws the network diagnostics display.
 /// This routine prints the retry and timeout settings currently in force, followed by a
@@ -1401,52 +1717,61 @@ void IPXManagerClass::Store_Stats(void)
 /// </summary>
 void IPXManagerClass::Multiplayer_Debug_Print(void)
 {
-	char buffer[256];
+	wchar_t buffer[256];	// RA2: wide text
+	wchar_t name[200];	// RA2: as above
+	Surface * surface = CompositeSurface;	// RA2: drawn on the composite surface
 
-	sprintf(buffer, "Rtr delta : %d", 1000 * RetryDelta / TIMER_SECOND);
-	Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D(0, 450), Fetch_Scheme_By_Name("Grey"), TBLACK, TextPrintType(TPF_NOSHADOW|TPF_EFNT));
+	swprintf(buffer, L"Rtry delta: %d", 1000 * RetryDelta / TIMER_SECOND);	// RA2: as above
+	Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 402), Fetch_Scheme_By_Name("Grey", 1), 0, TextPrintType(0x19));	// RA2: as above
 
-	sprintf(buffer, "Rtr timeout : %d", 1000 * Timeout / TIMER_SECOND);
-	Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D(0, 458), Fetch_Scheme_By_Name("Grey"), 0, TextPrintType(TPF_NOSHADOW|TPF_EFNT));
+	swprintf(buffer, L"Rtry timeout: %d", 1000 * Timeout / TIMER_SECOND);	// RA2: as above
+	Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 412), Fetch_Scheme_By_Name("Grey", 1), 0, TextPrintType(0x19));	// RA2: as above
 
-	sprintf(buffer, "Lat Fudge : %d", Session.LatencyFudge);
-	Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D(0, 466), Fetch_Scheme_By_Name("Grey"), TBLACK, TextPrintType(TPF_NOSHADOW|TPF_EFNT));
+	swprintf(buffer, L"Lat Fudge : %d", Session.LatencyFudge);	// RA2: as above
+	Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 422), Fetch_Scheme_By_Name("Grey", 1), 0, TextPrintType(0x19));	// RA2: as above
 
 	if (SentFrameSyncTimer / TIMER_SECOND) {
-		sprintf(buffer, "FSPS : %d", SentFrameSyncCount / (SentFrameSyncTimer / TIMER_SECOND));
-		Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D(0, 474), Fetch_Scheme_By_Name("Grey"), TBLACK, TextPrintType(TPF_NOSHADOW|TPF_EFNT));
+		swprintf(buffer, L"FSPS : %d", SentFrameSyncCount / (SentFrameSyncTimer / TIMER_SECOND));	// RA2: as above
+		Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 432), Fetch_Scheme_By_Name("Grey", 1), 0, TextPrintType(0x19));	// RA2: as above
 		if ((Frame & 0x7F) == 0x7F) {
 			SentFrameSyncTimer = 0;
 			SentFrameSyncCount = 0;
 		}
 	}
 
+	if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) {	// RA2: as above
+		swprintf(buffer, L"MC resp: %d", 1000 * Ipx.Multicast_Response_Time() / TIMER_SECOND);	// RA2: as above
+		Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 442), Fetch_Scheme_By_Name("Grey", 1), 0, TextPrintType(0x19));	// RA2: as above
+	}
+
 	for (int i = 0; i < NumConnections; i++) {
 		HouseClass * house = Houses[Connection[i]->ID];
 		if (house != NULL && house != PlayerPtr) {
 			int scheme = house->Scheme;
+			int x = (i + 1) * 100;	// RA2: as above
 
-			Fancy_Text_Print(Connection[i]->Name, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 402), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(name, L"%s", Connection[i]->Name);	// RA2: as above
+			Fancy_Text_Print(name, *surface, surface->Get_Rect(), Point2D(x, 302), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int avg = Connection[i]->Queue->Avg_Response_Time();
-			sprintf(buffer, "Average  : %d", 1000 * avg / TIMER_SECOND);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 411), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Average  : %d", 1000 * avg / TIMER_SECOND);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 311), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int max = Connection[i]->Queue->Max_Response_Time();
-			sprintf(buffer, "Max      : %d", 1000 * max / TIMER_SECOND);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 418), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Max      : %d", 1000 * max / TIMER_SECOND);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 319), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int resends = Connection[i]->Num_Resends();
-			sprintf(buffer, "Resends  : %d", resends);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 425), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Resends  : %d", resends);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 327), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int numlost = MAX(0, Connection[i]->Num_Lost());
-			sprintf(buffer, "Num lost : %d", numlost);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 432), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Num lost : %d", numlost);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 335), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int pcnt_lost = Connection[i]->Percent_Lost();
-			sprintf(buffer, "Pcnt lost: %d", pcnt_lost);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 439), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Pcnt lost: %d", pcnt_lost);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 343), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
 			int process_time = 0;
 			for (int j = 0; j < Session.Players.Count(); ++j) {
@@ -1455,20 +1780,27 @@ void IPXManagerClass::Multiplayer_Debug_Print(void)
 					break;
 				}
 			}
-			sprintf(buffer, "Process : %d", process_time);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 446), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Process : %d", process_time);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 351), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
-			sprintf(buffer, "Frame   : %d", -Session.PlayerLatency[i]);
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 453), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Frame   : %d", -Session.PlayerLatency[i]);	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 359), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
-			sprintf(buffer, "Queue s/r: %d/%d", Connection[i]->Queue->Num_Send(), Connection[i]->Queue->Num_Receive());
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 460), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Queue s/r: %d/%d", Connection[i]->Queue->Num_Send(), Connection[i]->Queue->Num_Receive());	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 367), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
 
-			sprintf(buffer, "Missed o/m: %d/%d", Connection[i]->Missed_Overall(), Connection[i]->Missed_Magic());
-			Fancy_Text_Print(buffer, *VisibleSurface, VisibleSurface->Get_Rect(), Point2D((i + 1) * 100, 467), ColorSchemes[scheme], TBLACK, TextPrintType(TPF_EFNT|TPF_NOSHADOW));
+			swprintf(buffer, L"Missed o/m: %d/%d", Connection[i]->Missed_Overall(), Connection[i]->Missed_Magic());	// RA2: as above
+			Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 375), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
+
+			if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) {	// RA2: as above
+				swprintf(buffer, L"Rout resp: %d", 1000 * RouterResponseTimes[i] / TIMER_SECOND);	// RA2: the router round trip per connection
+				Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(x, 383), ColorSchemes[scheme], 0, TextPrintType(0x19));	// RA2: as above
+			}
 		}
 	}
 }
+
+
 
 
 /***************************************************************************
@@ -1494,10 +1826,16 @@ void IPXManagerClass::Reset_Response_Time(bool zero)
 		Connection[i]->Queue->Reset_Response_Time(zero);
 	}
 
-	if (GlobalChannel)
+	if (GlobalChannel) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
 		GlobalChannel->Queue->Reset_Response_Time(true);
-
-}	/* end of Reset_Response_Time */
+	}
+	if (LobbyChannel) { // RA2: the lobby channel (magic 0xCDEF, members +0x18/+0x1C) and the multicast channel are part of the RA2 class
+		LobbyChannel->Queue->Reset_Response_Time(true); // RA2: as above
+	}
+	if (MulticastChannel) { // RA2: as above
+		MulticastChannel->Queue->Reset_Response_Time(true); // RA2: as above
+	}
+}
 
 
 /***************************************************************************
@@ -1612,19 +1950,17 @@ void IPXManagerClass::Set_Bridge(NetNumType bridge)
  * HISTORY:                                                                *
  *   05/31/1995 BRR : Created.                                             *
  *=========================================================================*/
-void IPXManagerClass::Configure_Debug(int index, int type_offset,
-	int type_size, char **names, int namestart, int namecount)
+void IPXManagerClass::Configure_Debug(int index, int type_offset, int type_size, // RA2: RA2's form, as in YR's body; TibSun's form does not match
+	char **names, int namestart, int namecount) // RA2: as above
 {
-	if (index == -1) {
-		GlobalChannel->Queue->Configure_Debug (type_offset, type_size, names,
+	if (index == CONNECTION_NONE) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
+		GlobalChannel->Queue->Configure_Debug(type_offset, type_size, names,
+			namestart, namecount);
+	} else if (Connection[index]) { // RA2: RA2's form, as in YR's body; TibSun's form does not match
+		Connection[index]->Queue->Configure_Debug(type_offset, type_size, names,
 			namestart, namecount);
 	}
-	else if (Connection[index]) {
-		Connection[index]->Queue->Configure_Debug (type_offset, type_size, names,
-			namestart, namecount);
-	}
-
-}	/* end of Configure_Debug */
+}
 
 
 /***************************************************************************
@@ -1643,67 +1979,70 @@ void IPXManagerClass::Configure_Debug(int index, int type_offset,
  * HISTORY:                                                                *
  *   01/25/1995 BR : Created.                                              *
  *=========================================================================*/
-void IPXManagerClass::Mono_Debug_Print(int index, int refresh)
+void IPXManagerClass::Mono_Debug_Print(int, int) // RA2: RA2's form, as in YR's body; TibSun's form does not match
 {
-#if 0
-	char txt[80];
-	int i;
+}
 
-	if (index == -1)
-		GlobalChannel->Queue->Mono_Debug_Print (refresh);
-
-	else if (Connection[index])
-		Connection[index]->Queue->Mono_Debug_Print (refresh);
-
-	if (refresh) {
-		Mono_Set_Cursor (20,1);
-		Mono_Printf ("IPX Queue:");
-
-		Mono_Set_Cursor (9,2);
-		Mono_Printf ("Average Response Time:");
-
-		Mono_Set_Cursor (43,1);
-		Mono_Printf ("Send Overflows:");
-
-		Mono_Set_Cursor (40,2);
-		Mono_Printf ("Receive Overflows:");
-
+void IPXManagerClass::Set_Lobby_Address(IPXAddressClass *address) // RA2: 0x005277C0
+{
+	if (LobbyChannel) { // RA2: as above
+		LobbyChannel->Address = *address; // RA2: as above
 	}
+}
 
-	Mono_Set_Cursor (32,1);
-	Mono_Printf ("%d",index);
 
-	Mono_Set_Cursor (32,2);
-	if (index == -1) {
-		Mono_Printf ("%d  ", GlobalChannel->Queue->Avg_Response_Time());
+void IPXManagerClass::Clear_Global_Routed(void) // RA2: 0x005277F0
+{
+	if (GlobalChannel) { // RA2: as above
+		GlobalChannel->IsRouted = false; // RA2: as above
 	}
-	else {
-		Mono_Printf ("%d  ", Connection[index]->Queue->Avg_Response_Time());
+}
+
+
+void IPXManagerClass::Set_Global_Routed(void) // RA2: 0x00527800
+{
+	if (GlobalChannel) { // RA2: as above
+		GlobalChannel->IsRouted = true; // RA2: as above
 	}
+}
 
-	Mono_Set_Cursor (59,1);
-	Mono_Printf ("%d  ", SendOverflows);
 
-	Mono_Set_Cursor (59,2);
-	Mono_Printf ("%d  ", ReceiveOverflows);
-
-	for (i = 0; i < NumBufs; i++) {
-		if (BufferFlags[i]) {
-			txt[i] = 'X';
-		}
-		else {
-			txt[i] = '_';
-		}
+void IPXManagerClass::Discard_Global_Packets_To(IPXAddressClass *address, unsigned short port) // RA2: 0x00527810
+{
+	if (GlobalChannel) { // RA2: as above
+		GlobalChannel->Discard_Packets_To(address, port); // RA2: as above
 	}
-	txt[i] = 0;
-	Mono_Set_Cursor ((80-NumBufs)/2,3);
-	Mono_Printf ("%s",txt);
+}
 
-#else
-	index = index;
-	refresh = refresh;
-#endif
 
-}	/* end of Mono_Debug_Print */
+void IPXManagerClass::Discard_Old_Global_Packets(int age) // RA2: 0x00527830
+{
+	if (GlobalChannel) { // RA2: as above
+		GlobalChannel->Discard_Old_Packets(age); // RA2: as above
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	/* end of Service */ // RA2: as above
+
 
 /*************************** end of ipxmgr.cpp *****************************/

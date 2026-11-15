@@ -12,6 +12,9 @@ class OwnerTalkClass
 {
 	public:
 		unsigned char Mask_From_ID(int id);
+
+		char Unknown_00[0x1C]; // RA2: +0x00 to +0x1B, not reconstructed
+		void * RouterProcess; // RA2: +0x1C, the packet router's process handle; non-NULL while a router runs (0x00525DC0)
 };
 
 extern OwnerTalkClass OwnerTalk;
