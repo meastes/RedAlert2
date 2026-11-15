@@ -108,6 +108,7 @@
 #include "anim.h"
 #include "animtype.h"
 #include "assert.h"
+#include "bomb.h"
 #include "building.h"
 #include "builtype.h"
 #include "cell.h"
@@ -1300,49 +1301,41 @@ void ObjectClass::Mark_For_Redraw(void)
  *=============================================================================================*/
 bool ObjectClass::Limbo(void)
 {
-	assert(this != NULL);
+	if (!GameActive || IsInLimbo) return(false); // RA2: RA2's form
+	Unselect(); // RA2: as above
+	Detach_All(true); // RA2: as above
+	Mark(MARK_UP); // RA2: as above
 
-	if (GameActive && !IsInLimbo) {
-
-		Unselect();
-
-		Detach_All();
-
-		if (RTTI != RTTI_BUILDING || ((BuildingClass *)this)->Class->ToTile == NULL) {
-			Mark(MARK_UP);
-		}
-
-		/*
-		**	Remove the object from the appropriate display list.
-		*/
-		Map.Remove(this);
-
-		/*
-		**	Remove the object from the logic processing list.
-		*/
-		if (Class_Of() != NULL && Class_Of()->IsSentient && (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH || Fetch_ID() != -2)) {
+	/* // RA2: as above
+	**	Remove the object from the appropriate display list. // RA2: as above
+	*/ // RA2: as above
+	Map.Remove(this); // RA2: as above
+	AmbientSoundController.Stop(); // RA2: as above
+	CustomSoundController.End(); // RA2: as above
+	if (Class_Of() && Class_Of()->IsSentient) { // RA2: as above
+		if (Session.Type == 0 || Session.Type == 5 || // RA2: as above
+			Fetch_ID() != -2) // RA2: as above
 			Logic.Remove(this);
-		}
-
-		if (Class_Of() != NULL && Class_Of()->AlphaImageData != NULL) {
-
-			Point2D point;
-			Coord coord = Center_Coord();
-			TacticalMap->Coord_To_Pixel(coord, point);
-
-			ShapeSet const * alpha = (ShapeSet const *)Class_Of()->AlphaImageData;
-			point -= Point2D(alpha->Get_Width()/2, alpha->Get_Height()/2);
-
-			TacticalMap->Register_Dirty_Area(Rect(point, alpha->Get_Width(), alpha->Get_Height()), true);
-		}
-
-		Hidden();
-		IsInLimbo = true;
-		IsToDisplay = false;
-		return(true);
 	}
-	return(false);
+	if (Class_Of() && Class_Of()->AlphaImageData) { // RA2: as above
+		Point2D pixel; // RA2: as above
+		Coord location = Center_Coord(); // RA2: as above
+		TacticalMap->Coord_To_Pixel(location, pixel); // RA2: as above
+		ShapeSet const * shape = (ShapeSet const *)Class_Of()->AlphaImageData; // RA2: as above
+		Point2D half; // RA2: as above
+		half.X = shape->Get_Width() / 2; // RA2: as above
+		half.Y = shape->Get_Height() / 2; // RA2: as above
+		pixel.X = (int)((unsigned int)pixel.X - (unsigned int)half.X); // RA2: as above
+		pixel.Y = (int)((unsigned int)pixel.Y - (unsigned int)half.Y); // RA2: as above
+		TacticalMap->Register_Dirty_Area( // RA2: as above
+			Rect(pixel.X, pixel.Y, shape->Get_Width(), shape->Get_Height()), 1); // RA2: as above
+	}
+	Hidden(); // RA2: as above
+	IsInLimbo = true; // RA2: as above
+	IsToDisplay = false; // RA2: as above
+	return(true); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -2080,14 +2073,19 @@ int ObjectClass::Health_Status(void) const // RA2: not in TibSun, at 0x5D46B0
 HRESULT STDMETHODCALLTYPE ObjectClass::Load(IStream * stream)
 {
 	HRESULT result = BASECLASS::Load(stream);
-	if (SUCCEEDED(result)) {
-		Swizzle_Pointer(&Next);
-		Swizzle_Pointer(&Tag);
-
-		result = S_OK;
+	if (FAILED(result)) { // RA2: RA2's form
+		return result; // RA2: as above
 	}
-	return(result);
+	Swizzler.Swizzle((void **)&Next); // RA2: as above
+	Swizzler.Swizzle((void **)&Tag); // RA2: as above
+	Swizzler.Swizzle((void **)&AttachedBomb); // RA2: as above
+	Swizzler.Swizzle((void **)&Unknown_18); // RA2: as above
+	AmbientSoundController.Init(); // RA2: as above
+	CustomSoundController.Init(); // RA2: as above
+	LineTrailer = 0; // RA2: as above
+	return S_OK; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2414,14 +2412,15 @@ void ObjectClass::Editor_Draw_It(Point2D const & point, Rect const & cliprect) c
 /// <remarks>The object must not be referred to after this routine returns.</remarks>
 void ObjectClass::Delete_Me(void)
 {
-	assert(this != NULL);
-//	//assert(IsActive);
-
-	Detach_This_From_All(this);
+	if (AttachedBomb != 0) { // RA2: RA2's form
+		AttachedBomb->Disarm(); // RA2: as above
+	}
+	Detach_This_From_All(this, true); // RA2: as above
 	Limbo();
 	IsActive = false;
 	ObjectsToDelete.Add(this);
 }
+
 
 
 /// <summary>
