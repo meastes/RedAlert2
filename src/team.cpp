@@ -1150,13 +1150,11 @@ bool TeamClass::Remove(FootClass * obj, int typeindex, bool no_idle) // RA2: no_
  *=============================================================================================*/
 int TeamClass::Recruit(int typeindex)
 {
-	Coord center = Zone != NULL ? Zone->Center_Coord() : COORD_NONE;
-
+	Coord center = Zone != 0 ? Zone->Center_Coord() : COORD_NONE; // RA2: RA2's form
 	if (Class->Get_Origin() != CELL_NONE) {
 		center = Class->Get_Origin().As_Coord();
 	}
-
-	int added = 0;				// Total number added to team.
+	int added = 0; // RA2: as above
 
 	/*
 	**	Quick check to see if recruiting is really allowed for this index or not.
@@ -1164,118 +1162,92 @@ int TeamClass::Recruit(int typeindex)
 	if (Class->TaskForce->Members[typeindex].Quantity > Quantity[typeindex]) {
 		int group = Class->Get_Group();
 		switch ((RTTIType)Class->TaskForce->Members[typeindex].Class->RTTI) {
-
-			/*
-			**	For infantry objects, sweep through the infantry in the game looking for
-			**	ones owned by the house that owns the team. When found, try to add.
-			*/
-			case RTTI_INFANTRYTYPE:
-			case RTTI_INFANTRY:
-				{
-					InfantryClass * best = 0;
-					int bestdist = -1;
-
-					for (int index = 0; index < Infantry.Count(); index++) {
-						InfantryClass * infantry = Infantry[index];
-						if (group == -2 || infantry->Group == group || Class->IsRecruiter) {
-							int d = infantry->Relative_Distance(center);
-
-							if (infantry->Group != group) {
-								d += 50 * CELL_LEPTON;
-							}
-
-							if ((d < bestdist || bestdist == -1) && Can_Add(infantry, typeindex)) {
-								best = infantry;
-								bestdist = d;
-							}
-						}
+		case 0xF: // RA2: as above
+		case 0x10: { // RA2: as above
+			FootClass *best = 0; // RA2: as above
+			int best_distance = -1; // RA2: as above
+			for (int index = 0; index < Infantry.Count(); index++) { // RA2: as above
+				FootClass *infantry = (FootClass *)Infantry[index]; // RA2: as above
+				if (group == -2 || infantry->Group == group || Class->IsRecruiter) { // RA2: as above
+					int distance = infantry->Relative_Distance(center); // RA2: as above
+					if (infantry->Group != group) { // RA2: as above
+						distance += 0x3200; // RA2: as above
 					}
-
-					if (best) {
-						best->Assign_Target(NULL);
-						Add(best);
-						added++;
+					if ((distance < best_distance || best_distance == -1) && Can_Add(infantry, typeindex)) { // RA2: as above
+						best = infantry; // RA2: as above
+						best_distance = distance; // RA2: as above
 					}
 				}
-				break;
-
-			case RTTI_AIRCRAFTTYPE:
-			case RTTI_AIRCRAFT:
-				{
-					AircraftClass * best = 0;
-					int bestdist = -1;
-
-					for (int index = 0; index < Aircraft.Count(); index++) {
-						AircraftClass * aircraft = Aircraft[index];
-						if (group == -2 || aircraft->Group == group || Class->IsRecruiter) {
-							int d = aircraft->Relative_Distance(center);
-
-							if (aircraft->Group != group) {
-								d += 50 * CELL_LEPTON;
-							}
-
-							if ((d < bestdist || bestdist == -1) && Can_Add(aircraft, typeindex)) {
-								best = aircraft;
-								bestdist = d;
-							}
-						}
+			}
+			if (best != 0) { // RA2: as above
+				best->Assign_Target(0); // RA2: as above
+				Add(best); // RA2: as above
+				added++; // RA2: as above
+			}
+			break; // RA2: as above
+		}
+		case 2: // RA2: as above
+		case 3: { // RA2: as above
+			AircraftClass *best = 0; // RA2: as above
+			int best_distance = -1; // RA2: as above
+			for (int index = 0; index < Aircraft.Count(); index++) { // RA2: as above
+				AircraftClass *aircraft = Aircraft[index]; // RA2: as above
+				if (group == -2 || aircraft->Group == group || Class->IsRecruiter) { // RA2: as above
+					int distance = aircraft->Relative_Distance(center); // RA2: as above
+					if (aircraft->Group != group) { // RA2: as above
+						distance += 0x3200; // RA2: as above
 					}
-
-					if (best) {
-						best->Assign_Target(NULL);
-						Add(best);
-						added++;
+					if ((distance < best_distance || best_distance == -1) && Can_Add(aircraft, typeindex)) { // RA2: as above
+						best = aircraft; // RA2: as above
+						best_distance = distance; // RA2: as above
 					}
 				}
-				break;
-
-			case RTTI_UNITTYPE:
-			case RTTI_UNIT:
-				{
-					UnitClass * best = 0;
-					int bestdist = -1;
-
-					for (int index = 0; index < Units.Count(); index++) {
-						UnitClass * unit = Units[index];
-						if (group == -2 || unit->Group == group || Class->IsRecruiter) {
-							int d = unit->Relative_Distance(center);
-
-							if (unit->Group != group) {
-								d += 12800;
-							}
-
-							if (unit->House == House && unit->Class == Class->TaskForce->Members[typeindex].Class) {
-
-								if ((d < bestdist || bestdist == -1) && Can_Add(unit, typeindex)) {
-									best = unit;
-									bestdist = d;
-								}
-
-							}
-						}
+			}
+			if (best != 0) { // RA2: as above
+				best->Assign_Target(0); // RA2: as above
+				Add(best); // RA2: as above
+				added++; // RA2: as above
+			}
+			break; // RA2: as above
+		}
+		case 1: // RA2: as above
+		case 0x28: { // RA2: as above
+			UnitClass *best = 0; // RA2: as above
+			int best_distance = -1; // RA2: as above
+			for (int index = 0; index < Units.Count(); index++) { // RA2: as above
+				UnitClass *unit = Units[index]; // RA2: as above
+				if (group == -2 || unit->Group == group || Class->IsRecruiter) { // RA2: as above
+					int distance = unit->Relative_Distance(center); // RA2: as above
+					if (unit->Group != group) { // RA2: as above
+						distance += 0x3200; // RA2: as above
 					}
-
-					if (best) {
-						best->Assign_Target(NULL);
-						Add(best);
-						added++;
-
-						/*
-						**	If a transport is added to the team, the occupants
-						**	are added by default.
-						*/
-						FootClass * f = best->Cargo.Attached_Object();
-						while (f) {
-							Add(f);
-							f = (FootClass *)(ObjectClass *)f->Next;
+					if (unit->House == House && unit->Class == Class->TaskForce->Members[typeindex].Class) { // RA2: as above
+						if ((distance < best_distance || best_distance == -1) && Can_Add(unit, typeindex)) { // RA2: as above
+							best = unit; // RA2: as above
+							best_distance = distance; // RA2: as above
 						}
 					}
 				}
-				break;
+			}
+			if (best != 0) { // RA2: as above
+				best->Assign_Target(0); // RA2: as above
+				Add(best); // RA2: as above
+				added++; // RA2: as above
+				FootClass *passenger = (FootClass *)best->Cargo.Attached_Object(); // RA2: as above
+				while (passenger != 0) { // RA2: as above
+					Add(passenger); // RA2: as above
+					ObjectClass *next = passenger->Next; // RA2: as above
+					passenger = next != 0 && (next->AbstractFlags & 4) ? (FootClass *)next : 0; // RA2: as above
+				}
+			}
+			break; // RA2: as above
+		}
 		}
 	}
-	return(added);
+	return added; // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -1718,36 +1690,18 @@ hold: // RA2: as above
  *=============================================================================================*/
 void TeamClass::Coordinate_Move(void)
 {
-	FootClass * unit = Member;
+	FootClass *unit = Member; // RA2: RA2's form
 	bool finished = true;
 	bool found = false;
-
-	if (unit == NULL) return;
-
-	if (Target == NULL) {
+	if (unit == 0) { // RA2: as above
+		return; // RA2: as above
+	}
+	if (Target == 0) { // RA2: as above
 		Target = MissionTarget;
 	}
-
-	if (Target != NULL) {
-
-		if (Class->TransportsReturnOnUnload) {
-			FootClass * obj = unit;
-			while (obj != NULL) {
-				if (!obj) {
-					break;
-				}
-				if (obj->TClass->Max_Passengers() > 0 && obj->ArchiveTarget == NULL) {
-					obj->ArchiveTarget = &Map[obj->Get_Coord()];
-				}
-				obj = obj->Member;
-			}
-
-		}
-
+	if (Target != 0) { // RA2: as above
 		if (!Lagging_Units()) {
-
-			while (unit != NULL) {
-
+			for (; unit != 0; unit = (FootClass *)unit->Member) { // RA2: as above
 				/*
 				**	Tell the unit, if necessary, that it should regroup
 				**	with the main team location. If the unit is regrouping, then
@@ -1757,70 +1711,57 @@ void TeamClass::Coordinate_Move(void)
 				if (Coordinate_Conscript(unit)) {
 					finished = false;
 				}
-
-				if (unit->Mission == MISSION_UNLOAD || unit->MissionQueue == MISSION_UNLOAD) {
+				if (unit->Get_Mission() == 0x10 || unit->MissionQueue == 0x10) { // RA2: as above
 					finished = false;
 				}
-
-				if (_Is_It_Playing(unit) && unit->Mission != MISSION_UNLOAD && unit->MissionQueue != MISSION_UNLOAD) {
-					int stray = Rule->StrayDistance;
-					if (unit->RTTI == RTTI_AIRCRAFT) {
-						stray *= 3;
+				if (_Is_It_Breathing(unit) && (unit->IsInitiated || unit->Fetch_RTTI() == RTTI_AIRCRAFT) // RA2: as above
+					&& unit->Get_Mission() != 0x10 && unit->MissionQueue != 0x10) { // RA2: as above
+					int stray = Stray_Distance(); // RA2: as above
+					if (unit->In_Air()) { // RA2: as above
+						stray *= 2; // RA2: as above
 					}
-
 					found = true;
-
-					int dist = unit->Distance(Target);
-
-					if (dist > stray ||
-						(unit->HeightAGL < 0 &&
-						Script->Get_Next_Mission().Mission != TMISSION_MOVE) ||
-						(unit->RTTI == RTTI_AIRCRAFT &&
-//						(unit->In_Which_Layer() == LAYER_TOP &&
-						((AircraftClass *)unit)->Height > 0 &&
-						&Map[unit->Center_Coord()] != Target &&
-						Script->Get_Next_Mission().Mission != TMISSION_MOVE)) {
-
-						if (!Class->IsAggressive || unit->TarCom == NULL) {
-							if (unit->Mission != MISSION_MOVE) {
-								unit->Assign_Mission(MISSION_MOVE);
-								if (unit->Ready_To_Commence()) {
-									unit->Commence();
-								}
-							}
-
-							if (unit->NavCom == NULL) {
-								unit->Assign_Destination(Target);
-							}
-							finished = false;
-							goto UGH;
+					int distance = unit->Distance(Target); // RA2: as above
+					if (distance > stray // RA2: as above
+						|| (unit->HeightAGL < 0 && Script->Get_Next_Mission().Mission != TMISSION_MOVE) // RA2: as above
+						|| (unit->Fetch_RTTI() == RTTI_AIRCRAFT && unit->Get_Height() > 0 // RA2: as above
+							&& &Map[unit->Center_Coord()] != Target // RA2: as above
+							&& Script->Get_Next_Mission().Mission != TMISSION_MOVE)) { // RA2: as above
+						if (Class->IsAggressive && unit->TarCom != 0) { // RA2: as above
+							continue; // RA2: as above
 						}
-
+						if (unit->Get_Mission() != MISSION_MOVE) { // RA2: as above
+							unit->QueueMission(MISSION_MOVE, false); // RA2: as above
+							if (unit->Ready_To_Commence()) { // RA2: as above
+								unit->Commence(); // RA2: as above
+							}
+						}
+						if (unit->NavCom == 0) { // RA2: as above
+							unit->Assign_Destination(Target, true); // RA2: as above
+						}
+						AbstractClass *navcom = unit->NavCom; // RA2: as above
+						if (navcom != Target) { // RA2: as above
+							if (unit->Techno_Type_Class()->BalloonHover // RA2: as above
+								|| (navcom != Target && unit->Fetch_RTTI() == RTTI_AIRCRAFT && navcom == unit->Get_Cell_Ptr())) { // RA2: as above
+								unit->Assign_Destination(Target, true); // RA2: as above
+							}
+						}
+						finished = false; // RA2: as above
 					} else {
-						if (unit->Mission == MISSION_MOVE && (unit->NavCom == NULL || unit->Distance(unit->NavCom) <= Rule->CloseEnoughDistance && !unit->Locomotion->Is_Moving())) {
-							if (unit->TarCom == NULL) {
-								unit->Assign_Destination(NULL);
-								unit->Enter_Idle_Mode();
-							}
+						if (unit->Get_Mission() == MISSION_MOVE // RA2: as above
+							&& (unit->NavCom == 0 // RA2: as above
+								|| (unit->Distance(unit->NavCom) <= Rule->CloseEnoughDistance && !unit->Locomotion->Is_Moving())) // RA2: as above
+							&& unit->TarCom == 0) { // RA2: as above
+							unit->Assign_Destination(0, true); // RA2: as above
+							unit->Enter_Idle_Mode(false, true); // RA2: as above
 						}
-
-						UGH:
-
-						/*
-						**	If any member still has a valid NavCom then consider this
-						**	movement mission to still be in progress. This will ensure
-						**	that the members come to a complete stop before the next
-						**	mission commences. Without this, the team will prematurely
-						**	start on the next mission even when all members aren't yet
-						**	in their proper spot.
-						*/
-						if (unit->NavCom != NULL) {
-							finished = false;
-						}
+					}
+					bool arrived = unit->Fetch_RTTI() == RTTI_AIRCRAFT && unit->NavCom == unit->Get_Cell_Ptr(); // RA2: as above
+					bool hovering = (unit->AbstractFlags & 1) && unit->Techno_Type_Class()->BalloonHover && distance < stray; // RA2: as above
+					if (unit->NavCom != 0 && !arrived && !hovering) { // RA2: as above
+						finished = false; // RA2: as above
 					}
 				}
-
-				unit = unit->Member;
 			}
 		} else {
 			finished = false;
@@ -1843,6 +1784,8 @@ void TeamClass::Coordinate_Move(void)
 		IsNextMission = true;
 	}
 }
+
+
 
 
 /***********************************************************************************************
