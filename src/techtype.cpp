@@ -261,8 +261,15 @@ int TechnoTypeClass::GetRefund(HouseClass * house, bool full) const // RA2: at 0
  *=============================================================================================*/
 void const * TechnoTypeClass::Get_Cameo_Data(void) const
 {
-	return(CameoData);
+	if (PlayerPtr && PlayerPtr->BarracksInfiltrated && Fetch_RTTI() == 0x10 && AltCameoData && IsTrainable) { // RA2: RA2's form
+		return AltCameoData; // RA2: as above
+	}
+	if (PlayerPtr && PlayerPtr->WarFactoryInfiltrated && Fetch_RTTI() == 0x28 && AltCameoData && IsTrainable) { // RA2: as above
+		return AltCameoData; // RA2: as above
+	}
+	return CameoData; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -808,60 +815,74 @@ HRESULT STDMETHODCALLTYPE TechnoTypeClass::GetSizeMax(ULARGE_INTEGER *pcbSize)
 /// </summary>
 void TechnoTypeClass::Compute_CRC(class CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
+	AbstractTypeClass::Compute_CRC(crc); // RA2: RA2's form
 	crc(ThreatAvoidanceCoefficient);
-	crc(SlowdownDistance);
+	crc((long)SlowdownDistance); // RA2: as above
 	crc(DeaccelerationFactor);
 	crc(AccelerationFactor);
-	crc(CloakingSpeed);
-	crc(DebrisTypes.Count());
-	crc(Dock.Count());
-	crc(DebrisMaximums.Count());
-	crc((char*)&Locomotor, sizeof(Locomotor));
+	crc((long)CloakingSpeed); // RA2: as above
+	crc((long)DebrisTypes.Count()); // RA2: as above
+	crc((long)DebrisAnims.Count()); // RA2: as above
+	crc((long)Dock.Count()); // RA2: as above
+	crc((long)DebrisMaximums.Count()); // RA2: as above
+	crc(&Locomotor, sizeof(Locomotor)); // RA2: as above
 	crc(VoxelCenterY);
 	crc(VoxelCenterX);
 	crc(Weight);
 	crc(PhysicalSize);
-	crc(InitialMission);
+	crc(Size); // RA2: as above
+	crc(SizeLimit); // RA2: as above
+	crc(HoverAttack); // RA2: as above
+	crc((long)InitialMission); // RA2: as above
 	crc(IsImmuneToVeins);
 	crc(IsTiberiumHeal);
 	crc(IsTargetLaser);
 	crc(RollAngle);
 	crc(PitchAngle);
 	crc(PitchSpeed);
-	crc(FlightLevel);
-	crc(BuildLimit);
-	crc(Category);
+	crc((long)FlightLevel); // RA2: as above
+	crc((long)BuildLimit); // RA2: as above
+	crc((long)Category); // RA2: as above
 	crc(DeployTime);
-	crc(FireAngle);
-	crc(PipScale);
-	crc(VoiceSelect.Count());
-	crc(VoiceMove.Count());
-	crc(VoiceAttack.Count());
-	crc(VoiceDie.Count());
-	crc(VoiceFeedback.Count());
-	crc(DamageParticleSystems.Count());
-	crc(MZone);
-	crc(ThreatRange);
-	crc(MaxDebris);
-	crc(MaxPassengers);
-	crc(SightRange);
-	crc(Cost);
-	crc(Level);
-	crc(Prerequisite.Count());
-	crc(Risk);
-	crc(Reward);
-	crc(MaxSpeed);
-	crc(Speed);
-	crc(MaxAmmo);
-	crc((int)Ownable);
-	crc(Rotation);
-	crc(ROT);
-	crc(TurretOffset);
-	crc(Points);
-	crc(Explosion.Count());
-	crc(ShadowIndex);
-	crc(Capacity);
+	crc((long)FireAngle); // RA2: as above
+	crc((long)PipScale); // RA2: as above
+	crc((long)VoiceSelect.Count()); // RA2: as above
+	crc((long)VoiceMove.Count()); // RA2: as above
+	crc((long)VoiceAttack.Count()); // RA2: as above
+	crc((long)VoiceSpecialAttack.Count()); // RA2: as above
+	crc((long)VoiceDie.Count()); // RA2: as above
+	crc((long)VoiceFeedback.Count()); // RA2: as above
+	crc((long)MoveSound.Count()); // RA2: as above
+	crc((long)DieSound.Count()); // RA2: as above
+	crc((long)DamageParticleSystems.Count()); // RA2: as above
+	crc((long)DestroyParticleSystems.Count()); // RA2: as above
+	crc((long)MZone); // RA2: as above
+	crc((long)ThreatRange); // RA2: as above
+	crc((long)MaxDebris); // RA2: as above
+	crc((long)MinDebris); // RA2: as above
+	crc((long)MaxPassengers); // RA2: as above
+	crc((long)SightRange); // RA2: as above
+	crc((long)Cost); // RA2: as above
+	crc((long)Soylent); // RA2: as above
+	crc((long)Level); // RA2: as above
+	crc((long)Prerequisite.Count()); // RA2: as above
+	crc((long)PrerequisiteOverride.Count()); // RA2: as above
+	crc((long)Risk); // RA2: as above
+	crc((long)Reward); // RA2: as above
+	crc((long)MaxSpeed); // RA2: as above
+	crc((long)Speed); // RA2: as above
+	crc((long)MaxAmmo); // RA2: as above
+	crc((long)AirRangeBonus); // RA2: as above
+	crc((long)Ownable); // RA2: as above
+	crc((long)AIBasePlanningSide); // RA2: as above
+	crc((long)Rotation); // RA2: as above
+	crc((long)ROT); // RA2: as above
+	crc((long)TurretOffset); // RA2: as above
+	crc((long)Points); // RA2: as above
+	crc((long)Explosion.Count()); // RA2: as above
+	crc((long)DestroyAnim.Count()); // RA2: as above
+	crc((long)ShadowIndex); // RA2: as above
+	crc((long)Capacity); // RA2: as above
 	crc(IsTrain);
 	crc(IsDropship);
 	crc(IsToProtect);
@@ -878,13 +899,25 @@ void TechnoTypeClass::Compute_CRC(class CRCEngine & crc) const
 	crc(IsCrew);
 	crc(IsRemappable);
 	crc(IsCloakable);
+	crc(GapGenerator); // RA2: as above
+	crc(GapRadiusInCells); // RA2: as above
+	crc(SuperGapRadiusInCells); // RA2: as above
+	crc(Teleporter); // RA2: as above
 	crc(IsSelfHealing);
 	crc(IsExploding);
 	crc(IsNoAutoFire);
-	crc(IsManualReload); // RA2: no IsRegulated, IsRadarEquipped (not in RA2's layout)
+	crc(TurretSpins); // RA2: as above
+	crc(Normalized); // RA2: as above
+	crc(IsManualReload); // RA2: as above
 	crc(IsVisibleLoad);
 	crc(IsLightningRod);
+	crc(DisableVoxelCache); // RA2: as above
+	crc(DisableShadowCache); // RA2: as above
+	crc(MobileFire); // RA2: as above
+	crc(OpportunityFire); // RA2: as above
+	crc(DistributedFire); // RA2: as above
 }
+
 
 
 /// <summary>
