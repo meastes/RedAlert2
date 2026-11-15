@@ -453,6 +453,8 @@ class FootClass : public TechnoClass
 		virtual bool Stop_Driver(void);
 		virtual void Assign_Destination(AbstractClass * target, bool = true) override;
 		virtual bool Enter_Idle_Mode(bool initial=false, bool = true) override;
+		virtual Coord GetAttackCoordinates(void) const override; // RA2: 0x4C71B0
+		virtual void Unknown_Virtual_40C(AbstractClass * target) override; // RA2: 0x4C8020
 		virtual bool Is_Allowed_To_Leave_Map(void) const override;
 		virtual bool Is_Docked_For_Repair(void);
 		void Link_DropPod(void);
@@ -472,6 +474,7 @@ class FootClass : public TechnoClass
 		virtual int Get_Z_Adjust(void) const override;
 		virtual ZGradientType Get_Z_Gradient(void) const override;
 		virtual void Draw_Action_Line(bool force, int unknown) const override;
+		void Draw_Action_Line(void) const; // RA2: TibSun's, no longer virtual (0x4CAB90)
 		virtual void Draw_Voxel(VoxelDataStruct const & voxeldata, int frame, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, int brightness, ShapeFlags_Type flags) const override;
 		void Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache, Surface * surface = NULL, unsigned extra1 = 0, unsigned extra2 = 0) const; // RA2: three more arguments (ret 44)
 		virtual void Draw_Object(ShapeSet const * shapefile, int shapenum, Point2D const & xy, Rect const & rect, Dir256 rotation=DIR_N, int scale=0x0100, int zadjust=0, ZGradientType zgrad=ZGRAD_GROUND, bool=false, int brightness=0, ShapeSet const * zshapefile=0, int zshapenum=0, Point2D zoff=Point2D(0,0), ShapeFlags_Type flags=SHAPE_NORMAL) const;

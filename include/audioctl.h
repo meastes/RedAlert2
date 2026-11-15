@@ -23,6 +23,7 @@ struct AudioController
 
 	void Init(void); // RA2: 0x00405BF0
 	void Release(void); // RA2: 0x00405C10
+	void End(void); // RA2: 0x00405FE0 (YR name); stops the event
 	void EndLooping(void); // RA2
 	void __fastcall SetEvent(AudioEvent * event, VocClass * type); // RA2
 };

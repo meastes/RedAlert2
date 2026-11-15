@@ -100,6 +100,7 @@
 #include "cell.h"
 #include "convert.h"
 #include "ddist.h"
+#include "dsurface.h" // RA2: Build_Hicolor_Pixel
 #include "goptions.h"
 #include "house.h"
 #include "incdec.h"
@@ -2053,14 +2054,15 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 /// </summary>
 /// <param name="resume_waypoint">Should an interrupted waypoint path be resumed?</param>
 /// <returns>bool; Was other work taken up instead of going idle?</returns>
-bool FootClass::Enter_Idle_Mode(bool, bool resume_waypoint)
+bool FootClass::Enter_Idle_Mode(bool initial, bool resume_waypoint) // RA2: both arguments passed on
 {
 	if (!IsIdle) {
 		IsIdle = true;
+		TechnoClass::Enter_Idle_Mode(initial, resume_waypoint); // RA2
 
 		if (IsToScatter) {
 			IsToScatter = false;
-			Scatter(COORD_NONE, true);
+			Scatter(COORD_NONE, true, false); // RA2: nokidding false
 		}
 
 		bool was_piggybacking = false;
@@ -2088,12 +2090,12 @@ bool FootClass::Enter_Idle_Mode(bool, bool resume_waypoint)
 			return(true);
 		}
 
-		if (RTTI == RTTI_INFANTRY) {
-			AbstractClass *target = ArchiveTarget;
-			if (target != NULL) {
+		if (RTTI == RTTI_INFANTRY && ArchivedTarget != NULL) { // RA2: the archived target read directly
+			if (ArchivedTarget->Center_Coord().As_Cell() != Center_Coord().As_Cell()) { // RA2: only when not already there
+				AbstractClass * target = ArchivedTarget;
 				if (CurrentMission != MISSION_GUARD_AREA) {
-					Assign_Mission(MISSION_MOVE);
-					ArchiveTarget = NULL;
+					QueueMission(MISSION_MOVE, false); // RA2: queued
+					Assign_Archive_Target(NULL);
 				}
 				Assign_Destination(target, true);
 			}
@@ -2103,6 +2105,25 @@ bool FootClass::Enter_Idle_Mode(bool, bool resume_waypoint)
 	}
 
 	return(false);
+}
+
+
+/// <summary>
+/// Fetches the spot this object is heading for when it attacks: unless it is on an attack
+/// mission, the object it follows or else its navigation target; otherwise the plain technology
+/// object's answer.
+/// </summary>
+Coord FootClass::GetAttackCoordinates(void) const // RA2: not in TibSun, at 0x4C71B0
+{
+	if (Get_Mission() != MISSION_ATTACK) {
+		if (FollowTarget != NULL) {
+			return(FollowTarget->As_Coord());
+		}
+		if (NavCom != NULL) {
+			return(NavCom->As_Coord());
+		}
+	}
+	return(TechnoClass::GetAttackCoordinates());
 }
 
 
@@ -2504,7 +2525,7 @@ int FootClass::Do_MISSION_ENTER(void)
 	**	defined. If not in radio contact, then try the archive target value to see if that
 	**	is suitable.
 	*/
-	TechnoClass * contact = Contact_With_Whom();
+	TechnoClass * contact = Radio_Link(0); // RA2: the out-of-line link accessor
 	if (contact == NULL) {
 		contact = Dynamic_Cast<TechnoClass *>(ArchiveTarget);
 	}
@@ -2531,6 +2552,11 @@ int FootClass::Do_MISSION_ENTER(void)
 					Assign_Destination(RouteQueue[0], false);
 					RouteQueue.Delete_Index(0);
 				}
+			} else if (Techno_Type_Class()->Teleporter) { // RA2: a teleporter restarts its move to the destination
+				AbstractClass * target = NavCom;
+				FollowTarget = NULL;
+				NavCom = NULL;
+				Assign_Destination(target, true);
 			}
 		}
 
@@ -2549,6 +2575,15 @@ int FootClass::Do_MISSION_ENTER(void)
 	}
 
 	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
+}
+
+
+/// <summary>
+/// Sets the object this object follows (the Follow object of a MegaMission order).
+/// </summary>
+void FootClass::Unknown_Virtual_40C(AbstractClass * target) // RA2: not in TibSun, at 0x4C8020
+{
+	FollowTarget = target;
 }
 
 
@@ -3616,6 +3651,31 @@ void FootClass::Draw_It(Point2D const &, Rect const &) const
  * HISTORY:                                                                                    *
  *   12/22/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
+bool FootClass::Limbo(void)
+{
+	if (!IsInLimbo && Techno_Type_Class() != NULL) { // RA2: only with a type
+		Cell cell = LastAdjacencyCell;
+		for (FacingType face = FACING_FIRST; face < FACING_COUNT; face++) {
+			Cell newcell = Adjacent_Cell(cell, face);
+			CellClass * cptr = &Map[newcell];
+			cptr->AdjacentObjectCount--;
+		}
+		if (!ScenarioInit) { // RA2: not while the scenario starts
+			Stop_Driver();
+		}
+		if (Locomotion != NULL) {
+			Locomotion->Mark_All_Occupation_Bits(0);
+		}
+		MoveSoundAudioController.End(); // RA2: the movement sound ends
+		if (Techno_Type_Class()->SensorsSight != 0) { // RA2: sensors withdrawn
+			RemoveSensorsAt(CELL_NONE);
+		}
+		if (GetLastFlightMapCoords() != CELL_NONE) { // RA2: out of the tracker of aircraft in flight
+			AircraftTracker.Remove(this);
+		}
+	}
+	return(BASECLASS::Limbo());
+}
 
 
 
@@ -3965,56 +4025,138 @@ void FootClass::On_Movement_Blocked(void)
 
 
 /// <summary>
-/// Draws the line that shows this object's current order.
-/// This routine marks the two ends of the order -- the firing point and its target, or the
-/// object and its destination -- and joins them with a line clipped to the tactical map.
-/// The line only appears for a short while after the order is given.
+/// Draws the line that shows this object's current order: to its target in red from the
+/// firing point, or else in green from the object to its destination (the last queued one).
+/// Unless forced, the line only appears for a short while after the order is given.
 /// </summary>
-void FootClass::Draw_Action_Line(bool, int) const // RA2: two arguments
+/// <param name="force">Draw the line even after the action line timer ran out?</param>
+/// <param name="dashed">Draw the line to the destination dashed?</param>
+void FootClass::Draw_Action_Line(bool force, int dashed) const // RA2: two arguments; the TibSun body moved to Draw_Action_Line(void)
 {
-	if (!TarCom && !NavCom) {
-		return;
-	}
+	Coord start_coord;
+	Coord end_coord;
 
-	if (ActionLineTimer.Value() > 0) {
-
-		Coord start_coord;
-		Coord end_coord;
-		ColorType color;
+	if (TarCom != NULL || NavCom != NULL) {
+		if (!force && ActionLineTimer.Value() <= 0) {
+			return;
+		}
 
 		if (TarCom != NULL) {
 			start_coord = Turret_Coord();
 			end_coord = Predict_Target_Coord();
-			color = RED;
+			TechnoClass::Draw_Action_Line(start_coord, end_coord, DSurface::Deconstruct_Hicolor_Pixel(NormalDrawer->Convert_Pixel(RED)), false, false);
+			return;
+		}
+
+		start_coord = PositionCoord;
+		if (RouteQueue.Count() == 0) {
+			end_coord = NavCom->Center_Coord();
 		} else {
-			start_coord = PositionCoord;
-			if (RouteQueue.Count() == 0) {
-				end_coord = NavCom->Center_Coord();
-			} else {
-				end_coord = RouteQueue[RouteQueue.Count() - 1]->Center_Coord();
-			}
-			color = GREEN;
-			if (Map.In_Radar(end_coord.As_Cell()) && Map[end_coord].IsUnderBridge) {
-				end_coord.Z = BRIDGE_LEPTON_HEIGHT + Map.Get_Height_GL(end_coord);
-			}
+			end_coord = RouteQueue[RouteQueue.Count() - 1]->Center_Coord();
 		}
-
-		Point2D start_point;
-		Point2D end_point;
-
-		TacticalMap->Coord_To_Pixel(start_coord, start_point);
-		TacticalMap->Coord_To_Pixel(end_coord, end_point);
-
-		start_point.Y += TacticalRect.Y;
-		end_point.Y += TacticalRect.Y;
-
-		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Rect(start_point - Point2D(2, 2), 3, 3)), NormalDrawer->Convert_Pixel(color));
-		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Rect(end_point - Point2D(2, 2), 3, 3)), NormalDrawer->Convert_Pixel(color));
-
-		Rect tacticalr = TacticalRect;
-		if (Clip_Line_To_Rect(start_point, end_point, tacticalr)) {
-			CompositeSurface->Draw_Line(start_point, end_point, NormalDrawer->Convert_Pixel(color));
+		if (Map.In_Radar(end_coord.As_Cell()) && Map[end_coord].IsUnderBridge) {
+			end_coord.Z = BRIDGE_LEPTON_HEIGHT + Map.Get_Height_GL(end_coord);
 		}
+		TechnoClass::Draw_Action_Line(start_coord, end_coord, DSurface::Deconstruct_Hicolor_Pixel(NormalDrawer->Convert_Pixel(GREEN)), dashed, false);
+	}
+}
+
+
+/// <summary>
+/// Fetches the marker rectangle for an action line end point: a small block centered about the pixel.
+/// </summary>
+static inline Rect Action_Line_End_Rect(Point2D const & point) // RA2
+{
+	return(Rect(point - Point2D(2, 2), 3, 3));
+}
+
+
+/// <summary>
+/// Fills the marker of an action line end point, clipped to the tactical map.
+/// </summary>
+static inline void Fill_Action_Line_End(Point2D const & point, int pixel) // RA2
+{
+	CompositeSurface->Fill_Rect(Intersect(TacticalRect, Action_Line_End_Rect(point)), pixel);
+}
+
+
+/// <summary>
+/// Draws the line that shows this object's current order in the owner's color.
+/// This routine marks the two ends of the order -- the firing point and its target, or the
+/// object and its destination -- and joins them with a dashed line clipped to the tactical
+/// map whose color pulses toward white and whose dashes crawl along it over time.
+/// </summary>
+void FootClass::Draw_Action_Line(void) const // RA2: TibSun's Draw_Action_Line, no longer virtual, at 0x4CAB90
+{
+	static bool _pattern[16] = { // RA2
+		true,
+		true,
+		true,
+		true,
+		true,
+		false,
+		false,
+		false,
+		true,
+		true,
+		true,
+		true,
+		true,
+		false,
+		false,
+		false
+	};
+
+	RGBClass white(255, 255, 255); // RA2
+	RGBClass color; // RA2: the owner's color
+
+	if (!TarCom && !NavCom) {
+		return;
+	}
+
+	Coord start_coord; // RA2: no ActionLineTimer check
+	Coord end_coord;
+
+	if (TarCom != NULL) {
+		start_coord = Turret_Coord();
+		end_coord = Predict_Target_Coord();
+	} else {
+		start_coord = PositionCoord;
+		if (RouteQueue.Count() == 0) {
+			end_coord = NavCom->Center_Coord();
+		} else {
+			end_coord = RouteQueue[RouteQueue.Count() - 1]->Center_Coord();
+		}
+		if (Map.In_Radar(end_coord.As_Cell()) && Map[end_coord].IsUnderBridge) {
+			end_coord.Z = BRIDGE_LEPTON_HEIGHT + Map.Get_Height_GL(end_coord);
+		}
+	}
+
+	Point2D start_point;
+	Point2D end_point;
+
+	TacticalMap->Coord_To_Pixel(start_coord, start_point);
+	TacticalMap->Coord_To_Pixel(end_coord, end_point);
+
+	start_point.Y += TacticalRect.Y;
+	end_point.Y += TacticalRect.Y;
+
+	color = House->RemapColorRGB; // RA2
+	int pixel = DSurface::Build_Hicolor_Pixel(color); // RA2
+	Fill_Action_Line_End(start_point, pixel); // RA2: pixel
+	Fill_Action_Line_End(end_point, pixel); // RA2: pixel
+
+	Rect tacticalr = TacticalRect;
+	if (Clip_Line_To_Rect(start_point, end_point, tacticalr)) {
+		unsigned long time = timeGetTime(); // RA2: the color pulses toward white
+		unsigned amount = time & 0x3FF;
+		if (!(amount & 0x200)) {
+			if (amount & 0x100) {
+				amount ^= 0xFF;
+			}
+			color.Adjust(amount & 0xFF, white);
+		}
+		CompositeSurface->Draw_Masked_Dashed_Line(start_point, end_point, DSurface::Build_Hicolor_Pixel(color), _pattern, (-(int)time >> 5) & 15, false); // RA2: dashed
 	}
 }
 
