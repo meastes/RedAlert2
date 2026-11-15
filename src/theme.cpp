@@ -466,15 +466,15 @@ int ThemeClass::Play_Song(ThemeType theme)
  *=============================================================================================*/
 char const * ThemeClass::Theme_File_Name(ThemeType theme)
 {
-	static char name[_MAX_FNAME+_MAX_EXT];
+	static char name[256 + 256]; // RA2: RA2's form
 
 	if ((unsigned)theme < (unsigned)Themes.Count()) {
-		_makepath(name, NULL, NULL, Themes[theme]->Name, ".AUD");
-		return((char const *)(&name[0]));
+		_makepath(name, 0, 0, Themes[theme]->Sound, ".WAV"); // RA2: as above
+		return name; // RA2: as above
 	}
-
-	return("");
+	return ""; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
