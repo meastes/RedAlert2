@@ -2607,25 +2607,30 @@ void FootClass::Set_Follow_Target(AbstractClass * target) // RA2: not in TibSun,
  *=============================================================================================*/
 void FootClass::Assign_Destination(AbstractClass * target, bool)
 {
+	FollowTarget = NULL; // RA2: RA2's form
 	NavCom = target;
 
-	if (NavCom != NULL) {
-		if (ParticleSystems[ATTACHED_PARTICLE_FIRE] != NULL) {
-			ParticleSystems[ATTACHED_PARTICLE_FIRE]->Delete_Me();
-			ParticleSystems[ATTACHED_PARTICLE_FIRE] = NULL;
+	if (target != NULL) { // RA2: as above
+		if (ParticleSystems[0] != NULL) { // RA2: as above
+			ParticleSystems[0]->Delete_Me(); // RA2: as above
+			ParticleSystems[0] = NULL; // RA2: as above
 		}
 
-		CLSID locoid;
 		IPersistPtr persist(Locomotion);
-		persist->GetClassID(&locoid);
+		GUID clsid; // RA2: as above
+		persist->GetClassID(&clsid); // RA2: as above
 
-		if (locoid == CLSID_HoverLocomotion && PathDelay == 0) {
-			PathDelay = 1;
+		if (memcmp(&clsid, &CLSID_HoverLocomotion, sizeof(GUID)) == 0 && PathDelay.Value() == 0) { // RA2: as above
+			PathDelay = CDTimerClass<FrameTimerClass>(1); // RA2: as above
 		}
 
-		Locomotion->Move_To(NavCom->Destination_Coord());
-
-	} else if (RTTI != RTTI_AIRCRAFT || (CurrentMission != MISSION_ATTACK && MissionQueue != MISSION_ATTACK) || TarCom == NULL) {
+		if (IsMoveToSkipped) { // RA2: as above
+			IsMoveToSkipped = false; // RA2: as above
+		} else { // RA2: as above
+			Coord coord = NavCom->Destination_Coord(this); // RA2: as above
+			Locomotion->Move_To(coord); // RA2: as above
+		}
+	} else if (Fetch_RTTI() != RTTI_AIRCRAFT || (CurrentMission != MISSION_ATTACK && MissionQueue != MISSION_ATTACK) || TarCom == NULL) { // RA2: as above
 		Locomotion->Stop_Moving();
 		NavCom = NULL;
 	}
@@ -2636,9 +2641,11 @@ void FootClass::Assign_Destination(AbstractClass * target, bool)
 	**	cannot be prevent. At this point, all movement should cease.
 	*/
 	IsToPathAroundBlockage = false;
-	BlockagePathDelay = Rule->BlockagePathDelay;
-	PathDelay = 0;
+	BlockagePathDelay = CDTimerClass<FrameTimerClass>(Rule->BlockagePathDelay); // RA2: as above
+	PathDelay = CDTimerClass<FrameTimerClass>(0); // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -3687,65 +3694,64 @@ bool FootClass::Limbo(void)
 /// <returns>Returns with S_OK if the object was read successfully.</returns>
 HRESULT STDMETHODCALLTYPE FootClass::Load(IStream * stream)
 {
-	if (Locomotion) {
-		((ILocomotion*)Locomotion)->Release();
-	}
-	Locomotion.Detach();
-
-	HRESULT result = BASECLASS::Load(stream);
+	Locomotion.Attach(0); // RA2: RA2's form
+	HRESULT result = TechnoClass::Load(stream); // RA2: as above
 	if (SUCCEEDED(result)) {
-		int index;
 		int count;
-
-		result = stream->Read(&count, sizeof(count), NULL);
+		result = stream->Read(&count, sizeof(count), 0); // RA2: as above
 		if (FAILED(result)) {
-			return(result);
+			return result; // RA2: as above
 		}
-
 		new (&RouteQueue) DynamicVectorClass<AbstractClass *>;
-
-		for (index = 0; index < count; index++) {
-			AbstractClass * obj = NULL;
-			result = stream->Read(&obj, sizeof(obj), NULL);
+		for (int index = 0; index < count; index++) { // RA2: as above
+			AbstractClass *pointer = 0; // RA2: as above
+			result = stream->Read(&pointer, sizeof(pointer), 0); // RA2: as above
 			if (FAILED(result)) {
-				return(result);
+				return result; // RA2: as above
 			}
-			RouteQueue.Add(obj);
+			RouteQueue.Add(pointer); // RA2: as above
 		}
 
-		result = stream->Read(&count, sizeof(count), NULL);
+		result = stream->Read(&count, sizeof(count), 0); // RA2: as above
 		if (FAILED(result)) {
-			return(result);
+			return result; // RA2: as above
 		}
-
 		new (&NavQueue) DynamicVectorClass<AbstractClass *>;
-
 		for (index = 0; index < count; index++) {
-			AbstractClass * obj = NULL;
-			result = stream->Read(&obj, sizeof(obj), NULL);
+			AbstractClass *pointer = 0; // RA2: as above
+			result = stream->Read(&pointer, sizeof(pointer), 0); // RA2: as above
 			if (FAILED(result)) {
-				return(result);
+				return result; // RA2: as above
 			}
-			NavQueue.Add(obj);
+			NavQueue.Add(pointer); // RA2: as above
 		}
 
 		Locomotion.Detach();
-		OleLoadFromStream(stream, IID_ILocomotion, (LPVOID *)&Locomotion);
+		OleLoadFromStream(stream, IID_ILocomotion, (void **)&Locomotion); // RA2: as above
+		FollowTarget = 0; // RA2: as above
 		Swizzle_Pointer(&Team);
 		Swizzle_Pointer(&Member);
 		Swizzle_Pointer(&NavCom);
 		Swizzle_Pointer(&SuspendedNavCom);
+		Swizzle_Pointer(&MegaDestination); // RA2: as above
+		Swizzle_Pointer(&MegaTarget); // RA2: as above
 		Swizzle_Pointer(&PatrolCell);
+		Swizzle_Pointer(&ParasiteEatingMe); // RA2: as above
+		Swizzle_Pointer(&ParasiteImUsing); // RA2: as above
+		MoveSoundAudioController.Init(); // RA2: as above
+		IsMoveSoundPlaying = false; // RA2: as above
+		MoveSoundDelay = 0; // RA2: as above
 		for (index = 0; index < NavQueue.Count(); index++) {
 			Swizzle_Pointer(&NavQueue[index]);
 		}
 		for (index = 0; index < RouteQueue.Count(); index++) {
 			Swizzle_Pointer(&RouteQueue[index]);
 		}
-		return(S_OK);
+		result = S_OK; // RA2: as above
 	}
-	return(result);
+	return result; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -4763,13 +4769,14 @@ bool FootClass::Goto_Weed(int rad)
 /// since its destination is underground rather than on the deck.
 /// </summary>
 /// <returns>bool; Is the object moving onto a bridge?</returns>
-bool FootClass::Is_Moving_Onto_Bridge(TechnoClass *) const // RA2: the docking object
+bool FootClass::Is_Moving_Onto_Bridge(TechnoClass *techno) const // RA2: the docking object
 {
 	if (CurrentTube >= 0) {
 		return(false);
 	}
-	return(BASECLASS::Is_Moving_Onto_Bridge());
+	return ObjectClass::Is_Moving_Onto_Bridge(techno); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4791,36 +4798,34 @@ bool FootClass::Is_Moving_Onto_Bridge(TechnoClass *) const // RA2: the docking o
  *=============================================================================================*/
 bool FootClass::Is_LZ_Clear(AbstractClass * target) const
 {
-	if (target == NULL) return(false);
-	Cell cell = target->Center_Coord().As_Cell();
-	if (!Map.In_Local_Radar(cell)) return(false);
-
-	/*
-	**	If the requested landing location is occupied, then only consider that location
-	**	legal if the occupying object is in radio contact with the aircraft. This presumes that
-	**	the two objects know what they are doing.
-	*/
-	ObjectClass const * object = Map[cell].Cell_Object();
-	if (object) {
-		if (this == object) return(true);
-
-		if (Contact_With_Whom() == object) {
-			return(true);
-		}
+	if (target == 0) { // RA2: RA2's form
 		return(false);
 	}
-
-	if (!Map[cell].Is_Clear_To_Move(SPEED_TRACK, false, false)) return(false);
-
-	for (int i = 0; i < Aircraft.Count(); i++) {
-		AircraftClass * aptr = Aircraft[i];
-		if (aptr->IsActive && !aptr->IsInLimbo && aptr->NavCom == target && aptr != this) {
+	Cell cell = target->Center_Coord().As_Cell();
+	if (!Map.In_Local_Radar(cell, true)) { // RA2: as above
+		return(false);
+	}
+	TechnoClass *techno = ((CellClass *)&Map[cell])->Cell_Techno(Point2D(0, 0), 0, 0); // RA2: as above
+	if (techno != 0) { // RA2: as above
+		if ((TechnoClass const *)this != techno && Radio_Link(0) != techno) { // RA2: as above
+			if (!Techno_Type_Class()->Spawned || (techno->SpawnManager == 0 && !techno->Techno_Type_Class()->Spawned)) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		}
+	} else { // RA2: as above
+		if (!((CellClass *)&Map[cell])->Is_Clear_To_Move(SPEED_TRACK, 0, 0, -1, MZONE_NORMAL, -1, 1)) { // RA2: as above
 			return(false);
 		}
+		for (int index = 0; index < Aircraft.Count(); index++) { // RA2: as above
+			AircraftClass *aircraft = Aircraft[index]; // RA2: as above
+			if (aircraft->IsActive && !aircraft->IsInLimbo && aircraft->NavCom == target && aircraft != this) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		}
 	}
-
 	return(true);
 }
+
 
 
 /// <summary>
