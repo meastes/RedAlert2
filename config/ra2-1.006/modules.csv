@@ -291,7 +291,7 @@ infantry,0x004FF640,0x00509810,tibsun,"functions compiled from src/infantry.cpp,
 unk_00509810,0x00509810,0x00509B20,unknown,code not assigned to a module
 infatype,0x00509B20,0x0050AF90,tibsun,"functions compiled from src/infatype.cpp, matched, without gaps; seven placed by the gap"
 unk_0050AF90,0x0050AF90,0x0050B8D0,unknown,code not assigned to a module
-ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, without gaps; matched except ?ReadStringtableEntry@INIClass@@QBEHPBD0PAGH@Z and ?ReadStringtableEntry@INIClass@@QBEHPBD0PAG0H@Z; three placed by the gap; ?ReadStringtableEntry@INIClass@@QBEHPBD0PAG0H@Z and ?ReadStringtableEntry@INIClass@@QBEHPBD0PAGH@Z placed at their function starts"
+ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap"
 unk_005109B0,0x005109B0,0x00513080,unknown,code not assigned to a module
 unk_00513080,0x00513080,0x00513260,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00513260,0x00513260,0x00515A80,unknown,code not assigned to a module
