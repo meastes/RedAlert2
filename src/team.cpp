@@ -121,6 +121,7 @@
 #include "super.h" // RA2: the seven RA2 functions
 #include "dbgprint.h" // RA2: the seven RA2 functions
 #include "suprtype.h" // RA2: the super weapon missions
+#include "houstype.h" // RA2: Pick_Building_With_Property reads IsMultiplayPassive
 static inline void Find_Gathering_Cell(Coord const & base, DirType dir, FootClass const * leader, Cell & cell); // RA2: defined after its first caller
 static inline void _Fire_Super(HouseClass * house, SuperClass * super, Cell const & cell); // RA2: defined after its first caller
 ThreatType __fastcall Quarry_To_Threat(int quarry); // RA2: 0x6220E0, a script quarry as a threat type
@@ -3377,7 +3378,7 @@ void TeamClass::TMission_MOVETO_FRIENDLY_BUILDING_WITH_PROPERTY(TeamMissionClass
 			int type = mission->Data.Type;
 			BuildingTypeClass * btype = BuildingTypes[type];
 
-			FootClass * leader = Fetch_A_Leader();
+			FootClass * leader = _Team_Leader(this); // RA2: _Team_Leader's form (Member read twice); Fetch_A_Leader's does not match
 
 			BuildingClass * bptr = Pick_Own_Building_With_Property(btype, NULL, leader, prop, false);
 			if (bptr != NULL) {
@@ -3513,7 +3514,7 @@ BuildingClass *Pick_Building_With_Property(BuildingTypeClass *type, HouseClass *
 
 		bool same_house = hptr == house;
 
-		if (ptr->Class == type && (same_house || !unit->House->Is_Ally(ptr->House))) {
+		if (ptr->Class == type && (same_house || !unit->House->Is_Ally(hptr) || ptr->House->Class->IsMultiplayPassive)) { // RA2: also a passive house's buildings
 
 			int dist = -1;
 
@@ -3547,7 +3548,7 @@ BuildingClass *Pick_Building_With_Property(BuildingTypeClass *type, HouseClass *
 		}
 	}
 
-	if (best_same_ptr) {
+	if (best_same_ptr && best_same_dist > best_dist) { // RA2: never true (best_dist is never smaller); RA2's bug
 		return(best_same_ptr);
 	}
 
@@ -3555,7 +3556,57 @@ BuildingClass *Pick_Building_With_Property(BuildingTypeClass *type, HouseClass *
 		return(best_ptr);
 	}
 
-	return(NULL);
+	return(best_same_ptr); // RA2: the preferred house's building, if any
+}
+
+
+/// <summary>
+/// RA2: picks the unit's own building of the given type that best fits the property.
+/// </summary>
+/// <param name="type">The building type to look for.</param>
+/// <param name="unit">The team member the search is being performed on behalf of; its house's buildings are searched.</param>
+/// <param name="prop">The property that decides which candidate is the best one.</param>
+/// <returns>Returns with a pointer to the building picked. Otherwise, NULL is returned.</returns>
+BuildingClass * __fastcall Pick_Own_Building_With_Property(BuildingTypeClass * type, HouseClass *, FootClass * unit, TargetPropertyType prop, bool) // RA2: not in TibSun, at 0x6BD240
+{
+	BuildingClass * best_ptr = NULL;
+	int best_dist = -1;
+
+	HouseClass * house = unit->House;
+	int count = house->Buildings.Count();
+	for (int index = 0; index < count; index++) {
+
+		BuildingClass * ptr = house->Buildings[index];
+
+		if (ptr->Class == type) {
+
+			int dist = -1;
+
+			switch (prop) {
+				case TPROPERTY_LEAST_THREAT:
+					dist = INT_MAX - Map.Cell_Threat(ptr->Center_Coord().As_Cell(), *unit->House);
+					break;
+
+				case TPROPERTY_GREATEST_THREAT:
+					dist = Map.Cell_Threat(ptr->Center_Coord().As_Cell(), *unit->House);
+					break;
+
+				case TPROPERTY_NEAREST:
+					dist = INT_MAX - ptr->Get_Coord().Distance_To(unit->Get_Coord());
+					break;
+
+				case TPROPERTY_FARTHEST:
+					dist = ptr->Get_Coord().Distance_To(unit->Get_Coord());
+					break;
+			}
+
+			if (dist > best_dist) {
+				best_ptr = ptr;
+				best_dist = dist;
+			}
+		}
+	}
+	return(best_ptr);
 }
 
 
