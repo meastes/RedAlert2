@@ -58,6 +58,7 @@ class WWKeyboardClass
 		bool Put(unsigned short key);
 		void Clear(void);
 		char To_ASCII(unsigned short num);
+		char To_Char(unsigned short key); // RA2
 		bool Down(unsigned short key);
 
 		/* Define the main hook for the message processing loop.					*/
@@ -97,6 +98,7 @@ class WWKeyboardClass
 		void Fill_Buffer_From_System(void);
 		bool Put_Key_Message(unsigned short vk_key, bool release = false);
 		bool Put_Mouse_Message(unsigned short vk_key, int x, int y, bool release = false);
+		bool Put_Char(char character); // RA2
 		int Available_Buffer_Room(void) const;
 		int Noop(void) const; /// Empty routine added in a TS patch.
 
@@ -107,6 +109,14 @@ class WWKeyboardClass
 		int Head;
 		int Tail;
 };
+
+/*
+**	RA2: the key states Put_Key_Message and Down read through Get_Key_State and Get_Async_Key_State: Windows' own, or
+**	(while keys are recorded or played back) the ones Set_Key_State kept.
+*/
+void Set_Key_State(unsigned key, bool release); // RA2: 0x5233A0
+short Get_Key_State(unsigned key); // RA2: 0x5233D0
+short Get_Async_Key_State(unsigned key); // RA2: 0x5233F0
 
 
 #define VK_NONE		 0x00

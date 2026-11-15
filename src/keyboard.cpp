@@ -230,23 +230,31 @@ bool WWKeyboardClass::Put(unsigned short key)
  *=============================================================================================*/
 bool WWKeyboardClass::Put_Key_Message(unsigned short vk_key, bool release)
 {
+	if (IgnoreInput && vk_key != VK_ESCAPE) { // RA2: only escape gets through while input is locked
+		return(true); // RA2: as above
+	}
+	Set_Key_State(vk_key, release); // RA2: kept for Get_Key_State
+
 	/*
 	**	Get the status of all of the different keyboard modifiers.  Note, only pay attention
 	**	to numlock and caps lock if we are dealing with a key that is affected by them.  Note
 	**	that we do not want to set the shift, ctrl and alt bits for Mouse keypresses as this
 	**	would be incompatible with the dos version.
 	*/
-	if (!Is_Mouse_Key(vk_key)) {
-		if (((GetKeyState(VK_SHIFT) & 0x8000) != 0) /*||
+	if (!Is_Mouse_Key(vk_key) && !Is_Wheel_Key(vk_key)) { // RA2: nor for a typed character
+		if (((Get_Key_State(VK_SHIFT) & 0x8000) != 0) /*|| // RA2: Get_Key_State
 			((GetKeyState(VK_CAPITAL) & 0x0008) != 0) ||
 			((GetKeyState(VK_NUMLOCK) & 0x0008) != 0)*/) {
 
 			vk_key |= WWKEY_SHIFT_BIT;
 		}
-		if ((GetKeyState(VK_CONTROL) & 0x8000) != 0) {
+		if ((Get_Key_State(VK_CONTROL) & 0x8000) != 0) { // RA2: Get_Key_State
 			vk_key |= WWKEY_CTRL_BIT;
 		}
-		if ((GetKeyState(VK_MENU) & 0x8000) != 0) {
+		if ((Get_Key_State(VK_MENU) & 0x8000) != 0) { // RA2: Get_Key_State
+			if (vk_key == VK_TAB) { // RA2: Alt+Tab is dropped
+				return(true); // RA2: as above
+			}
 			vk_key |= WWKEY_ALT_BIT;
 		}
 	}
@@ -261,6 +269,7 @@ bool WWKeyboardClass::Put_Key_Message(unsigned short vk_key, bool release)
 	*/
 	return(Put(vk_key));
 }
+
 
 
 /***********************************************************************************************
@@ -285,10 +294,31 @@ bool WWKeyboardClass::Put_Key_Message(unsigned short vk_key, bool release)
  *=============================================================================================*/
 bool WWKeyboardClass::Put_Mouse_Message(unsigned short vk_key, int x, int y, bool release)
 {
+	if (IgnoreInput) { // RA2: no mouse input while input is locked
+		return(true); // RA2: as above
+	}
 	if (Available_Buffer_Room() >= 3 && Is_Mouse_Key(vk_key)) {
 		Put_Key_Message(vk_key, release);
 		Put((unsigned short)x);
 		Put((unsigned short)y);
+		return(true);
+	}
+	return(false);
+}
+
+
+/// <summary>
+/// RA2: queues a typed character: a wheel key (VK 0x0A) followed by the character's code, which Buff_Get stores in
+/// MouseWheel for To_Char.
+/// </summary>
+bool WWKeyboardClass::Put_Char(char character) // RA2: not in TibSun, at 0x5326A0
+{
+	if (IgnoreInput) {
+		return(true);
+	}
+	if (Available_Buffer_Room() >= 2) {
+		Put_Key_Message(0x0A);
+		Put((unsigned short)(character & 0xFF));
 		return(true);
 	}
 	return(false);
@@ -360,6 +390,42 @@ char WWKeyboardClass::To_ASCII(unsigned short key)
 }
 
 
+/// <summary>
+/// RA2: the character a key stands for: a typed character (wheel key 0x0A, from Put_Char) is MouseWheel's low byte
+/// (a carriage return gives none), Home and End are backspace and backslash, and backspace, return and escape are
+/// themselves.
+/// </summary>
+char WWKeyboardClass::To_Char(unsigned short key) // RA2: not in TibSun, at 0x532800
+{
+	if ((key & WWKEY_RLS_BIT) == 0) {
+		unsigned short ch = (unsigned short)(key & 0xFF);
+		switch (ch) {
+			case VK_HOME:
+				return('\b');
+
+			case VK_END:
+				return('\\');
+
+			case 0x0A: {
+				char character = (char)MouseWheel;
+				if (character == '\r') {
+					character = '\0';
+				}
+				MouseWheel = 0;
+				return(character);
+			}
+
+			case VK_BACK:
+			case VK_RETURN:
+			case VK_ESCAPE:
+				return((char)ch);
+		}
+	}
+	return('\0');
+}
+
+
+
 
 
 
@@ -385,7 +451,7 @@ bool WWKeyboardClass::Down(unsigned short key)
 		key = (key != VK_LBUTTON) ? VK_LBUTTON : VK_RBUTTON;
 	}
 
-	return(GetAsyncKeyState(key) != 0);
+	return(Get_Async_Key_State(key) != 0); // RA2: Get_Async_Key_State
 }
 
 
@@ -668,6 +734,16 @@ int WWKeyboardClass::Message_Handler(HWND window, UINT message, UINT wParam, LON
 			//Put_Mouse_Message(VK_LBUTTON, x, y, true);
 			processed = true;
 			break;
+
+		/*
+		**	RA2: a typed character goes to the chat line being edited.
+		*/
+		case WM_CHAR: // RA2: as above
+			if (Is_Chat_Editing()) { // RA2: as above
+				Put_Char((char)wParam); // RA2: as above
+			} // RA2: as above
+			processed = true; // RA2: as above
+			break; // RA2: as above
 
 		/*
 		**	Press of the middle mouse button.
