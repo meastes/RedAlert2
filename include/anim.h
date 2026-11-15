@@ -54,6 +54,8 @@ class AnimClass : public ObjectClass, public StageClass
 {
 		typedef ObjectClass BASECLASS;
 
+	friend class SuperClass; // RA2: SuperClass::AI and Place reach IsInvisible and the start sound
+
 	public:
 
 		/*

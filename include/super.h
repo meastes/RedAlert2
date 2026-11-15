@@ -34,11 +34,23 @@
 #pragma once
 
 #include "abstract.h"
+#include "super.hh"	// RA2: SuperWeaponType for CurrentSuperWeaponType
 #include "ftimer.h"
 #include "timer.h"
 
 class SuperWeaponTypeClass;
 class HouseClass;
+
+// RA2: the three fields at +0x3C of SuperClass; what they hold is not known (Enable clears the first, Load the other two)
+struct SuperBlinkInfo
+{
+	SuperBlinkInfo(void) {Data0 = 0; State = false; Data1 = 0;}
+	SuperBlinkInfo(NoInitClass const &) {}
+
+	bool State; // RA2: +0x00
+	int Data0; // RA2: +0x04
+	int Data1; // RA2: +0x08
+};
 
 class SuperClass : public AbstractClass
 {
@@ -47,7 +59,7 @@ class SuperClass : public AbstractClass
 	public:
 		SuperClass(void);
 		SuperClass(SuperWeaponTypeClass * type, HouseClass * owner);
-		SuperClass(NoInitClass const & x) : Control(x) {};
+		SuperClass(NoInitClass const & x) : Control(x), BlinkInfo(x) {}; // RA2: BlinkInfo is left alone as well
 		virtual ~SuperClass(void) override;
 
 		virtual HRESULT STDMETHODCALLTYPE GetClassID(CLSID * retval) override;
@@ -62,26 +74,28 @@ class SuperClass : public AbstractClass
 		virtual void Compute_CRC(CRCEngine & crc) const override;
 
 		void Detach(AbstractClass const * target, bool all);
+		void Detach_Animation(void); // RA2: 0x0069CA70; drops the animation (stops its loops) and the animation list entry
+		void Create_Chrono_Anim(Coord coord); // RA2: 0x0069CB30; replaces the animation with the chrono placement marker at coord
+		void Reset(void); // RA2: 0x0069EBB0; drops the animation, clears the ready flag and sets the timer to the full charge time
 
 		bool Suspend(bool on);
 		bool Enable(bool onetime = false, bool player=false, bool quiet=false);
 		void Forced_Charge(bool player=false);
 		void Place(Cell const & cell, bool player);
-		void Drop_Pods(Cell const & cell) const;
-		void Deactivate_Firestorm(int, bool player) const;
 		bool AI(bool player=false);
 		bool Remove(void);
+		void Set_Ready(bool ready); // RA2: 0x0069CFB0; sets the ready flag, nothing else (YR: SetReadiness)
 		void Impatient_Click(void) const;
 		int Anim_Stage(void) const;
 		bool Discharged(bool player, Cell const & cell);
-		bool Can_Place(void) const;
+		bool Can_Place(void); // RA2: 0x0069D820; not const
 		bool Is_Charging(void) const;
 		bool Is_Powered(void) const;
 		bool Is_Ready(void) const {return(IsReady);}
 		bool Is_Present(void) const {return(IsPresent);}
 		bool Is_One_Time(void) const {return(IsOneTime && IsPresent);}
 
-		char const * State_String(void) const;
+		wchar_t const * State_String(void) const; // RA2: 0x0069D770; the text is wide
 
 	public:
 		/*
@@ -101,8 +115,7 @@ class SuperClass : public AbstractClass
 		CDTimerClass<FrameTimerClass> Control;
 
 		wchar_t const * UIName; // RA2: +0x38
-		bool BlinkState; // RA2: +0x3C
-		__int64 BlinkTimer; // RA2: +0x40; its eight byte alignment makes the class's size 0x68
+		SuperBlinkInfo BlinkInfo; // RA2: +0x3C, 12 bytes (a bool, then two ints; the constructors clear them in the order +4, +0, +8, Load clears the two ints again); the class stays 0x68 bytes
 
 	public:
 		/*
@@ -139,3 +152,6 @@ class SuperClass : public AbstractClass
 			ANIMATION_STAGES=54
 		};
 };
+
+extern SuperWeaponType CurrentSuperWeaponType; // RA2: 0x00833694; the type waiting for a target (SUPER_CHRONO_WARP, while the destination is chosen), else -1
+extern DynamicVectorClass<SuperClass *> TimedSuperWeapons; // RA2: 0x00A35DB8; the super weapons whose timer shows (ShowTimer) while the house has them

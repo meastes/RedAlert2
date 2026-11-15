@@ -28,6 +28,8 @@ class IonStormClass
 		static void Lightning_Bolt(Cell cell);
 		static void Set_Ion_Storm_Active(bool active);
 		static bool Is_Ion_Storm_Active(void);
+		static bool Is_Ion_Storm_Pending(void); // RA2: 0x0051FC30; a storm is running or still waiting out its deferment
+		static void Ion_Storm_Active_Message(void); // RA2: 0x00520BF0; tells the local player (Msg:LightningStormActive) that a storm is already running
 		static void Ion_Storm_Begin(int duration, int deferment, Cell cell, HouseClass * house); // RA2: 0x51F930, a storm aimed at a cell for a house
 		static void Ion_Storm_End(void);
 		static void AI(void);

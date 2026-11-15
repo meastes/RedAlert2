@@ -73,6 +73,36 @@
 #include "vector.h"
 #include "vox.h"
 #include "weapon.h"
+#include "revent.h"	// RA2
+#include "stringtable.h"	// RA2
+#include "ion.h"	// RA2
+#include "houstype.h"	// RA2
+#include "ilocos.h"	// RA2
+#include "loco.h"	// RA2
+#include "ipiggy.h"	// RA2
+#include "airctype.h"	// RA2
+#include "reinf.h"	// RA2
+#include "bullettype.h"	// RA2
+#include "anim.h"	// RA2
+
+// RA2: SuperClass in RA2's form, which shares none of YR's and few of TibSun's parts
+
+void __fastcall Queue_Speech(char const * name, int priority, int expire); // RA2: 0x00715B40, an EVA line by name
+extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted
+void __fastcall Speech_Cancel(int voice); // RA2: 0x00715E80, drops the lines of a voice still waiting
+AnimClass * __fastcall Create_Attached_Anim(HouseClass * house, AbstractClass * target, char const * anim, BulletClass * bullet); // RA2: 0x00438B80, makes the named animation at the target for the house and attaches the bullet to it
+
+Cell const CellAndNeighbors[9] = { // RA2: 0x00ABD7A0, built by the initializer at 0x0069C5A0: the cell itself, then its eight neighbours clockwise from east
+	Cell(0, 0), // RA2: as above
+	Cell(1, 0), // RA2: as above
+	Cell(1, -1), // RA2: as above
+	Cell(0, -1), // RA2: as above
+	Cell(-1, -1), // RA2: as above
+	Cell(-1, 0), // RA2: as above
+	Cell(-1, 1), // RA2: as above
+	Cell(0, 1), // RA2: as above
+	Cell(1, 1) // RA2: as above
+};
 
 
 /// <summary>
@@ -81,16 +111,19 @@
 /// it to the global super weapon list.
 /// </summary>
 SuperClass::SuperClass(void) :
-	Class(NULL),
+	Class(NULL), // RA2: the timer and the old stage get no initializer
 	House(NULL),
-	Control(0),
 	NeedsBuilding(true),
+	ChronoMapCoords(CELL_NONE), // RA2: copied from the constant at 0x00ABD768
+	Animation(NULL), // RA2: as above
+	AnimationGotInvalid(false), // RA2: as above
 	IsPresent(false),
 	IsOneTime(false),
 	IsReady(false),
 	IsSuspended(false),
 	ChargeDrainState(SUSPENDED)
 {
+	UIName = L""; // RA2: the empty wide text at 0x00839D4C
 	SuperWeapons.Add(this);
 }
 
@@ -118,13 +151,15 @@ SuperClass::SuperClass(void) :
 SuperClass::SuperClass(SuperWeaponTypeClass * type, HouseClass * owner) :
 	Class(type),
 	House(owner),
-	Control(0),
-	OldStage(-1),
-	NeedsBuilding(true),
+	NeedsBuilding(true), // RA2: as above
+	ChronoMapCoords(CELL_NONE), // RA2: as above
+	Animation(NULL), // RA2: as above
+	AnimationGotInvalid(false), // RA2: as above
 	IsPresent(false),
 	IsOneTime(false),
 	IsReady(false),
 	IsSuspended(false),
+	OldStage(-1),
 	ChargeDrainState(SUSPENDED)
 {
 	Create_ID();
@@ -139,12 +174,16 @@ SuperClass::SuperClass(SuperWeaponTypeClass * type, HouseClass * owner) :
 /// This routine unhooks the super weapon from the global super weapon list and from the
 /// trackers that watch its weapon type and its owning house.
 /// </summary>
+#pragma auto_inline(off) // RA2: the scalar deleting destructor (0x0069ECD0) calls this one out of line
 SuperClass::~SuperClass(void)
 {
+	Detach_Animation(); // RA2: as above
+	TimedSuperWeapons.Delete(this); // RA2: as above
 	SuperWeapons.Delete(this);
 	AbstractTypePtrTracker.Delete(this);
 	HousePtrTracker.Delete(this);
 }
+#pragma auto_inline(on)
 
 
 /***********************************************************************************************
@@ -162,137 +201,100 @@ SuperClass::~SuperClass(void)
  * HISTORY:                                                                                    *
  *   07/28/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
+void SuperClass::Detach_Animation() // RA2: drops the animation and its tracker entries (0x0069CA70)
+{
+	if (Animation != NULL) { // RA2: as above
+		Animation->Loops = 0; // RA2: as above
+		Animation = NULL; // RA2: as above
+		AnimPtrTracker.Delete(this); // RA2: as above
+	}
+	if (AnimationGotInvalid) { // RA2: as above
+		AnimPtrTracker.Delete(this); // RA2: as above
+		AnimationGotInvalid = false; // RA2: as above
+	}
+}
+
+
+void SuperClass::Create_Chrono_Anim(Coord coord) // RA2: puts the chrono placement marker 5 leptons above coord (0x0069CB30)
+{
+	Detach_Animation(); // RA2: as above
+	AnimClass *anim = new AnimClass(Rule->ChronoPlacement, coord + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
+	if (anim != NULL) { // RA2: as above
+		Animation = anim; // RA2: as above
+		AnimPtrTracker.Add(this); // RA2: as above
+	}
+}
+
+
 bool SuperClass::Suspend(bool on)
 {
 	if (IsPresent && !IsOneTime && on != IsSuspended && NeedsBuilding) {
-		if (!on && !Class->IsManualControl) {
-			Control.Start();
-		} else {
+		if (on || Class->IsManualControl) { // RA2: as above
 			Control.Stop();
+		} else {
+			Control.Start();
 		}
 		IsSuspended = on;
-		if (Class->UseChargeDrain) {
-			if (on) {
-				ChargeDrainState = SUSPENDED;
-				House->Deactivate_Firestorm();
-			} else {
-				ChargeDrainState = CHARGING;
-				Control = Class->RechargeTime;
-			}
-		}
 		return(true);
 	}
 	return(false);
 }
 
 
-/***********************************************************************************************
- * SuperClass::Enable -- Enable this super special weapon.                                     *
- *                                                                                             *
- *    This routine is called when the special weapon needs to be activated. This is used for   *
- *    both the normal super weapons and the special one-time super weapons (from crates).      *
- *                                                                                             *
- * INPUT:   onetime  -- Is this a special one time super weapon?                               *
- *                                                                                             *
- *          player   -- Is this weapon for the player? If true, then there might be a voice    *
- *                      announcement of this weapon's availability.                            *
- *                                                                                             *
- *          quiet    -- Request that the weapon start in suspended state (quiet mode).         *
- *                                                                                             *
- * OUTPUT:  Was the special super weapon enabled? Failure might indicate that the weapon was   *
- *          already available.                                                                 *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   07/28/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
-bool SuperClass::Enable(bool onetime, bool player, bool quiet)
+bool SuperClass::Enable(bool one_time, bool announce, bool on_hold) // RA2: grants the weapon and starts its charge (0x0069CCF0)
 {
 	if (!IsPresent) {
 		IsPresent = true;
-		IsOneTime = onetime;
-		bool retval = false;
+		IsOneTime = one_time; // RA2: as above
+		BlinkInfo.State = false; // RA2: as above
+		bool result = false; // RA2: as above
+		UIName = Class->UIName; // RA2: as above
+		if (!one_time) Suspend(false); // RA2: as above
+		if (Class->ShowTimer && !House->Class->IsMultiplayPassive) { // RA2: as above
+			TimedSuperWeapons.Add(this); // RA2: as above
+		}
 		if (Class->IsManualControl) {
 			OldStage = -1;
 			Control = Class->RechargeTime;
 			Control.Stop();
 		} else {
-			retval = Recharge(player && !quiet);
+			result = Recharge(announce && !on_hold); // RA2: as above
 		}
-		if (IsOneTime) Forced_Charge(player);
-		if (quiet) Suspend(true);
-		return(retval);
+		if (on_hold) Suspend(true); // RA2: as above
+		if (IsOneTime) Forced_Charge(announce); // RA2: as above
+		return(result);
 	}
 	return(false);
 }
 
 
-/***********************************************************************************************
- * SuperClass::Remove -- Removes super weapon availability.                                    *
- *                                                                                             *
- *    Call this routine when the super weapon should be removed because of some outside        *
- *    force. For one time special super weapons, they can never be removed except as the       *
- *    result of discharging them.                                                              *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  Was the special weapon removed and disabled?                                       *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   07/28/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
-bool SuperClass::Remove(void)
+bool SuperClass::Remove() // RA2: takes the weapon away and leaves the timer list (0x0069CF40)
 {
 	if (IsPresent) {
 		IsReady = false;
 		IsPresent = false;
-		if (Class->UseChargeDrain) {
-			House->Deactivate_Firestorm();
-		}
+		TimedSuperWeapons.Delete(this); // RA2: as above
 		return(true);
 	}
 	return(false);
 }
 
 
-/***********************************************************************************************
- * SuperClass::Recharge -- Starts the special super weapon recharging.                         *
- *                                                                                             *
- *    This routine is called when the special weapon is allowed to recharge. Suspension will   *
- *    be disabled and the animation process will begin.                                        *
- *                                                                                             *
- * INPUT:   player   -- Is this for a player owned super weapon? If so, then a voice           *
- *                      announcement might be in order.                                        *
- *                                                                                             *
- * OUTPUT:  Was the super weapon begun charging up?                                            *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   07/28/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
+void SuperClass::Set_Ready(bool ready) // RA2: has this one-line setter out of line (0x0069CFB0)
+{
+	IsReady = ready; // RA2: as above
+}
+
+
 bool SuperClass::Recharge(bool player)
 {
+	Detach_Animation(); // RA2: as above
 	if (IsPresent && !IsReady && !IsSuspended) {
 		OldStage = -1;
 		Control.Start();
 		Control = Class->RechargeTime;
-
 		if (Class->UseChargeDrain) {
 			ChargeDrainState = CHARGING;
-		}
-
-#ifdef _DEBUG
-		if (Special.IsSpeedBuild) {
-			Control = 1;
-		}
-#endif
-
-		if (player) {
-			Speak(Class->VoxCharging);
 		}
 		return(true);
 	}
@@ -300,23 +302,6 @@ bool SuperClass::Recharge(bool player)
 }
 
 
-/***********************************************************************************************
- * Superclass::Discharged -- Handles discharged action for special super weapon.               *
- *                                                                                             *
- *    This routine should be called when the special super weapon has been discharged. The     *
- *    weapon will either begin charging anew or will be removed entirely -- depends on the     *
- *    one time flag for the weapon.                                                            *
- *                                                                                             *
- * INPUT:   player   -- Is this special weapon for the player? If so, then there might be a    *
- *                      voice announcement.                                                    *
- *                                                                                             *
- * OUTPUT:  Should the sidebar be reprocessed because the special weapon has been eliminated?  *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   07/28/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
 bool SuperClass::Discharged(bool player, Cell const & cell)
 {
 	if (Class->UseChargeDrain) {
@@ -324,39 +309,40 @@ bool SuperClass::Discharged(bool player, Cell const & cell)
 			if (ChargeDrainState == FIRESTORM_ON) {
 				ChargeDrainState = READY;
 				Control = Class->RechargeTime - Control.Value() / Rule->ChargeToDrainRatio;
-				Deactivate_Firestorm(0, player);
 				return(false);
 			}
 			if (ChargeDrainState == READY) {
 				ChargeDrainState = FIRESTORM_ON;
 				Control = (Class->RechargeTime - Control.Value()) * Rule->ChargeToDrainRatio;
 				Place(cell, player);
-				return(false);
 			}
-		} else {
-			if (House->FirestormDefenseActivated) {
-				Deactivate_Firestorm(0, player);
-			} else {
-				Place(cell, player);
-			}
+		} else if (!House->FirestormDefenseActivated) { // RA2: as above
+			Place(cell, player);
 		}
 		return(false);
 	}
 
-	if (Control.Is_Active() && IsPresent && IsReady) {
+	if ((Control.Is_Active() && IsPresent && IsReady) || Class->PostClick) { // RA2: as above
+		if (Class->Type == SUPER_LIGHTNING_STORM && IonStormClass::Is_Ion_Storm_Pending()) { // RA2: as above
+			if (player) {
+				IonStormClass::Ion_Storm_Active_Message(); // RA2: as above
+			}
+			return(false);
+		}
 		Place(cell, player);
-		IsReady = false;
+		if (!Class->PostClick) { // RA2: as above
+			IsReady = false;
+		}
 		if (IsOneTime) {
 			IsOneTime = false;
 			return(Remove());
-		} else {
-			if (Class->IsManualControl) {
-				Control = Class->RechargeTime;
-				OldStage = -1;
-				Control.Stop();
-			} else {
-				Recharge(player);
-			}
+		}
+		if (Class->IsManualControl) {
+			Control = Class->RechargeTime;
+			OldStage = -1;
+			Control.Stop();
+		} else if (!Class->PreClick && !Class->PostClick) { // RA2: as above
+			Recharge(player);
 		}
 	}
 	return(false);
@@ -383,7 +369,11 @@ bool SuperClass::Discharged(bool player, Cell const & cell)
  *=============================================================================================*/
 bool SuperClass::AI(bool player)
 {
-	if (IsPresent && (!IsReady || Class->UseChargeDrain) && !IsSuspended) {
+	if (CurrentSuperWeaponType != SUPER_CHRONO_WARP && Animation != NULL) { // RA2: as above
+		Animation->IsInvisible = true; // RA2: as above
+		Animation->StartSoundAudioController.End(); // RA2: as above
+	}
+	if (Is_Present() && (!IsReady || Class->UseChargeDrain) && !IsSuspended) { // RA2: as above
 		if (!Control.Is_Active()) {
 			if (OldStage != -1) {
 				OldStage = -1;
@@ -394,7 +384,6 @@ bool SuperClass::AI(bool player)
 				if (Class->UseChargeDrain) {
 					if (ChargeDrainState == FIRESTORM_ON) {
 						ChargeDrainState = CHARGING;
-						Deactivate_Firestorm(0, player);
 						Control = Class->RechargeTime;
 					} else {
 						ChargeDrainState = READY;
@@ -404,7 +393,24 @@ bool SuperClass::AI(bool player)
 				} else {
 					IsReady = true;
 					if (player) {
-						Speak(Class->VoxRecharge);
+						switch (Class->Type) {
+						case SUPER_MULTI_MISSILE:
+							Queue_Speech("EVA_NuclearMissileReady", -1, -1); // RA2: as above
+							break;
+						case SUPER_IRON_CURTAIN: // RA2: as above
+							Queue_Speech("EVA_IronCurtainReady", -1, -1); // RA2: as above
+							break;
+						case SUPER_LIGHTNING_STORM: // RA2: as above
+							Queue_Speech("EVA_LightningStormReady", -1, -1); // RA2: as above
+							break;
+						case SUPER_CHRONO_SPHERE: // RA2: as above
+							Queue_Speech("EVA_ChronosphereReady", -1, -1); // RA2: as above
+							break;
+						case SUPER_PARA_DROP: // RA2: as above
+						case SUPER_AMER_PARA_DROP: // RA2: as above
+							Queue_Speech("EVA_ReinforcementsReady", -1, -1); // RA2: as above
+							break;
+						}
 					}
 					return(true);
 				}
@@ -437,23 +443,23 @@ bool SuperClass::AI(bool player)
  *   07/28/1995 JLB : Created.                                                                 *
  *   10/11/1996 JLB : Doesn't show complete until really complete.                             *
  *=============================================================================================*/
-int SuperClass::Anim_Stage(void) const
+int SuperClass::Anim_Stage() const // RA2: sidebar stage with the charge drain ratio (0x0069D560)
 {
 	if (IsPresent) {
 		int stage;
 		if (Class->UseChargeDrain) {
 			if (ChargeDrainState == FIRESTORM_ON) {
-				stage = ANIMATION_STAGES * (1-double(Class->RechargeTime*Rule->ChargeToDrainRatio-Control.Value()) / (Class->RechargeTime*Rule->ChargeToDrainRatio));
+				stage = 54 * (1 - double(Class->RechargeTime * Rule->ChargeToDrainRatio - Control.Value()) / (Class->RechargeTime * Rule->ChargeToDrainRatio)); // RA2: as above
 			} else {
-				stage = ANIMATION_STAGES * (double(Class->RechargeTime-Control.Value()) / Class->RechargeTime);
+				stage = 54 * (double(Class->RechargeTime - Control.Value()) / Class->RechargeTime); // RA2: as above
 			}
 		} else {
 			if (IsReady) {
-				return(ANIMATION_STAGES);
+				return 54; // RA2: as above
 			}
-			stage = ANIMATION_STAGES * (double(Class->RechargeTime-Control.Value()) / Class->RechargeTime);
+			stage = 54 * (double(Class->RechargeTime - Control.Value()) / Class->RechargeTime); // RA2: as above
 		}
-		stage = MIN(stage, ANIMATION_STAGES-1);
+		stage = stage < 54 - 1 ? stage : 54 - 1; // RA2: as above
 		return(stage);
 	}
 	return(0);
@@ -478,11 +484,7 @@ int SuperClass::Anim_Stage(void) const
  *=============================================================================================*/
 void SuperClass::Impatient_Click(void) const
 {
-	if (!Control.Is_Active()) {
-		Speak(Class->VoxSuspend);
-	} else {
-		Speak(Class->VoxImpatient);
-	}
+	// RA2: does nothing (0x0069D680)
 }
 
 
@@ -511,7 +513,24 @@ void SuperClass::Forced_Charge(bool player)
 		Control = 0;
 //		IsSuspended = false;
 		if (player) {
-			Speak(Class->VoxRecharge);
+			switch (Class->Type) {
+			case SUPER_MULTI_MISSILE:
+				Queue_Speech("EVA_NuclearMissileReady", -1, -1); // RA2: as above
+				break;
+			case SUPER_IRON_CURTAIN: // RA2: as above
+				Queue_Speech("EVA_IronCurtainReady", -1, -1); // RA2: as above
+				break;
+			case SUPER_LIGHTNING_STORM: // RA2: as above
+				Queue_Speech("EVA_LightningStormReady", -1, -1); // RA2: as above
+				break;
+			case SUPER_CHRONO_SPHERE: // RA2: as above
+				Queue_Speech("EVA_ChronosphereReady", -1, -1); // RA2: as above
+				break;
+			case SUPER_PARA_DROP: // RA2: as above
+			case SUPER_AMER_PARA_DROP: // RA2: as above
+				Queue_Speech("EVA_ReinforcementsReady", -1, -1); // RA2: as above
+				break;
+			}
 		}
 		if (Class->UseChargeDrain) {
 			ChargeDrainState = READY;
@@ -537,35 +556,28 @@ bool SuperClass::Is_Powered(void) const
 /// </summary>
 /// <returns>Returns with a pointer to the text to display, or NULL if the weapon has
 /// nothing worth saying.</returns>
-char const * SuperClass::State_String(void) const
+wchar_t const *SuperClass::State_String() const // RA2: returns wide texts from the string table (0x0069D770)
 {
 	if (!IsSuspended) {
 		if (Class->UseChargeDrain) {
 			switch (ChargeDrainState) {
-				case CHARGING:
-					return(Fetch_String(TXT_CHARGING));
-				case READY:
-					return(Fetch_String(TXT_READY));
-				case FIRESTORM_ON:
-					return(Fetch_String(TXT_FIRESTORM_ON));
-				default:
-					return(NULL);
-			}
-		}
-		if (Class->Type == SUPER_HUNTER_SEEKER) {
-			if (IsReady) {
-				return(Fetch_String(TXT_RELEASE_THE_HOUNDS));
-			} else {
-				return(NULL);
+			case CHARGING:
+				return StringTable::LoadString("TXT_CHARGING", NULL, "D:\\Ra2\\Super.CPP", 0x32B); // RA2: as above
+			case READY:
+				return StringTable::LoadString("TXT_READY", NULL, "D:\\Ra2\\Super.CPP", 0x32E); // RA2: as above
+			case FIRESTORM_ON:
+				return StringTable::LoadString("TXT_FIRESTORM_ON", NULL, "D:\\Ra2\\Super.CPP", 0x331); // RA2: as above
+			default:
+				return(0);
 			}
 		}
 		if (IsReady) {
-			return(Fetch_String(TXT_READY));
+			return StringTable::LoadString("TXT_READY", NULL, "D:\\Ra2\\Super.CPP", 0x344); // RA2: as above
 		} else {
-			return(NULL);
+			return(0);
 		}
 	} else {
-		return(Fetch_String(TXT_HOLD));
+		return StringTable::LoadString("TXT_HOLD", NULL, "D:\\Ra2\\Super.CPP", 0x34A); // RA2: as above
 	}
 }
 
@@ -576,11 +588,11 @@ char const * SuperClass::State_String(void) const
 /// cursor. A suspended weapon can never be fired, no matter how charged it is.
 /// </summary>
 /// <returns>bool; Is the super weapon ready to be used?</returns>
-bool SuperClass::Can_Place(void) const
+bool SuperClass::Can_Place() // RA2: is not const (0x0069D820)
 {
 	if (!IsSuspended) {
 		if (Class->UseChargeDrain) {
-			return(ChargeDrainState != CHARGING ? true : false);
+			return ChargeDrainState != NULL ? true : false; // RA2: as above
 		}
 		return(IsReady);
 	}
@@ -599,167 +611,273 @@ bool SuperClass::Can_Place(void) const
 /// <param name="cell">The cell that was designated as the target.</param>
 /// <param name="player">Is this for a player owned super weapon? If so, then the
 /// targeting cursor gets cleared.</param>
-void SuperClass::Place(Cell const & cell, bool player)
+void SuperClass::Place(Cell const &cell, bool player) // RA2: does each weapon type's effect here; not a byte match yet, see the report (0x0069D850)
 {
 	switch (Class->Type) {
-		case SUPER_DROP_PODS:
-			Drop_Pods(cell);
-			if (player) {
-				Map.IsTargettingMode = SUPER_NONE;
+	case SUPER_CHRONO_SPHERE: // RA2: as above
+		if (IsReady) {
+			ChronoMapCoords = cell; // RA2: as above
+			Coord coord = Map[cell].Center_Coord(); // RA2: as above
+			if (Map[cell].IsUnderBridge) { // RA2: as above
+				coord.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
 			}
-			House->IsRecalcNeeded = true;
-			break;
+			Create_Chrono_Anim(coord + Coord(0, 0, 5)); // RA2: as above
+			if (player) {
+				CurrentSuperWeaponType = SUPER_CHRONO_WARP; // RA2: as above
+				return; // RA2: as above
+			}
+			if (Animation != 0) { // RA2: as above
+				Animation->IsInvisible = true; // RA2: as above
+				Animation->StartSoundAudioController.Stop(); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+		break;
 
-		case SUPER_ION_CANNON:
-			if (IsReady) {
-				Coord coord = cell.As_Coord(LEVEL_LEPTON_H * Map[cell].Height);
-				if (coord != COORD_NONE) {
-					if (player) {
-						Map.IsTargettingMode = SUPER_NONE;
+	case SUPER_CHRONO_WARP: { // RA2: as above
+		Submit_Radar_Event(RadarEventType(13), ChronoMapCoords); // RA2: as above
+		Submit_Radar_Event(RadarEventType(13), cell); // RA2: as above
+		Coord dest = Map[cell].Center_Coord(); // RA2: as above
+		Coord from = Map[ChronoMapCoords].Center_Coord(); // RA2: as above
+		if (Map[cell].IsUnderBridge) { // RA2: as above
+			dest.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+		}
+		if (Map[ChronoMapCoords].IsUnderBridge) { // RA2: as above
+			from.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+		}
+		Detach_Animation(); // RA2: as above
+		new AnimClass(Rule->ChronoBlastDest, dest + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
+		new AnimClass(Rule->ChronoBlast, from + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
+		for (int index = 0; index < 9; index++) { // RA2: as above
+			Cell const *offset = &CellAndNeighbors[index]; // RA2: as above
+			ObjectClass *object; // RA2: as above
+			if (Map[*offset + ChronoMapCoords].IsUnderBridge) { // RA2: as above
+				object = Map[ChronoMapCoords + *offset].Cell_Bridge_Occupier(); // RA2: as above
+			} else {
+				object = Map[*offset + ChronoMapCoords].Cell_Occupier(); // RA2: as above
+			}
+			while (object != 0) { // RA2: as above
+				FootClass *foot = (FootClass *)object; // RA2: as above
+				if (object->Is_Foot() && !object->In_Air()) { // RA2: as above
+					TechnoTypeClass const * ttype = object->Techno_Type_Class(); // RA2: as above
+					if (ttype->Organic && !object->Techno_Type_Class()->Teleporter && !object->In_Air()) { // RA2: as above
+						int damage = object->Techno_Type_Class()->MaxStrength; // RA2: as above
+						object->Take_Damage(damage, 0, Rule->C4Warhead, 0, true, 0); // RA2: as above
+					} else if (!foot->Unknown_Virtual_32C() && !foot->IsImmobilized && !object->IsBeingWarpedOut() && !object->IsWarpingIn()) { // RA2: as above
+						IPiggybackPtr piggyback(foot->Locomotion); // RA2: as above
+						ILocomotionPtr teleport(CLSID_TeleportLocomotion); // RA2: as above
+						UnitClass *unit = object->Fetch_RTTI() == RTTI_UNIT ? (UnitClass *)object : 0; // RA2: as above
+						Coord coord = Map[*offset + cell].Center_Coord(); // RA2: as above
+						if (Map[coord].IsUnderBridge) { // RA2: as above
+							coord.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+						}
+						if (unit != 0) { // RA2: as above
+							foot->Locomotion->Mark_All_Occupation_Bits(0); // RA2: as above
+							foot->Locomotion->Force_Track(-1, coord); // RA2: as above
+							object->Clear_Occupy_Bit(coord); // RA2: as above
+							foot->IsOccupyingCell = true; // RA2: as above
+						}
+						teleport->Link_To_Object(object); // RA2: as above
+						piggyback = IPiggybackPtr(teleport); // RA2: as above
+						if (piggyback != NULL) { // RA2: as above
+							piggyback->Begin_Piggyback(foot->Locomotion); // RA2: as above
+							foot->Locomotion = teleport; // RA2: as above
+						}
+						Coord delta = object->Center_Coord() - Map[ChronoMapCoords].Center_Coord(); // RA2: as above
+						if (unit == 0) { // RA2: as above
+							coord = delta + Map[cell].Center_Coord(); // RA2: as above
+							if (Map[coord].IsUnderBridge) { // RA2: as above
+								coord.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+							}
+						}
+						foot->IsImmobilized = true; // RA2: as above
+						foot->ChronoDestCoords = coord; // RA2: as above
+						foot->Assign_Destination(&Map[*offset + cell], true); // RA2: as above
 					}
-					House->IsRecalcNeeded = true;
-					new IonBlastClass(coord);
+				}
+				object = object->Next; // RA2: as above
+			}
+		}
+		if (!MuteSWLaunches) { // RA2: as above
+			Queue_Speech("EVA_ChronosphereActivated", -1, -1); // RA2: as above
+		}
+		if (player) {
+			CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+			Speech_Cancel(Vox_From_Name("EVA_ChronosphereReady")); // RA2: as above
+			return; // RA2: as above
+		}
+		break;
+	}
+
+	case SUPER_LIGHTNING_STORM: // RA2: as above
+		if (IsReady) {
+			IonStormClass::Ion_Storm_Begin(Rule->LightningStormDuration, Rule->LightningDeferment, cell, House); // RA2: as above
+			if (!MuteSWLaunches) { // RA2: as above
+				Queue_Speech("EVA_LightningStormCreated", -1, -1); // RA2: as above
+			}
+			if (player) {
+				CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+				Speech_Cancel(Vox_From_Name("EVA_LightningStormReady")); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+		break;
+
+	case SUPER_IRON_CURTAIN: // RA2: as above
+		if (IsReady) {
+			Coord coord = Map[cell].Center_Coord(); // RA2: as above
+			new AnimClass(Rule->IronCurtainInvokeAnim, coord + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
+			if (!MuteSWLaunches) { // RA2: as above
+				Queue_Speech("EVA_IronCurtainActivated", -1, -1); // RA2: as above
+			}
+			Submit_Radar_Event(RadarEventType(13), cell); // RA2: as above
+			for (int index = 0; index < 9; index++) { // RA2: as above
+				Cell const *offset = &CellAndNeighbors[index]; // RA2: as above
+				for (ObjectClass *object = Map[cell + *offset].Cell_Occupier(); object != 0; object = object->Next) { // RA2: as above
+					object->IronCurtain(Rule->IronCurtainDuration); // RA2: as above
 				}
 			}
-			break;
+			if (player) {
+				CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+				Speech_Cancel(Vox_From_Name("EVA_IronCurtainReady")); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+		break;
 
-		case SUPER_EM_PULSE:
-			if (IsReady && (!IsOneTime || !IsPresent)) {
-				int mindist = INT_MAX;
-				BuildingClass * launchsite = NULL;
-				CellClass * target = &Map[cell];
-
-				/*
-				 * Search for a suitable launch site for the EMP.
-				 */
-				for (int index = 0; index < Buildings.Count(); index++) {
-					BuildingClass * b = Buildings[index];
-					if (!b->IsInLimbo && b->Class->IsEMPulseCannon && b->House == House && b->Is_Powered_On()) {
-						if (b->Distance(target) < mindist) {
-							mindist = b->Distance(target);
-							launchsite = b;
+	case SUPER_PARA_DROP: // RA2: as above
+		if (IsReady) {
+			int plane = AircraftTypeClass::From_Name("PDPLANE"); // RA2: as above
+			CellClass *cellptr = &Map[cell]; // RA2: as above
+			if (cellptr != 0 && cellptr != &BlubCell) { // RA2: as above
+				if (cellptr->Is_Tile_Water()) { // RA2: as above
+					Cell spot = Map.Nearby_Location(cell, SPEED_FOOT, -1, MZONE_NORMAL, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false); // RA2: as above
+					if (spot != CELL_NONE) { // RA2: as above
+						CellClass *nearptr = &Map[spot]; // RA2: as above
+						if (nearptr != 0 && nearptr != &BlubCell && !nearptr->Is_Tile_Water()) { // RA2: as above
+							cellptr = nearptr; // RA2: as above
 						}
 					}
 				}
+				if (House->ActLike == 0) { // RA2: as above
+					if (Rule->AllyParaDropInf.Count() == Rule->AllyParaDropNum.Count()) { // RA2: as above
+						for (int i = 0; i < Rule->AllyParaDropInf.Count(); i++) { // RA2: as above
+							int type = Rule->AllyParaDropInf[i]->HeapID; // RA2: as above
+							int count = Rule->AllyParaDropNum[i]; // RA2: as above
+							if (plane != -1 && type != -1) { // RA2: as above
+								Create_Air_Reinforcement(House, (AircraftType)plane, 1, MISSION_PARADROP_APPROACH, cellptr, NULL, (InfantryType)type, count); // RA2: as above
+							}
+						}
+					}
+				} else {
+					for (int i = 0; i < Rule->SovParaDropInf.Count(); i++) { // RA2: as above
+						int type = Rule->SovParaDropInf[i]->HeapID; // RA2: as above
+						int count = Rule->SovParaDropNum[i]; // RA2: as above
+						if (plane != -1 && type != -1) { // RA2: as above
+							Create_Air_Reinforcement(House, (AircraftType)plane, 1, MISSION_PARADROP_APPROACH, cellptr, NULL, (InfantryType)type, count); // RA2: as above
+						}
+					}
+				}
+			}
+			if (player) {
+				CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+				Speech_Cancel(Vox_From_Name("EVA_ReinforcementsReady")); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+		break;
 
-				/*
-				 * If a launch site was found, then proceed with the normal launch
-				 * sequence.
-				 */
-				if (launchsite != NULL) {
-					launchsite->Assign_Mission(MISSION_MISSILE);
-					launchsite->Commence();
-					House->EMPDest = cell;
+	case SUPER_AMER_PARA_DROP: // RA2: as above
+		if (IsReady) {
+			int plane = AircraftTypeClass::From_Name("PDPLANE"); // RA2: as above
+			CellClass *cellptr = &Map[cell]; // RA2: as above
+			if (cellptr != 0 && cellptr != &BlubCell) { // RA2: as above
+				if (cellptr->Is_Tile_Water()) { // RA2: as above
+					Cell spot = Map.Nearby_Location(cell, SPEED_FOOT, -1, MZONE_NORMAL, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false); // RA2: as above
+					if (spot != CELL_NONE) { // RA2: as above
+						CellClass *nearptr = &Map[spot]; // RA2: as above
+						if (nearptr != 0 && nearptr != &BlubCell && !nearptr->Is_Tile_Water()) { // RA2: as above
+							cellptr = nearptr; // RA2: as above
+						}
+					}
+				}
+				if (Rule->AmerParaDropInf.Count() == Rule->AmerParaDropNum.Count()) { // RA2: as above
+					for (int i = 0; i < Rule->AmerParaDropInf.Count(); i++) { // RA2: as above
+						int type = Rule->AmerParaDropInf[i]->HeapID; // RA2: as above
+						int count = Rule->AmerParaDropNum[i]; // RA2: as above
+						if (plane != -1 && type != -1) { // RA2: as above
+							Create_Air_Reinforcement(House, (AircraftType)plane, 1, MISSION_PARADROP_APPROACH, cellptr, NULL, (InfantryType)type, count); // RA2: as above
+						}
+					}
+				}
+			}
+			if (player) {
+				CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+				Speech_Cancel(Vox_From_Name("EVA_ReinforcementsReady")); // RA2: as above
+			}
+		}
+		break;
+
+	case SUPER_MULTI_MISSILE:
+		if (IsReady) {
+			if (Is_One_Time()) { // RA2: as above
+				Cell spot = cell; // RA2: as above
+				Coord coord = Coord(spot, 0); // RA2: as above
+				coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+				if (Map[spot].IsUnderBridge) { // RA2: as above
+					coord.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+				}
+				WeaponTypeClass *payload = Weapons[WeaponTypeClass::From_Name("NukePayload")]; // RA2: as above
+				CellClass *target = &Map[coord]; // RA2: as above
+				Coord sound = coord; // RA2: as above
+				Coord launch(sound.X, sound.Y, sound.Z + 20000); // RA2: as above
+				BulletClass * bullet = payload->Bullet->Create_Bullet(target, NULL, payload->Attack, payload->WarheadPtr, payload->MaxSpeed, false); // RA2: as above
+				bullet->Set_Weapon_Type(payload); // RA2: as above
+				Create_Attached_Anim(House, target, "PSIWARN", bullet); // RA2: as above
+				if (bullet != 0) { // RA2: as above
+					double y = sin(1.5707483884323126); // RA2: as above
+					y *= cos(1.5707483884323126); // RA2: as above
+					y *= -100.0; // RA2: as above
+					TVelocity3D<double> velocity(cos(1.5707483884323126) * cos(1.5707483884323126) * -100.0, y, sin(1.5707483884323126) * -100.0); // RA2: as above
+					bullet->Unlimbo(launch, velocity); // RA2: as above
+					if (!MuteSWLaunches) { // RA2: as above
+						Queue_Speech("EVA_NuclearMissileLaunched", -1, -1); // RA2: as above
+					}
+					VocClass::PlayIndexAtPos(Rule->DigSound, sound, 0); // RA2: as above
 				}
 				if (player) {
-					Map.IsTargettingMode = SUPER_NONE;
+					CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+					Speech_Cancel(Vox_From_Name("EVA_NuclearMissileReady")); // RA2: as above
 				}
 				House->IsRecalcNeeded = true;
+				return; // RA2: as above
 			}
-			break;
-
-		case SUPER_FIRESTORM:
-			House->Activate_Firestorm();
+			for (int index = 0; index < BuildingTypes.Count(); index++) {
+				BuildingTypeClass *btype = BuildingTypes[index]; // RA2: as above
+				if (btype->IsNukeSilo && (btype->SuperWeapon == Class->HeapID || btype->SuperWeapon2 == Class->HeapID)) {
+					BuildingClass *site = House->Find_Building((StructType)index, ZONE_NONE); // RA2: as above
+					if (site != 0) { // RA2: as above
+						Cell spot = cell; // RA2: as above
+						Coord coord = Coord(spot, 0); // RA2: as above
+						coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+						Coord sound = coord; // RA2: as above
+						site->QueueMission(MISSION_MISSILE, false); // RA2: as above
+						site->Commence(); // RA2: as above
+						House->NukeDest = cell;
+						site->LastSuperWeaponIndex = Class->Type; // RA2: as above
+						VocClass::PlayIndexAtPos(Rule->DigSound, sound, 0); // RA2: as above
+						if (!MuteSWLaunches) { // RA2: as above
+							Queue_Speech("EVA_NuclearMissileLaunched", -1, -1); // RA2: as above
+						}
+					}
+					break;
+				}
+			}
 			if (player) {
-				House->IsRecalcNeeded = true;
-				Map.Column[1].IsToRedraw = true;
+				CurrentSuperWeaponType = SUPER_NONE; // RA2: as above
+				Speech_Cancel(Vox_From_Name("EVA_NuclearMissileReady")); // RA2: as above
 			}
-			break;
-
-		case SUPER_MULTI_MISSILE:
-		case SUPER_CHEM_MISSILE:
-			if (IsReady) {
-				if (IsOneTime && IsPresent) {
-					Cell target = cell;
-					Coord start = target.As_Coord();
-					start.Z = Map.Get_Height_GL(start);
-					if (Map[target].IsUnderBridge) {
-						start.Z += BRIDGE_LEPTON_HEIGHT;
-					}
-
-					Cell closest = Map.Closest_Edge_Cell(start);
-
-					WeaponTypeClass const * wtype;
-					if (Class->Type == SUPER_CHEM_MISSILE) {
-						wtype = Weapons[WeaponTypeClass::From_Name("ChemLauncher")];
-					} else {
-						wtype = Weapons[WeaponTypeClass::From_Name("MultiLauncher")];
-					}
-
-					BulletTypeClass const * btype = wtype->Bullet;
-					BulletClass * bullet = Create_Bullet(btype, &Map[start], NULL, wtype->Attack, wtype->WarheadPtr, wtype->MaxSpeed, 100000, false);
-
-					if (bullet) {
-						TVelocity3D<double> velocity = TVelocity3D<double>(DIR_E, DIR_N, 100);
-						bullet->Unlimbo(closest, velocity);
-					}
-					if (player) {
-						Map.IsTargettingMode = SUPER_NONE;
-					}
-					House->IsRecalcNeeded = true;
-				} else {
-					for (int index = 0; index < BuildingTypes.Count(); index++) {
-						BuildingTypeClass const * btype = BuildingTypes[index];
-						if (btype->IsNukeSilo && (btype->SuperWeapon == Class->HeapID || btype->SuperWeapon2 == Class->HeapID)) {
-
-							/*
-							**	Search for a suitable launch site for this missile.
-							*/
-							BuildingClass * launchsite = House->Find_Building(StructType(index));
-
-							/*
-							**	If a launch site was found, then proceed with the normal launch
-							**	sequence.
-							*/
-							if (launchsite) {
-								launchsite->Assign_Mission(MISSION_MISSILE);
-								launchsite->Commence();
-								House->NukeDest = cell;
-								launchsite->LastSuperWeaponIndex = Class->Type;
-							}
-
-							break;
-						}
-					}
-					if (player) {
-						Map.IsTargettingMode = SUPER_NONE;
-					}
-					House->IsRecalcNeeded = true;
-				}
-			}
-			break;
-
-		case SUPER_HUNTER_SEEKER: {
-			BuildingClass * hsbuilding = NULL;
-			for (int index = 0; index < Buildings.Count(); index++) {
-				BuildingClass * b = Buildings[index];
-				if (b->House == House) {
-					for (int j = 0; j < Rule->HSBuilding.Count(); j++) {
-						if (b->Class == Rule->HSBuilding[j]) {
-							hsbuilding = b;
-						}
-					}
-				}
-			}
-
-			if (hsbuilding) {
-				Cell nearby = Map.Nearby_Location(hsbuilding->PositionCoord.As_Cell(), SPEED_FOOT);
-				if (Map.In_Local_Radar(nearby)) {
-					UnitClass * hs;
-					if (House->ActLike == HOUSE_GOOD) {
-						hs = new UnitClass(Rule->GDIHunterSeeker, House);
-					} else {
-						hs = new UnitClass(Rule->NodHunterSeeker, House);
-					}
-					if (!hs->Unlimbo(nearby, DIR_E)) {
-						delete hs;
-					} else {
-						hs->Locomotion->Acquire_Hunter_Seeker_Target();
-						hs->Assign_Mission(MISSION_ATTACK);
-						hs->Commence();
-					}
-				}
-			}
+			House->IsRecalcNeeded = true;
 		}
 		break;
 	}
@@ -773,31 +891,12 @@ void SuperClass::Place(Cell const & cell, bool player)
 /// </summary>
 /// <param name="player">Is this for a player owned super weapon? If so, then the sidebar
 /// will want redrawing.</param>
-void SuperClass::Deactivate_Firestorm(int, bool player) const
-{
-	if (Class->Type == SUPER_FIRESTORM) {
-		House->Deactivate_Firestorm();
-		if (player) {
-			House->IsRecalcNeeded = true;
-			Map.Column[1].IsToRedraw = true;
-		}
-	}
-}
-
-
-/// <summary>
-/// Is the super weapon building up toward its next use?
-/// This routine is used by the sidebar to decide whether the charge-up clock should be
-/// drawn over the cameo. A charge-drain weapon is always considered to be charging,
-/// since it never simply sits at the ready.
-/// </summary>
-/// <returns>bool; Is the super weapon charging?</returns>
-bool SuperClass::Is_Charging(void) const
+bool SuperClass::Is_Charging() const // RA2: (0x0069E990)
 {
 	if (Class->UseChargeDrain) {
 		return(true);
 	}
-	return(IsReady == false);
+	return !IsReady; // RA2: as above
 }
 
 
@@ -822,40 +921,32 @@ HRESULT STDMETHODCALLTYPE SuperClass::GetClassID(CLSID * retval)
 HRESULT STDMETHODCALLTYPE SuperClass::Load(IStream * stream)
 {
 	HRESULT result = BASECLASS::Load(stream);
-	if (SUCCEEDED(result)) {
-		new (this) SuperClass(NoInitClass());
-
-		Swizzle_Pointer(&Class);
-		Swizzle_Pointer(&House);
-
-		result = S_OK;
+	if (FAILED(result)) { // RA2: as above
+		return(result);
 	}
-	return(result);
+	new (this) SuperClass(NoInitClass());
+	if (Animation != NULL) { // RA2: as above
+		AnimPtrTracker.Add(this); // RA2: as above
+	}
+	Swizzle_Pointer(&Class);
+	Swizzle_Pointer(&House);
+	Swizzle_Pointer(&Animation); // RA2: as above
+	BlinkInfo.Data0 = 0; // RA2: as above
+	BlinkInfo.Data1 = 0; // RA2: as above
+	return(S_OK);
 }
 
 
-/// <summary>
-/// Writes the super weapon out to the save game stream.
-/// </summary>
-/// <param name="cleardirty">Should the object be marked as clean once it is written?</param>
-/// <returns>Returns with S_OK if the super weapon was written successfully.</returns>
 HRESULT STDMETHODCALLTYPE SuperClass::Save(IStream * stream, BOOL cleardirty)
 {
 	HRESULT result = BASECLASS::Save(stream, cleardirty);
 	if (SUCCEEDED(result)) {
-
 		result = S_OK;
 	}
 	return(result);
 }
 
 
-/// <summary>
-/// Removes any reference to the object specified.
-/// This routine is called when an object is about to be destroyed, so that the super
-/// weapon does not keep pointing at the type or the house that is going away.
-/// </summary>
-/// <param name="target">The object that is about to disappear.</param>
 void SuperClass::Detach(AbstractClass const * target, bool all)
 {
 	if (target == House) {
@@ -863,6 +954,10 @@ void SuperClass::Detach(AbstractClass const * target, bool all)
 	}
 	if (target == Class) {
 		Class = NULL;
+	}
+	if (target == Animation) { // RA2: as above
+		Animation = NULL; // RA2: as above
+		AnimationGotInvalid = true; // RA2: as above
 	}
 }
 
@@ -872,15 +967,20 @@ void SuperClass::Detach(AbstractClass const * target, bool all)
 /// This routine is used by the multiplayer synchronization check to prove that every
 /// machine agrees about the charge state of this super weapon.
 /// </summary>
-void SuperClass::Compute_CRC(CRCEngine &crc) const
+void SuperClass::Compute_CRC(CRCEngine & crc) const // RA2: sums the flags, the stage, the drain state and the animation (0x0069EB20)
 {
 	BASECLASS::Compute_CRC(crc);
 	crc(IsPresent);
 	crc(IsOneTime);
 	crc(IsReady);
-	crc(OldStage);
-	crc(ChargeDrainState);
+	crc((long)OldStage); // RA2: as above
+	crc((long)ChargeDrainState); // RA2: as above
 	crc(NeedsBuilding);
+	crc(AnimationGotInvalid); // RA2: as above
+	if (Animation != NULL) { // RA2: as above
+		crc((long)Animation->Loops); // RA2: as above
+		crc(Animation->Fetch_ID()); // RA2: as above
+	}
 }
 
 
@@ -892,50 +992,14 @@ void SuperClass::Compute_CRC(CRCEngine &crc) const
 /// cannot find room to land is quietly thrown away.
 /// </summary>
 /// <param name="cell">The cell to begin dropping the squad around.</param>
-void SuperClass::Drop_Pods(Cell const & cell) const
+void SuperClass::Reset() // RA2: drops the animation and resets the charge (0x0069EBB0)
 {
-	Cell working_cell = cell;
-	int count = Random_Pick(Rule->DropPodInfantryMinimum, Rule->DropPodInfantryMaximum);
-	InfantryType i1 = InfantryTypeClass::From_Name("E1");
-	InfantryTypeClass const * inftype = InfantryTypes[i1];
-	InfantryType i2 = InfantryTypeClass::From_Name("E2");
-	InfantryTypeClass const * altinftype = InfantryTypes[i2];
-
-	int toplace = count;
-	int attempts = 3 * count;
-
-	while (toplace && attempts--) {
-		InfantryClass * inf = (InfantryClass *)(((Random_Double(0.0, 1.0) < 0.5) ? inftype : altinftype)->Create_One_Of(House));
-
-		Cell nearby = Map.Nearby_Location(working_cell, SPEED_FOOT, -1, MZONE_INFANTRY, false, Point2D(1,1), false, false, false, false);
-		if (inf->Can_Enter_Cell(&Map[nearby]) == MOVE_OK) {
-			inf->Veterancy.Set_Elite(true);
-			inf->Link_DropPod();
-			inf->PositionCoord = nearby;
-			inf->Assign_Destination(&Map[nearby]);
-			inf->Locomotion->Move_To(Coord(nearby));
-			if (!inf->IsInLimbo) {
-				inf->Look();
-				inf->Assign_Mission(MISSION_GUARD_AREA);
-				inf->Commence();
-				toplace--;
-			}
-
-			FacingType start_dir = Random_Pick(FACING_N, FACING_NW);
-
-			for (int offset = 0; offset < FACING_COUNT; offset++) {
-				FacingType dir = (FacingType)((start_dir + offset) % FACING_COUNT);
-				if (inf->Can_Enter_Cell(&Map[Adjacent_Cell(nearby, dir)]) == MOVE_OK) {
-					working_cell = Adjacent_Cell(nearby, dir);
-					break;
-				}
-			}
-
-			if (inf->IsInLimbo) {
-				inf->Delete_Me();
-			}
-		} else {
-			inf->Delete_Me();
-		}
+	Detach_Animation(); // RA2: as above
+	IsReady = false;
+	OldStage = -1;
+	bool active = Control.Is_Active(); // RA2: as above
+	Control = Class->RechargeTime;
+	if (!active) { // RA2: as above
+		Control.Stop();
 	}
 }
