@@ -173,21 +173,9 @@ dib,0x004981C0,0x004983E0,tibsun,"functions compiled from src/dib.cpp, matched, 
 diskswap,0x004983E0,0x00498750,tibsun,"functions compiled from src/diskswap.cpp, matched, without gaps; ?Request_Disk@DiskSwap@@UAE_NW4DiskID@@@Z not placed"
 unk_00498750,0x00498750,0x00498950,unknown,code not assigned to a module
 unk_00498950,0x00498950,0x00498A00,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00498A00,0x00498A00,0x00499810,unknown,code not assigned to a module
-unk_00499810,0x00499810,0x004998C0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_004998C0,0x004998C0,0x00499B60,unknown,code not assigned to a module
-unk_00499B60,0x00499B60,0x00499BB0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00499BB0,0x00499BB0,0x0049A5B0,unknown,code not assigned to a module
-unk_0049A5B0,0x0049A5B0,0x0049A5D0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0049A5D0,0x0049A5D0,0x0049AE70,unknown,code not assigned to a module
-unk_0049AE70,0x0049AE70,0x0049AF80,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0049AF80,0x0049AF80,0x0049CBF0,unknown,code not assigned to a module
-unk_0049CBF0,0x0049CBF0,0x0049CC20,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0049CC20,0x0049CC20,0x0049E7D0,unknown,code not assigned to a module
-unk_0049E7D0,0x0049E7D0,0x0049E7F0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0049E7F0,0x0049E7F0,0x0049E810,unknown,code not assigned to a module
-unk_0049E810,0x0049E810,0x0049E870,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0049E870,0x0049E870,0x0049EE00,unknown,code not assigned to a module
+unk_00498A00,0x00498A00,0x00498BE0,unknown,code not assigned to a module
+display,0x00498BE0,0x0049EC80,tibsun,"functions compiled from src/display.cpp, without gaps; matched except ?Center_Map@DisplayClass@@QAEXXZ and ?Set_Cursor_Pos@DisplayClass@@QAE?AVCell@@ABV2@@Z and ?Calculated_Cell@DisplayClass@@QBE?AVCell@@W4SourceType@@ABV2@1W4SpeedType@@_NW4MZoneType@@@Z and ?Mouse_Left_Up@DisplayClass@@MAEXABVCell@@_NPAVObjectClass@@W4ActionType@@1@Z and ?Mouse_Left_Release@DisplayClass@@MAEXABVCoord@@ABVCell@@PAVObjectClass@@W4ActionType@@_N@Z; three placed by the gap; ?Calculated_Cell@DisplayClass@@QBE?AVCell@@W4SourceType@@ABV2@1W4SpeedType@@_NW4MZoneType@@@Z and ?Center_Map@DisplayClass@@QAEXXZ and ?Mouse_Left_Release@DisplayClass@@MAEXABVCoord@@ABVCell@@PAVObjectClass@@W4ActionType@@_N@Z and ?Mouse_Left_Up@DisplayClass@@MAEXABVCell@@_NPAVObjectClass@@W4ActionType@@1@Z and ?Set_Cursor_Pos@DisplayClass@@QAE?AVCell@@ABV2@@Z placed at their function starts; ??0DisplayClass@@QAE@XZ not placed; ?One_Time@DisplayClass@@UAEXXZ not placed"
+unk_0049EC80,0x0049EC80,0x0049EE00,unknown,code not assigned to a module
 dllver,0x0049EE00,0x0049EE80,tibsun,"functions compiled from src/dllver.cpp, matched, without gaps"
 unk_0049EE80,0x0049EE80,0x0049EEA0,unknown,code not assigned to a module
 draw,0x0049EEA0,0x0049F430,tibsun,"functions compiled from src/draw.cpp, matched, without gaps"
