@@ -5215,7 +5215,7 @@ address,symbol,evidence
 0x006E6050,??RTEventClass@@QAE_NW4TEventType@@PBVHouseClass@@PBVObjectClass@@AAV?$CDTimerClass@VFrameTimerClass@@@@AA_NPAVTechnoClass@@@Z,"inferred: referenced by matched src/trigger.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x006E68B0,?Build_INI_Entry@TEventClass@@QBEXPAD@Z,"compiled from src/tevent.cpp, matched"
 0x006E6900,?Read_INI@TEventClass@@QAEXXZ,"compiled from src/tevent.cpp, matched"
-0x006E6A30,?Attaches_To@@YI?AW4AttachType@@W4TEventType@@@Z,"inferred: referenced by matched src/trigtype.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x006E6A30,?Attaches_To@@YI?AW4AttachType@@W4TEventType@@@Z,"compiled from src/tevent.cpp, matched"
 0x006E6BA0,?Detach@TEventClass@@UAEXPBVAbstractClass@@_N@Z,"compiled from src/tevent.cpp, matched"
 0x006E6BC0,?Compute_CRC@TEventClass@@UBEXAAVCRCEngine@@@Z,"compiled from src/tevent.cpp, matched"
 0x006E6C20,?GetClassID@TEventClass@@UAGJPAU_GUID@@@Z,"compiled from src/tevent.cpp, matched; code at 77 addresses, placed by the gap"
