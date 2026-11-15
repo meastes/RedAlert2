@@ -377,6 +377,7 @@ address,size,evidence
 0x00417890,16,"code of src/aircraft.cpp, matched: too short for the match rule"
 0x004185B0,,"inferred: target of the call at 0x00414F44 in matched src/aircraft.cpp; size not known"
 0x00418CF0,272,"code of src/aircraft.cpp, matched"
+0x00418E00,272,"code of src/aircraft.cpp, matched"
 0x00418F10,832,"code of src/aircraft.cpp, matched"
 0x00419250,384,"code of src/aircraft.cpp, matched"
 0x004198B0,,"inferred: target of the call at 0x00414E9F in matched src/aircraft.cpp; size not known"
