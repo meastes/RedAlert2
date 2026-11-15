@@ -4527,7 +4527,7 @@ address,size,evidence
 0x00661960,32,"code of src/scenario.cpp, matched"
 0x006625B0,,"inferred: target of the call at 0x0065FA71 in matched src/scenario.cpp; size not known"
 0x00662D60,160,"function of the Tiberian Sun reconstruction, matched"
-0x00662E00,,"inferred: target of the call at 0x00654CBA in matched src/saveload.cpp; size not known"
+0x00662E00,880,"code of src/scenario.cpp, matched"
 0x00663170,16,"code of src/scenario.cpp, matched: too short for the match rule"
 0x00663180,32,"code of src/scenario.cpp, matched"
 0x006631A0,32,"code of src/scenario.cpp, matched: its code occurs at 2 addresses; placed by the gap the other functions of the file leave"
