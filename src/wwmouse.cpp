@@ -67,6 +67,7 @@
 #include "draw.h"
 #include "globals.h"
 #include "goptions.h"
+#include "msgloop.h"
 #include "shapeset.h"
 #include "surface.h"
 #include "win.h"
@@ -1023,29 +1024,33 @@ void WWMouseClass::Update_Mouse_Position(int x, int y, bool forced)
  *=============================================================================================*/
 void WWMouseClass::Process_Mouse(void)
 {
-	static bool _forced = false;
-
-	if (SurfacePtr != NULL) {
+	static bool forced = false; // RA2: RA2's form
+	if (SurfacePtr != 0) { // RA2: as above
 		Block_Mouse();
 
-		/*
-		**	Fetch and update the mouse position.
-		*/
 		int x;
 		int y;
-		Get_Bounded_Position(x, y);
-		if (!SurfacePtr->entry_64() && !_forced) {
+		if (Get_Input_Record_Mode()) { // RA2: as above
+			x = CursorX; // RA2: as above
+			y = CursorY; // RA2: as above
+		} else {
+			Get_Bounded_Position(x, y); // RA2: as above
+			CursorX = x; // RA2: as above
+			CursorY = y; // RA2: as above
+		}
+		if (!SurfacePtr->entry_64() && !forced) { // RA2: as above
 			MouseX = x;
 			MouseY = y;
-			_forced = true;
+			forced = true; // RA2: as above
 		} else {
-			Update_Mouse_Position(x, y, _forced);
-			_forced = false;
+			Update_Mouse_Position(x, y, forced); // RA2: as above
+			forced = false; // RA2: as above
 		}
 
 		Unblock_Mouse();
 	}
 }
+
 
 
 /// <summary>
