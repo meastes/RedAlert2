@@ -1074,83 +1074,6 @@ void WaveClass::Wave_Recalc_Affected_Cells(void)
 
 
 
-/// <summary>
-/// Handles the per frame update of the wave geometry.
-/// This routine keeps the wave anchored to the object that fired it and to the object it
-/// was aimed at. While that link holds, the shape is rebuilt and its leading edge is drawn
-/// further out until the wave has reached its full length. Once the link is broken the
-/// trailing edge is drawn in after it, and the wave removes itself when nothing of it is
-/// left. The list of cells the wave covers is refreshed before returning.
-/// </summary>
-void WaveClass::Wave_Shape_AI(void) // RA2: defined after Wave_Recalc_Affected_Cells, at 0x00724200
-{
-	if (Target != NULL && Source != NULL && WaveEC != (int)(1.0 / WaveStep) && Source->TarCom == Target) {
-		if ((Source->PositionCoord - Target->As_Coord()).Length() > CELL_LEPTON_DIAG * 6.0) {
-			IsWaveActive = false;
-		}
-	} else {
-		IsWaveActive = false;
-	}
-
-	if (IsWaveActive) {
-		Build_Wave_Shape(Source->Fire_Coord(0), Target->As_Coord());
-	}
-
-	if (WaveProgress < 1.0 && IsWaveActive) {
-		WaveProgress += WaveStep;
-		if (WaveProgress > 0.98) {
-			WaveProgress = 1.0;
-		}
-		WaveShape.Vertices[PolygonShapeStruct::END_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, WaveProgress);
-		WaveShape.Vertices[PolygonShapeStruct::END_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, WaveProgress);
-		WaveShape.Vertices[PolygonShapeStruct::END_RIGHT] = Lerp(WaveStartRight, WaveEndRight, WaveProgress);
-	} else if (!IsWaveActive) {
-		if (WaveStep * 0.5 + WaveProgress >= FadeProgress) {
-			FadeProgress += WaveStep;
-			if (WaveProgress <= FadeProgress) {
-				Delete_Me();
-				return;
-			} else {
-				WaveShape.Vertices[PolygonShapeStruct::START_RIGHT] = Lerp(WaveStartRight, WaveEndRight, FadeProgress);
-				WaveShape.Vertices[PolygonShapeStruct::START_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, FadeProgress);
-				WaveShape.Vertices[PolygonShapeStruct::START_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, FadeProgress);
-			}
-		}
-	}
-
-	Wave_Recalc_Affected_Cells();
-}
-
-
-/// <summary>
-/// RA2
-/// </summary>
-static inline void Lerp_From(Coord & point, Coord const & origin, float t) // RA2: a point pulled toward an origin
-{
-	double inv = 1.0 - t; // RA2: the remaining weight
-	point = Coord(origin.X * inv + point.X * t, origin.Y * inv + point.Y * t, origin.Z * inv + point.Z * t); // RA2: blended per axis
-}
-
-
-
-
-
-
-
-
-
-
-
-/// <summary>
-/// Fetches the RTTI type of this object.
-/// </summary>
-/// <returns>Returns with the RTTI identifier that marks this object as a wave.</returns>
-RTTIType WaveClass::Fetch_RTTI(void) const // RA2: defined last
-{
-	return(RTTI_WAVE);
-}
-
-
 static const float WaveLengthFactor[] = { 1.0f, 1.05f, 1.05f };
 
 
@@ -1160,7 +1083,7 @@ static const float WaveLengthFactor[] = { 1.0f, 1.05f, 1.05f };
 /// template for its wave type, rotating it to lie along the line of fire, and converting
 /// each corner into the screen points that the drawing routines rasterize from.
 /// </summary>
-void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & target_coord)
+void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & target_coord) // RA2: defined before Wave_Shape_AI, at 0x7238B0
 {
 	static Vector3 WaveSize[WAVE_COUNT][4] = {
 		{
@@ -1266,4 +1189,82 @@ void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & targe
 	/// Copy facing
 	Facing = Source->SecondaryFacing;
 }
+
+
+/// <summary>
+/// Handles the per frame update of the wave geometry.
+/// This routine keeps the wave anchored to the object that fired it and to the object it
+/// was aimed at. While that link holds, the shape is rebuilt and its leading edge is drawn
+/// further out until the wave has reached its full length. Once the link is broken the
+/// trailing edge is drawn in after it, and the wave removes itself when nothing of it is
+/// left. The list of cells the wave covers is refreshed before returning.
+/// </summary>
+void WaveClass::Wave_Shape_AI(void) // RA2: defined after Wave_Recalc_Affected_Cells, at 0x00724200
+{
+	if (Target != NULL && Source != NULL && WaveEC != (int)(1.0 / WaveStep) && Source->TarCom == Target) {
+		if ((Source->PositionCoord - Target->As_Coord()).Length() > CELL_LEPTON_DIAG * 6.0) {
+			IsWaveActive = false;
+		}
+	} else {
+		IsWaveActive = false;
+	}
+
+	if (IsWaveActive) {
+		Build_Wave_Shape(Source->Fire_Coord(0), Target->As_Coord());
+	}
+
+	if (WaveProgress < 1.0 && IsWaveActive) {
+		WaveProgress += WaveStep;
+		if (WaveProgress > 0.98) {
+			WaveProgress = 1.0;
+		}
+		WaveShape.Vertices[PolygonShapeStruct::END_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, WaveProgress);
+		WaveShape.Vertices[PolygonShapeStruct::END_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, WaveProgress);
+		WaveShape.Vertices[PolygonShapeStruct::END_RIGHT] = Lerp(WaveStartRight, WaveEndRight, WaveProgress);
+	} else if (!IsWaveActive) {
+		if (WaveStep * 0.5 + WaveProgress >= FadeProgress) {
+			FadeProgress += WaveStep;
+			if (WaveProgress <= FadeProgress) {
+				Delete_Me();
+				return;
+			} else {
+				WaveShape.Vertices[PolygonShapeStruct::START_RIGHT] = Lerp(WaveStartRight, WaveEndRight, FadeProgress);
+				WaveShape.Vertices[PolygonShapeStruct::START_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, FadeProgress);
+				WaveShape.Vertices[PolygonShapeStruct::START_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, FadeProgress);
+			}
+		}
+	}
+
+	Wave_Recalc_Affected_Cells();
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void Lerp_From(Coord & point, Coord const & origin, float t) // RA2: a point pulled toward an origin
+{
+	double inv = 1.0 - t; // RA2: the remaining weight
+	point = Coord(origin.X * inv + point.X * t, origin.Y * inv + point.Y * t, origin.Z * inv + point.Z * t); // RA2: blended per axis
+}
+
+
+
+
+
+
+
+
+
+
+
+/// <summary>
+/// Fetches the RTTI type of this object.
+/// </summary>
+/// <returns>Returns with the RTTI identifier that marks this object as a wave.</returns>
+RTTIType WaveClass::Fetch_RTTI(void) const // RA2: defined last
+{
+	return(RTTI_WAVE);
+}
+
 
