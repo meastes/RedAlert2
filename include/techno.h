@@ -727,6 +727,7 @@ class TechnoClass :	public RadioClass,
 		void UpdateThreatInCell(CellClass * cell); // RA2: 0x6D9610
 		void Set_Planning_Token(PlanningTokenClass * token); // RA2: 0x6D1420
 		PlanningTokenClass * Get_Planning_Token(void); // RA2: 0x6D1430
+		void Select_Planning_Members(void); // RA2: 0x6145E0; when planning mode is active (guarded against re-entry), selects every member of the last node of this object's planning token
 		bool Has_Planning_Nodes(void); // RA2: 0x6D1440
 		bool Next_Planning_Node(void); // RA2: 0x6D1470
 		bool TryNextPlanningTokenNode(void); // RA2: 0x615360
