@@ -37,7 +37,7 @@ class rc_ptr : public rc_ptr_base
 		rc_ptr & operator=(T * ptr) { Assign(ptr); return(*this); }
 		T * Get(void) const { return((T *)Ptr); }
 		T & operator*(void) const { return(*Get()); }
-		T * operator->(void) const { return(Ptr ? (T *)Ptr : NULL); }
+		T * operator->(void) const { if (Ptr != NULL) { /* a debug-only reference count check; nothing in release */ } return((T *)Ptr); } // RA2: a null test with nothing left in it stands before the load (as in the YR decompilation); WDTState::Create_Territories 0x0072C490 matches only so
 };
 
 template<class T>

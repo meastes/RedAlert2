@@ -13,6 +13,7 @@
 #include "data.h"
 #include "msanim.h"
 #include "msengine.h"
+#include "rcptr.h" // RA2: the tour keeps its territories and states as counted pointers
 #include "refcount.h"
 
 class MSFont;
@@ -30,6 +31,8 @@ class WDTTerritory : public ReferenceCounted { // RA2: ReferenceCounted
 	public:
 		WDTTerritory(void);
 		virtual ~WDTTerritory(void);
+
+		static rc_ptr<WDTTerritory> __fastcall Create(void); // RA2: 0x0072BDC0; a new territory, counted
 
 		bool operator==(const WDTTerritory &that) const { return(Index == that.Index); }
 		bool operator!=(const WDTTerritory &that) const { return(Index != that.Index); }
@@ -296,7 +299,7 @@ enum {
 							+ size_of(WDTTerritory, Width)
 							+ size_of(WDTTerritory, Height)
 							+ size_of(WDTTerritory, NumPlayers)
-							+ size_of(WDTTerritory, Resources) // RA2: was Veinholes
+							+ 1 // RA2: the resources byte of the packet (Resources is an int in RA2)
 							+ size_of(WDTTerritory, CliffsDefault)
 							+ size_of(WDTTerritory, AccessibilityDefault)
 							+ size_of(WDTTerritory, HillsDefault)
@@ -314,6 +317,8 @@ class WDTState : public ReferenceCounted { // RA2: ReferenceCounted
 		WDTState(void);
 		WDTState(void *data);
 		virtual ~WDTState(void);
+
+		static rc_ptr<WDTState> __fastcall Create(void *data); // RA2: 0x0072BEB0; a new state read from the packet, counted
 
 		bool Has_Owner_History(void);
 		bool Is_Previous_Cycle(void);
@@ -388,7 +393,7 @@ class WDTState : public ReferenceCounted { // RA2: ReferenceCounted
 		 * battlefield and the game options that the fight over that territory is
 		 * settled by.
 		 */
-		DynamicVectorClass<WDTTerritory *> Territories;
+		DynamicVectorClass<rc_ptr<WDTTerritory> > Territories; // RA2: counted pointers
 
 		/*
 		 * This records who held each territory at each tick of the cycle -- a row per

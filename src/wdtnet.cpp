@@ -20,6 +20,29 @@
 #define PEEK(data) (*((unsigned char*)(data)))
 #define PEEK_AT(data, pos) (*((unsigned char*)(data) + pos))
 
+/// <summary>
+/// A battle setting byte of the tour packet with its high bit dropped.
+/// </summary>
+static inline unsigned char WDT_Unbias(unsigned char const &value) // RA2: no such routine in TibSun, whose triples treat a byte above 0x7F as the default
+{
+	return(value > 0x7F ? value - 0x80 : value); // RA2: as above
+}
+
+
+
+
+
+
+
+/// <summary>
+/// Makes a new territory record, counted.
+/// </summary>
+/// <returns>The counted pointer to the new territory.</returns>
+rc_ptr<WDTTerritory> __fastcall WDTTerritory::Create(void) // RA2: 0x0072BDC0; no such routine in TibSun, which makes its territories with new
+{
+	return(rc_ptr<WDTTerritory>(new WDTTerritory())); // RA2: as above
+}
+
 
 /// <summary>
 /// Creates a territory record carrying default settings.
@@ -36,7 +59,8 @@ WDTTerritory::WDTTerritory(void)
 	Width = 1;
 	Height = 1;
 	NumPlayers = 2;
-	Biome = 3;
+	MapType = 1; // RA2: the map type is +0x1C, a byte, one here (TibSun: Biome 3)
+	Theater = 0; // RA2: the byte after it, which TibSun does not have
 	Time = 0;
 	CliffsMin = 0;
 	CliffsMax = 100;
@@ -76,6 +100,9 @@ WDTTerritory::~WDTTerritory(void)
 }
 
 
+
+
+
 /// <summary>
 /// Fetches the game options this territory is fought under.
 /// This routine is used to set up the rules for the conflict over this territory. Options
@@ -84,24 +111,11 @@ WDTTerritory::~WDTTerritory(void)
 /// </summary>
 /// <returns>Returns with a newly allocated option block. The caller is responsible for
 /// deleting it.</returns>
-GameOptionsType *WDTTerritory::Get_Game_Options(void)
+/// <param name="data">The raw packet received from the ladder server.</param>
+/// <returns>The counted pointer to the new state.</returns>
+rc_ptr<WDTState> __fastcall WDTState::Create(void *data) // RA2: 0x0072BEB0; no such routine in TibSun
 {
-	GameOptionsType *opts = new GameOptionsType;
-
-	opts->Bases = Bases;
-	opts->Credits = StartingCredits;
-	opts->BridgeDestruction = BridgeDestruction;
-	opts->Goodies = Goodies;
-	opts->Ghosts = true;
-	opts->UnitCount = UnitCount;
-	opts->AIPlayers = false;
-	opts->AlliesAllowed = AlliesAllowed;
-	opts->HarvTruce = HarvTruce;
-	opts->CTF = false;
-	opts->FogOfWar = FogOfWar;
-	opts->MCVRedeploy = MCVRedeploy;
-
-	return(opts);
+	return(rc_ptr<WDTState>(new WDTState(data))); // RA2: as above
 }
 
 
@@ -117,7 +131,7 @@ WDTState::WDTState(void)
 	NumTerritories=0;
 	NumTicks=0;
 	TickTime=1000000;
-	Territories = NULL;
+	Territories = DynamicVectorClass<rc_ptr<WDTTerritory> >(); // RA2: the list is reset by assigning an empty one (TibSun: NULL)
 	OwnerHistory = NULL;
 }
 
@@ -240,16 +254,7 @@ WDTState::WDTState(void *data) :
 /// </summary>
 WDTState::~WDTState(void)
 {
-	if (!IsPreviousCycle) {
-		for (int i = 0; i < (int)NumTerritories; i++) {
-			if (Territories[i] != NULL) {
-				delete Territories[i];
-			}
-		}
-	}
-	Territories.Delete_All();
-	/// Redundant -- Delete_All has already cleared the vector.
-	Territories.Clear();
+	Territories.Clear(); // RA2: the territories are counted pointers and Clear releases them (TibSun deletes each one and calls Delete_All first)
 
 	if (LongDesc != NULL) {
 		delete [] LongDesc;
@@ -383,8 +388,7 @@ bool WDTState::Create_Territories(void * data, int size)
 			return(false);
 		}
 
-		WDTTerritory * terr = new WDTTerritory;
-		memset(terr, 0, sizeof(*terr));
+		rc_ptr<WDTTerritory> terr = WDTTerritory::Create(); // RA2: the territory is made counted (TibSun: new WDTTerritory and a memset)
 
 		terr->Index = NumTerritories;
 
@@ -403,51 +407,53 @@ bool WDTState::Create_Territories(void * data, int size)
 		 */
 		terr->Seed = PEEK_AT(data, pos++) << 8;
 		terr->Seed += PEEK_AT(data, pos++);
-		terr->UnitCount = PEEK_AT(data, pos++) - 0x80;
-		terr->TechLevel = PEEK_AT(data, pos++) - 0x80;
+		terr->UnitCount = PEEK_AT(data, pos++) + 0x80; // RA2: adds 0x80 (TibSun: subtracts it)
+		terr->TechLevel = PEEK_AT(data, pos++) + 0x80; // RA2: as above
 		terr->StartingCredits = PEEK_AT(data, pos++) << 8;
 		terr->StartingCredits += PEEK_AT(data, pos++);
-		terr->Biome = PEEK_AT(data, pos++) - 0x80;
-		terr->Time = PEEK_AT(data, pos++) - 0x80;
-		terr->Width = PEEK_AT(data, pos++) - 0x80;
-		terr->Height = PEEK_AT(data, pos++) - 0x80;
-		terr->NumPlayers = PEEK_AT(data, pos++) - 0x80;
-		terr->Veinholes = PEEK_AT(data, pos++) - 0x80;
+		unsigned int packed = PEEK_AT(data, pos++) - 0x80; // RA2: one byte holds the map type in its low and the theater in its high nibble (TibSun: Biome)
+		terr->MapType = packed & 0x0F; // RA2: as above
+		terr->Theater = (packed >> 4) & 0x0F; // RA2: as above
+		terr->Time = PEEK_AT(data, pos++) + 0x80; // RA2: adds 0x80
+		terr->Width = PEEK_AT(data, pos++) + 0x80; // RA2: as above
+		terr->Height = PEEK_AT(data, pos++) + 0x80; // RA2: as above
+		terr->NumPlayers = PEEK_AT(data, pos++) + 0x80; // RA2: as above
+		terr->Resources = PEEK_AT(data, pos++) - 0x80; // RA2: the resources (TibSun: Veinholes)
 
 		/*
 		 * Ranged Values
 		 */
-		terr->CliffsMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->CliffsMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->CliffsDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->CliffsMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: every value of a triple only drops the high bit, in order
+		terr->CliffsMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->CliffsDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->AccessibilityMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->AccessibilityMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->AccessibilityDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->AccessibilityMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->AccessibilityMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->AccessibilityDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->HillsMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->HillsMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->HillsDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->HillsMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->HillsMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->HillsDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->TiberiumAmountMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->TiberiumAmountMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->TiberiumAmountDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->TiberiumAmountMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->TiberiumAmountMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->TiberiumAmountDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->TiberiumFieldsMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->TiberiumFieldsMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->TiberiumFieldsDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->TiberiumFieldsMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->TiberiumFieldsMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->TiberiumFieldsDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->WaterMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->WaterMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->WaterDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->WaterMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->WaterMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->WaterDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->VegetationMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->VegetationMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->VegetationDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->VegetationMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->VegetationMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->VegetationDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
-		terr->CitiesMin = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->CitiesMax = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos) - 0x80 : PEEK_AT(data, pos++);
-		terr->CitiesDefault = PEEK_AT(data, pos) > 0x7F ? PEEK_AT(data, pos++) - 0x80 : PEEK_AT(data, pos++);
+		terr->CitiesMin = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->CitiesMax = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
+		terr->CitiesDefault = WDT_Unbias(PEEK_AT(data, pos)); pos++; // RA2: as above
 
 		/*
 		 * User Modifiable Values
@@ -469,6 +475,35 @@ bool WDTState::Create_Territories(void * data, int size)
 		NumTerritories++;
 	}
 	return(true);
+}
+
+
+/// <summary>
+/// Fetches the game options this territory is fought under.
+/// This routine is used to set up the rules for the conflict over this territory. Options
+/// the tour never varies are forced to their tour values rather than taken from the
+/// territory.
+/// </summary>
+/// <returns>Returns with a newly allocated option block. The caller is responsible for
+/// deleting it.</returns>
+GameOptionsType *WDTTerritory::Get_Game_Options(void)
+{
+	GameOptionsType *opts = new GameOptionsType;
+
+	opts->Bases = Bases;
+	opts->Credits = StartingCredits;
+	opts->BridgeDestruction = BridgeDestruction;
+	opts->Goodies = Goodies;
+	opts->Ghosts = true;
+	opts->UnitCount = UnitCount;
+	opts->AIPlayers = false;
+	opts->AlliesAllowed = AlliesAllowed;
+	opts->HarvTruce = HarvTruce;
+	opts->CTF = false;
+	opts->FogOfWar = FogOfWar;
+	opts->MCVRedeploy = MCVRedeploy;
+
+	return(opts);
 }
 
 
@@ -565,7 +600,7 @@ char *WDTTerritory::To_String(void)
 	strcat(retbuf, tempbuf);
 	sprintf(tempbuf, "Width\t\t\t%d\nHeight\t\t\t%d\n", Width, Height);
 	strcat(retbuf, tempbuf);
-	sprintf(tempbuf, "NumPlayers\t\t%d\nBiome\t\t\t%d\n", NumPlayers, Biome);
+	sprintf(tempbuf, "NumPlayers\t\t%d\nBiome\t\t\t%d\n", NumPlayers, MapType); // RA2: the map type (TibSun: Biome)
 	strcat(retbuf, tempbuf);
 	sprintf(tempbuf, "Time\t\t\t%d\nCliffsMin\t\t%d\n", Time, CliffsMin);
 	strcat(retbuf, tempbuf);
@@ -595,7 +630,7 @@ char *WDTTerritory::To_String(void)
 	strcat(retbuf, tempbuf);
 	sprintf(tempbuf, "Blue tiberium\t\t%d\n", BlueTiberium);
 	strcat(retbuf, tempbuf);
-	sprintf(tempbuf, "Veinholes\t\t%d\nCliffsDefault\t\t%d\n", Veinholes, CliffsDefault);
+	sprintf(tempbuf, "Veinholes\t\t%d\nCliffsDefault\t\t%d\n", Resources, CliffsDefault); // RA2: the resources (TibSun: Veinholes)
 	strcat(retbuf, tempbuf);
 	sprintf(tempbuf, "HillsDefault\t\t%d\nAccessibilityDefault\t\t%d\n", HillsDefault, AccessibilityDefault);
 	strcat(retbuf, tempbuf);
@@ -609,3 +644,4 @@ char *WDTTerritory::To_String(void)
 
 	return(retbuf);
 }
+
