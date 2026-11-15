@@ -105,7 +105,10 @@ class MapClass: public GScreenClass
 		*/
 		void Fresh_Map(void);
 		void Sight_From(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true, bool=false); // RA2: 0x54A110, eight arguments
+		void RevealArea1(Coord const & coord, int sightrange, HouseClass * house, bool incremental=false, bool=false, bool=false, bool=true, bool=false); // RA2: 0x549C50 (YR name), Sight_From (0x54A110) that also reveals the fog and shroud pieces
+		void RevealArea0(int, int, Coord const & coord, int sightrange, HouseClass * house, bool incremental, bool dont_map, bool unfog, bool byheight); // RA2: 0x549C20 (YR name), RevealArea1 with the last argument true; the first two arguments are not used
 		void Shroud_Gap_Area(Coord const & coord, int radius); // RA2: 0x54A720
+		void Unshroud_Gap_Area(Coord const & coord, int radius); // RA2: 0x54A8F0 (YR name), the cells of the radius are mapped and visible again
 		void RevealArea3(Coord const & coord, int height, int radius, int skip_reveal); // RA2: 0x54A550 (YR: RevealArea3)
 		void Refresh_Shroud(void); // RA2: 0x55A300, re-flags the shrouded cells
 		void Spy_Satellite_Hide(void); // RA2: 0x559F10, shrouds every cell again (ShroudCounter 1) and refreshes the radar
@@ -122,6 +125,7 @@ class MapClass: public GScreenClass
 		int Cell_Region(Cell const & cell);
 		int Largest_Water_Zone(int & zone); // RA2: 0x5658C0, counts the water cells (Passability 4) per zone and gives the biggest zone and its count
 		void Find_Naval_Yard_Cells(Cell const & center, int a, int b, int c, int zone, DynamicVectorClass<Cell> & cells, int width, int height); // RA2: 0x565A50, collects water-side cells for a naval yard of the size around the center
+		void Reset_Shroud_All(void); // RA2: 0x0055A070 (declared ahead of its definition; map.cpp is landed up to 0x559F10)
 		int Cell_Threat(Cell const & cell, HouseClass const & house);
 		Cell Pick_Random_Location(void) const;
 		bool Place_Random_Crate(void);
@@ -230,6 +234,15 @@ class MapClass: public GScreenClass
 		static int Get_Low_Bridge_EW_Neighbor_Mask(Cell const & cell);
 		static int Get_Low_Bridge_NS_Neighbor_Mask(Cell const & cell);
 		bool Damage_Low_Bridge_EW(Cell const & cell);
+		void Destroy_Bridge2_Near(Cell const & cell); // RA2: 0x556520, destroys the concrete bridge deck (BridgeSet tiles) near the cell
+		void Destroy_Low_Bridge_Span(Cell const & cell); // RA2: 0x556BF0, the low bridge piece at the cell and its neighbours are destroyed
+		void Destroy_Low_Bridge2_Span(Cell const & cell); // RA2: 0x556E30, as Destroy_Low_Bridge_Span for the second low bridge kind
+		void Destroy_Low_Bridge_Near(Cell const & cell); // RA2: 0x557090, destroys the low or train bridge near the cell
+		void Destroy_Low_Bridge_EW(Cell const & cell); // RA2: 0x5576A0, the east-west low bridge around the cell is blown up piece by piece
+		void Destroy_Low_Bridge_NS(Cell const & cell); // RA2: 0x5579C0, the north-south low bridge around the cell is blown up piece by piece
+		void Destroy_Low_Bridge2_EW(Cell const & cell); // RA2: 0x557CE0, as Destroy_Low_Bridge_EW for the second low bridge kind
+		void Destroy_Low_Bridge2_NS(Cell const & cell); // RA2: 0x558010, as Destroy_Low_Bridge_NS for the second low bridge kind
+		bool Destroy_Low_Bridge_Piece(Cell const & cell); // RA2: 0x55EDB0, a low bridge piece is destroyed with its explosions
 		bool Damage_Low_Bridge_NS(Cell const & cell);
 		void Damage_Low_Bridge_Piece_EW(Cell const & cell);
 		void Damage_Low_Bridge_Piece_NS(Cell const & cell);
@@ -239,6 +252,7 @@ class MapClass: public GScreenClass
 		void Repair_Low_Bridge_EW(Cell const & cell);
 		void Repair_Low_Bridge_NS(Cell const & cell);
 		static bool Is_Low_Bridge(Cell const & cell);
+		static bool Is_Low_Bridge2(Cell const & cell); // RA2: 0x562980, as Is_Low_Bridge for the second low bridge kind
 
 	public:
 
@@ -358,6 +372,8 @@ class MapClass: public GScreenClass
 		virtual void Set_Map_Dimensions(Rect const & size, bool, int cell_height, bool);
 		virtual void Set_Local_Dimensions(Rect const & size);
 
+		bool IsMapInitialized; // RA2: +0x10, cleared by the constructor (0x547A76)
+
 		/*
 		 * This is the set of base terrain zones that touch one another, keyed by a packed
 		 * pair of zone IDs. It is filled while the zones are being flood filled, and gains a
@@ -374,7 +390,7 @@ class MapClass: public GScreenClass
 		 * number, so two cells are mutually reachable by a given movement type only
 		 * when their zones map to the same number.
 		 */
-		unsigned short * Zones[MZONE_COUNT];
+		unsigned short * Zones[MZONE_CRUSHER_ALL]; // RA2: 12 layers (+0x18)
 
 		/*
 		 * This is the number of base terrain zones the last rebuild produced, and thus the

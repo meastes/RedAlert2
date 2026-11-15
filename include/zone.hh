@@ -229,6 +229,7 @@ struct SubzoneTrackingStruct
 		ThreatRegion = 0;
 	}
 
+	SubzoneTrackingStruct & operator=(const SubzoneTrackingStruct & that); // RA2: 0x56C2E0, out of line
 	bool operator==(const SubzoneTrackingStruct & that) const { return(ParentSubzoneID == that.ParentSubzoneID && Passability == that.Passability); }
 	bool operator!=(const SubzoneTrackingStruct & that) const { return(ParentSubzoneID != that.ParentSubzoneID || Passability != that.Passability); }
 
