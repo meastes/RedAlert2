@@ -2406,6 +2406,9 @@ bool InfantryClass::Start_Driver(Coord & headto)
 bool InfantryClass::Limbo(void)
 {
 	Locomotion->Stop_Movement_Animation();
+	LastSurface = 2; // RA2: the surface is not known again
+	IsProne = false; // RA2: standing up again
+	Doing = DO_STAND_READY; // RA2: as above
 	return(BASECLASS::Limbo());
 }
 
