@@ -396,6 +396,7 @@ address,symbol,evidence
 0x0041B570,?Fetch_Object_Size@AircraftClass@@UBEHXZ,"compiled from src/aircraft.cpp, matched"
 0x0041B580,?Fetch_RTTI@AircraftClass@@UBE?AW4RTTIType@@XZ,"compiled from src/aircraft.cpp, matched"
 0x0041B590,?GetClassID@AircraftClass@@UAGJPAU_GUID@@@Z,"compiled from src/aircraft.cpp, matched"
+0x0041B5D0,?Full_Name@AircraftClass@@UBEPBGXZ,"compiled from src/aircraft.cpp, matched"
 0x0041B5E0,?Turret_Facing@AircraftClass@@UBE?AVDirType@@XZ,"compiled from src/aircraft.cpp, matched"
 0x0041B600,?Class_Of@AircraftClass@@UBEPBVObjectTypeClass@@XZ,"compiled from src/aircraft.cpp, matched"
 0x0041B630,??0?$TPoint3D@H@@QAE@HHH@Z,"inferred: referenced by matched src/coord.cpp (24 references); across all matched code never at another address, and no other symbol here"

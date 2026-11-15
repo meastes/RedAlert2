@@ -408,6 +408,7 @@ address,size,evidence
 0x0041B570,16,"code of src/aircraft.cpp, matched: too short for the match rule"
 0x0041B580,16,"code of src/aircraft.cpp, matched: too short for the match rule"
 0x0041B590,64,"code of src/aircraft.cpp, matched"
+0x0041B5D0,16,"code of src/aircraft.cpp, matched: too short for the match rule"
 0x0041B5E0,32,"code of src/aircraft.cpp, matched"
 0x0041B600,16,"code of src/aircraft.cpp, matched: too short for the match rule"
 0x0041B630,,"inferred: target of the call at 0x004917EF in matched src/coord.cpp; size not known"
