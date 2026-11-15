@@ -65,3 +65,5 @@ extern int Misc;
 extern CRITICAL_SECTION	GlobalAudioCriticalSection;
 
 extern int StreamLowImpact;
+
+int AudioDeviceAvailable(void); // RA2: whether the audio library opened a device, at 0x00406F30
