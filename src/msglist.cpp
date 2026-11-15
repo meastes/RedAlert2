@@ -66,6 +66,7 @@
 #include "scheme.h"
 #include "surface.h"
 #include "txtlabel.h"
+#include "winstub.h"
 #include "vector.h"
 
 #include <cstdio>
@@ -634,25 +635,17 @@ TextLabelClass * MessageListClass::Add_Edit(int color, // RA2: YR's wide-text fo
  *=========================================================================*/
 void MessageListClass::Remove_Edit(void)
 {
-	//------------------------------------------------------------------------
-	// If the edit field is active, delete it
-	//------------------------------------------------------------------------
 	if (IsEdit) {
-		IsEdit = 0;
+		IsEdit = false; // RA2: RA2's form
 		delete EditLabel;
-
-		//.....................................................................
-		// If the edit field appears over the message list, recompute the
-		// y-value for all messages.  Adjust MaxMessages back up, since there
-		// is now a new available slot.
-		//.....................................................................
+		IME_Stub1(); // RA2: as above
 		if (AdjustEdit) {
 			Compute_Y();
 			MaxMessages++;
 		}
 	}
-
 }
+
 
 
 /***************************************************************************
