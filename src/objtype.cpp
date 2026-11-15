@@ -208,8 +208,13 @@ Point3D ObjectTypeClass::Pixel_Dimensions(void) const
  *=============================================================================================*/
 Point3D ObjectTypeClass::Lepton_Dimensions(void) const
 {
-	return(Point3D(CELL_LEPTON_W, CELL_LEPTON_H, 200));
+	Point3D coord; // RA2: RA2's form
+	coord.X = 0x100; // RA2: as above
+	coord.Y = 0x100; // RA2: as above
+	coord.Z = LEVEL_LEPTON_H * 2; // RA2: as above
+	return coord; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -613,146 +618,184 @@ void ObjectTypeClass::Free_Charger_Voxels(void) // RA2: not in TibSun, at 0x005D
 /// </summary>
 void ObjectTypeClass::Fetch_Voxel_Image(void)
 {
-	char buffer[256];
-	char name[260];
-
+	char name[256]; // RA2: RA2's form
+	char fullname[260]; // RA2: as above
 	bool failed = false;
 
-	_makepath(name, 0, 0, (const char *)GraphicName, ".VXL");
-	CCFileClass vxl(name);
-
-	if (vxl.Is_Available()) {
+	_makepath(fullname, 0, 0, GraphicName, ".VXL"); // RA2: as above
+	CCFileClass voxel(fullname); // RA2: as above
+	if (voxel.Is_Available()) { // RA2: as above
 		delete Voxel.VoxLib;
-		Voxel.VoxLib = new VoxelLibrary(vxl);
+		Voxel.VoxLib = new VoxelLibrary(voxel); // RA2: as above
 		if (Voxel.VoxLib == NULL || Voxel.VoxLib->Load_Failed()) {
 			failed = true;
 		}
-		_makepath(name, 0, 0, (const char *)GraphicName, ".HVA");
-		CCFileClass hva(name);
+		_makepath(fullname, 0, 0, GraphicName, ".HVA"); // RA2: as above
+		CCFileClass motion(fullname); // RA2: as above
+
 		//if (hva.Is_Available()) {
-			delete Voxel.MotLib;
-			Voxel.MotLib = new MotionLibrary(hva);
-			if (Voxel.MotLib == NULL || Voxel.MotLib->Load_Failed()) {
-				failed = true;
-			} else {
-				Voxel.MotLib->Scale(Voxel.VoxLib->Get_Layer_Info(0, 0).Scale);
-			}
-		//}
+		delete Voxel.MotLib;
+		Voxel.MotLib = new MotionLibrary(motion); // RA2: as above
+		if (Voxel.MotLib != NULL && !Voxel.MotLib->Load_Failed()) { // RA2: as above
+			Voxel.MotLib->Scale(Voxel.VoxLib->Get_Layer_Info(0, 0).Scale); // RA2: as above
+		} else { // RA2: as above
+			failed = true;
+		}
 	} else {
 		failed = true;
 	}
 
 	UnitTypeClass *utype = (UnitTypeClass *)this;
+	TechnoTypeClass *ttype = (TechnoTypeClass *)this; // RA2: as above
 
-	if (utype->RTTI != RTTI_UNITTYPE || utype->IsTurretEquipped) {
-		sprintf(buffer, "%sTUR", (const char *)utype->GraphicName);
-		_makepath(name, 0, 0, buffer, ".VXL");
-		CCFileClass tvxl(name);
-
-		if (tvxl.Is_Available()) {
-			delete utype->AuxVoxel.VoxLib;
-			utype->AuxVoxel.VoxLib = new VoxelLibrary(tvxl);
-
-			if (AuxVoxel.VoxLib == NULL || AuxVoxel.VoxLib->Load_Failed()) {
-				failed = true;
-			}
-
-			sprintf(buffer, "%sTUR", (const char *)utype->GraphicName);
-			_makepath(name, 0, 0, buffer, ".HVA");
-			CCFileClass thva(name);
-
-			//if (thva.Is_Available()) {
-				delete utype->AuxVoxel.MotLib;
-				utype->AuxVoxel.MotLib = new MotionLibrary(thva);
-				if (AuxVoxel.MotLib == NULL || AuxVoxel.MotLib->Load_Failed()) {
+	if (Fetch_RTTI() == 0x28 && !utype->IsTurretEquipped) { // RA2: as above
+		if (strcmp((const char *)utype->IniName, "APC") == 0) { // RA2: as above
+			sprintf(name, "%sW", (char const *)GraphicName); // RA2: as above
+			_makepath(fullname, 0, 0, name, ".VXL"); // RA2: as above
+			CCFileClass voxel(fullname); // RA2: as above
+			if (voxel.Is_Available()) { // RA2: as above
+				delete AuxVoxel.VoxLib; // RA2: as above
+				AuxVoxel.VoxLib = new VoxelLibrary(voxel); // RA2: as above
+				if (AuxVoxel.VoxLib == NULL || AuxVoxel.VoxLib->Load_Failed()) { // RA2: as above
 					failed = true;
-				} else {
+				}
+				sprintf(name, "%sW", (char const *)GraphicName); // RA2: as above
+				_makepath(fullname, 0, 0, name, ".HVA"); // RA2: as above
+				CCFileClass motion(fullname); // RA2: as above
+				delete AuxVoxel.MotLib; // RA2: as above
+				AuxVoxel.MotLib = new MotionLibrary(motion); // RA2: as above
+				if (AuxVoxel.MotLib != NULL && !AuxVoxel.MotLib->Load_Failed()) { // RA2: as above
 					AuxVoxel.MotLib->Scale(AuxVoxel.VoxLib->Get_Layer_Info(0, 0).Scale);
-				}
-			//}
-		}
-	} else if (strcmp((const char *)utype->IniName, "APC") == 0) {
-		sprintf(buffer, "%sW", (const char *)utype->GraphicName);
-		_makepath(name, 0, 0, buffer, ".VXL");
-		CCFileClass wvxl(name);
-
-		if (wvxl.Is_Available()) {
-			delete utype->AuxVoxel.VoxLib;
-			utype->AuxVoxel.VoxLib = new VoxelLibrary(wvxl);
-
-			if (AuxVoxel.VoxLib == NULL || AuxVoxel.VoxLib->Load_Failed()) {
-				failed = true;
-			}
-			sprintf(buffer, "%sW", (const char *)utype->GraphicName);
-			_makepath(name, 0, 0, buffer, ".HVA");
-			CCFileClass whva(name);
-
-			//if (whva.Is_Available()) {
-				delete utype->AuxVoxel.MotLib;
-				utype->AuxVoxel.MotLib = new MotionLibrary(whva);
-				if (AuxVoxel.MotLib == NULL || AuxVoxel.MotLib->Load_Failed()) {
-					failed = true;
 				} else {
+					failed = true;
+				}
+			}
+		}
+		if (NoSpawnAlt) { // RA2: as above
+			sprintf(name, "%sWO", (char const *)GraphicName); // RA2: as above
+			_makepath(fullname, 0, 0, name, ".VXL"); // RA2: as above
+			CCFileClass voxel(fullname); // RA2: as above
+			if (voxel.Is_Available()) { // RA2: as above
+				delete AuxVoxel.VoxLib; // RA2: as above
+				AuxVoxel.VoxLib = new VoxelLibrary(voxel); // RA2: as above
+				if (AuxVoxel.VoxLib == NULL || AuxVoxel.VoxLib->Load_Failed()) { // RA2: as above
+					failed = true;
+				}
+				sprintf(name, "%sWO", (char const *)GraphicName); // RA2: as above
+				_makepath(fullname, 0, 0, name, ".HVA"); // RA2: as above
+				CCFileClass motion(fullname); // RA2: as above
+				delete AuxVoxel.MotLib; // RA2: as above
+				AuxVoxel.MotLib = new MotionLibrary(motion); // RA2: as above
+				if (AuxVoxel.MotLib != NULL && !AuxVoxel.MotLib->Load_Failed()) { // RA2: as above
 					AuxVoxel.MotLib->Scale(AuxVoxel.VoxLib->Get_Layer_Info(0, 0).Scale);
-				}
-			//}
-		}
-	}
-
-	if (utype->RTTI != RTTI_UNITTYPE || utype->IsTurretEquipped) {
-		sprintf(buffer, "%sBARL", (const char *)utype->GraphicName);
-		_makepath(name, 0, 0, buffer, ".VXL");
-		CCFileClass bvxl(name);
-
-		if (bvxl.Is_Available()) {
-			delete utype->AuxVoxel2.VoxLib;
-			utype->AuxVoxel2.VoxLib = new VoxelLibrary(bvxl);
-
-			if (AuxVoxel2.VoxLib == NULL || AuxVoxel2.VoxLib->Load_Failed()) {
-				failed = true;
-			}
-
-			sprintf(buffer, "%sBARL", (const char *)utype->GraphicName);
-			_makepath(name, 0, 0, buffer, ".HVA");
-			CCFileClass bhva(name);
-
-			//if (bhva.Is_Available()) {
-				delete utype->AuxVoxel2.MotLib;
-				utype->AuxVoxel2.MotLib = new MotionLibrary(bhva);
-				if (AuxVoxel2.MotLib == NULL || AuxVoxel2.MotLib->Load_Failed()) {
-					failed = true;
 				} else {
-					AuxVoxel2.MotLib->Scale(AuxVoxel2.VoxLib->Get_Layer_Info(0, 0).Scale);
+					failed = true;
 				}
-			//}
-		}
-	}
-	if (!failed) {
-		int largest = Voxel.VoxLib->Get_Layer_Info(0, 0).XSize;
-		for (int i = 0; i < (int)Voxel.VoxLib->Get_Layer_Count(); i++) {
-			if (largest <= Voxel.VoxLib->Get_Layer_Info(i, 0).XSize) {
-				largest = Voxel.VoxLib->Get_Layer_Info(i, 0).XSize;
-			}
-			if (largest <= Voxel.VoxLib->Get_Layer_Info(i, 0).YSize) {
-				largest = Voxel.VoxLib->Get_Layer_Info(i, 0).YSize;
-			}
-			if (largest <= Voxel.VoxLib->Get_Layer_Info(i, 0).ZSize) {
-				largest = Voxel.VoxLib->Get_Layer_Info(i, 0).ZSize;
 			}
 		}
-		MaxSize = max(largest, 8);
-		Clear_Voxel_Index();
+	} else if (Fetch_RTTI() == 0x28 && ttype->Has_Turret_Weapons()) { // RA2: as above
+		int count = ttype->TurretCount; // RA2: as above
+		for (int index = 0; index < count; index++) { // RA2: as above
+			if (!Load_Charger_Turret(GraphicName, index)) { // RA2: as above
+				failed = true;
+				break; // RA2: as above
+			}
+		}
 	} else {
-		delete Voxel.VoxLib;
-		delete Voxel.MotLib;
-		delete AuxVoxel.VoxLib;
-		delete AuxVoxel.MotLib;
-		Voxel.VoxLib = NULL;
-		Voxel.MotLib = NULL;
-		AuxVoxel.VoxLib = NULL;
-		AuxVoxel.MotLib = NULL;
+		sprintf(name, "%sTUR", (char const *)GraphicName); // RA2: as above
+		_makepath(fullname, 0, 0, name, ".VXL"); // RA2: as above
+		CCFileClass voxel(fullname); // RA2: as above
+		if (voxel.Is_Available()) { // RA2: as above
+			delete AuxVoxel.VoxLib; // RA2: as above
+			AuxVoxel.VoxLib = new VoxelLibrary(voxel); // RA2: as above
+			if (AuxVoxel.VoxLib == NULL || AuxVoxel.VoxLib->Load_Failed()) {
+				failed = true;
+			}
+			sprintf(name, "%sTUR", (char const *)GraphicName); // RA2: as above
+			_makepath(fullname, 0, 0, name, ".HVA"); // RA2: as above
+			CCFileClass motion(fullname); // RA2: as above
+			delete AuxVoxel.MotLib; // RA2: as above
+			AuxVoxel.MotLib = new MotionLibrary(motion); // RA2: as above
+			if (AuxVoxel.MotLib != NULL && !AuxVoxel.MotLib->Load_Failed()) { // RA2: as above
+				AuxVoxel.MotLib->Scale(AuxVoxel.VoxLib->Get_Layer_Info(0, 0).Scale); // RA2: as above
+			} else {
+				failed = true;
+			}
+		}
+	}
+
+	if (Fetch_RTTI() != 0x28 || utype->IsTurretEquipped) { // RA2: as above
+		if (Fetch_RTTI() == 0x28 && ttype->Has_Turret_Weapons()) { // RA2: as above
+			int count = ttype->TurretCount; // RA2: as above
+			for (int index = 0; index < count; index++) { // RA2: as above
+				if (!Load_Charger_Barrel(GraphicName, index)) { // RA2: as above
+					failed = true;
+					break; // RA2: as above
+				}
+			}
+		} else { // RA2: as above
+			sprintf(name, "%sBARL", (char const *)GraphicName); // RA2: as above
+			_makepath(fullname, 0, 0, name, ".VXL"); // RA2: as above
+			CCFileClass voxel(fullname); // RA2: as above
+			if (voxel.Is_Available()) { // RA2: as above
+				delete AuxVoxel2.VoxLib; // RA2: as above
+				AuxVoxel2.VoxLib = new VoxelLibrary(voxel); // RA2: as above
+				if (AuxVoxel2.VoxLib == NULL || AuxVoxel2.VoxLib->Load_Failed()) { // RA2: as above
+					failed = true;
+				}
+				sprintf(name, "%sBARL", (char const *)GraphicName); // RA2: as above
+				_makepath(fullname, 0, 0, name, ".HVA"); // RA2: as above
+				CCFileClass motion(fullname); // RA2: as above
+				delete AuxVoxel2.MotLib; // RA2: as above
+				AuxVoxel2.MotLib = new MotionLibrary(motion); // RA2: as above
+				if (AuxVoxel2.MotLib != NULL && !AuxVoxel2.MotLib->Load_Failed()) { // RA2: as above
+					AuxVoxel2.MotLib->Scale(AuxVoxel2.VoxLib->Get_Layer_Info(0, 0).Scale);
+				} else {
+					failed = true;
+				}
+			}
+		}
+	}
+
+	if (failed) { // RA2: as above
+		if (Voxel.VoxLib != NULL) { // RA2: as above
+			delete Voxel.VoxLib; // RA2: as above
+			Voxel.VoxLib = NULL; // RA2: as above
+		}
+		if (Voxel.MotLib != NULL) { // RA2: as above
+			delete Voxel.MotLib;
+			Voxel.MotLib = NULL; // RA2: as above
+		}
+		if (Fetch_RTTI() == 0x28 && ttype->Has_Turret_Weapons()) { // RA2: as above
+			Free_Charger_Voxels(); // RA2: as above
+		} else { // RA2: as above
+			if (AuxVoxel.VoxLib != NULL) { // RA2: as above
+				delete AuxVoxel.VoxLib; // RA2: as above
+				AuxVoxel.VoxLib = NULL; // RA2: as above
+			}
+			if (AuxVoxel.MotLib != NULL) { // RA2: as above
+				delete AuxVoxel.MotLib; // RA2: as above
+				AuxVoxel.MotLib = NULL; // RA2: as above
+			}
+		}
+	} else {
+		int size = Voxel.VoxLib->Get_Layer_Info(0, 0).XSize; // RA2: as above
+		for (int index = 0; index < (int)Voxel.VoxLib->Get_Layer_Count(); index++) { // RA2: as above
+			if (size <= Voxel.VoxLib->Get_Layer_Info(index, 0).XSize) { // RA2: as above
+				size = Voxel.VoxLib->Get_Layer_Info(index, 0).XSize; // RA2: as above
+			}
+			if (size <= Voxel.VoxLib->Get_Layer_Info(index, 0).YSize) { // RA2: as above
+				size = Voxel.VoxLib->Get_Layer_Info(index, 0).YSize; // RA2: as above
+			}
+			if (size <= Voxel.VoxLib->Get_Layer_Info(index, 0).ZSize) { // RA2: as above
+				size = Voxel.VoxLib->Get_Layer_Info(index, 0).ZSize; // RA2: as above
+			}
+		}
+		MaxSize = size > 8 ? size : 8; // RA2: as above
+		Clear_Voxel_Index();
 	}
 }
+
 
 
 /// <summary>
