@@ -780,55 +780,18 @@ static inline CellClass const & LAT_Neighbor(CellClass const & cell, FacingType 
  *=============================================================================================*/
 bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, HouseClass * who) const
 {
-	/*
-	**	During scenario initialization, passability is always guaranteed.
-	*/
-	if (ScenarioInit) return(true);
+	if (ScenarioInit) { // RA2: RA2's form
+		return(true);
+	}
 
-	if (what) {
+	if (what != 0) { // RA2: as above
 		if (what->IsLaserFence) {
-
-			if (Cell_Building() != NULL) {
+			if (Cell_Building() != 0 || Cell_Terrain() != 0) { // RA2: as above
 				return(false);
 			}
-
-			if (Cell_Terrain() != NULL) {
-				return(false);
-			}
-
-		} else if ((!what->IsLaserFencePost && !what->IsGate)) {
-			if (!what->ToTile) {
-
-				/*
-				**	If there is an object there, then don't allow building.
-				*/
-				if (Cell_Object() != NULL) {
-					return(false);
-				}
-
-				if ((Flag.Composite & 0x3F) != 0) {
-					return(false);
-				}
-
-			} else {
-
-				if (ITType >= ISOTILE_FIRST && ITType < IsometricTileTypes.Count() && !IsometricTileTypes[ITType]->IsMorphable) {
-					return(false);
-				}
-
-				if (Cell_Building() != NULL) {
-					return(false);
-				}
-			}
-
-		} else {
-
-			/*
-			 * A laser fence post or gate may only be placed on an empty cell or
-			 * on top of an existing laser fence section owned by the same house.
-			 */
-			ObjectClass * obj = Cell_Object();
-			if (obj != NULL) {
+		} else if (what->IsLaserFencePost || what->IsGate) { // RA2: as above
+			ObjectClass *obj = Cell_Object(); // RA2: as above
+			if (obj != 0) { // RA2: as above
 				if (obj->RTTI != RTTI_BUILDING) {
 					return(false);
 				}
@@ -836,9 +799,24 @@ bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, Hous
 					return(false);
 				}
 			}
-
 			if ((Flag.Composite & 0x3F) != 0) {
 				return(false);
+			}
+		} else {
+			if (!what->ToTile) {
+				if (Cell_Object() != 0) { // RA2: as above
+					return(false);
+				}
+				if ((Flag.Composite & 0x3F) != 0) {
+					return(false);
+				}
+			} else {
+				if (ITType >= ISOTILE_FIRST && ITType < IsometricTileTypes.Count() && !IsometricTileTypes[ITType]->IsMorphable) {
+					return(false);
+				}
+				if (Cell_Building() != 0) { // RA2: as above
+					return(false);
+				}
 			}
 		}
 	}
@@ -858,14 +836,14 @@ bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, Hous
 	**	purposes. In normal game mode, all overlays are not buildable.
 	*/
 	if (Overlay != OVERLAY_NONE) {
-		HouseClass * owner = NULL;
+		HouseClass *owner = 0; // RA2: as above
 		if (Owner >= HOUSE_FIRST) {
 			owner = Houses[Owner];
 		}
 
 		if (Overlay == OVERLAY_BRICK_WALL || Overlay == OVERLAY_SANDBAG_WALL) {
-			if (what != NULL) {
-				if (what->ToOverlay != NULL && what->ToOverlay->HeapID == Overlay && OverlayData >= 0x10 || what == Rule->WallTower || what == Rule->GDIGateOne || what == Rule->GDIGateTwo) {
+			if (what != 0) { // RA2: as above
+				if (what->ToOverlay != 0 && what->ToOverlay->HeapID == Overlay && OverlayData >= 0x10 || what == Rule->WallTower || what == Rule->GDIGateOne || what == Rule->GDIGateTwo) { // RA2: as above
 					if (owner == who) {
 						return(true);
 					}
@@ -874,8 +852,8 @@ bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, Hous
 		}
 
 		if (Overlay == OVERLAY_NOD_WALL) {
-			if (what != NULL) {
-				if ((what->ToOverlay != NULL && what->ToOverlay->HeapID == OVERLAY_NOD_WALL && OverlayData >= 0x10) || what == Rule->NodGateOne || what == Rule->NodGateTwo) {
+			if (what != 0) { // RA2: as above
+				if ((what->ToOverlay != 0 && what->ToOverlay->HeapID == OVERLAY_NOD_WALL && OverlayData >= 0x10) || what == Rule->NodGateOne || what == Rule->NodGateTwo) { // RA2: as above
 					if (owner == who) {
 						return(true);
 					}
@@ -883,13 +861,11 @@ bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, Hous
 			}
 		}
 
-		if (what != NULL && what->IsLaserFence) {
-			if (Overlay == OVERLAY_VEINS || Tiberium_Type_Here() != TIBERIUM_NONE) {
-				if (Is_Bridge_Here() || WasUnderBridge || Ramp != RAMP_NONE) {
-					return(false);
-				}
-				return(true);
+		if (what != 0 && what->IsLaserFence && (Overlay == OVERLAY_VEINS || Tiberium_Type_Here() != TIBERIUM_NONE)) { // RA2: as above
+			if (Is_Bridge_Here() || WasUnderBridge || Ramp != RAMP_NONE) { // RA2: as above
+				return(false);
 			}
+			return(true); // RA2: as above
 		}
 
 		if (!Debug_Map || OverlayTypes[Overlay]->IsWall) {
@@ -906,19 +882,22 @@ bool CellClass::Is_Clear_To_Build(SpeedType loco, BuildingTypeClass * what, Hous
 		if (Is_Bridge_Here() || WasUnderBridge || Ramp != RAMP_NONE) {
 			return(false);
 		}
-
+		if (what->Naval) { // RA2: as above
+			if (!Is_Tile_Water()) { // RA2: as above
+				return(false);
+			}
+			return(true); // RA2: as above
+		}
 		return(::Ground[Land_Type()].Build);
-
 	} else {
-
 		if (::Ground[Land_Type()].Cost[loco] == 0) {
 			return(false);
 		}
 		return(true);
 	}
-
-	return(true);
 }
+
+
 
 
 /// <summary>
@@ -1394,16 +1373,16 @@ void CellClass::Recalc_Attributes(int cell_height)
 void CellClass::Destroy_Bridge(void)
 {
 	if (!Debug_Map) {
-		ObjectClass * occupier = Cell_Occupier();
+		ObjectClass *occupier = OccupierPtr; // RA2: RA2's form
 		while (occupier != NULL) {
-			ObjectClass * next = occupier->Next;
+			ObjectClass *next = occupier->Next; // RA2: as above
 			occupier->Take_Damage(occupier->Strength, 0, Rule->C4Warhead, NULL, true, true);
 			occupier = next;
 		}
 
-		occupier = Cell_Occupier(true);
+		occupier = BridgeOccupierPtr; // RA2: as above
 		while (occupier != NULL) {
-			ObjectClass * next = occupier->Next;
+			ObjectClass *next = occupier->Next; // RA2: as above
 			occupier->Fall_From_Height();
 			occupier = next;
 		}
@@ -1411,19 +1390,23 @@ void CellClass::Destroy_Bridge(void)
 		Map.PendingBridgeCells.Add(CellID);
 
 		if (Rule->BridgeExplosions.Count() > 0 && Random_Double(0.0, 1.0) < 0.95) {
-			Coord coord = CellID;
-			coord.Z = LEVEL_LEPTON_H * Height + BRIDGE_LEPTON_HEIGHT;
-			coord.X += Random_Double(-0.5, 0.5) * 50;
-			coord.Y += Random_Double(-0.5, 0.5) * 50;
-
+			Coord coord; // RA2: as above
+			coord.X = CellID.X * 256 + 128; // RA2: as above
+			coord.Y = CellID.Y * 256 + 128; // RA2: as above
+			coord.Z = Height * LEVEL_LEPTON_H + BRIDGE_LEPTON_HEIGHT; // RA2: as above
+			coord.X += (Random_Double(0.0, 1.0) - 0.5) * 50.0; // RA2: as above
+			coord.Y += (Random_Double(0.0, 1.0) - 0.5) * 50.0; // RA2: as above
 			if (Random_Double(0.0, 1.0) < 0.5) {
-				new AnimClass(Rule->MetallicDebris[Random_Pick(0, Rule->MetallicDebris.Count() - 1)], coord);
+				new AnimClass(Rule->MetallicDebris[Random_Pick(0, Rule->MetallicDebris.Count() - 1)], coord, 0, 1, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
 			}
 
-			new AnimClass(Rule->BridgeExplosions[Random_Pick(0, Rule->BridgeExplosions.Count() - 1)], coord, Random_Pick(1, 5));
+			new AnimClass(Rule->BridgeExplosions[Random_Pick(0, Rule->BridgeExplosions.Count() - 1)], coord, Random_Pick(1, 5), 1, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL), 0); // RA2: as above
 		}
 	}
 }
+
+
+
 
 
 /// <summary>
@@ -2076,8 +2059,7 @@ void CellClass::Draw_Shroud_Or_Fog_Shape(Point2D const & drawpoint, Rect const &
 void CellClass::Draw_Fog_Shape(Point2D const & drawpoint, Rect const & cliprect, int shapenum)
 {
 	static bool shapes_loaded = false;
-	static ShapeSet const * shapes = NULL;
-
+	static ShapeSet const *shapes = 0; // RA2: RA2's form
 	if (!shapes_loaded) {
 		shapes_loaded = true;
 		shapes = (ShapeSet const *)MFCD::Retrieve("FOG.SHP");
@@ -2090,59 +2072,55 @@ void CellClass::Draw_Fog_Shape(Point2D const & drawpoint, Rect const & cliprect,
 	if (drawpoint.X + shaperect.X + shaperect.Width < cliprect.X + 1) return;
 	if (drawpoint.X >= cliprect.X + cliprect.Width) return;
 
-	int inter_top = MAX(cliprect.Y, drawpoint.Y + shaperect.Y);
-	int src_y = inter_top - drawpoint.Y - shaperect.Y;
-	int inter_bottom = MIN(cliprect.Y + cliprect.Height, drawpoint.Y + shaperect.Y + shaperect.Height);
-
-	int inter_left = MAX(cliprect.X, drawpoint.X + shaperect.X);
-	int src_x = inter_left - drawpoint.X - shaperect.X;
-	int inter_right = MIN(drawpoint.X + shaperect.X + shaperect.Width, cliprect.X + cliprect.Width);
-
-	int shape_skip = drawpoint.X - inter_right + shaperect.X + shaperect.Width + src_x;
-	int alpha_skip = inter_left - inter_right + AlphaBuffer->Get_Buffer_Width();
-
-	unsigned char * shapedata = (unsigned char *)shapes->Get_Data(shapenum);
-	unsigned short * alphaptr = (unsigned short *)AlphaBuffer->Get_Buffer_Offset(Point2D(inter_left, inter_top - TacticalRect.Y));
-
-	unsigned char * shapeptr = (unsigned char *)&shapedata[src_x + src_y * shaperect.Width];
-	if (&alphaptr[inter_right - inter_left + (inter_bottom - inter_top) * AlphaBuffer->Get_Buffer_Width() + 2] >= (unsigned short *)AlphaBuffer->Get_Buffer_End()) {
-		for (int i = inter_top; i < inter_bottom; i++) {
-			for (int j = inter_left; j < inter_right; j++) {
+	int top = cliprect.Y > drawpoint.Y + shaperect.Y ? cliprect.Y : drawpoint.Y + shaperect.Y; // RA2: as above
+	int src_y = top - drawpoint.Y - shaperect.Y; // RA2: as above
+	int bottom = cliprect.Y + cliprect.Height < drawpoint.Y + shaperect.Y + shaperect.Height ? cliprect.Y + cliprect.Height : drawpoint.Y + shaperect.Y + shaperect.Height; // RA2: as above
+	int left = cliprect.X > drawpoint.X + shaperect.X ? cliprect.X : drawpoint.X + shaperect.X; // RA2: as above
+	int src_x = left - drawpoint.X - shaperect.X; // RA2: as above
+	int right = cliprect.X + cliprect.Width < drawpoint.X + shaperect.X + shaperect.Width ? cliprect.X + cliprect.Width : drawpoint.X + shaperect.X + shaperect.Width; // RA2: as above
+	int shape_skip = drawpoint.X - right + shaperect.X + shaperect.Width + src_x; // RA2: as above
+	int depth_skip = left - right + AlphaBuffer->Get_Buffer_Width(); // RA2: as above
+	unsigned char const *shapeptr = (unsigned char const *)shapes->Get_Data(shapenum); // RA2: as above
+	unsigned short *depth = (unsigned short *)AlphaBuffer->Get_Buffer_Offset(Point2D(left, top - TacticalRect.Y)); // RA2: as above
+	shapeptr += src_x + src_y * shaperect.Width; // RA2: as above
+	if (&depth[right - left + (bottom - top) * AlphaBuffer->Get_Buffer_Width() + 2] >= (unsigned short *)AlphaBuffer->Get_Buffer_End()) { // RA2: as above
+		for (int i = top; i < bottom; i++) { // RA2: as above
+			for (int j = left; j < right; j++) { // RA2: as above
 				unsigned char pixel = *shapeptr++;
 				if (pixel <= 0x7F) {
-					if (*alphaptr == 127) {
-						*alphaptr = pixel;
+					if (*depth == 127) { // RA2: as above
+						*depth = pixel; // RA2: as above
 					} else {
-						int value = (unsigned short)*alphaptr + pixel - 127;
-						*alphaptr = (value <= 0) ? 0 : value;
+						*depth = ((unsigned short)*depth + pixel - 127 <= 0) ? 0 : (unsigned short)*depth + pixel - 127; // RA2: as above
 					}
 				}
-				alphaptr++;
-				alphaptr = (unsigned short *)AlphaBuffer->Wrap_Overflow((unsigned)alphaptr);
+				depth++; // RA2: as above
+				depth = (unsigned short *)AlphaBuffer->Wrap_Overflow((unsigned)depth); // RA2: as above
 			}
 			shapeptr += shape_skip;
-			alphaptr += alpha_skip;
-			alphaptr = (unsigned short *)AlphaBuffer->Wrap_Overflow((unsigned)alphaptr);
+			depth += depth_skip; // RA2: as above
+			depth = (unsigned short *)AlphaBuffer->Wrap_Overflow((unsigned)depth); // RA2: as above
 		}
 	} else {
-		for (int i = inter_top; i < inter_bottom; i++) {
-			for (int j = inter_left; j < inter_right; j++) {
+		for (int i = top; i < bottom; i++) { // RA2: as above
+			for (int j = left; j < right; j++) { // RA2: as above
 				unsigned char pixel = *shapeptr++;
 				if (pixel <= 0x7F) {
-					if (*alphaptr == 127) {
-						*alphaptr = pixel;
+					if (*depth == 127) { // RA2: as above
+						*depth = pixel; // RA2: as above
 					} else {
-						int value = (unsigned short)*alphaptr + pixel - 127;
-						*alphaptr = (value <= 0) ? 0 : value;
+						*depth = ((unsigned short)*depth + pixel - 127 <= 0) ? 0 : (unsigned short)*depth + pixel - 127; // RA2: as above
 					}
 				}
-				++alphaptr;
+				++depth; // RA2: as above
 			}
 			shapeptr += shape_skip;
-			alphaptr += alpha_skip;
+			depth += depth_skip; // RA2: as above
 		}
 	}
 }
+
+
 
 
 /// <summary>
