@@ -549,9 +549,10 @@ HRESULT STDMETHODCALLTYPE AnimTypeClass::GetClassID(CLSID * retval)
 /// <param name="crc">The checksum engine to submit this object's data to.</param>
 void AnimTypeClass::Compute_CRC(CRCEngine & crc) const
 {
-	BASECLASS::Compute_CRC(crc);
+	ObjectTypeClass::Compute_CRC(crc); // RA2: RA2's form
+	crc((long)Layer); // RA2: as above
 	crc(IsNormalized);
-	crc(IsFlat); // RA2: no IsGroundLayer (not in RA2's layout)
+	crc(IsFlat); // RA2: as above
 	crc(IsTranslucent);
 	crc(IsScorcher);
 	crc(IsFlameThrower);
@@ -559,21 +560,25 @@ void AnimTypeClass::Compute_CRC(CRCEngine & crc) const
 	crc(IsSticky);
 	crc(IsPingPong);
 	crc(IsReverse);
-	crc(Biggest);
+	crc(Shadow); // RA2: as above
+	crc((long)Biggest); // RA2: as above
 	crc(Damage);
 	crc(IsTiberiumChainReaction);
-	crc(Delay);
-	crc(Start);
-	crc(LoopStart);
-	crc(LoopEnd);
-	crc(Stages);
-	crc(DetailLevel); // RA2: no Sound (TibSun's use does not compile against RA2's declaration)
-	crc(TranslucencyDetailLevel);
-	crc(RandomLoopDelayMin);
-	crc(RandomLoopDelayMax);
-	crc(Translucency);
+	crc((long)Delay); // RA2: as above
+	crc((long)Start); // RA2: as above
+	crc((long)LoopStart); // RA2: as above
+	crc((long)LoopEnd); // RA2: as above
+	crc((long)Stages); // RA2: as above
+	crc((long)StartSound); // RA2: as above
+	crc((long)StopSound); // RA2: as above
+	crc((long)DetailLevel); // RA2: as above
+	crc((long)TranslucencyDetailLevel); // RA2: as above
+	crc((long)RandomLoopDelayMin); // RA2: as above
+	crc((long)RandomLoopDelayMax); // RA2: as above
+	crc((long)Translucency); // RA2: as above
 	crc(IsTiled);
 }
+
 
 
 /// <summary>
