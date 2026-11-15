@@ -29,6 +29,11 @@ enum BAnimType {
 	BANIM_SPECIAL_ONE,
 	BANIM_SPECIAL_TWO,
 	BANIM_SPECIAL_THREE,
+	BANIM_SUPER_ONE, // RA2: SuperAnim (BuildingTypeClass::Read_INI reads it into slot 13)
+	BANIM_SUPER_TWO, // RA2: SuperAnimTwo, slot 14
+	BANIM_SUPER_THREE, // RA2: SuperAnimThree, slot 15
+	BANIM_SUPER_FOUR, // RA2: SuperAnimFour, slot 16
+	BANIM_IDLE, // RA2: IdleAnim, slot 17
 
 	BANIM_COUNT,
 	BANIM_FIRST = 0,
