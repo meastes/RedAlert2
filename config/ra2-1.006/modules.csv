@@ -672,7 +672,9 @@ unk_00712700,0x00712700,0x00712B20,unknown,code not assigned to a module
 version,0x00712B20,0x00713300,tibsun,"functions compiled from src/version.cpp, matched, without gaps; two placed by the gap"
 unk_00713300,0x00713300,0x00713360,unknown,code not assigned to a module
 veteran,0x00713360,0x007135A0,tibsun,"functions compiled from src/veteran.cpp, matched, without gaps; three placed by the gap; ?Ability_From_Name@@YI?AW4AbilityType@@PBD@Z not placed; ??0VeterancyClass@@QAE@XZ not placed; ??1VeterancyClass@@QAE@XZ not placed"
-unk_007135A0,0x007135A0,0x00715090,unknown,code not assigned to a module
+unk_007135A0,0x007135A0,0x00713810,unknown,code not assigned to a module
+voc,0x00713810,0x00714D30,tibsun,"functions compiled from src/voc.cpp, matched, without gaps; two placed by the gap"
+unk_00714D30,0x00714D30,0x00715090,unknown,code not assigned to a module
 volinfo,0x00715090,0x00715230,tibsun,"functions compiled from src/volinfo.cpp, matched, without gaps"
 unk_00715230,0x00715230,0x007166C0,unknown,code not assigned to a module
 unk_007166C0,0x007166C0,0x00716720,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
