@@ -844,104 +844,105 @@ void BuildingClass::Editor_Draw_It(Point2D const & xdrawpoint, Rect const & xcli
  *=============================================================================================*/
 void BuildingClass::Draw_It(Point2D const & xdrawpoint, Rect const & xcliprect) const
 {
-	Cell cell = PositionCell;
+	Cell cell = Get_Cell(); // RA2: RA2's form
 
 	/*
 	**	The shape file to use for rendering depends on whether the building
 	**	is undergoing construction or not.
 	*/
-	ShapeSet const * shapefile = (ShapeSet const *)Get_Image_Data();
-	if (shapefile == NULL) return;
+	ShapeSet const * shape = (ShapeSet const *)Get_Image_Data(); // RA2: as above
+	if (shape == NULL) return; // RA2: as above
+
+	if (this != NULL && Fetch_RTTI() == RTTI_BUILDING && BState == BSTATE_CONSTRUCTION && Get_Mission() == MISSION_DECONSTRUCTION) { // RA2: as above
+		for (int index = 0; index < 18; index++) { // RA2: as above
+			if (Anims[index]) { // RA2: as above
+				Anims[index]->Make_Invisible(); // RA2: as above
+			}
+		}
+	}
 
 	if (Class->IsInvisibleInGame) return;
 
-	Point2D zdrawpoint(144, 172);
-	int zadjust = Class->NormalZAdjust;
-
-	if (Mission == MISSION_OPEN && !Door.Is_Ready_To_Open()) {
-
-		int shapenum = int(Door.Percent_Complete() * Class->GateStages);
-		if (Door.Is_Door_Closing()) {
-			shapenum = Class->GateStages - shapenum;
+	Point2D depth_point(198, 446); // RA2: as above
+	int z_adjust = Class->NormalZAdjust; // RA2: as above
+	bool air_product = false; // RA2: as above
+	if (Get_Mission() == MISSION_UNLOAD) { // RA2: as above
+		TechnoClass * product = Radio_Link(0); // RA2: as above
+		if (product && (product->Techno_Type_Class()->JumpJet || product->Techno_Type_Class()->BalloonHover)) { // RA2: as above
+			air_product = true; // RA2: as above
 		}
-		if (Door.Is_Door_Closed()) {
-			shapenum = 0;
-		}
-		if (Door.Is_Door_Open()) {
-			shapenum = Class->GateStages - 1;
-		}
-		if (shapenum >= Class->GateStages) {
-			shapenum = Class->GateStages - 1;
-		}
-		if (shapenum < 0) {
-			shapenum = 0;
-		}
+	}
 
-		ShapeSet const * shapefile = (ShapeSet const *)Get_Image_Data();
-
-		/// The z-shape offset built here is not used by the draw call below.
-		zdrawpoint += Class->ZShapePointMove;
-		Point2D zsizeoffset((Class->Width() * CELL_LEPTON) - CELL_LEPTON, (Class->Height() * CELL_LEPTON) - CELL_LEPTON);
-		zdrawpoint -= TacticalMap->Coord_To_Pixel_Absolute(zsizeoffset);
-
-		ZGradientType zgrad = ZGRAD_GROUND;
-		if (shapenum < Class->GateStages / 2) {
-			zgrad = ZGRAD_90DEG;
+	if (Get_Mission() == MISSION_OPEN && (Door.Is_Count_Up_Active() || Door.Is_Count_Down_Active() || Door.Is_Count_Up_Complete())) { // RA2: as above
+		int stage = (int)(Door.Percent_Complete() * Class->GateStages); // RA2: as above
+		if (Door.Is_Count_Down_Active()) { // RA2: as above
+			stage = Class->GateStages - stage; // RA2: as above
+		}
+		if (Door.Is_Count_Down_Complete()) { // RA2: as above
+			stage = 0; // RA2: as above
+		}
+		if (Door.Is_Count_Up_Complete()) { // RA2: as above
+			stage = Class->GateStages - 1; // RA2: as above
+		}
+		if (stage >= Class->GateStages) { // RA2: as above
+			stage = Class->GateStages - 1; // RA2: as above
+		}
+		if (stage < 0) { // RA2: as above
+			stage = 0; // RA2: as above
 		}
 
-		shapenum += (HealthRatio <= Rule->ConditionYellow ? (Class->GateStages + 1) : 0);
-		Techno_Draw_Object(shapefile, shapenum, xdrawpoint, xcliprect, DIR_N, 256, zadjust - TacticalMap->Z_Lepton_To_Pixel(Height), zgrad, true, Map[cell].Brightness);
-
+		ShapeSet const * gate_shape = (ShapeSet const *)Get_Image_Data(); // RA2: as above
+		stage += (HealthRatio <= Rule->ConditionYellow ? Class->GateStages + 1 : 0); // RA2: as above
+		Techno_Draw_Object(gate_shape, stage, xdrawpoint, xcliprect, DIR_N, 256, // RA2: as above
+			z_adjust - TacticalMap->Z_Lepton_To_Pixel(Get_Height()), ZGRAD_90DEG, 1, Map[cell].Brightness, 0, 0, Point2D(0, 0), SHAPE_NORMAL); // RA2: as above
 		return;
 	}
 
-	if (Mission == MISSION_UNLOAD) {
-		if (Class->DeployingAnim != NULL) {
-			shapefile = Class->DeployingAnim;
-			zadjust = 0;
+	if (Get_Mission() == MISSION_UNLOAD) { // RA2: as above
+		if ((air_product && Class->RoofDeployingAnim) || (!air_product && Class->DeployingAnim)) { // RA2: as above
+			shape = (ShapeSet const *)(air_product ? Class->RoofDeployingAnim : Class->DeployingAnim); // RA2: as above
+			z_adjust = -20; // RA2: as above
 		}
 	}
 
-	Point2D drawpoint = xdrawpoint;
-	int height = drawpoint.Y + shapefile->Get_Height() / 2;
-
-	Rect cliprect = xcliprect;
-	if (cliprect.Height > height) {
-		cliprect.Height = height;
+	int mission = Get_Mission(); // RA2: as above
+	if (mission != MISSION_CONSTRUCTION && mission != MISSION_DECONSTRUCTION) { // RA2: as above
+		depth_point += Class->ZShapePointMove; // RA2: as above
 	}
 
-	zdrawpoint += Class->ZShapePointMove;
-	Point2D zsizeoffset((Class->Width() * CELL_LEPTON) - CELL_LEPTON, (Class->Height() * CELL_LEPTON) - CELL_LEPTON);
-	zdrawpoint -= TacticalMap->Coord_To_Pixel_Absolute(zsizeoffset);
+	Point2D footprint(Class->Width() * 256 - 256, Class->Height() * 256 - 256); // RA2: as above
+	depth_point -= TacticalMap->Coord_To_Pixel_Absolute(footprint); // RA2: as above
 
-	ShapeSet const * zshapefile = (ShapeSet const *)BuildingTypeClass::BuildingZShape;
-	if (Class->Width() >= 6) {
-		zshapefile = NULL;
+	ShapeSet const * depth_shape = (ShapeSet const *)BuildingTypeClass::BuildingZShape; // RA2: as above
+	if (Class->Width() >= 8) { // RA2: as above
+		depth_shape = NULL; // RA2: as above
 	}
 
-	if (cliprect.Height > 0) {
-
-		/*
-		**	Actually draw the building shape.
-		*/
-		if ((Class->IsLaserFence && (LaserFenceFrame == 12 || LaserFenceFrame == 8)) || Class->IsFirestormWall) {
-			Techno_Draw_Object(shapefile, Shape_Number(), drawpoint, cliprect, DIR_N, 256, -1 - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, true, Map[cell].Brightness + Class->ExtraLight);
-		} else {
-			Techno_Draw_Object(shapefile, Shape_Number() < shapefile->Get_Count() / 2 ? Shape_Number() : shapefile->Get_Count() / 2, drawpoint, cliprect, DIR_N, 256, zadjust - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_90DEG, true, Map[cell].Brightness + Class->ExtraLight, zshapefile, 0, zdrawpoint);
-		}
+	if (xcliprect.Height > 0) { // RA2: as above
+		int frame = Shape_Number() < shape->Get_Count() / 2 ? Shape_Number() : shape->Get_Count() / 2; // RA2: as above
+		Techno_Draw_Object(shape, frame, xdrawpoint, xcliprect, DIR_N, 256, // RA2: as above
+			z_adjust - TacticalMap->Z_Lepton_To_Pixel(Get_Height()), ZGRAD_90DEG, 1, Map[cell].Brightness + Class->ExtraLight, depth_shape, 0, depth_point, SHAPE_NORMAL); // RA2: as above
 	}
 
 	/*
 	**	Draw the weapon factory custom overlay graphic.
 	*/
 	if (Class->BibShape && BState != BSTATE_CONSTRUCTION) {
-		Techno_Draw_Object(Class->BibShape, Shape_Number(), xdrawpoint, xcliprect, DIR_N, 256, -1 - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, true, Map[cell].Brightness + Class->ExtraLight);
+		Techno_Draw_Object(Class->BibShape, Shape_Number(), xdrawpoint, xcliprect, DIR_N, 256, // RA2: as above
+			-1 - TacticalMap->Z_Lepton_To_Pixel(Get_Height()), ZGRAD_GROUND, 1, Map[cell].Brightness + Class->ExtraLight, 0, 0, Point2D(0, 0), SHAPE_NORMAL); // RA2: as above
 	}
 
-	if (Mission == MISSION_UNLOAD && Class->UnderDoorAnim != NULL) {
-		Techno_Draw_Object(Class->UnderDoorAnim, HealthRatio <= Rule->ConditionYellow ? 1 : 0, xdrawpoint, xcliprect, DIR_N, 256, -TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, true, Map[cell].Brightness + Class->ExtraLight);
+	if (Get_Mission() == MISSION_UNLOAD && ((air_product && Class->UnderRoofDoorAnim != NULL) || (!air_product && Class->UnderDoorAnim != NULL))) { // RA2: as above
+		if (air_product) { // RA2: as above
+			Techno_Draw_Object(Class->UnderRoofDoorAnim, HealthRatio <= Rule->ConditionYellow, xdrawpoint, xcliprect, DIR_N, 256, // RA2: as above
+				-TacticalMap->Z_Lepton_To_Pixel(Get_Height()), ZGRAD_GROUND, 1, Map[cell].Brightness + Class->ExtraLight, 0, 0, Point2D(0, 0), SHAPE_NORMAL); // RA2: as above
+		} else {
+			Techno_Draw_Object(Class->UnderDoorAnim, HealthRatio <= Rule->ConditionYellow, xdrawpoint, xcliprect, DIR_N, 256, // RA2: as above
+				-TacticalMap->Z_Lepton_To_Pixel(Get_Height()), ZGRAD_GROUND, 1, Map[cell].Brightness + Class->ExtraLight, 0, 0, Point2D(0, 0), SHAPE_NORMAL); // RA2: as above
+		}
 	}
 }
+
 
 
 /// <summary>
@@ -6677,64 +6678,62 @@ int BuildingClass::Flush_For_Placement(TechnoClass * techno, Cell const & cell)
  *=============================================================================================*/
 Cell BuildingClass::Find_Exit_Cell(TechnoClass const * techno) // RA2: not const
 {
-	Cell const * ptr;
-	Cell origin = PositionCell;
-
+	Cell origin = Get_Cell(); // RA2: as above
+	Cell cell; // RA2: as above
 	if (Class->IsGDIBarracks) {
-		Cell cell = origin + Cell(1,2);
-		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-			return(cell);
-		}
+		cell = origin + Cell(1, 2); // RA2: as above
+		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+			return cell; // RA2: as above
 	}
-
 	if (Class->IsNODBarracks) {
-		Cell cell = origin + Cell(2,2);
-		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-			return(cell);
-		}
+		cell = origin + Cell(2, 2); // RA2: as above
+		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+			return cell; // RA2: as above
 	}
-
-	ptr = Class->ExitList;
-	if (ptr != NULL) {
-		while (*ptr != REFRESH_EOL) {
-			Cell cell = origin + *ptr++;
-			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, NULL, false) == MOVE_OK) {
-				return(cell);
-			}
+	if (Class->Naval && Class->IsWeaponsFactory) { // RA2: as above
+		Cell dock = Cell(Docking_Coord((TechnoClass *)techno)); // RA2: as above
+		cell = dock; // RA2: as above
+		cell += Cell(1, 1); // RA2: as above
+		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 0) == MOVE_OK) // RA2: as above
+			return cell; // RA2: as above
+		--cell.Y; // RA2: as above
+		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 0) == MOVE_OK) // RA2: as above
+			return cell; // RA2: as above
+		++cell.Y; // RA2: as above
+		--cell.X; // RA2: as above
+		if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 0) == MOVE_OK) // RA2: as above
+			return cell; // RA2: as above
+	}
+	Cell const *offset = Class->ExitList; // RA2: as above
+	if (!offset || Class->IsHospital) { // RA2: as above
+		int bottom = Class->Height(); // RA2: as above
+		for (int x = -1; x <= Class->Width(); ++x) { // RA2: as above
+			cell = origin + Cell(x, bottom); // RA2: as above
+			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+				return cell; // RA2: as above
+			cell = origin + Cell(x, -1); // RA2: as above
+			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+				return cell; // RA2: as above
+		}
+		int right = Class->Width(); // RA2: as above
+		for (int y = -1; y <= Class->Height(); ++y) { // RA2: as above
+			cell = origin + Cell(right, y); // RA2: as above
+			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+				return cell; // RA2: as above
+			cell = origin + Cell(-1, y); // RA2: as above
+			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 1) == MOVE_OK) // RA2: as above
+				return cell; // RA2: as above
 		}
 	} else {
-		int x1, x2;
-		int y1, y2;
-		Cell cell;
-
-		y1 = -1;
-		y2 = Class->Height();
-		for (x1 = -1; x1 <= Class->Width(); x1++) {
-			cell = origin + Cell(x1, y1);
-			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-				return(cell);
-			}
-			cell = origin + Cell(x1, y2);
-			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-				return(cell);
-			}
-		}
-
-		x1 = -1;
-		x2 = Class->Width();
-		for (y1 = -1; y1 <= Class->Height(); y1++) {
-			cell = origin + Cell(x1, y1);
-			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-				return(cell);
-			}
-			cell = origin + Cell(x2, y1);
-			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell]) == MOVE_OK) {
-				return(cell);
-			}
+		while (offset->X != 0x7fff || offset->Y != 0x7fff) { // RA2: as above
+			cell = origin + *offset++; // RA2: as above
+			if (Map.In_Radar(cell) && techno->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, 0) == MOVE_OK) // RA2: as above
+				return cell; // RA2: as above
 		}
 	}
-	return(CELL_NONE);
+	return CELL_NONE; // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -7398,47 +7397,26 @@ void BuildingClass::Update_Overpowerers(void) // RA2: not in TibSun, at 0x44B910
  *=============================================================================================*/
 void BuildingClass::Repair_AI(void)
 {
-	if (House->IQ >= Rule->IQRepairSell && Mission != MISSION_CONSTRUCTION && Mission != MISSION_DECONSTRUCTION) {
-		/*
-		**	Possibly start repair process if the building is below half strength.
-		*/
-//		unsigned ratio = MIN(House->Smartness, 0x00F0);
-		if (Can_Repair()) {
-			if (House->Available_Money() >= Rule->RepairThreshhold) {
-				if (!House->DidRepair) {
-					if (!IsRepairing && (IsCaptured || IsToRepair || House->Is_Human_Player())) {
-						House->DidRepair = true;	// flag that this house did its repair allocation for this frame
-						Repair(1);
-
-						if (!House->Is_Human_Player()) {
-							House->RepairTimer = Random_Pick((int)(House->RepairDelay * (TICKS_PER_MINUTE/4)), (int)(House->RepairDelay * TICKS_PER_MINUTE * 2));
-						}
-					}
+	if (House->IQ >= Rule->IQRepairSell && Get_Mission() != MISSION_CONSTRUCTION && Get_Mission() != MISSION_DECONSTRUCTION && Can_Repair()) { // RA2: RA2's form
+		if (House->Available_Money() >= Rule->RepairThreshhold) { // RA2: as above
+			if (!House->DidRepair && !IsRepairing && (IsCaptured || IsToRepair || House->Is_Human_Player())) { // RA2: as above
+				House->DidRepair = true; // RA2: as above
+				Repair(1); // RA2: as above
+				if (!House->Is_Human_Player()) { // RA2: as above
+					House->RepairTimer = Random_Pick((int)(House->RepairDelay * 225.0), (int)(House->RepairDelay * 1800.0)); // RA2: as above
 				}
-			} else {
-				if ((Session.Type != GAME_NORMAL || IsAllowedToSell) &&
-					IsTickedOff &&
-					(unsigned)House->Control.TechLevel >= (unsigned)Rule->IQSellBack &&
-					(unsigned)Random_Pick(0, 50) < (unsigned)House->Control.TechLevel &&
-					Tag == NULL &&
-					Class->ToBuild != RTTI_BUILDINGTYPE &&
-					HealthRatio < Rule->ConditionRed)
-				{
-					Sell_Back(1);
-				}
+			}
+		} else {
+			if ((Session.Type != GAME_NORMAL || IsAllowedToSell) && IsTickedOff && (unsigned)House->Control.IQ >= (unsigned)Rule->IQSellBack && (unsigned)Random_Pick(0, 50) < (unsigned)House->Control.TechLevel && Tag == NULL && Class->ToBuild != RTTI_BUILDINGTYPE && HealthRatio < Rule->ConditionRed) { // RA2: as above
+				Sell_Back(1); // RA2: as above
 			}
 		}
 	}
-
-	/*
-	**	If it is repairing, then apply any repair effects as necessary.
-	*/
-	if (IsRepairing && (Frame % (int)(Rule->RepairRate * TICKS_PER_MINUTE)) == 0) {
-		IsWrenchVisible = (IsWrenchVisible == false);
+	if (IsRepairing && Frame % (int)(Rule->RepairRate * 900.0) == 0) { // RA2: as above
+		IsWrenchVisible = !IsWrenchVisible; // RA2: as above
 		int cost = Class->Repair_Cost();
 		int step = Class->Repair_Step();
-
-		int shapenum = Shape_Number();
+		int old_frame = Shape_Number(); // RA2: as above
 
 		/*
 		**	Check for and expend any necessary monies to continue the repair.
@@ -7446,39 +7424,20 @@ void BuildingClass::Repair_AI(void)
 		if (House->Available_Money() >= cost) {
 			House->Spend_Money(cost);
 			Strength += step;
-
+			EstimatedHealth += step; // RA2: as above
 			if (Strength >= Class->MaxStrength) {
-				Strength = Class->MaxStrength;
+				EstimatedHealth = Strength = Class->MaxStrength; // RA2: as above
 				IsRepairing = false;
 			}
-
 			Set_Anim_Damage_State(HealthRatio <= Rule->ConditionYellow);
-
-			if (HealthRatio > Rule->ConditionYellow && ParticleSystems[ATTACHED_PARTICLE_DAMAGE] != NULL) {
-				ParticleSystems[ATTACHED_PARTICLE_DAMAGE]->Delete_Me();
-			}
-
-			if (Anims[BANIM_ACTIVE_ONE] == NULL) {
-				Begin_Anim(BANIM_ACTIVE_ONE, HealthRatio <= Rule->ConditionYellow);
-			}
-
-
-			if (Anims[BANIM_ACTIVE_THREE] == NULL) { // RA2: no IsTurretAnimExclusive (not in RA2's layout)
-				Begin_Anim(BANIM_ACTIVE_THREE, HealthRatio <= Rule->ConditionYellow);
-			}
-
-			if (Anims[BANIM_ACTIVE_FOUR] == NULL) {
-				Begin_Anim(BANIM_ACTIVE_FOUR, HealthRatio <= Rule->ConditionYellow);
-			}
-
-			if (Shape_Number() != shapenum) {
-				IsToDisplay = true;
-			}
+			if (HealthRatio > Rule->ConditionYellow && ParticleSystems[ATTACHED_PARTICLE_DAMAGE]) ParticleSystems[ATTACHED_PARTICLE_DAMAGE]->Delete_Me(); // RA2: as above
+			if (Shape_Number() != old_frame) IsToDisplay = true; // RA2: as above
 		} else {
 			IsRepairing = false;
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -7893,6 +7852,7 @@ void BuildingClass::Detach_Anim(AnimClass * anim)
 		return; // RA2: as above
 	}
 }
+
 
 
 
@@ -9396,11 +9356,11 @@ void BuildingClass::Cloaking_AI(bool fast)
 		return;
 	}
 
-	Cell center = Center_Coord().As_Cell();
+	Cell center = Cell(Center_Coord()); // RA2: RA2's form
 
 	if (Cloak == CLOAKING) {
 		if (TranslucencyLevel < 15) {
-			TranslucencyLevel++;
+			++TranslucencyLevel; // RA2: as above
 			if (TranslucencyLevel == 1 || TranslucencyLevel == 6 || TranslucencyLevel == 11) {
 				IsToDisplay = true;
 			}
@@ -9413,11 +9373,10 @@ void BuildingClass::Cloaking_AI(bool fast)
 				}
 			}
 		}
-	}
-	else if (Cloak == UNCLOAKING) {
+	} else if (Cloak == UNCLOAKING) { // RA2: as above
 		if (TranslucencyLevel >= 0) {
 			if (TranslucencyLevel > 0) {
-				TranslucencyLevel--;
+				--TranslucencyLevel; // RA2: as above
 			}
 			if (TranslucencyLevel == 0 || TranslucencyLevel == 5 || TranslucencyLevel == 10) {
 				IsToDisplay = true;
@@ -9427,18 +9386,19 @@ void BuildingClass::Cloaking_AI(bool fast)
 				Cloak = UNCLOAKED;
 				if (ParticleSystems[ATTACHED_PARTICLE_NATURAL] == NULL && Class->NaturalParticleLocation != COORD_NONE) {
 					Coord coord = Coord(Class->NaturalParticleLocation);
-					ParticleSystems[ATTACHED_PARTICLE_NATURAL] = new ParticleSystemClass(Class->NaturalParticleSystem, PositionCoord + coord, &Map[Get_Coord()], NULL);
+					ParticleSystems[ATTACHED_PARTICLE_NATURAL] = new ParticleSystemClass(Class->NaturalParticleSystem, // RA2: as above
+						PositionCoord + coord, &Map[Get_Coord()], NULL); // RA2: as above
 				}
 			}
 		}
 	}
 
 	if (Cloak == CLOAKED && Should_Uncloak()) {
-		Do_Uncloak();
+		Do_Uncloak(false); // RA2: as above
 	}
 
 	if (Cloak == UNCLOAKED && Is_Ready_To_Cloak()) {
-		Do_Cloak();
+		Do_Cloak(false); // RA2: as above
 	}
 
 	if (CloakGeneratorState != 0 && Class->IsCloakGenerator) {
@@ -9450,45 +9410,35 @@ void BuildingClass::Cloaking_AI(bool fast)
 		if (CloakGeneratorState > 0) {
 			if (CurrentCloakRadius == Class->CloakRadiusInCells) {
 				CloakGeneratorState = 0;
-				for (int i = 0; i < Buildings.Count(); i++) {
-					BuildingClass * building = Buildings[i];
-					if (building->IsActive && building->Class->IsSensorArray && building->IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-						building->SensorArrayActivate(); // RA2: the sensor array virtuals
-					}
-				}
 			} else {
-				CurrentCloakRadius++;
+				++CurrentCloakRadius; // RA2: as above
 				cloaking_surface->Fill(0);
 				cloaking_surface->Draw_Circle(Point2D(width_half, width_half), CurrentCloakRadius, cloaking_surface->Get_Rect(), 1);
 				char * data = (char *)cloaking_surface->Lock();
 				Cell origin = center - Cell(width_half, width_half);
 
-				for (int y = 0; y < width; y++) {
-					for (int x = 0; x < width; x++) {
+				for (int y = 0; y < width; ++y) { // RA2: as above
+					for (int x = 0; x < width; ++x) { // RA2: as above
 						if (*data++ != 0) {
 							Cell current = origin + Cell(x, y);
 							CellClass * cellptr = &Map[current];
 							if (!cellptr->Is_Cloaked(houseid)) {
 								cellptr->Cloaked_By(houseid);
 								Cloak_Cell_Occupiers(cellptr);
-								BuildingClass * building = cellptr->Cell_Building();
-								if (building != NULL && building->House->HeapID == houseid) {
-									if (building->Center_Coord().As_Cell() == current) {
-										CurrentCloakRadius--;
-										return;
-									}
+								BuildingClass * building = static_cast<BuildingClass *>(cellptr->Cell_Building()); // RA2: as above
+								if (building && building->House->HeapID == houseid && Cell(building->Center_Coord()) == current) { // RA2: as above
+									--CurrentCloakRadius; // RA2: as above
+									return;
 								}
 							}
 						}
 					}
 				}
 			}
-		}
-		else if (CurrentCloakRadius == 0) {
+		} else if (CurrentCloakRadius == 0) { // RA2: as above
 			CloakGeneratorState = 0;
-		}
-		else {
-			CurrentCloakRadius--;
+		} else { // RA2: as above
+			--CurrentCloakRadius; // RA2: as above
 			cloaking_surface->Fill(2);
 			cloaking_surface->Draw_Circle(Point2D(width_half, width_half), Class->CloakRadiusInCells, cloaking_surface->Get_Rect(), 0);
 			if (CurrentCloakRadius != 0) {
@@ -9497,20 +9447,18 @@ void BuildingClass::Cloaking_AI(bool fast)
 			char * data = (char *)cloaking_surface->Lock();
 			Cell origin = center - Cell(width_half, width_half);
 
-			for (int y = 0; y < width; y++) {
-				for (int x = 0; x < width; x++) {
+			for (int y = 0; y < width; ++y) { // RA2: as above
+				for (int x = 0; x < width; ++x) { // RA2: as above
 					if (*data++ == 0) {
 						Cell current = origin + Cell(x, y);
 						CellClass * cellptr = &Map[current];
 						if (cellptr->Is_Cloaked(houseid)) {
 							cellptr->Uncloaked_By(houseid);
 							Cloak_Cell_Occupiers(cellptr);
-							BuildingClass * building = cellptr->Cell_Building();
-							if (building != NULL && building->House->HeapID == houseid) {
-								if (building->Center_Coord().As_Cell() == current && !fast) {
-									CurrentCloakRadius++;
-									return;
-								}
+							BuildingClass * building = static_cast<BuildingClass *>(cellptr->Cell_Building()); // RA2: as above
+							if (building && building->House->HeapID == houseid && Cell(building->Center_Coord()) == current && (char)fast == 0) { // RA2: as above
+								++CurrentCloakRadius; // RA2: as above
+								return; // RA2: as above
 							}
 						}
 					}
@@ -9518,17 +9466,23 @@ void BuildingClass::Cloaking_AI(bool fast)
 			}
 
 			if (CurrentCloakRadius == 0) {
-				for (int i = 0; i < Buildings.Count(); i++) {
+				for (int i = 0; i < Buildings.Count(); ++i) { // RA2: as above
 					BuildingClass * building = Buildings[i];
-					if (building->IsActive && building != this && building->Class->IsCloakGenerator && building->IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-						if (building->CloakGeneratorState == 0) {
-							Cell diff = center - building->Center_Coord().As_Cell();
-							int maxdist = (Class->CloakRadiusInCells + 2);
-							if (diff.X*diff.X + diff.Y*diff.Y < 4 * (maxdist * maxdist)) {
-								building->Enable_Cloak_Generator();
-								if (building->CurrentCloakRadius != 0) {
-									building->CurrentCloakRadius--;
+					if (building->IsActive && building != this && building->Class->IsCloakGenerator && // RA2: as above
+						building->IsPowerOnline() && building->CloakGeneratorState == 0) { // RA2: as above
+						Cell diff = center - Cell(building->Center_Coord()); // RA2: as above
+						int dy = diff.Y; // RA2: as above
+						int dx = diff.X; // RA2: as above
+						if (dy * dy + dx * dx < 4 * ((Class->CloakRadiusInCells + 2) * (Class->CloakRadiusInCells + 2))) { // RA2: as above
+							if (building->Class->IsCloakGenerator) { // RA2: as above
+								building->CloakGeneratorState = 1; // RA2: as above
+								if (building->CurrentCloakRadius == building->Class->CloakRadiusInCells) { // RA2: as above
+									building->CurrentCloakRadius = 0; // RA2: as above
 								}
+								building->IsToDisplay = true; // RA2: as above
+							}
+							if (building->CurrentCloakRadius != 0) { // RA2: as above
+								--building->CurrentCloakRadius; // RA2: as above
 							}
 						}
 					}
@@ -9537,6 +9491,7 @@ void BuildingClass::Cloaking_AI(bool fast)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -9576,38 +9531,31 @@ bool BuildingClass::IsPowerOnline(void) const // RA2: Is_Powered_On is the IsPow
 /// objects standing there are hidden again. The house's other sensor arrays are then
 /// re-enabled, since their coverage may well have overlapped the area just given up.
 /// </summary>
-void BuildingClass::SensorArrayDeactivate(Cell) // RA2: Disable_Sensor_Array is the virtual SensorArrayDeactivate
+void BuildingClass::SensorArrayDeactivate(Cell cell) // RA2: RA2's form
 {
-	int radius = Class->CloakRadiusInCells;
-	int dist = radius * radius;
-	HousesType houseid = House->HeapID;
-	Cell origin = Center_Coord().As_Cell();
-	for (int y = -radius; y < radius; y++) {
-		for (int x = -radius; x < radius; x++) {
-			Cell newcell = Cell(origin.X + x, origin.Y + y);
-			if (x * x + y * y < dist) {
-				CellClass * cellptr = &Map[newcell];
-				if (cellptr->Is_Sensed(houseid)) {
-					cellptr->Unsensed_By(houseid);
-					Cloak_Cell_Occupiers(cellptr);
-					BuildingClass * building = cellptr->Cell_Building();
-					if (building != NULL && building->House != PlayerPtr) {
-						if (building->Visual_Character() != VISUAL_NORMAL) {
-							building->IsToDisplay = true;
-						}
+	int range = Class->CloakRadiusInCells; // RA2: as above
+	int range_squared = range * range; // RA2: as above
+	HousesType house = House->HeapID; // RA2: as above
+	if (cell == CELL_NONE) { // RA2: as above
+		cell = Center_Coord().As_Cell(); // RA2: as above
+	}
+	for (int y = -range; y < range; y++) { // RA2: as above
+		for (int x = -range; x < range; x++) { // RA2: as above
+			Cell spot = Cell(cell.X + x, cell.Y + y); // RA2: as above
+			if (x * x + y * y < range_squared) { // RA2: as above
+				CellClass *object = &Map[spot]; // RA2: as above
+				object->Unsensed_By(house); // RA2: as above
+				for (ObjectClass *occupier = object->Cell_Occupier(); occupier != 0; occupier = occupier->Next) { // RA2: as above
+					int kind = occupier->Fetch_RTTI(); // RA2: as above
+					if (kind == 1 || kind == 15 || kind == 2) { // RA2: as above
+						((TechnoClass *)occupier)->Try_To_Cloak(); // RA2: as above
 					}
 				}
 			}
 		}
 	}
-
-	for (int i = 0; i < Buildings.Count(); i++) {
-		BuildingClass * building = Buildings[i];
-		if (building->IsActive && building != +this && building->Class->IsSensorArray && building->IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-			building->SensorArrayActivate(); // RA2: the sensor array virtuals
-		}
-	}
 }
+
 
 
 /// <summary>
@@ -9676,31 +9624,27 @@ void BuildingClass::DisguiseDetectorDeactivate(Cell cell) // RA2: not in TibSun,
 /// reveals cloaked objects standing there and forces any cloaked unit in the area to
 /// reconsider whether it can stay hidden. A powered down array does nothing.
 /// </summary>
-void BuildingClass::SensorArrayActivate(Cell) // RA2: Enable_Sensor_Array is the virtual SensorArrayActivate
+void BuildingClass::SensorArrayActivate(Cell cell) // RA2: Enable_Sensor_Array is the virtual SensorArrayActivate
 {
-	if (IsPowerOnline()) { // RA2: Is_Powered_On is the IsPowerOnline virtual
-		int radius = Class->CloakRadiusInCells;
-		int dist = radius * radius;
-		HousesType houseid = House->HeapID;
-		Cell origin = Center_Coord().As_Cell();
-		for (int y = -radius; y < radius; y++) {
-			for (int x = -radius; x < radius; x++) {
-				Cell newcell = Cell(origin.X + x, origin.Y + y);
-				if (x * x + y * y < dist) {
-					CellClass * cellptr = &Map[newcell];
-					cellptr->Sensed_By(houseid);
-					Cloak_Cell_Occupiers(cellptr);
-					BuildingClass * building = cellptr->Cell_Building();
-					if (building != NULL && building->House != PlayerPtr) {
-						if (building->Visual_Character() != VISUAL_NORMAL) {
-							building->IsToDisplay = true;
-						}
-					}
+	if (IsPowerOnline()) { // RA2: as above
+		int range = Class->DetectDisguiseRange; // RA2: as above
+		int range_squared = range * range; // RA2: as above
+			HousesType house = House->HeapID; // RA2: as above
+		if (cell == CELL_NONE) { // RA2: as above
+			cell = Center_Coord().As_Cell(); // RA2: as above
+		}
+		for (int y = -range; y < range; y++) { // RA2: as above
+			for (int x = -range; x < range; x++) { // RA2: as above
+				Cell spot = Cell(cell.X + x, cell.Y + y); // RA2: as above
+				if (x * x + y * y < range_squared) { // RA2: as above
+					CellClass *object = &Map[spot]; // RA2: as above
+				object->Sensed_By(house); // RA2: as above
 				}
 			}
 		}
 	}
 }
+
 
 
 
@@ -10760,79 +10704,88 @@ bool BuildingClass::CanBeOccupiedBy(InfantryClass * infantry) const // RA2: not 
 void BuildingClass::Eject_Occupants(bool hunt) // RA2: not in TibSun, at 0x452F50
 {
 	if (Occupants.Count() == 0) return;
-	Coord destination;
+
+	Coord destination = COORD_NONE; // RA2: as above
 	Cell selected;
+	memcpy(&selected, &CELL_NONE, sizeof(selected)); // RA2: as above
 	int width = Class->Width();
 	int height = Class->Height(false);
 	bool found = false;
-	InfantryClass * occupant = Occupants[0];
 	Cell probe = Get_Cell();
-	probe.X += width;
-	probe.Y += height;
-	while (!found && probe.Y > Get_Cell().Y - 1) {
-		probe.Y--;
-		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == MOVE_OK) {
+	probe.X = (short)((unsigned int)(int)probe.X + (unsigned int)width); // RA2: as above
+	probe.Y = (short)((unsigned int)(int)probe.Y + (unsigned int)height); // RA2: as above
+	InfantryClass *occupant = Occupants[0]; // RA2: as above
+
+	int entry_result = occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true); // RA2: as above
+	while (entry_result != 0) { // RA2: as above
+		if ((int)probe.Y <= (int)Get_Cell().Y - 1) goto after_first_edge; // RA2: as above
+		probe.Y = (short)(probe.Y - 1); // RA2: as above
+		entry_result = occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true); // RA2: as above
+	}
+	found = true; // RA2: as above
+	selected = probe; // RA2: as above
+after_first_edge: // RA2: as above
+	probe = Get_Cell();
+	probe.X = (short)((unsigned int)(int)probe.X + (unsigned int)width); // RA2: as above
+	probe.Y = (short)((unsigned int)(int)probe.Y + (unsigned int)height); // RA2: as above
+	while (!found && (int)probe.X > (int)Get_Cell().X - 1) { // RA2: as above
+		probe.X = (short)(probe.X - 1); // RA2: as above
+		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == 0) { // RA2: as above
 			found = true;
 			selected = probe;
 		}
 	}
+
 	probe = Get_Cell();
-	probe.X += width;
-	probe.Y += height;
-	while (!found && probe.X > Get_Cell().X - 1) {
-		probe.X--;
-		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == MOVE_OK) {
+	probe.X = (short)(probe.X - 1); // RA2: as above
+	probe.Y = (short)(probe.Y - 1); // RA2: as above
+	while (!found && (int)probe.X < (int)((unsigned int)(int)Get_Cell().X + (unsigned int)width)) { // RA2: as above
+		probe.X = (short)(probe.X + 1); // RA2: as above
+		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == 0) { // RA2: as above
 			found = true;
 			selected = probe;
 		}
 	}
+
 	probe = Get_Cell();
-	probe.X--;
-	probe.Y--;
-	while (!found && probe.X < Get_Cell().X + width) {
-		probe.X++;
-		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == MOVE_OK) {
-			found = true;
+	probe.X = (short)(probe.X - 1); // RA2: as above
+	probe.Y = (short)(probe.Y - 1); // RA2: as above
+	while (!found && (int)probe.Y < (int)((unsigned int)(int)Get_Cell().Y + (unsigned int)height)) { // RA2: as above
+		probe.Y = (short)(probe.Y + 1); // RA2: as above
+		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == 0) { // RA2: as above
 			selected = probe;
-		}
-	}
-	probe = Get_Cell();
-	probe.X--;
-	probe.Y--;
-	while (!found && probe.Y < Get_Cell().Y + height) {
-		probe.Y++;
-		if (occupant->Can_Enter_Cell(&Map[probe], FACING_NONE, -1, NULL, true) == MOVE_OK) {
 			found = true;
-			selected = probe;
 		}
 	}
 	if (!found) {
 		KillOccupants(NULL);
 		return;
 	}
+
 	destination = Map[selected].Center_Coord();
-	ScenarioInit++;
-	for (int index = Occupants.Count() - 1; index >= 0; index--) {
-		InfantryClass * member = Occupants[index];
+	ScenarioInit = (int)((unsigned int)ScenarioInit + 1u); // RA2: as above
+	for (int index = (int)((unsigned int)Occupants.Count() - 1u); index >= 0; --index) { // RA2: as above
+		InfantryClass *member = Occupants[index]; // RA2: as above
 		if (member->Unlimbo(destination, DIR_N)) {
 			member->Assign_Target(NULL);
 			member->Scatter(Center_Coord(), true, true);
 			if (hunt) {
-				if (member->Team != NULL) {
-					member->Team->Remove(member, -1);
-				}
+				TeamClass *team = member->Team; // RA2: as above
+				if (team) team->Remove(member, -1, 0); // RA2: as above
 				member->QueueMission(MISSION_HUNT, false);
 			}
 		} else {
 			member->Delete_Me();
 		}
 	}
-	ScenarioInit--;
-	int capacity = Occupants.Length();
-	Occupants.Clear();
-	Occupants.Resize(capacity, 0);
+	ScenarioInit = (int)((unsigned int)ScenarioInit - 1u); // RA2: as above
+	DynamicVectorClass<InfantryClass *> &occupants = Occupants; // RA2: as above
+	int capacity = occupants.Length(); // RA2: as above
+	occupants.Clear(); // RA2: as above
+	occupants.Resize(capacity, 0); // RA2: as above
 	UpdateThreatInCell(Get_Cell_Ptr());
 }
+
 
 
 /// <summary>
@@ -10850,36 +10803,44 @@ int BuildingClass::GetOccupantCount(void) const // RA2: not in TibSun, at 0x4532
 /// </summary>
 void BuildingClass::Update_Garrison_Owner(void) // RA2: not in TibSun, at 0x453300
 {
-	if (Get_Health_Ratio() <= Rule->ConditionRed) {
-		Eject_Occupants(false);
+	if ((char)Is_Red_Health()) { // RA2: as above
+		Eject_Occupants(0); // RA2: as above
 	}
-	HouseClass * civilian = NULL;
 	int count = Houses.Count();
-	SideType side = SideClass::From_Name("Civilian");
-	for (int i = 0; i < count; i++) {
-		if (Houses[i]->Class->Side == side) {
-			civilian = Houses[i];
-		}
-	}
-	if (GetOccupantCount() == 0 && House != civilian) {
-		if (House->Is_Player_Control()) {
-			VocClass::PlayGlobal(Rule->BuildingAbandonedSound, 1.0f, 0x2000);
-			if (Submit_Radar_Event(RadarEventType(15), Get_Cell())) {
-				Queue_Speech("EVA_StructureAbandoned", -1, -1);
+	HouseClass * civilian = NULL;
+	int side = SideClass::From_Name("Civilian"); // RA2: as above
+	if (count > 0) { // RA2: as above
+		HouseClass ** cursor = &Houses[0]; // RA2: as above
+		do { // RA2: as above
+			HouseClass * house = *cursor; // RA2: as above
+			if (house->Class->Side == side) { // RA2: as above
+				civilian = house; // RA2: as above
 			}
-		}
-		Refresh_State_Animations();
-		Captured(civilian, false);
+			++cursor; // RA2: as above
+		} while (--count); // RA2: as above
 	}
-	if (GetOccupantCount() > 0 && House == civilian) {
+	if (Occupants.Count() == 0) { // RA2: as above
+		if (House != civilian) { // RA2: as above
+			if (House->Is_Player_Control()) { // RA2: as above
+				VocClass::PlayGlobal(Rule->BuildingAbandonedSound, 1.0f, 0x2000, 0); // RA2: as above
+				if (Submit_Radar_Event(RadarEventType(15), Get_Cell())) { // RA2: as above
+					Queue_Speech("EVA_StructureAbandoned", -1, -1); // RA2: as above
+				}
+			}
+			Refresh_State_Animations(); // RA2: as above
+			Captured(civilian, 0); // RA2: as above
+		}
+	}
+	if (Occupants.Count() > 0 && House == civilian) { // RA2: as above
 		Refresh_State_Animations();
-		Captured(Occupants[0]->House, false);
-		if (House->Is_Player_Control()) {
+		Captured(Occupants[0]->House, 0); // RA2: as above
+		if (Occupants[0]->House->Is_Player_Control()) { // RA2: as above
 			Queue_Speech("EVA_StructureGarrisoned", -1, -1);
-			VocClass::PlayAt(Rule->BuildingGarrisonedSound, Center_Coord());
+			VocClass::PlayAt(Rule->BuildingGarrisonedSound, Center_Coord(), 0); // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
