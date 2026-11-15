@@ -161,6 +161,7 @@ class DisplayClass: public MapClass
 		virtual void Put_Place_Back(TechnoClass * ) {}; // Affects 'pending' system.
 		void Cursor_Mark(Cell const & pos, bool on);
 		void Set_Cursor_Shape(Cell const * list);
+		void Set_Copy_Cursor_Shape(Cell const * list); // RA2: 0x499070, the same for the copy footprint
 		Cell Set_Cursor_Pos(Cell const & pos = CELL_NONE);
 		Cell Get_Occupy_Dimensions(Cell const *list) const;
 

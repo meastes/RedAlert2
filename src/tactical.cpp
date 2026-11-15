@@ -3376,7 +3376,7 @@ void Tactical::Detach(AbstractClass const * target, bool all)
 	}
 
 	if (target == Map.CopyPendingObjectPtr) { // RA2: a copied placement of the object is dropped too
-		Map.Set_Cursor_Shape(NULL); // RA2: as above
+		Map.Set_Copy_Cursor_Shape(NULL); // RA2: as above
 		Map.CopyPendingObjectPtr = NULL; // RA2: as above
 		Map.CopyPendingObject = NULL; // RA2: as above
 		Map.CopyPendingHouse = HOUSE_NONE; // RA2: as above
