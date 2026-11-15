@@ -172,6 +172,8 @@ extern "C" {
 bool VideoBackBufferAllowed = true;
 
 extern	HINSTANCE LanguageResources;
+extern void * MouseShapes; // RA2: 0xABD488, MOUSE.SHP as Init_Game loaded it
+extern bool MouseShapesAllocated; // RA2: 0xABD48C, set when MouseShapes was allocated
 
 #define APP_GUID "29e3bb2a-2f36-11d3-a72c-0090272fa661"
 #define AUTOPLAY_GUID "b350c6d2-2f36-11d3-a72c-0090272fa661"
@@ -1444,8 +1446,7 @@ void Exit_Process(int code) // RA2: not in TibSun, at 0x691310
  *=============================================================================================*/
 void Emergency_Exit(void)
 {
-	Audio.End();
-
+	// RA2: no Audio.End()
 	ReadyToQuit = 1;
 
 	/*
@@ -1474,6 +1475,11 @@ void Emergency_Exit(void)
 		delete MouseCursor;
 	}
 	MouseCursor = NULL;
+
+	if (MouseShapesAllocated) { // RA2: frees the mouse shapes Init_Game loaded (MOUSE.SHP)
+		delete MouseShapes; // RA2: as above
+		MouseShapesAllocated = false; // RA2: as above
+	} // RA2: as above
 
 	PostQuitMessage(EXIT_SUCCESS);
 
