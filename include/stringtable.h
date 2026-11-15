@@ -21,4 +21,5 @@ class StringTable
 {
 	public:
 		static wchar_t const * LoadString(char const * label, char ** extra, char const * file, int line);
+		static int Is_Initialized(void); // RA2: 0x6FA030, has the string table been read in yet?
 };

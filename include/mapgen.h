@@ -185,6 +185,10 @@ public:
 		static void Destroy_Cell_Regions(void);
 		static void Delete_All_Regions(void);
 		static MapRegionClass *From_ID(int id);
+		static void Create_Zone_Region(CellClass * cptr, MZoneType mzone, int zone); // RA2: 0x575D20
+		static void Create_Zone_Regions(MZoneType mzone, int zone); // RA2: 0x576000
+		void Place_Start_Points(int first_waypoint); // RA2: 0x576170
+		DynamicVectorClass<Cell> * Pick_Spread_Cells(DynamicVectorClass<Cell> const & cells); // RA2: 0x576810, a member
 
 		/*
 		 * Random cell pickers.
@@ -235,6 +239,12 @@ public:
 		void Flatten_Area(Rect const & rect);
 
 	public:
+		/*
+		 * These are the cells picked for the player start points placed in this region,
+		 * filled in by Generate_Starting_Points. The region owns the list and deletes it.
+		 */
+		DynamicVectorClass<Cell> *StartCells; // RA2: not in TibSun, +0x00
+
 		/*
 		 * Pointer to the list of region numbers this region borders. It is built just before
 		 * the bridges and ramps are laid out and thrown away directly afterward, so it is NULL
@@ -348,6 +358,10 @@ class MapSeedClass : public LoadOptionsClass
 		virtual bool Save_File(const char * file_name, wchar_t const * descr) override; // RA2: a wide description
 		virtual bool Delete_File(const char * file_name) override;
 		virtual bool Read_File(FileEntryClass * entry, WIN32_FIND_DATAA * ff) override;
+		virtual wchar_t const * Load_Caption(void) const; // RA2: 0x5796F0; overrides LoadOptionsClass's slot 5 (0x53C970) once loaddlg.h declares it
+		virtual wchar_t const * Save_Caption(void) const; // RA2: 0x579710; as above, slot 6
+		virtual wchar_t const * Delete_Caption(void) const; // RA2: 0x579730; as above, slot 7
+		virtual wchar_t const * Saved_Message(void) const; // RA2: 0x579750; as above, slot 8
 
 		/*
 		 * Dialog interaction.
@@ -360,6 +374,8 @@ class MapSeedClass : public LoadOptionsClass
 		/*
 		 * Settings adjustment.
 		 */
+		void Set_Default_Description(void); // RA2: 0x576FE0
+		void Randomize_For_Map_Type(int map_type); // RA2: 0x5789F0
 		void Randomize(void);
 		void Fixup_Settings(void);
 		void Fixup_WDT_Settings(void);
@@ -489,7 +505,8 @@ class MapGeneratorClass
 		void Init_Regions(void);
 		IsometricTileType Pick_Alternate_Cliff(IsometricTileType type); // RA2: 0x582B30
 		void Vary_Cliff_Runs(void); // RA2: 0x582FD0
-		bool Make_Regions(void);
+		void Fixup_Cliff_Corners(void); // RA2: 0x5831C0
+		void Make_Regions(void); // RA2: returns nothing
 		bool Expand_All_High_Ground(void);
 		bool Grow_Region(int id, int rings, Rect rect, char set_height, char height);
 		bool Clear_Region_Border(int id, int rings, int new_id);
