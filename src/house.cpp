@@ -2927,9 +2927,11 @@ bool HouseClass::Place_Special_Blast(SuperWeaponType id, Cell const & cell)
 		}
 	}
 	super->Discharged(this == PlayerPtr, cell); // RA2: as above
-	if (super->Class->PostClick && linked != 0) { // RA2: as above
-		linked->Set_Ready(0); // RA2: as above
-		linked->Recharge(this == PlayerPtr); // RA2: as above
+	if (super->Class->PostClick) { // RA2: nested ifs; the larger source size keeps this function out of line at every call site
+		if (linked != 0) { // RA2: as above
+			linked->Set_Ready(0); // RA2: as above
+			linked->Recharge(this == PlayerPtr); // RA2: as above
+		}
 	}
 	return(true);
 }
