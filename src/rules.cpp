@@ -75,6 +75,7 @@
 #include "levitate.h"
 #include "mission.h"
 #include "movie.h"
+#include "multiplayer.h"
 #include "overtype.h"
 #include "psystype.h"
 #include "ptype.h"
@@ -2883,11 +2884,16 @@ int Coop_Camp_Unique_ID(void) // RA2: not in TibSun, at 0x652520
 int RulesClass::Get_Rule_Unique_ID(void)
 {
 	int id = RuleINI->Get_Unique_ID();
-	if (Addon_Enabled(ADDON_FIRESTORM)) {
-		id += FSRuleINI.Get_Unique_ID();
+	int count = MultiplayerGameMode::GetModeCount(); // RA2: RA2's form
+	for (int index = 1; index <= count; index++) { // RA2: as above
+		MultiplayerGameMode *session = MultiplayerGameMode::Get(index); // RA2: as above
+		if (session != 0) { // RA2: as above
+			id += session->GetINI()->Get_Unique_ID(); // RA2: as above
+		}
 	}
-	return(id);
+	return id + Coop_Camp_Unique_ID(); // RA2: as above
 }
+
 
 
 /// <summary>
