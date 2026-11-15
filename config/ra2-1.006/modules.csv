@@ -416,9 +416,9 @@ unk_005B6A40,0x005B6A40,0x005B9B20,unknown,code not assigned to a module
 multiplayerteam,0x005B9B20,0x005B9C20,source,"functions compiled from src/multiplayerteam.cpp, matched, without gaps"
 unk_005B9C20,0x005B9C20,0x005BB9D0,unknown,code not assigned to a module
 unk_005BB9D0,0x005BB9D0,0x005BBA50,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_005BBA50,0x005BBA50,0x005BCE90,unknown,code not assigned to a module
-unk_005BCE90,0x005BCE90,0x005BD070,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_005BD070,0x005BD070,0x005C2C40,unknown,code not assigned to a module
+unk_005BBA50,0x005BBA50,0x005BBD10,unknown,code not assigned to a module
+netdlg2,0x005BBD10,0x005C2970,tibsun,"functions compiled from src/netdlg2.cpp, without gaps; matched except ?Net2SetHouseAndColor@@YIHPBDHH@Z and ?MPlayer_Game_List_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?MPlayer_Host_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?Request_To_Join@@YIHH_N@Z"
+unk_005C2970,0x005C2970,0x005C2C40,unknown,code not assigned to a module
 unk_005C2C40,0x005C2C40,0x005C2C80,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_005C2C80,0x005C2C80,0x005CDB40,unknown,code not assigned to a module
 nullconn,0x005CDB40,0x005CDCB0,tibsun,"functions compiled from src/nullconn.cpp, matched, without gaps; ?Packet_Overhead_Size@NullModemConnClass@@SIHXZ not placed"
