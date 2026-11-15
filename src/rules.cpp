@@ -1978,8 +1978,7 @@ bool RulesClass::Read_AdvancedCommandBar(CCINIClass const & ini, bool multiplaye
 /// </summary>
 void RulesClass::Save(IStream * stream)
 {
-	stream->Write(this, sizeof(*this), NULL);
-
+	stream->Write(this, sizeof(*this), 0); // RA2: RA2's form
 	AIIonCannonConYardValue.Save(stream);
 	AIIonCannonWarFactoryValue.Save(stream);
 	AIIonCannonPowerValue.Save(stream);
@@ -1994,9 +1993,15 @@ void RulesClass::Save(IStream * stream)
 	AIIonCannonTempleValue.Save(stream);
 	FillEarliestTeamProbability.Save(stream);
 	TeamDelays.Save(stream);
+	AlliedBaseDefenseCounts.Save(stream); // RA2: as above
+	SovietBaseDefenseCounts.Save(stream); // RA2: as above
+	DisabledDisguiseDetectionPercent.Save(stream); // RA2: as above
+	AIAutoDeployFrameDelay.Save(stream); // RA2: as above
+	AIPickWallDefensePercent.Save(stream); // RA2: as above
 	MinimumAIDefensiveTeams.Save(stream);
 	MaximumAIDefensiveTeams.Save(stream);
 	MultiplayerAICreditMultipliers.Save(stream);
+	AIVirtualPurifiers.Save(stream); // RA2: as above
 	TotalAITeamCap.Save(stream);
 	AIHateDelays.Save(stream);
 	RadarEventSuppressionDistances.Save(stream);
@@ -2009,13 +2014,16 @@ void RulesClass::Save(IStream * stream)
 	PrerequisiteBarracks.Save(stream);
 	PrerequisiteRadar.Save(stream);
 	PrerequisiteTech.Save(stream);
+	PrerequisiteProc.Save(stream); // RA2: as above
 	CreditTicks.Save(stream);
+	LightningSounds.Save(stream); // RA2: as above
 	Scorches.Save(stream);
 	Scorches1.Save(stream);
 	Scorches2.Save(stream);
 	Scorches3.Save(stream);
 	Scorches4.Save(stream);
-	BuildConst.Save(stream); // RA2: no Craters (not in RA2's layout)
+	Shipyard.Save(stream); // RA2: as above
+	BuildConst.Save(stream); // RA2: as above
 	BuildPower.Save(stream);
 	BuildRefinery.Save(stream);
 	BuildBarracks.Save(stream);
@@ -2027,12 +2035,17 @@ void RulesClass::Save(IStream * stream)
 	BuildHelipad.Save(stream);
 	BuildRadar.Save(stream);
 	ConcreteWalls.Save(stream);
-	EWGates.Save(stream);
 	NSGates.Save(stream);
+	EWGates.Save(stream);
+	BuildNavalYard.Save(stream); // RA2: as above
+	BuildDummy.Save(stream); // RA2: as above
+	NeutralTechBuildings.Save(stream); // RA2: as above
 	PadAircraft.Save(stream);
 	OnFire.Save(stream);
 	TreeFire.Save(stream);
 	SplashList.Save(stream);
+	BaseUnit.Save(stream); // RA2: as above
+	DefaultMirageDisguises.Save(stream); // RA2: as above
 	HarvesterUnit.Save(stream);
 	DeadBodies.Save(stream);
 	DropPod.Save(stream);
@@ -2040,7 +2053,17 @@ void RulesClass::Save(IStream * stream)
 	BridgeExplosions.Save(stream);
 	IceCrackSounds.Save(stream);
 	HSBuilding.Save(stream);
-} // RA2: no PrerequisiteNodFactory, PrerequisiteGDIFactory (not in RA2's layout)
+	AmerParaDropInf.Save(stream); // RA2: as above
+	AmerParaDropNum.Save(stream); // RA2: as above
+	AllyParaDropInf.Save(stream); // RA2: as above
+	AllyParaDropNum.Save(stream); // RA2: as above
+	SovParaDropInf.Save(stream); // RA2: as above
+	SovParaDropNum.Save(stream); // RA2: as above
+	DamageFireTypes.Save(stream); // RA2: as above
+	WeatherConClouds.Save(stream); // RA2: as above
+	WeatherConBolts.Save(stream); // RA2: as above
+}
+ // RA2: no PrerequisiteNodFactory, PrerequisiteGDIFactory (not in RA2's layout)
 
 
 /// <summary>
@@ -2368,263 +2391,349 @@ void RulesClass::Load(IStream * stream)
 void RulesClass::Detach(AbstractClass const * target, bool all)
 {
 	if (target == LargeVisceroid) {
-		LargeVisceroid = NULL;
+		LargeVisceroid = 0; // RA2: RA2's form
 	}
 	if (target == SmallVisceroid) {
-		SmallVisceroid = NULL;
+		SmallVisceroid = 0; // RA2: as above
 	}
 	if (target == UnloadingHarvester) {
-		UnloadingHarvester = NULL;
+		UnloadingHarvester = 0; // RA2: as above
 	}
 	if (target == VeinAttack) {
-		VeinAttack = NULL;
+		VeinAttack = 0; // RA2: as above
 	}
 	if (target == Wake) {
-		Wake = NULL;
+		Wake = 0; // RA2: as above
+	}
+	if (target == OreTwinkle) { // RA2: as above
+		OreTwinkle = 0; // RA2: as above
 	}
 	if (target == FlamingInfantry) {
-		FlamingInfantry = NULL;
+		FlamingInfantry = 0; // RA2: as above
+	}
+	if (target == NukeTakeOff) { // RA2: as above
+		NukeTakeOff = 0; // RA2: as above
+	}
+	if (target == InfantryHeadPop) { // RA2: as above
+		InfantryHeadPop = 0; // RA2: as above
+	}
+	if (target == InfantryNuked) { // RA2: as above
+		InfantryNuked = 0; // RA2: as above
+	}
+	if (target == Behind) { // RA2: as above
+		Behind = 0; // RA2: as above
 	}
 	if (target == DropPodWeapon) {
-		DropPodWeapon = NULL;
+		DropPodWeapon = 0; // RA2: as above
 	}
 	if (target == FlameDamage) {
-		FlameDamage = NULL;
+		FlameDamage = 0; // RA2: as above
 	}
 	if (target == FlameDamage2) {
-		FlameDamage2 = NULL;
+		FlameDamage2 = 0; // RA2: as above
 	}
 	if (target == NukeWarhead) {
-		NukeWarhead = NULL;
+		NukeWarhead = 0; // RA2: as above
 	}
 	if (target == EMPulseWarhead) {
-		EMPulseWarhead = NULL;
+		EMPulseWarhead = 0; // RA2: as above
 	}
 	if (target == C4Warhead) {
-		C4Warhead = NULL;
+		C4Warhead = 0; // RA2: as above
+	}
+	if (target == V3Warhead) { // RA2: as above
+		V3Warhead = 0; // RA2: as above
+	}
+	if (target == DMislWarhead) { // RA2: as above
+		DMislWarhead = 0; // RA2: as above
+	}
+	if (target == V3EliteWarhead) { // RA2: as above
+		V3EliteWarhead = 0; // RA2: as above
+	}
+	if (target == DMislEliteWarhead) { // RA2: as above
+		DMislEliteWarhead = 0; // RA2: as above
+	}
+	if (target == V3Rocket.Type) { // RA2: as above
+		V3Rocket.Type = 0; // RA2: as above
+	}
+	if (target == DMisl.Type) { // RA2: as above
+		DMisl.Type = 0; // RA2: as above
+	}
+	if (target == IvanWarhead) { // RA2: as above
+		IvanWarhead = 0; // RA2: as above
+	}
+	if (target == DeathWeapon) { // RA2: as above
+		DeathWeapon = 0; // RA2: as above
 	}
 	if (target == IonCannonWarhead) {
-		IonCannonWarhead = NULL;
+		IonCannonWarhead = 0; // RA2: as above
 	}
 	if (target == FirestormWarhead) {
-		FirestormWarhead = NULL;
+		FirestormWarhead = 0; // RA2: as above
 	}
 	if (target == EMPulseSparkles) {
-		EMPulseSparkles = NULL;
+		EMPulseSparkles = 0; // RA2: as above
 	}
 	if (target == VeinholeWarhead) {
-		VeinholeWarhead = NULL;
+		VeinholeWarhead = 0; // RA2: as above
 	}
 	if (target == DefaultFirestormExplosionSystem) {
-		DefaultFirestormExplosionSystem = NULL;
+		DefaultFirestormExplosionSystem = 0; // RA2: as above
 	}
 	if (target == DefaultLargeGreySmokeSystem) {
-		DefaultLargeGreySmokeSystem = NULL;
+		DefaultLargeGreySmokeSystem = 0; // RA2: as above
 	}
 	if (target == DefaultSmallGreySmokeSystem) {
-		DefaultSmallGreySmokeSystem = NULL;
+		DefaultSmallGreySmokeSystem = 0; // RA2: as above
 	}
 	if (target == DefaultSparkSystem) {
-		DefaultSparkSystem = NULL;
+		DefaultSparkSystem = 0; // RA2: as above
 	}
 	if (target == DefaultLargeRedSmokeSystem) {
-		DefaultLargeRedSmokeSystem = NULL;
+		DefaultLargeRedSmokeSystem = 0; // RA2: as above
 	}
 	if (target == DefaultSmallRedSmokeSystem) {
-		DefaultSmallRedSmokeSystem = NULL;
+		DefaultSmallRedSmokeSystem = 0; // RA2: as above
 	}
 	if (target == DefaultDebrisSmokeSystem) {
-		DefaultDebrisSmokeSystem = NULL;
+		DefaultDebrisSmokeSystem = 0; // RA2: as above
 	}
 	if (target == DefaultFireStreamSystem) {
-		DefaultFireStreamSystem = NULL;
+		DefaultFireStreamSystem = 0; // RA2: as above
 	}
 	if (target == DefaultTestParticleSystem) {
-		DefaultTestParticleSystem = NULL;
+		DefaultTestParticleSystem = 0; // RA2: as above
 	}
 	if (target == DefaultRepairParticleSystem) {
-		DefaultRepairParticleSystem = NULL;
+		DefaultRepairParticleSystem = 0; // RA2: as above
 	}
 	if (target == VeinholeTypeClass) {
-		VeinholeTypeClass = NULL;
+		VeinholeTypeClass = 0; // RA2: as above
+	}
+	if (target == WeatherConBoltExplosion) { // RA2: as above
+		WeatherConBoltExplosion = 0; // RA2: as above
 	}
 	if (target == Smoke1) {
-		Smoke1 = NULL;
+		Smoke1 = 0; // RA2: as above
 	}
 	if (target == Smoke2) {
-		Smoke2 = NULL;
+		Smoke2 = 0; // RA2: as above
 	}
 	if (target == MoveFlash) {
-		MoveFlash = NULL;
+		MoveFlash = 0; // RA2: as above
 	}
 	if (target == BombParachute) {
-		BombParachute = NULL;
+		BombParachute = 0; // RA2: as above
 	}
 	if (target == Parachute) {
-		Parachute = NULL;
+		Parachute = 0; // RA2: as above
 	}
 	if (target == SmallFire) {
-		SmallFire = NULL;
+		SmallFire = 0; // RA2: as above
 	}
 	if (target == LargeFire) {
-		LargeFire = NULL;
+		LargeFire = 0; // RA2: as above
 	}
 	if (target == FlareAnim) {
-		FlareAnim = NULL;
+		FlareAnim = 0; // RA2: as above
 	}
-	BaseUnit.Delete((UnitTypeClass const *)target); // RA2: a list
 	if (target == UnitCrateType) {
-		UnitCrateType = NULL;
+		UnitCrateType = 0; // RA2: as above
 	}
 	if (target == Paratrooper) {
-		Paratrooper = NULL;
-	} // RA2: no Disguise (TibSun's use does not compile against RA2's declaration)
+		Paratrooper = 0; // RA2: as above
+	}
+	if (target == AlliedDisguise) { // RA2: as above
+		AlliedDisguise = 0; // RA2: as above
+	}
+	if (target == SovietDisguise) { // RA2: as above
+		SovietDisguise = 0; // RA2: as above
+	}
 	if (target == Technician) {
-		Technician = NULL;
+		Technician = 0; // RA2: as above
 	}
 	if (target == Engineer) {
-		Engineer = NULL;
+		Engineer = 0; // RA2: as above
 	}
 	if (target == Pilot) {
-		Pilot = NULL;
-	} // RA2: no Crew (TibSun's use does not compile against RA2's declaration)
+		Pilot = 0; // RA2: as above
+	}
+	if (target == AlliedCrew) { // RA2: as above
+		AlliedCrew = 0; // RA2: as above
+	}
+	if (target == SovietCrew) { // RA2: as above
+		SovietCrew = 0; // RA2: as above
+	}
 	if (target == RepairBay) {
-		RepairBay = NULL;
+		RepairBay = 0; // RA2: as above
 	}
 	if (target == GDIGateOne) {
-		GDIGateOne = NULL;
+		GDIGateOne = 0; // RA2: as above
 	}
 	if (target == GDIGateTwo) {
-		GDIGateTwo = NULL;
+		GDIGateTwo = 0; // RA2: as above
 	}
 	if (target == NodGateOne) {
-		NodGateOne = NULL;
+		NodGateOne = 0; // RA2: as above
 	}
 	if (target == NodGateTwo) {
-		NodGateTwo = NULL;
+		NodGateTwo = 0; // RA2: as above
 	}
 	if (target == WallTower) {
-		WallTower = NULL;
+		WallTower = 0; // RA2: as above
 	}
 	if (target == GDIPowerPlant) {
-		GDIPowerPlant = NULL;
+		GDIPowerPlant = 0; // RA2: as above
 	}
 	if (target == GDIPowerTurbine) {
-		GDIPowerTurbine = NULL;
+		GDIPowerTurbine = 0; // RA2: as above
 	}
 	if (target == NodRegularPower) {
-		NodRegularPower = NULL;
+		NodRegularPower = 0; // RA2: as above
 	}
 	if (target == NodAdvancedPower) {
-		NodAdvancedPower = NULL;
+		NodAdvancedPower = 0; // RA2: as above
 	}
 	if (target == GDIFirestormGenerator) {
-		GDIFirestormGenerator = NULL;
+		GDIFirestormGenerator = 0; // RA2: as above
 	}
 	if (target == GDIHunterSeeker) {
-		GDIHunterSeeker = NULL;
+		GDIHunterSeeker = 0; // RA2: as above
 	}
 	if (target == NodHunterSeeker) {
-		NodHunterSeeker = NULL;
+		NodHunterSeeker = 0; // RA2: as above
 	}
 	if (target == NukeProjectile) {
-		NukeProjectile = NULL;
+		NukeProjectile = 0; // RA2: as above
 	}
 	if (target == NukeDown) {
-		NukeDown = NULL;
+		NukeDown = 0; // RA2: as above
 	}
 	if (target == EMPulseProjectile) {
-		EMPulseProjectile = NULL;
+		EMPulseProjectile = 0; // RA2: as above
 	}
 	if (target == TireVoxelDebris) {
-		TireVoxelDebris = NULL;
+		TireVoxelDebris = 0; // RA2: as above
 	}
 	if (target == ScrapVoxelDebris) {
-		ScrapVoxelDebris = NULL;
+		ScrapVoxelDebris = 0; // RA2: as above
 	}
 	if (target == AtmosphereEntry) {
-		AtmosphereEntry = NULL;
+		AtmosphereEntry = 0; // RA2: as above
 	}
 	if (target == InfantryExplode) {
-		InfantryExplode = NULL;
+		InfantryExplode = 0; // RA2: as above
 	}
 	if (target == IonBlast) {
-		IonBlast = NULL;
+		IonBlast = 0; // RA2: as above
 	}
 	if (target == IonBeam) {
-		IonBeam = NULL;
+		IonBeam = 0; // RA2: as above
+	}
+	if (target == ChronoBlast) { // RA2: as above
+		ChronoBlast = 0; // RA2: as above
+	}
+	if (target == ChronoBlastDest) { // RA2: as above
+		ChronoBlastDest = 0; // RA2: as above
+	}
+	if (target == ChronoPlacement) { // RA2: as above
+		ChronoPlacement = 0; // RA2: as above
+	}
+	if (target == ChronoBeam) { // RA2: as above
+		ChronoBeam = 0; // RA2: as above
+	}
+	if (target == WarpIn) { // RA2: as above
+		WarpIn = 0; // RA2: as above
+	}
+	if (target == WarpOut) { // RA2: as above
+		WarpOut = 0; // RA2: as above
+	}
+	if (target == WarpAway) { // RA2: as above
+		WarpAway = 0; // RA2: as above
+	}
+	if (target == ChronoSparkle1) { // RA2: as above
+		ChronoSparkle1 = 0; // RA2: as above
+	}
+	if (target == IronCurtainInvokeAnim) { // RA2: as above
+		IronCurtainInvokeAnim = 0; // RA2: as above
+	}
+	if (target == WeaponNullifyAnim) { // RA2: as above
+		WeaponNullifyAnim = 0; // RA2: as above
 	}
 	if (target == Dig) {
-		Dig = NULL;
+		Dig = 0; // RA2: as above
 	}
 	if (target == FirestormIdleAnim) {
-		FirestormIdleAnim = NULL;
+		FirestormIdleAnim = 0; // RA2: as above
 	}
 	if (target == FirestormAirAnim) {
-		FirestormAirAnim = NULL;
+		FirestormAirAnim = 0; // RA2: as above
 	}
 	if (target == FirestormActiveAnim) {
-		FirestormActiveAnim = NULL;
+		FirestormActiveAnim = 0; // RA2: as above
 	}
 	if (target == FirestormGroundAnim) {
-		FirestormGroundAnim = NULL;
+		FirestormGroundAnim = 0; // RA2: as above
 	}
 	if (target == BarrelExplode) {
-		BarrelExplode = NULL;
+		BarrelExplode = 0; // RA2: as above
 	}
 	if (target == BarrelParticle) {
-		BarrelParticle = NULL;
+		BarrelParticle = 0; // RA2: as above
 	}
 	if (target == DropPodPuff) {
-		DropPodPuff = NULL;
+		DropPodPuff = 0; // RA2: as above
 	}
-
-	BarrelDebris.Delete((VoxelAnimTypeClass const *)target); // RA2: no IonStormWarhead, WebbedInfantry (not in RA2's layout)
-
-	OnFire.Delete((AnimTypeClass const *)target);
-
-	TreeFire.Delete((AnimTypeClass const *)target);
-
-	SplashList.Delete((AnimTypeClass const *)target);
-
-	Scorches.Delete((SmudgeTypeClass const *)target);
-	Scorches1.Delete((SmudgeTypeClass const *)target);
-	Scorches2.Delete((SmudgeTypeClass const *)target);
-	Scorches3.Delete((SmudgeTypeClass const *)target);
-	Scorches4.Delete((SmudgeTypeClass const *)target);
-
-
-	HarvesterUnit.Delete((UnitTypeClass const *)target); // RA2: no Craters (not in RA2's layout)
-
-	BuildConst.Delete((BuildingTypeClass const *)target);
-	BuildPower.Delete((BuildingTypeClass const *)target);
-	BuildRefinery.Delete((BuildingTypeClass const *)target);
-	BuildBarracks.Delete((BuildingTypeClass const *)target);
-	BuildTech.Delete((BuildingTypeClass const *)target);
-	BuildWeapons.Delete((BuildingTypeClass const *)target);
-	BuildDefense.Delete((BuildingTypeClass const *)target);
-	BuildPDefense.Delete((BuildingTypeClass const *)target);
-	BuildAA.Delete((BuildingTypeClass const *)target);
-	BuildHelipad.Delete((BuildingTypeClass const *)target);
-	BuildRadar.Delete((BuildingTypeClass const *)target);
-
-	ConcreteWalls.Delete((BuildingTypeClass const *)target);
-
-	NSGates.Delete((BuildingTypeClass const *)target);
-	EWGates.Delete((BuildingTypeClass const *)target);
-
-	PadAircraft.Delete((AircraftTypeClass const *)target);
-
-	DeadBodies.Delete((AnimTypeClass const *)target);
-
-	DropPod.Delete((AnimTypeClass const *)target);
-
-	MetallicDebris.Delete((AnimTypeClass const *)target);
-
-	BridgeExplosions.Delete((AnimTypeClass const *)target);
-
-	HSBuilding.Delete((BuildingTypeClass const *)target);
+	if (target == LightningWarhead) { // RA2: as above
+		LightningWarhead = 0; // RA2: as above
+	}
+	if (target == RadSiteWarhead) { // RA2: as above
+		RadSiteWarhead = 0; // RA2: as above
+	}
+	BarrelDebris.Delete((VoxelAnimTypeClass *)target); // RA2: as above
+	OnFire.Delete((AnimTypeClass *)target); // RA2: as above
+	TreeFire.Delete((AnimTypeClass *)target); // RA2: as above
+	SplashList.Delete((AnimTypeClass *)target); // RA2: as above
+	Scorches.Delete((SmudgeTypeClass *)target); // RA2: as above
+	Scorches1.Delete((SmudgeTypeClass *)target); // RA2: as above
+	Scorches2.Delete((SmudgeTypeClass *)target); // RA2: as above
+	Scorches3.Delete((SmudgeTypeClass *)target); // RA2: as above
+	Scorches4.Delete((SmudgeTypeClass *)target); // RA2: as above
+	BaseUnit.Delete((UnitTypeClass *)target); // RA2: as above
+	DefaultMirageDisguises.Delete((TerrainTypeClass *)target); // RA2: as above
+	HarvesterUnit.Delete((UnitTypeClass *)target); // RA2: as above
+	Shipyard.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildConst.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildPower.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildRefinery.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildBarracks.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildTech.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildWeapons.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildDefense.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildPDefense.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildAA.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildHelipad.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildRadar.Delete((BuildingTypeClass *)target); // RA2: as above
+	ConcreteWalls.Delete((BuildingTypeClass *)target); // RA2: as above
+	NSGates.Delete((BuildingTypeClass *)target); // RA2: as above
+	EWGates.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildNavalYard.Delete((BuildingTypeClass *)target); // RA2: as above
+	BuildDummy.Delete((BuildingTypeClass *)target); // RA2: as above
+	NeutralTechBuildings.Delete((BuildingTypeClass *)target); // RA2: as above
+	PadAircraft.Delete((AircraftTypeClass *)target); // RA2: as above
+	DeadBodies.Delete((AnimTypeClass *)target); // RA2: as above
+	DropPod.Delete((AnimTypeClass *)target); // RA2: as above
+	MetallicDebris.Delete((AnimTypeClass *)target); // RA2: as above
+	BridgeExplosions.Delete((AnimTypeClass *)target); // RA2: as above
+	HSBuilding.Delete((BuildingTypeClass *)target); // RA2: as above
+	WeatherConClouds.Delete((AnimTypeClass *)target); // RA2: as above
+	WeatherConBolts.Delete((AnimTypeClass *)target); // RA2: as above
+	AmerParaDropInf.Delete((InfantryTypeClass *)target); // RA2: as above
+	AllyParaDropInf.Delete((InfantryTypeClass *)target); // RA2: as above
+	SovParaDropInf.Delete((InfantryTypeClass *)target); // RA2: as above
+	DamageFireTypes.Delete((AnimTypeClass *)target); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
