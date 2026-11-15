@@ -2903,6 +2903,7 @@ address,size,evidence
 0x0053B770,,"inferred: target of the jump at 0x0053B19E in matched src/loaddlg.cpp; size not known"
 0x0053BF90,128,"function of the Tiberian Sun reconstruction, matched"
 0x0053C010,48,"code of src/loaddlg.cpp, matched"
+0x0053C5C0,144,"code of src/loaddlg.cpp, matched"
 0x0053C650,48,"code of src/loaddlg.cpp, matched"
 0x0053C7D0,32,"function of the Tiberian Sun reconstruction, matched"
 0x0053C7F0,384,"code of src/loaddlg.cpp, matched"
