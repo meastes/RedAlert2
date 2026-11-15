@@ -14,7 +14,9 @@
 #include "msanim.h"
 #include "msengine.h"
 #include "rcptr.h" // RA2: the tour keeps its territories and states as counted pointers
+#include "rcptr.h"
 #include "refcount.h"
+#include "wstring.h"
 
 class MSFont;
 class MSAnimEntry;
@@ -25,6 +27,11 @@ template<class T> class DynamicVectorClass;
 
 #define MAX_WDT_TERRITORIES 100
 
+class Surface;
+class ConvertClass;
+class Wstring;
+void __fastcall WDT_Write_Map_Ini(Wstring const & prefix, Wstring const & filename); // RA2: 0x0072A880; a development tool that finds the territory targets in a click map and writes them to WDTMap.ini
+Wstring const & __fastcall Faction_Name(int faction); // RA2: 0x007685A0; the name a faction is called in the INI files
 void WDT_Game_Option_Append_Comma(char *str, int len);
 
 class WDTTerritory : public ReferenceCounted { // RA2: ReferenceCounted
@@ -590,6 +597,9 @@ namespace WorldDominationTour
 		public:
 			Territory(int id, const char * fname, INIClass const & ini, const char * name, int side, MSEngine & engine, ConvertClass * drawer, MS_ANIM_LIST * anims, Point2D const & pos);
 			~Territory(void);
+			static rc_ptr<Territory> __fastcall Create(int index, INIClass const & ini, Wstring const & section, Wstring const & shape_prefix, Wstring const & name_prefix); // RA2: 0x00730B80 (WDTTerr.cpp)
+			void Create_Owner_Anim(MSEngine * engine, ConvertClass * drawer, Point2D const & offset); // RA2: 0x00730E00
+			void Create_Highlight_Anim(MSEngine * engine, ConvertClass * drawer, Point2D const & offset); // RA2: 0x00730EC0
 			void Set_Owner_State(int state, MSEngine & engine, bool wait);
 			void Set_Highlight(bool active, MSEngine & engine);
 			void Set_Target_Anim(MSAnim * anim);
@@ -640,45 +650,91 @@ namespace WorldDominationTour
 	typedef DynamicVectorClass<Territory *> TERR_LIST;
 	typedef VectorCursor<Territory *, TERR_LIST> TERR_ITER;
 
-	class Map {
-		public:
-			Map(int id);
-			virtual ~Map(void);
-			void Add_Territory(const char * fname, INIClass const & ini, const char * name, int side, MSEngine & engine, ConvertClass * drawer, MS_ANIM_LIST * anims, Point2D const & pos);
+	class Voices; // RA2: Map::Start_Intro takes the voice player
+	typedef DynamicVectorClass<rc_ptr<Territory> > TERRITORY_LIST; // RA2: the map's territories are counted pointers
 
+	/*
+	 * RA2: the map is a counted object made by Create. Load reads the map's section of WDTMap.ini
+	 * for the screen size in use: the background and the animations, the click map in which every
+	 * pixel holds the number of the territory it belongs to, the rectangles the texts go in, the back
+	 * button, and the territories with their overlays.
+	 */
+	class Map : public ReferenceCounted {
 		public:
 			/*
-			 * This specifies which of the tour's world maps is depicted.
+			 * RA2: a palette file of the map and the drawer made from it (Get_Drawer keeps them).
 			 */
-			int ID;
+			class AnimationPalette {
+				public:
+					AnimationPalette(Wstring const & name, ConvertClass * drawer) : Name(name), Drawer(drawer) {}
+					~AnimationPalette(void); // RA2: 0x0072A600
+
+					Wstring Name; // RA2: +0x00
+					ConvertClass * Drawer; // RA2: +0x04
+			};
 
 			/*
-			 * These are the territories the map is divided into, built out of the map control
-			 * file and owned by the map.
+			 * RA2: the back button's overlay, whether it is down (+0x68), and the frames for its states.
 			 */
-			TERR_LIST Territories;
+			struct BackButtonOverlay {
+				BackButtonOverlay(void) : Anim(0), IsDown(false) {}
+				MSOverlayAnim * Anim; // RA2: +0x64
+				bool IsDown; // RA2: +0x68
+			};
+			struct BackButtonFrames {
+				BackButtonFrames(void) : Normal(0), Depressed(0), IsHot(false) {}
+				int Normal; // RA2: +0x6C
+				int Depressed; // RA2: +0x70
+				bool IsHot; // RA2: +0x74; the mouse is over the button
+			};
+
+			Map(int map, int faction, int player_faction); // RA2: 0x00729330
+			virtual ~Map(void); // RA2: 0x0072AF30 (scalar deleting), 0x007293F0
+			static rc_ptr<Map> __fastcall Create(int map, int faction, int player_faction); // RA2: 0x007292E0
+			void Load(INIClass & ini, MSEngine * engine, int differs); // RA2: 0x00729510
+			MSAnim * Load_Anim(INIClass & ini, Wstring const & section, Wstring const & entry, ConvertClass * drawer); // RA2: 0x0072A280; "file,x,y[,rate[,palette]]"
+			ConvertClass * Get_Drawer(Wstring const & name); // RA2: 0x0072A510; the drawer of a palette file, loaded on first use
+			void Start_Intro(MSEngine * engine, Voices * voices); // RA2: 0x0072A620
+			int Territory_At(Point2D const & point) const; // RA2: 0x0072A660; the territory under a point, -1 for none
+			void Set_Back_Hot(MSEngine * engine, bool hot); // RA2: 0x0072A6D0
+			void Set_Back_Down(MSEngine * engine, bool down); // RA2: 0x0072A720
+			int Is_Over_Back(Point2D const & point) const; // RA2: 0x0072A770; inside the back button's rectangle (+0x54)
+
+		public:
+			int MapNumber; // RA2: +0x08; the entry of [MAPS]
+			int Faction; // RA2: +0x0C
+			int PlayerFaction; // RA2: +0x10; the faction whose section is read
+			ConvertClass * OverlayDrawer; // RA2: +0x14
+			MSAnim * OpeningAnim; // RA2: +0x18; the "Opening" movie
+			MSAnim * BackgroundAnim; // RA2: +0x1C
+			MSAnim * HelpBarAnim; // RA2: +0x20
+			Surface * ClickMap; // RA2: +0x24; each pixel holds a territory's number
+			Wstring OverlayPrefix; // RA2: +0x28
+			TERRITORY_LIST Territories; // RA2: +0x2C
+			Point2D Origin; // RA2: +0x44; where the map begins on the screen
+			Point2D HelpBarOrigin; // RA2: +0x4C
+			Rect BackButtonRect; // RA2: +0x54
+			BackButtonOverlay BackButton; // RA2: +0x64
+			BackButtonFrames BackFrames; // RA2: +0x6C
+			ConvertClass * BackButtonDrawer; // RA2: +0x78
+			Rect DescriptionRect; // RA2: +0x7C
+			Rect TooltipRect; // RA2: +0x8C
+			Rect PlayRect; // RA2: +0x9C
+			Rect BackRect; // RA2: +0xAC
+			DynamicVectorClass<AnimationPalette *> Palettes; // RA2: +0xBC
 	};
 
 	class Centroid {
 		public:
-			Centroid(void);
-			Centroid const & operator+=(Point2D const & pt);
-			Point2D Center_Point(void) const;
-			bool operator==(Centroid const & that) const;
+			Centroid(void); // RA2: 0x0072A7B0
+			Centroid const & operator+=(Point2D const & pt); // RA2: 0x0072A7C0
+			Point2D Center_Point(void) const; // RA2: 0x0072A7F0
+			bool operator==(Centroid const & that) const; // RA2: 0x0072A840
 			bool operator!=(Centroid const & that) const { return(!(*this == that)); }
 
 		public:
-			/*
-			 * This is the running sum of every point accumulated so far, which the center
-			 * point is averaged out of.
-			 */
-			Point2D Position;
-
-			/*
-			 * This is the number of points accumulated so far, and the divisor the average is
-			 * taken with.
-			 */
-			int Count;
+			Point2D Position; // RA2: the sum of the points
+			int Count; // RA2: how many were added
 	};
 
 	typedef VectorClass<Centroid> CENTROID_LIST;
@@ -992,6 +1048,7 @@ namespace WorldDominationTour
 
 			void Queue(VoiceCategoryType category, Outcome outcome, bool emphasis, bool count_queued, int delay);
 			void Queue(StandaloneVoiceType voice, bool count_queued, int delay);
+			void Say_List(int index, bool counted, int delay); // RA2: 0x00732700; says one of the voice lists read from the INI (the startup list is 0)
 			void Advance(void);
 			void Discard(void);
 			void Cleanup(void);

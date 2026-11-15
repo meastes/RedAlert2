@@ -42,6 +42,8 @@ class MSEngine
 
 		void Wait_Delay(int delay);
 		void Wait_For_Focus(void);
+		void Broadcast(void * area); // RA2: 0x005B3800; takes the address of a rectangle (the map's back button, +0x54)
+		void Redraw(void); // RA2: 0x005B2F90
 
 		bool Add_Sound_Effect(char const * name, char const * file_name);
 		void Play_Sound_Effect(char const * name, int volume);

@@ -264,13 +264,17 @@ class MSBitPrintAnim : public MSAnim
 class MSFrameAnim : public MSAnim
 {
 	public:
-		MSFrameAnim(void) : MSAnim(0, 0, false) {}
-		virtual ~MSFrameAnim(void) override;
+		MSFrameAnim(void); // RA2: 0x007291C0
+		virtual ~MSFrameAnim(void) override; // RA2: 0x007291F0
 
-		virtual bool Advance(Surface * surface, Rect & rect) override;
-		virtual void Redraw(Surface * surface, Rect const * rect=NULL) override;
-		virtual Rect Get_Rect(void) const override;
+		virtual bool Advance(Surface * surface, Rect & rect) override; // RA2: 0x00729200; draws the interface frame while FrameAdvanceDraws is set
+		virtual void Redraw(Surface * surface, Rect const * rect=NULL) override; // RA2: 0x00729220; as above while FrameRedrawDraws is set
+		virtual Rect Get_Rect(void) const override; // RA2: 0x007292B0
 };
+
+extern bool FrameAdvanceDraws; // RA2: 0x007FBD04; MSFrameAnim::Advance draws the interface frame while this is set
+extern bool FrameRedrawDraws; // RA2: 0x007FBD05; MSFrameAnim::Redraw draws it while this is set
+void __fastcall Draw_Interface_Frame(Surface * surface, Rect const & rect, bool flag); // RA2: 0x006F3650
 
 
 /*
