@@ -621,32 +621,29 @@ void WWMouseClass::Draw_Mouse(Surface * surface, bool issidebarsurface)
  *=============================================================================================*/
 void WWMouseClass::Erase_Mouse(Surface * surface, bool issidebarsurface)
 {
-	if (!Is_Hidden() && surface != NULL && surface != SurfacePtr && Alternate != NULL && SidebarAlternate != NULL) {
+	if (Is_Hidden() || !Is_Captured() || surface == 0 || surface == SurfacePtr || Alternate == 0 // RA2: RA2's form
+		|| SidebarAlternate == 0) { // RA2: as above
+		return; // RA2: as above
+	}
+	BSurface *background; // RA2: as above
+	Rect rect; // RA2: as above
+	if (issidebarsurface) { // RA2: as above
+		background = SidebarAlternate; // RA2: as above
+		rect = SidebarAltRegion; // RA2: as above
+	} else { // RA2: as above
+		background = Alternate; // RA2: as above
+		rect = AltRegion; // RA2: as above
+	}
+	if (background != 0) { // RA2: as above
+		Block_Mouse(); // RA2: as above
+		surface->Blit_From(rect, *background, Rect(0, 0, rect.Width, rect.Height), false, true); // RA2: as above
 
-		BSurface *savesurface;
-		Rect savedregion;
-
-		if (issidebarsurface){
-			savesurface = SidebarAlternate;
-			savedregion = SidebarAltRegion;
-		}else{
-			savesurface = Alternate;
-			savedregion = AltRegion;
-		}
-
-		/*
-		**	Blit the background from the holding buffer to the surface.
-		*/
-		if (savesurface != NULL) {
-			Block_Mouse();
-			//Rect old = surface->Window.Get_Rect();
-			//surface->Window.Reset();
-			surface->Blit_From(savedregion, *savesurface, Rect(0, 0, savedregion.Width, savedregion.Height));
-			//surface->Window.Set(old);
-			Unblock_Mouse();
-		}
+		//surface->Window.Set(old);
+		Unblock_Mouse(); // RA2: as above
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -792,17 +789,19 @@ void WWMouseClass::Show_Mouse(void)
  *=============================================================================================*/
 void WWMouseClass::Hide_Mouse(void)
 {
-	if (!Is_Captured()) {
-		ShowCursor(FALSE);
-	} else {
-		Block_Mouse();
-		MouseState--;
-		if (MouseState == -1) {
+	Block_Mouse(); // RA2: RA2's form
+	if (MouseState == 0) { // RA2: as above
+		if (Is_Captured()) { // RA2: as above
 			Low_Hide_Mouse();
+		} else { // RA2: as above
+			while (ShowCursor(0) >= 0) { // RA2: as above
+			}
 		}
-		Unblock_Mouse();
 	}
+	MouseState--; // RA2: as above
+	Unblock_Mouse(); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -860,19 +859,19 @@ void WWMouseClass::Capture_Mouse(void)
  *=============================================================================================*/
 void WWMouseClass::Release_Mouse(void)
 {
-	if (this != NULL && Is_Captured()) {
+	if (this != 0 && Is_Captured()) { // RA2: RA2's form
 		DebugString("Release_Mouse()\n");
 		Block_Mouse();
-		Hide_Mouse();
 		IsCaptured = false;
-		if (GetCapture() == Window) ReleaseCapture();
-		while (ShowCursor(FALSE) > -1) {}
-		while (ShowCursor(TRUE) < -1) {}
-		Show_Mouse();
-
+		if (!Is_Hidden()) { // RA2: as above
+			Low_Hide_Mouse(); // RA2: as above
+			while (ShowCursor(1) < 0) { // RA2: as above
+			}
+		}
 		Unblock_Mouse();
 	}
 }
+
 
 
 /***********************************************************************************************
