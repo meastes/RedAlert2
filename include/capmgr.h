@@ -29,7 +29,7 @@ class CaptureManagerClass : public AbstractClass
 		bool CaptureUnit(AbstractClass * target);
 		void HandleOverload(void);
 		void DecideUnitFate(TechnoClass * techno);
-		void FreeAll(void);
+		void FreeAll(void); // RA2: 0x4681E0, returns the controlled unit to its original house and forgets it (one unit only in 1.006)
 		bool FreeUnit(TechnoClass * techno);
 		bool FUN_00472330(TechnoClass * techno);
 		bool FUN_004722E0(void) const;
