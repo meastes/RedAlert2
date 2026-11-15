@@ -3976,6 +3976,7 @@ address,symbol,evidence
 0x006395C0,?Read_Line@@YIHAAVFileClass@@PADHAA_N@Z,"compiled from src/readline.cpp, matched"
 0x00639670,?Read_Line@@YIHAAVStraw@@PADHAA_N@Z,"compiled from src/readline.cpp, matched"
 0x00639970,?Do_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z,"inferred: referenced by matched src/taction.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x0063A680,?Reinforcement_Refused@@YG_NHHH@Z,"compiled from src/reinf.cpp, matched"
 0x0063A690,?Create_Air_Reinforcement@@YIHPAVHouseClass@@W4AircraftType@@HW4MissionType@@PAVAbstractClass@@3W4InfantryType@@H@Z,"compiled from src/reinf.cpp, matched"
 0x0063A880,?Do_Chrono_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z,"inferred: referenced by matched src/taction.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063B090,?Restate_Mission@@YIXPAVScenarioClass@@@Z,"compiled from src/restate.cpp, matched"
