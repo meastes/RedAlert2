@@ -1549,28 +1549,18 @@ void ObjectClass::Detach_All(bool all)
 RadioMessageType ObjectClass::Receive_Message(RadioClass *, RadioMessageType message, int & )
 {
 	switch (message) {
-
-		/*
-		**	This message serves as a rendering convenience. It lets the system
-		**	know that there might be a visual conflict and the unit in radio
-		**	contact should be redrawn. This typically occurs when a vehicle
-		**	is being unloaded from a hover lander.
-		*/
-		case RADIO_REDRAW:
-			Mark(MARK_CHANGE);
+	case 0x22: // RA2: RA2's form
+		if (HealthRatio < Rule->ConditionGreen) { // RA2: as above
 			return(RADIO_ROGER);
-
-		case RADIO_NEED_REPAIR: // RA2: a unit asking for repair
-			if ((double)Strength / Class_Of()->MaxStrength >= Rule->ConditionGreen) { // RA2: at or above ConditionGreen
-				return(RADIO_NEGATIVE); // RA2: is refused
-			}
-			return(RADIO_ROGER); // RA2: otherwise accepted
-
-		default:
-			break;
+		}
+		return RADIO_NEGATIVE; // RA2: as above
+	case 0x0D: // RA2: as above
+		Mark(MARK_CHANGE); // RA2: as above
+		return(RADIO_ROGER); // RA2: as above
 	}
 	return(RADIO_STATIC);
 }
+
 
 
 /***********************************************************************************************
