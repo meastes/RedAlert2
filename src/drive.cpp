@@ -2180,13 +2180,13 @@ ZGradientType STDMETHODCALLTYPE DriveLocomotionClass::Z_Gradient(void)
 bool DriveLocomotionClass::Abandon_Navigation(void)
 {
 	if (LinkedTo->RouteQueue.Count() == 0) {
-		LinkedTo->Assign_Destination(NULL);
+		LinkedTo->Assign_Destination(0, true); // RA2: RA2's form
 		return(false);
 	}
-
-	LinkedTo->NavCom = NULL;
-	return(LinkedTo->Enter_Idle_Mode());
+	LinkedTo->Abort_Motion(); // RA2: as above
+	return LinkedTo->Enter_Idle_Mode(false, true); // RA2: as above
 }
+
 
 
 /// <summary>
