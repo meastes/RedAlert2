@@ -3077,6 +3077,7 @@ address,size,evidence
 0x0056DBD0,80,"code of src/mapgen.cpp, matched"
 0x0056DC20,144,"code of src/mapgen.cpp, matched"
 0x0056DCB0,240,"code of src/mapgen.cpp, matched"
+0x0056DDA0,256,"code of src/mapgen.cpp, matched"
 0x0056DEA0,288,"code of src/mapgen.cpp, matched"
 0x0056DFC0,48,"function of the Tiberian Sun reconstruction, matched"
 0x0056DFF0,272,"function of the Tiberian Sun reconstruction, matched"
