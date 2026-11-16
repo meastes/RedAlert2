@@ -399,7 +399,6 @@ address,symbol,evidence
 0x00412380,?Unlock_Audio_Handler@@YAJXZ,"inferred: referenced by matched src/vqalib_task.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00412390,?ahtoi@@YIHPBD@Z,"compiled from src/ahtoi.cpp, matched"
 0x004131D0,?Detach@AircraftTrackerClass@@QAEXPAVAbstractClass@@@Z,"inferred: referenced by matched src/tracker.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x00413310,?Remove@AircraftTrackerClass@@QAEXPAVFootClass@@@Z,"inferred: referenced by matched src/foot.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00413770,?As_Cell@Coord@@QBE?AVCell@@XZ,"inferred: referenced by matched src/wave.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x004139F0,?Counts_As_Civ_Evac@@YI_NPBVObjectClass@@@Z,"compiled from src/aircraft.cpp, matched"
 0x00413A40,??0AircraftClass@@QAE@PBVAircraftTypeClass@@PAVHouseClass@@@Z,"inferred: referenced by matched src/airctype.cpp (1 reference); across all matched code never at another address, and no other symbol here"

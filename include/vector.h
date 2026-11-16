@@ -90,6 +90,7 @@ class VectorClass
 		int Length(void) const {return(VectorMax);};
 		virtual int ID(T const * ptr);	// Pointer based identification.
 		virtual int ID(T const & ptr);	// Value based identification.
+		virtual T GetItem(int index) const {return(Vector[index]);} // RA2: vtable offset 0x18, after the two ID functions (YR name GetItem); AircraftTrackerClass::Append_Bin (0x412720) calls it
 
 	protected:
 
