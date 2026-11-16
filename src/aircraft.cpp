@@ -130,11 +130,52 @@
 #include "tag.h"
 #include "tagtype.h"
 #include "team.h"
+#include "temporal.h" // RA2: AircraftClass::AI calls TemporalClass::AI
 #include "tracker.h"
 #include "unit.h"
 #include "waypoint.h"
 #include "weapon.h"
 static inline bool Aircraft_Fire_Shrouded(Coord const & coord); // RA2: defined after its first caller
+
+
+static inline Cell Aircraft_Adjacent_Cell(Cell const & cell, FacingType dir) // RA2: an adjacent cell by value, the table entry first
+{
+	return(AdjacentCell[(int)dir & 0x07] + cell); // RA2: as above
+}
+
+
+extern bool AircraftRearmWhenEmpty; // RA2: a global at 0x83C4D4 that no code sets (false)
+extern bool AircraftRearmWhenHalf; // RA2: a global at 0x83C4D5 that no code sets (false)
+
+
+static inline Cell Aircraft_Destination_Cell(AbstractClass * target, TechnoClass * docker) // RA2: the cell of the destination coordinate
+{
+	return(target->Destination_Coord(docker).As_Cell()); // RA2: as above
+}
+
+
+enum {RA2_RADIO_WANT_RIDE = 36}; // RA2: the radio message number of the executable (two extra messages sit at 26 and 27)
+
+
+enum {RA2_RADIO_PREPARED = 29, RA2_RADIO_RELOAD = 31, RA2_RADIO_ALL_DONE = 33}; // RA2: the radio message numbers of the executable (two extra messages sit at 26 and 27)
+
+
+static inline bool Aircraft_Accepts_Radio(int mission) // RA2: an aircraft that retreats or paradrops answers no radio message
+{
+	if (mission == MISSION_RETREAT) { // RA2: as above
+		return(false);
+	}
+	if (mission > MISSION_PATROL && mission <= MISSION_PARADROP_OVERFLY) { // RA2: as above
+		return(false);
+	}
+	return(true);
+}
+
+
+static inline BuildingClass * Aircraft_Building_Destination(AbstractClass * target) // RA2: the target when it is a building
+{
+	return(target == NULL ? NULL : ((target->Fetch_RTTI() == RTTI_BUILDING) ? (BuildingClass *)target : NULL)); // RA2: as above
+}
 
 
 char const * const AircraftClass::INI_NAME = "Aircraft";
@@ -209,7 +250,13 @@ AircraftClass::AircraftClass(AircraftTypeClass const * type, HouseClass * house)
 	Class((AircraftTypeClass *)type),
 	Passenger(false),
 	IsKamikaze(false),
-	IsLockedStraight(false) // RA2: last initializer: YR's field_35B, SightTimer, AttacksRemaining, IsReadyToCommence are not in RA2
+	DockNowHeadingTo(NULL), // RA2: the later members are initialized as well
+	Unused_5B8(false), // RA2: as above
+	Unused_5B9(false), // RA2: as above
+	IsLockedStraight(false),
+	NumParadropsLeft(5), // RA2: as above
+	IsCarryallNotLanding(true), // RA2: as above
+	IsReturningFromAttackRun(true) // RA2: as above
 {
 	Create_ID();
 
@@ -224,6 +271,7 @@ AircraftClass::AircraftClass(AircraftTypeClass const * type, HouseClass * house)
 
 	TargetTracker.Add_Index(Fetch_ID(), this);
 }
+
 
 
 /***********************************************************************************************
@@ -601,19 +649,50 @@ int AircraftClass::Do_MISSION_HUNT(void)
  *=============================================================================================*/
 void AircraftClass::AI(void)
 {
-	if (Mission == MISSION_SLEEP && HeightAGL > 0) {
-		Assign_Mission(MISSION_GUARD);
+	switch (CurrentMission) { // RA2: a paradrop run keeps the lock as well
+		case MISSION_ATTACK:
+		case MISSION_PARADROP_OVERFLY: // RA2: as above
+			break;
+
+		default:
+			IsLockedStraight = false;
+			break;
 	}
 
-	if (CurrentMission != MISSION_ATTACK) {
-		IsLockedStraight = false;
+	/*
+	**	RA2: a chronoshifting aircraft sparkles every 24th frame, and a chrono-warping one
+	**	cannot do anything else.
+	*/
+	if (TemporalTargetingMe != NULL) { // RA2: the executable's AI order (temporal, chrono warp)
+		TemporalTargetingMe->AI(); // RA2: as above
+	}
+	if ((IsBeingWarpedOut() || IsWarpingIn()) && Frame % 24 == 0 && Rule->ChronoSparkle1 != NULL) { // RA2: as above
+		new AnimClass(Rule->ChronoSparkle1, PositionCoord, 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+	}
+	if (IsWarpingIn() || (IsBeingWarpedOut() && IsImmobilized)) { // RA2: as above
+		Locomotion->Process(); // RA2: as above
+		if (!IsActive) { // RA2: as above
+			return;
+		}
+	}
+	if ((IsWarpingIn() && TemporalTargetingMe != NULL) || IsBeingWarpedOut()) { // RA2: as above
+		if (TarCom != NULL) {
+			Assign_Target(NULL);
+		}
+		if (NavCom != NULL) {
+			Assign_Destination(NULL, true);
+		}
+		return;
 	}
 
 	if (TarCom != NULL) {
 		if (TarCom->In_Air()) {
 			Assign_Target(NULL);
-		} else if (TarCom->Is_Techno() && !House->Is_Ally(TarCom) && ((TechnoClass*)TarCom)->Cloak == CLOAKED && !((TechnoClass*)TarCom)->Is_Sensed_By_House(House)) {
-			Assign_Target(NULL);
+		} else if (TarCom != NULL) {
+			unsigned char const & techno = TarCom->AbstractFlags & 1; // RA2: the Is_Techno test is read into a byte temporary
+			if (techno && !House->Is_Ally(TarCom) && ((TechnoClass*)TarCom)->Cloak == CLOAKED && !((TechnoClass*)TarCom)->Is_Sensed_By_House(House)) {
+				Assign_Target(NULL);
+			}
 		}
 	}
 
@@ -626,21 +705,44 @@ void AircraftClass::AI(void)
 		return;
 	}
 
-	if (!Map.In_Local_Radar(PositionCell) && Should_Delete_Off_Map()) {
+	if (IsSinking) { // RA2: a sinking aircraft drops until it is gone
+		Coord current = PositionCoord; // RA2: as above
+		Set_Coord(current - Coord(0, 0, 5)); // RA2: as above
+		if (HeightAGL < -400) { // RA2: as above
+			Record_The_Kill(NULL); // RA2: as above
+			Delete_Me(); // RA2: as above
+			return;
+		}
+		if ((Frame & 3) == 0) { // RA2: as above
+			int offset_y = Scen->RandomNumber(-170, 170); // RA2: as above
+			int offset_x = Scen->RandomNumber(-170, 170); // RA2: as above
+			Coord offset(offset_x, offset_y, -HeightAGL); // RA2: as above
+			current = PositionCoord; // RA2: as above
+			current = current + offset; // RA2: as above
+			new AnimClass(Rule->Wake, current, 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+		}
+	}
+
+	Coord position = PositionCoord; // RA2: the trailer animation
+	if (Class->Trailer != NULL && Frame % Class->SpawnDelay == 0) { // RA2: as above
+		new AnimClass(Class->Trailer, position, 1, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+	}
+
+	if (!Map.In_Local_Radar(Get_Cell(), true) && Should_Delete_Off_Map()) { // RA2: the virtual Get_Cell
 		Delete_Me();
 		return;
 	}
 
 	if (NavCom == &BlubCell) {
-		Assign_Destination(NULL);
+		Assign_Destination(NULL, true); // RA2: explicit second argument
 		Assign_Target(NULL);
-		Enter_Idle_Mode();
+		Enter_Idle_Mode(false, true); // RA2: as above
 	}
 
 	if (TarCom == &BlubCell) {
-		Assign_Destination(NULL);
+		Assign_Destination(NULL, true); // RA2: as above
 		Assign_Target(NULL);
-		Enter_Idle_Mode();
+		Enter_Idle_Mode(false, true); // RA2: as above
 	}
 
 	if (Ready_To_Commence()) {
@@ -654,23 +756,21 @@ void AircraftClass::AI(void)
 		}
 	}
 
-	if (House->Is_Ally(PlayerPtr) && SightTimer == 0) {
-		Look();
-		SightTimer = TICKS_PER_SECOND;
-	}
-
 	if (HealthRatio < Rule->ConditionRed && HeightAGL > 0) {
-		if (Percent_Chance(Strength != 0 ? 10 : 80)) {
-			new AnimClass(AnimTypes[AnimTypeClass::From_Name("SGRYSMK1")], PositionCoord);
+		int chance = Strength != 0 ? 10 : 80; // RA2: as above
+		if (Scen->RandomNumber(0, 99) < chance) { // RA2: Percent_Chance open coded
+			new AnimClass(AnimTypes[AnimTypeClass::From_Name("SGRYSMK1")], PositionCoord, 0, 1, (ShapeFlags_Type)0x600, 0);
 		}
 	}
 
 	if (Cargo.Is_Something_Attached() && Class->IsCarryall) {
 		Cargo.Attached_Object()->PrimaryFacing = SecondaryFacing;
 		Cargo.Attached_Object()->SecondaryFacing = SecondaryFacing;
-		Cargo.Attached_Object()->PositionCoord = PositionCoord;
+		Coord passenger_position = PositionCoord; // RA2: the position is copied
+		Cargo.Attached_Object()->Set_Coord(passenger_position); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -947,8 +1047,8 @@ int AircraftClass::Exit_Object(TechnoClass * unit)
 	*/
 	FacingType face;
 	for (face = FACING_N; face < FACING_COUNT; face++) {
-		cell = Adjacent_Cell(PositionCell, _toface[face]);
-		if (unit->Can_Enter_Cell(&Map[cell]) == MOVE_OK) break;
+		cell = Aircraft_Adjacent_Cell(Get_Cell(), _toface[face]); // RA2: the virtual Get_Cell, not PositionCell; the table entry is the left operand of the sum
+		if (unit->Can_Enter_Cell(&Map[cell], FACING_NONE, -1, NULL, true) == MOVE_OK) break; // RA2: explicit defaults, as above
 	}
 
 	// Should perform a check here to see if no cell could be found.
@@ -959,9 +1059,9 @@ int AircraftClass::Exit_Object(TechnoClass * unit)
 	**	to make sure that the transport waits until the passenger is clear before
 	**	unloading the next passenger or taking off.
 	*/
-	if (unit->Unlimbo(PositionCoord, Facing_Dir(_toface[face]))) {
-		unit->Assign_Mission(MISSION_MOVE);
-		unit->Assign_Destination(&Map[cell]);
+	if (unit->Unlimbo(PositionCoord, DirType(Facing_Dir(_toface[face])).As_Dir256())) { // RA2: the facing goes through As_Dir256
+		unit->QueueMission(MISSION_MOVE, false); // RA2: QueueMission(MISSION_MOVE, false) in place of Assign_Mission
+		unit->Assign_Destination(&Map[cell], true); // RA2: explicit second argument
 		if (Transmit_Message(RADIO_HELLO, unit) == RADIO_ROGER) {
 			Transmit_Message(RADIO_UNLOAD);
 		}
@@ -969,6 +1069,7 @@ int AircraftClass::Exit_Object(TechnoClass * unit)
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -991,30 +1092,49 @@ int AircraftClass::Paradrop_Cargo(void)
 {
 	FootClass * passenger = Cargo.Detach_Object();
 	if (passenger) {
-		if (!passenger->Paradrop(Center_Coord())) {
-			Cargo.Attach(passenger);
-			passenger->Hidden();
+		Ammo--; // RA2: each drop uses one Ammo, which alternates the side the passenger leaves on
+		Coord landing = Center_Coord(); // RA2: the drop point is found by projecting 128 leptons to the side
+		DirType facing;
+		if (Ammo & 1) {
+			facing = DirType((unsigned short)(PrimaryFacing.Current().Raw - 0x3FFF)); // RA2: a quarter turn each way
 		} else {
+			facing = DirType((unsigned short)(PrimaryFacing.Current().Raw + 0x3FFF)); // RA2: as above
+		}
+		double angle = facing.As_Radian(); // RA2: as above
+		int altitude = landing.Z;
+		double center_y = landing.Y;
+		int sample_y = (int)(center_y - fastmath::sin(angle) * 128.0); // RA2: as above
+		int sample_x = (int)(fastmath::cos(angle) * 128.0 + landing.X); // RA2: as above
+		landing = Coord(sample_x, sample_y, altitude); // RA2: as above
+		CellClass * cell = &Map[landing];
+		if (passenger->Can_Enter_Cell(cell, FACING_NONE, 0, NULL, true) == MOVE_OK) { // RA2: height 0, no shroud check
+			Coord spot = cell->Closest_Free_Spot(landing, false, false); // RA2: as above
+			if (spot != COORD_NONE) { // RA2: as above
+				landing.X = spot.X; // RA2: only X and Y come from the free spot
+				landing.Y = spot.Y; // RA2: as above
+				if (passenger->Paradrop(landing)) {
 
-			/*
-			**	Play a sound effect of the parachute opening.
-			*/
-			Sound_Effect(Rule->ChuteSound, PositionCoord);
-
-			if (Team != NULL) {
-				Team->Remove(passenger);
-				if (passenger->House->Is_Human_Player()) {
-					Assign_Mission(MISSION_GUARD);
-				} else {
-					Assign_Mission(MISSION_HUNT);
+					/*
+					**	Play a sound effect of the parachute opening.
+					*/
+					VocClass::PlayAt(Rule->ChuteSound, PositionCoord, NULL); // RA2: positional sound, no audio controller
+					passenger->LastAdjacencyCell = Cell(Map[landing].Center_Coord()); // RA2: the landing cell is remembered
+					if (Team != NULL) {
+						Team->Remove(passenger, -1, false); // RA2: no Assign_Mission afterwards, keeps the passenger's own mission
+					}
+					Arm = CDTimerClass<FrameTimerClass>(0); // RA2: the arm timer is restarted by hand
+					NumParadropsLeft = 5; // RA2: 5 left again
+					return(0); // RA2: no delay returned
 				}
 			}
-//			Arm = Rearm_Delay(IsSecondShot);
-			Arm = 0;
 		}
+		Cargo.Attach(passenger); // RA2: the drop failed
+		passenger->Hidden(); // RA2: as above
+		Ammo++; // RA2: as above
 	}
-	return(Arm);
+	return(0); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -1059,7 +1179,7 @@ BulletClass * AircraftClass::Fire_At(AbstractClass * target, int which)
 
 		if (bullet->Class->ROT == 0) {
 			bullet->Velocity.Set_Speed(Locomotion->Apparent_Speed());
-			bullet->Velocity.Set_Pitch(DIR_E);
+			bullet->Velocity.Set_Pitch(DirType(0x4000)); // RA2: straight up as a DirType
 			bullet->Velocity.Set_Yaw(SecondaryFacing.Current());
 		}
 
@@ -1078,12 +1198,17 @@ BulletClass * AircraftClass::Fire_At(AbstractClass * target, int which)
 				Map.Is_Shrouded(PositionCoord + Coord(2 * CELL_LEPTON_W, -2 * CELL_LEPTON_H)) ||
 				Aircraft_Fire_Shrouded(PositionCoord) ||
 				Map.Is_Shrouded(target->Center_Coord())) {
-				Map.Sight_From(PositionCoord, Rule->AttackingAircraftSightRange, House);
+				Map.Sight_From(PositionCoord, Rule->AttackingAircraftSightRange, House, false, false, false, true, false); // RA2: the sight is revealed twice, the second time with the last flag set
+				Map.Sight_From(PositionCoord, Rule->AttackingAircraftSightRange, House, false, false, false, true, true); // RA2: as above
 			}
 		}
 	}
+	if (IsKamikaze) { // RA2: a kamikaze aircraft is gone after it fired
+		Delete_Me(); // RA2: as above
+	}
 	return(bullet);
 }
+
 
 
 /***********************************************************************************************
@@ -1344,19 +1469,22 @@ void AircraftClass::Drop_Off_Cargo(void)
 		Cargo.Attach(unit);
 	} else {
 		unit->IsInTransport = false;
-		unit->Look();
-		Cell nearby = Nearby_Location();
-		if (Contact_With_Whom() == unit) {
+		unit->RemoveSight(false, false, false, NULL); // RA2: Look is taken apart: the sight is removed and added again
+		unit->UpdateSight(false, false, false, NULL); // RA2: as above
+		Map.RevealArea3(Coord(PositionCoord), unit->LastSightRange - 3, unit->LastSightRange + 3, 0); // RA2: as above
+		Cell nearby = Nearby_Location(NULL); // RA2: explicit argument
+		if (Radio_Link(0) == unit) { // RA2: the Radio_Link accessor, not Contact_With_Whom
 			Transmit_Message(RADIO_UNTETHER);
 			Transmit_Message(RADIO_OVER_OUT);
 		}
 		if (nearby != CELL_NONE) {
-			Assign_Destination(&Map[nearby]);
+			Assign_Destination(&Map[nearby], true); // RA2: explicit second argument
 		} else {
-			Assign_Destination(NULL);
+			Assign_Destination(NULL, true); // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1377,6 +1505,8 @@ int AircraftClass::Do_MISSION_MOVE_Carryall(void)
 	};
 
 	TechnoClass * target;
+	Coord bridge_position; // RA2: declared first
+	Coord occupant_position; // RA2: as above
 
 	switch (Status) {
 
@@ -1387,37 +1517,40 @@ int AircraftClass::Do_MISSION_MOVE_Carryall(void)
 			DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ\n");
 			if (NavCom == NULL) {
 				DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - NavCom == NULL\n");
-				Enter_Idle_Mode();
+				Enter_Idle_Mode(false, true); // RA2: explicit arguments
 				break;
 			}
 
 			target = Dynamic_Cast<TechnoClass *>(NavCom);
 			if (target != NULL &&
 				!Cargo.Is_Something_Attached() &&
-				House->Is_Ally(target) &&
-				(!target->Is_Techno() || target->Owner_HouseClass()->Is_Ally(this))
-				&& target->RTTI == RTTI_UNIT) {
+				House->Is_Ally(target)) {
+				bool const & techno_ref = (target->AbstractFlags & 1); // RA2: the Is_Techno test is read into a byte temporary
+				if (!techno_ref || target->Owner_HouseClass()->Is_Ally(this)) { // RA2: as above
+				if (target->Fetch_RTTI() == RTTI_UNIT) { // RA2: the virtual Fetch_RTTI
 				DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - target != NULL\n");
-				if (Contact_With_Whom() != target) {
+				if (Radio_Link(0) != target) { // RA2: Radio_Link(0), not Contact_With_Whom
 					Transmit_Message(RADIO_OVER_OUT);
 				}
 				if (Transmit_Message(RADIO_HELLO, target) == RADIO_ROGER) {
 					DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - RADIO_HELLO got RADIO_ROGER\n");
-					if (Transmit_Message(RADIO_WANT_RIDE) != RADIO_ROGER) {
+					if (Transmit_Message((RadioMessageType)RA2_RADIO_WANT_RIDE) != RADIO_ROGER) { // RA2: RA2's message number 36
 						DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - RADIO_WANT_RIDE did not get RADIO_ROGER\n");
 						Transmit_Message(RADIO_OVER_OUT);
-						Enter_Idle_Mode();
+						Enter_Idle_Mode(false, true); // RA2: explicit arguments
 						break;
 					} else {
 						Transmit_Message(RADIO_HOLD_STILL);
 					}
 				} else {
-					Assign_Destination(NULL);
-					Enter_Idle_Mode();
+					Assign_Destination(NULL, true); // RA2: explicit second argument
+					Enter_Idle_Mode(false, true); // RA2: explicit arguments
 					break;
 				}
+				}
+				}
 			}
-			Assign_Destination(New_LZ(NavCom));
+			Assign_Destination(New_LZ(NavCom), true); // RA2: as above
 			if (Team != NULL) {
 				Team->Assign_Mission_Target(NavCom);
 			}
@@ -1428,43 +1561,46 @@ int AircraftClass::Do_MISSION_MOVE_Carryall(void)
 		/*
 		**	Take off if necessary.
 		*/
-		case TAKE_OFF:
+		case TAKE_OFF: {
 			if (NavCom == NULL) {
-				Enter_Idle_Mode();
+				Enter_Idle_Mode(false, true); // RA2: explicit arguments
 				return(1);
 			}
-			Locomotion->Move_To(NavCom->Center_Coord());
+			Coord destination = NavCom->Center_Coord(); // RA2: a local
+			Locomotion->Move_To(destination);
 			Status = FLY_TO_LZ;
 			return(1);
+		}
 
 		/*
 		**	Fly toward target.
 		*/
 		case FLY_TO_LZ:
-			if (NavCom != NULL && !Is_Target_Cell(NavCom) && Contact_With_Whom() != NavCom) {
+			if (NavCom != NULL && NavCom->Fetch_RTTI() != RTTI_CELL && Radio_Link(0) != NavCom) { // RA2: the RTTI is read directly
 				DebugString("Do_MISSION_MOVE_Carryall - FLY_TO_LZ - Lost contact\n");
 				Status = VALIDATE_LZ;
 				return(1);
 			}
 
-			if (Is_Target_Cell(NavCom) && !Is_LZ_Clear(NavCom)) {
+			if (NavCom != NULL && NavCom->Fetch_RTTI() == RTTI_CELL && !Is_LZ_Clear(NavCom)) { // RA2: as above
 				Status = VALIDATE_LZ;
 				return(1);
 			}
 
 			if (Locomotion->Get_Status() == 1) {
 				DebugString("Do_MISSION_MOVE_Carryall - FLY_TO_LZ - Begin landing\n");
-				if (NavCom != NULL && NavCom->RTTI == RTTI_UNIT) {
-					UnitClass *unit = ((UnitClass *)NavCom);
-					if (unit->PositionCoord.As_Cell() != PositionCoord.As_Cell()) {
+				if (NavCom != NULL && NavCom->Fetch_RTTI() == RTTI_UNIT) { // RA2: as above
+					Coord current_position = PositionCoord; // RA2: both cells are made from copies
+					Cell current_cell = Cell(current_position); // RA2: as above
+					Coord target_position = ((ObjectClass *)NavCom)->PositionCoord; // RA2: as above
+					Cell target_cell = Cell(target_position); // RA2: as above
+					if (target_cell != current_cell) { // RA2: as above
 						Status = VALIDATE_LZ;
 						DebugString("Do_MISSION_MOVE_Carryall - FLY_TO_LZ - Target moved\n");
 						return(1);
-					} else {
-					} // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
-				} else {
-				} // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
-
+					}
+				}
+				IsCarryallNotLanding = false; // RA2: the landing has begun
 			}
 			if (!Locomotion->Is_Moving()) {
 				DebugString("Do_MISSION_MOVE_Carryall - FLY_TO_LZ - Stopped moving\n");
@@ -1475,41 +1611,49 @@ int AircraftClass::Do_MISSION_MOVE_Carryall(void)
 		/*
 		**	Land on target.
 		*/
-		case LAND:
+		case LAND: {
 			DebugString("Do_MISSION_MOVE_Carryall - LAND\n");
 			if (Cargo.Is_Something_Attached() && QueueUpToEnter != NULL) { // RA2: QueueUpToEnter, the object to enter once nearby
-			} else if (Cargo.Is_Something_Attached()) {
+				IsCarryallNotLanding = true; // RA2: keeps hovering
+				return(1); // RA2: as above
+			}
+			if (Cargo.Is_Something_Attached()) {
 				Mark(MARK_UP);
 				Drop_Off_Cargo();
 				Mark(MARK_DOWN);
 				Status = VALIDATE_LZ;
-			} else {
-				DebugString("Do_MISSION_MOVE_Carryall - LAND - Picking up cargo\n");
-				Mark(MARK_UP);
-				UnitClass * unit = Map[(Coord const &)PositionCoord].Cell_Unit(Map[(Coord const &)PositionCoord].IsUnderBridge);
-				if (unit != NULL && unit == Contact_With_Whom()) {
-					DebugString("Do_MISSION_MOVE_Carryall - LAND - Got Cell_Unit\n");
-					if (Transmit_Message(RADIO_NEED_TO_MOVE) == RADIO_ROGER) {
-						DebugString("Do_MISSION_MOVE_Carryall - LAND - RADIO_NEED_TO_MOVE got RADIO_ROGER\n");
-						unit->Limbo();
-						unit->IsOnBridge = false;
-						unit->IsInTransport = true;
-						Cargo.Attach(unit);
-					} else {
-						Status = VALIDATE_LZ;
-					}
+				return(1); // RA2: as above
+			}
+			DebugString("Do_MISSION_MOVE_Carryall - LAND - Picking up cargo\n");
+			Mark(MARK_UP);
+			bridge_position = PositionCoord; // RA2: two copies of the position
+			occupant_position = PositionCoord; // RA2: as above
+			FootClass * unit = Map[occupant_position].Cell_Unit(Map[bridge_position].IsUnderBridge); // RA2: as above
+			if (unit != NULL && unit == Radio_Link(0)) { // RA2: Radio_Link(0), not Contact_With_Whom
+				DebugString("Do_MISSION_MOVE_Carryall - LAND - Got Cell_Unit\n");
+				if (Transmit_Message(RADIO_NEED_TO_MOVE) == RADIO_ROGER) {
+					DebugString("Do_MISSION_MOVE_Carryall - LAND - RADIO_NEED_TO_MOVE got RADIO_ROGER\n");
+					unit->Limbo();
+					unit->IsOnBridge = false;
+					unit->IsInTransport = true;
+					Cargo.Attach(unit);
 				} else {
 					Status = VALIDATE_LZ;
 				}
-				Transmit_Message(RADIO_OVER_OUT);
-				Mark(MARK_DOWN);
-				Enter_Idle_Mode(); // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+			} else {
+				Status = VALIDATE_LZ;
 			}
+			Transmit_Message(RADIO_OVER_OUT);
+			Mark(MARK_DOWN);
+			IsCarryallNotLanding = true; // RA2: as above
+			Enter_Idle_Mode(false, true); // RA2: explicit arguments
 			return(1);
+		}
 	}
 
-	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
+	return(Current_Mission_Control().Normal_Delay() + Scen->RandomNumber(0, 2)); // RA2: the scenario's random number
 }
+
 
 
 /// <summary>
@@ -1539,8 +1683,6 @@ int AircraftClass::Do_MISSION_PATROL(void)
 		LAND,
 	};
 
-	int i;
-
 	IsOnPatrol = true;
 
 	switch (Status) {
@@ -1550,9 +1692,9 @@ int AircraftClass::Do_MISSION_PATROL(void)
 		*/
 		case VALIDATE_LZ:
 			if (NavCom == NULL) {
-				Enter_Idle_Mode();
+				Enter_Idle_Mode(false, true); // RA2: explicit arguments
 			} else {
-				Assign_Destination(New_LZ(NavCom));
+				Assign_Destination(New_LZ(NavCom), true); // RA2: as above
 				if (Team != NULL) {
 					Team->Assign_Mission_Target(NavCom);
 				}
@@ -1565,10 +1707,10 @@ int AircraftClass::Do_MISSION_PATROL(void)
 		*/
 		case TAKE_OFF:
 			if (NavCom == NULL) {
-				Enter_Idle_Mode();
+				Enter_Idle_Mode(false, true); // RA2: as above
 				return(1);
 			} else {
-				Locomotion->Move_To(NavCom->Destination_Coord());
+				Locomotion->Move_To(NavCom->Destination_Coord(this)); // RA2: the destination is asked for this docker
 				Status = FLY_TO_LZ;
 				return(1);
 			}
@@ -1579,13 +1721,7 @@ int AircraftClass::Do_MISSION_PATROL(void)
 		*/
 		case FLY_TO_LZ:
 			if (Ammo == 0) {
-				BuildingClass * building = NULL;
-				for (i = 0; i < Class->Dock.Count(); i++) {
-					building = Find_Docking_Bay(Class->Dock[i], false);
-					if (building != NULL) {
-						break;
-					}
-				}
+				BuildingClass * building = TryNearestDockBuilding((TypeList<BuildingTypeClass *> *)&Class->Dock, 0, 0); // RA2: the whole Dock list at once
 
 				if (building != NULL) {
 					Override_Mission(MISSION_ENTER, NULL, building);
@@ -1595,8 +1731,8 @@ int AircraftClass::Do_MISSION_PATROL(void)
 			}
 
 			if (Ammo != 0) {
-				ObjectClass *threat = Greatest_Threat(THREAT_AREA, PositionCoord, false)->As_ObjectClass();
-				if (threat != NULL) {
+				AbstractClass * threat = Greatest_Threat(THREAT_AREA, PositionCoord, false); // RA2: the position goes in directly, only objects count
+				if (threat != NULL && (threat->AbstractFlags & 2)) { // RA2: only objects
 					Override_Mission(MISSION_ATTACK, threat, NULL);
 					Status = VALIDATE_LZ;
 					return(1);
@@ -1622,7 +1758,7 @@ int AircraftClass::Do_MISSION_PATROL(void)
 			if (!Locomotion->Is_Moving()) {
 				Status = IDLE;
 			} else {
-				if (NavCom != NULL && !Cell_Seems_Ok(NavCom->Destination_Coord(), true)) {
+				if (NavCom != NULL && !Cell_Seems_Ok(Aircraft_Destination_Cell(NavCom, this), true)) {
 					Status = VALIDATE_LZ;
 				} else {
 					Status = LAND;
@@ -1631,7 +1767,7 @@ int AircraftClass::Do_MISSION_PATROL(void)
 			return(1);
 
 		case IDLE:
-			Enter_Idle_Mode();
+			Enter_Idle_Mode(false, true); // RA2: as above
 			return(1);
 
 		/*
@@ -1642,7 +1778,7 @@ int AircraftClass::Do_MISSION_PATROL(void)
 				Status = IDLE;
 			} else {
 				if (NavCom != NULL) {
-					if (!Cell_Seems_Ok(NavCom->Destination_Coord(), true)) {
+					if (!Cell_Seems_Ok(Aircraft_Destination_Cell(NavCom, this), true)) {
 						Status = VALIDATE_LZ;
 					}
 				}
@@ -1653,8 +1789,9 @@ int AircraftClass::Do_MISSION_PATROL(void)
 			break;
 	}
 
-	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
+	return(Current_Mission_Control().Normal_Delay() + Scen->RandomNumber(0, 2)); // RA2: the scenario's random number
 }
+
 
 
 /***********************************************************************************************
@@ -1954,7 +2091,11 @@ ActionType AircraftClass::What_Action(ObjectClass const * target, bool disallow_
 	if (Class->IsCarryall && House->Is_Player_Control()) {
 		if (action == ACTION_SELECT || action == ACTION_NONE) {
 			if (House->Is_Ally(target)) {
-				if (!target->Is_Techno() || target->Owner_HouseClass()->Is_Ally(this)) {
+				bool techno; // RA2: the Is_Techno test is read into a local
+				if (target != NULL) { // RA2: as above
+					techno = target->AbstractFlags & 1; // RA2: as above
+				}
+				if (target == NULL || !techno || target->Owner_HouseClass()->Is_Ally(this)) { // RA2: as above
 					if (!Cargo.Is_Something_Attached() && target->RTTI == RTTI_UNIT) {
 						action = ACTION_TOTE;
 					}
@@ -1976,12 +2117,10 @@ ActionType AircraftClass::What_Action(ObjectClass const * target, bool disallow_
 	}
 
 	if (House->Is_Player_Control() && action == ACTION_SELECT && target->RTTI == RTTI_BUILDING) { // RA2: What_Action at 0x417840 has no PrimaryWeapon
-		BuildingClass * building = (BuildingClass *)target;
-		if (building->Class->IsCanUnitRepair) { // RA2: as above
-			if (Class->Dock.Is_In_List(building->Class) && building->HasFreeLink(this) && !building->Cargo.Is_Something_Attached() && ((AircraftClass *)this)->Transmit_Message(RADIO_CAN_LOAD, building) == RADIO_ROGER) { // RA2: as above
+		BuildingTypeClass const * type = ((BuildingClass *)target)->Class; // RA2: a repair bay or a helipad is entered
+		if (type == Rule->RepairBay || type->IsHelipad) { // RA2: as above
+			if (((BuildingClass *)target)->HasFreeLink(this) && !((BuildingClass *)target)->Cargo.Is_Something_Attached() && ((AircraftClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (BuildingClass *)target) == RADIO_ROGER) { // RA2: as above
 				action = ACTION_ENTER;
-			} else {
-				action = ACTION_NO_ENTER; // RA2: as above
 			}
 		}
 	}
@@ -2006,6 +2145,7 @@ ActionType AircraftClass::What_Action(ObjectClass const * target, bool disallow_
 
 	return(action);
 }
+
 
 
 /***********************************************************************************************
@@ -2129,7 +2269,7 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 			if (TarCom == NULL || Ammo == 0) {
 				Status = RETURN_TO_BASE;
 			} else {
-				Assign_Destination(Good_Fire_Location(TarCom));
+				Assign_Destination(Good_Fire_Location(TarCom), true); // RA2: explicit second argument
 				if (NavCom != NULL) {
 					Status = FLY_TO_POSITION;
 				} else {
@@ -2137,38 +2277,6 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 				}
 			}
 			break;
-
-#if OBSOLETE
-		/*
-		**	Take off (if necessary).
-		*/
-		case TAKE_OFF:
-			if (TarCom == NULL) {
-				Status = RETURN_TO_BASE;
-			} else {
-				if (Process_Take_Off()) {
-					Status = FLY_TO_POSITION;
-
-					/*
-					**	Break off radio contact with the helipad it is taking off from.
-					*/
-					if (In_Radio_Contact() && Map[Coord].Cell_Building() == Contact_With_Whom()) {
-						Transmit_Message(RADIO_OVER_OUT);
-					}
-
-					/*
-					**	Start flying toward the destination by skewing at first.
-					**	As the flight progresses, the body will rotate to face
-					**	the direction of travel.
-					*/
-					int diff = SecondaryFacing.Difference(Direction(NavCom));
-					diff = Bound(diff, -DIR_STEP_2, DIR_STEP_2);
-					PrimaryFacing = Dir256((int)SecondaryFacing.Current()+diff);
-				}
-				return(1);
-			}
-			break;
-#endif
 
 		/*
 		**	Fly to attack location.
@@ -2188,9 +2296,9 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 						Status = FIRE_AT_TARGET;
 						return(1);
 					}
-					Assign_Destination(TarCom);
+					Assign_Destination(TarCom, true); // RA2: as above
 				} else {
-					if (!Locomotion->Is_Moving_Now()) {
+					if (Is_Fighter() || !Locomotion->Is_Moving_Now()) { // RA2: a fighter fires without waiting to stop
 						Status = FIRE_AT_TARGET;
 						return(1);
 					}
@@ -2213,7 +2321,7 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 
 					if (distance < 0x0010) {
 						Status = FIRE_AT_TARGET;
-						Assign_Destination(NULL);
+						Assign_Destination(NULL, true); // RA2: as above
 					}
 				} else {
 					SecondaryFacing.Set_Desired(DirType().Direction(Fire_Coord(0), NavCom->Center_Coord()));
@@ -2237,9 +2345,9 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 				PrimaryFacing.Set_Desired(Direction(TarCom));
 				SecondaryFacing.Set_Desired(Direction(TarCom));
 			}
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: the weapon is chosen, the range ignored
 				case FIRE_CLOAKED:
-					Do_Uncloak();
+					Do_Uncloak(false); // RA2: explicit argument
 					break;
 
 				case FIRE_REARM:
@@ -2249,8 +2357,12 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					if (!Ammo) {
 						Status = RETURN_TO_BASE;
 					} else {
-						if (In_Range(TarCom) && !Is_Strafe()) {
-							Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
+						if (IsCloseEnoughToAttack(TarCom) && !Is_Strafe()) { // RA2: IsCloseEnoughToAttack in place of In_Range
+							if (Is_Fighter()) { // RA2: a fighter keeps firing from here
+								Status = FIRE_AT_TARGET;
+							} else {
+								Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
+							}
 						} else {
 							Status = PICK_ATTACK_LOCATION;
 						}
@@ -2262,18 +2374,20 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 
 				case FIRE_OK:
 					IsToSpendAmmo = true;
-					if (In_Range(TarCom)) {
-						Fire_At(TarCom, 0);
-					}
-					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: no In_Range test, the weapon is chosen
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: explicit arguments
 					if (Is_Strafe()) {
 						Status = STRAFE_SHOT2;
 						IsLockedStraight = true;
-					} else {
-						Status = FIRE_AT_TARGET2;
-						break;
+						return(PrimaryWeapon->ROF);
 					}
-					return(PrimaryWeapon->ROF);
+					if (Is_Fighter()) { // RA2: a fighter makes one pass per shot
+						IsLockedStraight = true;
+						Status = Ammo <= 0 ? RETURN_TO_BASE : PICK_ATTACK_LOCATION;
+						return(PrimaryWeapon->ROF);
+					}
+					Status = FIRE_AT_TARGET2;
+					break;
 
 				default:
 					if (!Ammo) {
@@ -2298,9 +2412,9 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 
 			PrimaryFacing.Set_Desired(Direction(TarCom));
 			SecondaryFacing.Set_Desired(Direction(TarCom));
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: as above
 				case FIRE_CLOAKED:
-					Do_Uncloak();
+					Do_Uncloak(false); // RA2: as above
 					break;
 
 				case FIRE_REARM:
@@ -2310,10 +2424,10 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					if (!Ammo) {
 						Status = RETURN_TO_BASE;
 					} else {
-						if (In_Range(TarCom) && !Is_Strafe()) {
-							Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
-						} else {
+						if (!IsCloseEnoughToAttack(TarCom) || Is_Strafe()) { // RA2: as above
 							Status = PICK_ATTACK_LOCATION;
+						} else {
+							Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
 						}
 						if (Is_Strafe()) {
 							return(45);
@@ -2322,10 +2436,8 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					break;
 
 				case FIRE_OK:
-					if (In_Range(TarCom)) {
-						Fire_At(TarCom, 0);
-					}
-					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: as above
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: as above
 
 					if (Ammo) {
 						Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
@@ -2338,7 +2450,7 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					if (!Ammo) {
 						Status = RETURN_TO_BASE;
 					} else {
-						if (!In_Range(TarCom)) {
+						if (!IsCloseEnoughToAttack(TarCom)) { // RA2: as above
 							Status = PICK_ATTACK_LOCATION;
 						} else {
 							Status = Rule->IsCurleyShuffle ? PICK_ATTACK_LOCATION : FIRE_AT_TARGET;
@@ -2353,15 +2465,20 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 				Status = RETURN_TO_BASE;
 				return(1);
 			}
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: as above
+				case FIRE_RANGE:
+					Assign_Destination(TarCom, true); // RA2: as above
+
 				case FIRE_OK:
 				case FIRE_FACING:
 				case FIRE_CLOAKED:
-					break;
-
-				case FIRE_RANGE:
-					Assign_Destination(TarCom);
-					break;
+				{
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: as above
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: as above
+					Assign_Destination(TarCom, true); // RA2: as above
+					Status = STRAFE_SHOT3;
+					return(PrimaryWeapon->ROF);
+				}
 
 				default:
 					if (!Ammo) {
@@ -2370,28 +2487,26 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					}
 					return(1);
 			}
-			if (In_Range(TarCom)) {
-				Fire_At(TarCom, 0);
-			}
-			Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
-			Assign_Destination(TarCom);
-			Status = STRAFE_SHOT3;
-			return(PrimaryWeapon->ROF);
 
 		case STRAFE_SHOT3:
 			if (TarCom == NULL) {
 				Status = RETURN_TO_BASE;
 				return(1);
 			}
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: as above
+				case FIRE_RANGE:
+					Assign_Destination(TarCom, true); // RA2: as above
+
 				case FIRE_OK:
 				case FIRE_FACING:
 				case FIRE_CLOAKED:
-					break;
-
-				case FIRE_RANGE:
-					Assign_Destination(TarCom);
-					break;
+				{
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: as above
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: as above
+					Assign_Destination(TarCom, true); // RA2: as above
+					Status = STRAFE_SHOT4;
+					return(PrimaryWeapon->ROF);
+				}
 
 				default:
 					if (!Ammo) {
@@ -2400,28 +2515,26 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					}
 					return(1);
 			}
-			if (In_Range(TarCom)) {
-				Fire_At(TarCom, 0);
-			}
-			Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
-			Assign_Destination(TarCom);
-			Status = STRAFE_SHOT4;
-			return(PrimaryWeapon->ROF);
 
 		case STRAFE_SHOT4:
 			if (TarCom == NULL) {
 				Status = RETURN_TO_BASE;
 				return(1);
 			}
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: as above
+				case FIRE_RANGE:
+					Assign_Destination(TarCom, true); // RA2: as above
+
 				case FIRE_OK:
 				case FIRE_FACING:
 				case FIRE_CLOAKED:
-					break;
-
-				case FIRE_RANGE:
-					Assign_Destination(TarCom);
-					break;
+				{
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: as above
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: as above
+					Assign_Destination(TarCom, true); // RA2: as above
+					Status = STRAFE_LAST_SHOT;
+					return(PrimaryWeapon->ROF);
+				}
 
 				default:
 					if (!Ammo) {
@@ -2430,28 +2543,19 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 					}
 					return(1);
 			}
-			if (In_Range(TarCom)) {
-				Fire_At(TarCom, 0);
-			}
-			Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
-			Assign_Destination(TarCom);
-			Status = STRAFE_LAST_SHOT;
-			return(PrimaryWeapon->ROF);
 
 		case STRAFE_LAST_SHOT:
 			if (TarCom == NULL) {
 				Status = RETURN_TO_BASE;
 				return(1);
 			}
-			switch (Can_Fire(TarCom, 0)) {
+			switch (Can_Fire(TarCom, What_Weapon_Should_I_Use(TarCom), true)) { // RA2: as above
 				case FIRE_OK:
 				case FIRE_FACING:
 				case FIRE_RANGE:
 				case FIRE_CLOAKED:
-					if (In_Range(TarCom)) {
-						Fire_At(TarCom, 0);
-					}
-					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
+					Fire_At(TarCom, What_Weapon_Should_I_Use(TarCom)); // RA2: as above
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true, false, false); // RA2: as above
 					Status = FLY_TO_POSITION;
 					return((PrimaryWeapon->Range + 4 * CELL_LEPTON) / Class->MaxSpeed);
 
@@ -2460,9 +2564,8 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 						Status = RETURN_TO_BASE;
 						IsLockedStraight = false;
 					}
-					break;
+					return(1);
 			}
-			return(1);
 
 		/*
 		**	Fly back to landing spot.
@@ -2473,7 +2576,9 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 
 			if (IsToSpendAmmo) {
 				IsToSpendAmmo = false;
-				Ammo--;
+				if (Ammo > 0) { // RA2: the ammunition does not go below zero
+					Ammo--;
+				}
 			}
 			/*
 			**	Break off of firing at the target if there is no more
@@ -2490,16 +2595,19 @@ int AircraftClass::Do_MISSION_ATTACK(void)
 			}
 
 			IsLockedStraight = false;
-			Assign_Destination(NULL);
-			Enter_Idle_Mode();
+			Assign_Destination(NULL, true); // RA2: as above
+			IsReturningFromAttackRun = false; // RA2: idle mode is entered with the flag cleared
+			Enter_Idle_Mode(false, true); // RA2: as above
+			IsReturningFromAttackRun = true; // RA2: as above
 			return(1);
 
 		default:
 			break;
 	}
 
-	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
+	return(Current_Mission_Control().Normal_Delay() + Scen->RandomNumber(0, 2)); // RA2: the scenario's random number
 }
+
 
 
 /***********************************************************************************************
@@ -2521,36 +2629,48 @@ int AircraftClass::Do_MISSION_ATTACK(void)
  *=============================================================================================*/
 AbstractClass * AircraftClass::New_LZ(AbstractClass * oldlz) const
 {
-	if (oldlz != NULL && (Team == NULL || !Team->Is_Leaving_Map()) && (!Is_LZ_Clear(oldlz) || !Cell_Seems_Ok(oldlz->Destination_Coord().As_Cell()))) {
+	if (oldlz != NULL) {
+		if (Team != NULL && Team->Is_Leaving_Map()) { // RA2: a team that is leaving keeps its landing zone
+			return(oldlz); // RA2: as above
+		}
+		if (Is_LZ_Clear(oldlz)) { // RA2: a clear landing zone whose cell is fine is kept
+			Cell lzcell = oldlz->Destination_Coord().As_Cell(); // RA2: as above
+			if (Cell_Seems_Ok(lzcell, false)) { // RA2: as above
+				return(oldlz); // RA2: as above
+			}
+		}
 		Coord coord = oldlz->Center_Coord();
 
 		/*
 		**	Scan outward in a series of concentric rings up to certain distance
 		**	in cells.
 		*/
-		for (int radius = 0; radius < (2 * Rule->LZScanRadius) / CELL_LEPTON_W; radius++) {
-			FacingType modifier = Random_Pick(FACING_N, FACING_NW);
-			Cell lastcell(0,0);
+		if (!ScenarioInit) { // RA2: no scan while the scenario is being initialised
+			for (int radius = 0; radius < Rule->LZScanRadius / CELL_LEPTON_W; radius++) { // RA2: the radius is in cells
+				FacingType modifier = Random_Pick(FACING_N, FACING_NW);
+				Cell lastcell(0,0);
 
-			/*
-			**	Perform a radius scan out from the original center location. Try to
-			**	find a cell that is allowed to be a legal LZ.
-			*/
-			for (FacingType facing = FACING_N; facing < FACING_COUNT; facing++) {
-				Cell newcell = Move_Cell(Cell(coord), DirType(Facing_Dir(FacingType(facing+modifier))).As_Int() & -(DIR_STEP_8 << 8), radius/* * CELL_LEPTON_W*/);
-				if (Map.In_Local_Radar(newcell)) {
-					AbstractClass * newtarget = &Map[newcell];
+				/*
+				**	Perform a radius scan out from the original center location. Try to
+				**	find a cell that is allowed to be a legal LZ.
+				*/
+				for (FacingType facing = FACING_N; facing < FACING_COUNT; facing++) {
+					Cell newcell = Move_Cell(Cell(coord), DirType(Facing_Dir(FacingType(facing+modifier))).As_Int() & -(DIR_STEP_8 << 8), radius/* * CELL_LEPTON_W*/);
+					if (Map.In_Local_Radar(newcell, true)) {
+						AbstractClass * newtarget = &Map[newcell];
 
-					if (newcell != lastcell && Is_LZ_Clear(newtarget) && Cell_Seems_Ok(newcell)) {
-						return(newtarget);
+						if (newcell != lastcell && Is_LZ_Clear(newtarget) && Cell_Seems_Ok(newcell, false)) {
+							return(newtarget);
+						}
+						lastcell = newcell;
 					}
-					lastcell = newcell;
 				}
 			}
 		}
 	}
 	return(oldlz);
 }
+
 
 
 /***********************************************************************************************
@@ -2578,20 +2698,24 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 {
 	AbstractClass * target;
 
-	switch (message) {
+	if (!Aircraft_Accepts_Radio(CurrentMission)) { // RA2: no radio while retreating or paradropping
+		return(RADIO_STATIC); // RA2: as above
+	}
 
-		case RADIO_RELOAD:
+	switch ((int)message) { // RA2: the message numbers are RA2's (two extra messages sit at 26 and 27)
+
+		case RA2_RADIO_RELOAD: // RA2: RA2's number
 			if (Ammo >= (Class->MaxAmmo / 2) && TarCom != NULL) {
 				return(RADIO_ROGER);
 			}
 			return(BASECLASS::Receive_Message(from, message, param));
 
-		case RADIO_PREPARED:
+		case RA2_RADIO_PREPARED: // RA2: RA2's number
 			if (TarCom != NULL) return(RADIO_NEGATIVE);
-			if ((HeightAGL == 0 && Ammo == Class->MaxAmmo) || (HeightAGL > 0 && Ammo > 0)) return(RADIO_ROGER);
+			if (Ammo == Class->MaxAmmo) return(RADIO_ROGER); // RA2: no height test
 			return(RADIO_NEGATIVE);
 
-		case RADIO_ALL_DONE:
+		case RA2_RADIO_ALL_DONE: // RA2: RA2's number
 			if (Ammo == Class->MaxAmmo) {
 				return(RADIO_ROGER);
 			}
@@ -2602,7 +2726,9 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 		**	and regroup. This means that any landing process is immediately aborted.
 		*/
 		case RADIO_RUN_AWAY:
-			Scatter(COORD_NONE, true);
+			QueueMission(MISSION_MOVE, false); // RA2: the aircraft heads for a good landing zone
+			Assign_Destination(Good_LZ(), true); // RA2: as above
+			Transmit_Message(RADIO_OVER_OUT); // RA2: as above
 			break;
 
 		/*
@@ -2611,15 +2737,15 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 		case RADIO_MOVE_HERE:
 			BASECLASS::Receive_Message(from, message, param);
 			target = (AbstractClass *)param;
-			if (target->As_BuildingClass() != NULL) {
+			if (target != NULL && target->Fetch_RTTI() == RTTI_BUILDING) { // RA2: the virtual Fetch_RTTI
 				if (Transmit_Message(RADIO_CAN_LOAD, Dynamic_Cast<TechnoClass *>(target)) != RADIO_ROGER) {
 					return(RADIO_NEGATIVE);
 				}
-				Assign_Mission(MISSION_ENTER);
-				Assign_Destination(target);
+				QueueMission(MISSION_ENTER, false); // RA2: QueueMission in place of Assign_Mission
+				Assign_Destination(target, true); // RA2: explicit second argument
 			} else {
-				Assign_Mission(MISSION_MOVE);
-				Assign_Destination(target);
+				QueueMission(MISSION_MOVE, false); // RA2: as above
+				Assign_Destination(target, true); // RA2: as above
 			}
 			Commence();
 			return(RADIO_ROGER);
@@ -2631,6 +2757,9 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 			BASECLASS::Receive_Message(from, message, param);
 			if (!Locomotion->Is_Moving() || NavCom == NULL) {
 				return(RADIO_ROGER);
+			}
+			if (Class->IsAirportBound && NavCom->Fetch_RTTI() == RTTI_CELL && NavCom == Get_Cell_Ptr()) { // RA2: an airport-bound aircraft that is heading for its own cell is fine
+				return(RADIO_ROGER); // RA2: as above
 			}
 			return(RADIO_NEGATIVE);
 
@@ -2648,7 +2777,9 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 			**	fly off the map.
 			*/
 			if (Counts_As_Civ_Evac(from)) {
-				Assign_Mission(MISSION_RETREAT);
+				Assign_Target(NULL); // RA2: the target and destination are cleared first
+				Assign_Destination(NULL, true); // RA2: as above
+				QueueMission(MISSION_RETREAT, false); // RA2: QueueMission in place of Assign_Mission
 			}
 			return(RADIO_ATTACH);
 
@@ -2679,7 +2810,7 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 						if (Transmit_Message(RADIO_MOVE_HERE, param, from) != RADIO_ROGER) {
 							Transmit_Message(RADIO_OVER_OUT, from);
 						} else {
-							Contact_With_Whom()->Unselect();
+							Radio_Link(0)->Unselect(); // RA2: Radio_Link(0), not Contact_With_Whom
 						}
 					}
 				}
@@ -2714,6 +2845,7 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 	*/
 	return(BASECLASS::Receive_Message(from, message, param));
 }
+
 
 
 /***********************************************************************************************
@@ -2969,13 +3101,31 @@ int AircraftClass::Do_MISSION_ENTER(void)
 	};
 
 	/*
+	**	RA2: an airport-bound aircraft on the ground that is not standing on its destination
+	**	building heads for that building (or none) and starts over.
+	*/
+	if (HeightAGL == 0 && Class->IsAirportBound && NavCom != NULL) { // RA2: not in TibSun
+		if (NavCom != Get_Cell_Ptr()->Cell_Building()) { // RA2: as above
+			DockNowHeadingTo = Aircraft_Building_Destination(NavCom); // RA2: as above
+			Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+			QueueMission(MISSION_MOVE, true); // RA2: as above
+			return(1); // RA2: as above
+		}
+	}
+	if (HeightAGL > 0) { // RA2: in the air the dock being headed for follows the destination
+		if (DockNowHeadingTo != NavCom && NavCom != NULL && NavCom->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+			DockNowHeadingTo = Aircraft_Building_Destination(NavCom); // RA2: as above
+		}
+	}
+
+	/*
 	**	Verify that it has a valid NavCom. If it doesn't then request one from the
 	**	building this building is trying to land upon. If that fails, then enter
 	**	idle mode.
 	*/
 	if (NavCom == NULL && In_Which_Layer() != LAYER_GROUND) {
 		if (Transmit_Message(RADIO_DOCKING) != RADIO_ROGER && !Move_To_Object_Nearby()) {
-			Enter_Idle_Mode();
+			Enter_Idle_Mode(false, true); // RA2: explicit arguments
 			return(1);
 		}
 	}
@@ -2983,55 +3133,67 @@ int AircraftClass::Do_MISSION_ENTER(void)
 	switch (Status) {
 		case INITIAL:
 			Status = TRAVEL;
-			break; // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+			IsCarryallNotLanding = true; // RA2: RA2's flag where TibSun sets IsReadyToCommence
+			return(1);
 
 		case TAKEOFF:
 		case ALTITUDE:
 		case STACK:
 		case DOWNWIND:
 		case CROSSWIND:
-			break; // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+			IsCarryallNotLanding = true; // RA2: as above
+			return(1);
 
 		case TRAVEL:
-			Transmit_Message(RADIO_DOCKING);
-			if (!In_Radio_Contact()) {
+			if (Class->IsAirportBound && HeightAGL != 0) { // RA2: an airport-bound aircraft in the air asks to dock
+				Transmit_Message(RADIO_DOCKING); // RA2: as above
+			}
+			if (!HasAnyLink()) { // RA2: HasAnyLink, not In_Radio_Contact
 				if (!Move_To_Object_Nearby()) {
 					if (Locomotion->Get_Status() == 1) {
 						Status = LANDING;
-					} // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+						IsCarryallNotLanding = true; // RA2: as above
+					}
 					if (MissionQueue == MISSION_NONE) {
-						Assign_Destination(NULL);
-						Enter_Idle_Mode();
-						break; // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+						Assign_Destination(NULL, true); // RA2: explicit second argument
+						Enter_Idle_Mode(false, true); // RA2: as above
+						IsCarryallNotLanding = true; // RA2: as above
+						return(1);
 					} else {
-					} // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+						IsCarryallNotLanding = true; // RA2: as above
+					}
 				}
-				break; // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+				IsCarryallNotLanding = true; // RA2: as above
+				return(1);
 			} else {
-				if (Locomotion->Get_Status() == 1) {
+				if (Locomotion->Get_Status() == 1 || (Class->IsAirportBound && HeightAGL == 0)) { // RA2: an airport-bound aircraft on the ground counts as landed
 					Status = LANDING;
-				} // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+					IsCarryallNotLanding = false;
+				}
 				return(3);
 			}
-			break;
 
 		case LANDING:
 			if (Locomotion->Get_Status() == 1) {
-				if (NavCom != NULL) {
-					Coord nav = NavCom->Center_Coord();
+				AbstractClass * target = NavCom; // RA2: a local copy
+				if (target != NULL) {
+					Coord nav = (target->Fetch_RTTI() == RTTI_BUILDING) ? ((ObjectClass *)target)->Docking_Coord(this) : NavCom->Center_Coord(); // RA2: a building is approached at its docking coordinate
 					Coord pos = PositionCoord;
 					int x = nav.X - pos.X;
 					int y = nav.Y - pos.Y;
 					x = x > 0 ? min(5, x) : max(-5, x);
 					y = y > 0 ? min(5, y) : max(-5, y);
-					pos += Coord(x, y, 0);
-					PositionCoord = pos;
+					pos.X += x; // RA2: the components are added separately
+					pos.Y += y; // RA2: as above
+					Set_Coord(pos); // RA2: the virtual Set_Coord
 				}
-			} else { // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
-				switch (Transmit_Message(RADIO_IM_IN)) { // RA2: no IsReadyToCommence (TibSun's use does not compile against RA2's declaration)
+				IsCarryallNotLanding = true; // RA2: as above
+			} else {
+				IsCarryallNotLanding = true; // RA2: as above
+				switch (Transmit_Message(RADIO_IM_IN)) {
 					case RADIO_ROGER:
 						if (Class->IsCarryall && Cargo.Is_Something_Attached()) {
-							TechnoClass * contact = Contact_With_Whom();
+							TechnoClass * contact = Radio_Link(0); // RA2: Radio_Link(0), not Contact_With_Whom
 							TechnoClass * cargo = Cargo.Detach_Object();
 							Transmit_Message(RADIO_OVER_OUT);
 							if (cargo->Transmit_Message(RADIO_HELLO, contact) == RADIO_ROGER) {
@@ -3040,21 +3202,21 @@ int AircraftClass::Do_MISSION_ENTER(void)
 								Drop_Off_Cargo();
 								Mark(MARK_DOWN);
 							} else {
-								Assign_Destination(Good_LZ());
+								Assign_Destination(Good_LZ(), true); // RA2: explicit second argument
 							}
-							Assign_Mission(MISSION_MOVE);
+							QueueMission(MISSION_MOVE, false); // RA2: QueueMission in place of Assign_Mission
 						} else {
-							Assign_Mission(MISSION_GUARD);
+							QueueMission(MISSION_GUARD, false); // RA2: as above
 						}
 						break;
 
 					case RADIO_ATTACH:
 						Limbo();
-						Contact_With_Whom()->Cargo.Attach(this);
+						Radio_Link(0)->Cargo.Attach(this); // RA2: Radio_Link(0), not Contact_With_Whom
 						break;
 
 					default:
-						Enter_Idle_Mode();
+						Enter_Idle_Mode(false, true); // RA2: explicit arguments
 				}
 			}
 			break;
@@ -3064,6 +3226,7 @@ int AircraftClass::Do_MISSION_ENTER(void)
 	}
 	return(1);
 }
+
 
 
 /***********************************************************************************************
@@ -3092,13 +3255,15 @@ AbstractClass * AircraftClass::Good_LZ(void) const
 	*/
 	Cell bestcell = Cell(0, 0);
 	int bestdist = -1;
+	int index; // RA2: one index for both scans
 
 	if (Class->Dock.Count() > 0) {
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * building = Buildings[index];
+		int count = House->Buildings.Count(); // RA2: the owner's own building list, counted once
+		for (index = 0; index < count; index++) { // RA2: as above
+			BuildingClass * building = House->Buildings[index]; // RA2: as above
 
-			if (building && !building->IsInLimbo && building->House == House) {
-				int dist = Distance_To(building);
+			if (building && !building->IsInLimbo) { // RA2: the owner's list holds only its own buildings
+				int dist = Distance(building->Center_Coord()); // RA2: the 3D distance between the two centres
 				if (building->Class == Class->Dock[0]) {
 					dist /= 4;
 				}
@@ -3116,17 +3281,17 @@ AbstractClass * AircraftClass::Good_LZ(void) const
 
 	if (bestdist != -1) {
 		if (bestdist < CELL_LEPTON) {
-			bestcell = Map.Nearby_Location(PositionCell, SPEED_FOOT, Map.Get_Cell_Zone(PositionCell));
-			return(&Map[bestcell]);
+			Cell cell = Map.Nearby_Location(PositionCell, SPEED_FOOT, Map.Get_Cell_Zone(PositionCell)); // RA2: the cell is a local, bestcell is kept
+			return(&Map[cell]); // RA2: as above
 		}
 		return(&Map[bestcell]);
 	}
 
 	if (bestdist == -1) {
-		for (int index = 0; index < Objects.Count(); index++) {
+		for (index = 0; index < Objects.Count(); index++) { // RA2: as above
 			TechnoClass * techno = Dynamic_Cast<TechnoClass *>(Objects[index]);
 			if (techno && !techno->IsInLimbo && techno->House == House && techno != (AircraftClass *)this) {
-				int dist = Distance_To(techno);
+				int dist = (Center_Coord() - techno->Center_Coord()).Length(); // RA2: as above
 				if (bestdist == -1 || dist < bestdist) {
 					Cell cell = techno->PositionCell;
 					cell = Map.Nearby_Location(cell, SPEED_FOOT, Map.Get_Cell_Zone(cell));
@@ -3151,6 +3316,7 @@ AbstractClass * AircraftClass::Good_LZ(void) const
 	*/
 	return(&Map[(Coord const &)PositionCoord]);
 }
+
 
 
 /***********************************************************************************************
@@ -3229,38 +3395,22 @@ int AircraftClass::Do_MISSION_GUARD(void)
 		*/
 		if (Team) {
 			if (NavCom != NULL) {
-				Assign_Mission(MISSION_MOVE);
+				IsCarryallNotLanding = true; // RA2: set before the move order
+				QueueMission(MISSION_MOVE, false); // RA2: QueueMission in place of Assign_Mission
 			}
 			return(Current_Mission_Control().Normal_Delay());
 		}
 
 		if (PrimaryWeapon == NULL) {
-			Assign_Destination(&Map[(Coord const &)PositionCoord]);
-			Assign_Mission(MISSION_MOVE);
+			Assign_Destination(&Map[(Coord const &)PositionCoord], true); // RA2: explicit second argument
+			QueueMission(MISSION_MOVE, false); // RA2: as above
 		} else {
-			if (Team == NULL) Enter_Idle_Mode();
-		}
-		return(1);
-	}
-	//if (House->IsHuman) return(MissionControl[Mission].Normal_Delay());
-
-	/*
-	**	If the aircraft is very badly damaged, then it will search for a
-	**	repair bay first.
-	*/
-	if (!House->Is_Human_Player() && House->Available_Money() >= 100 && HealthRatio <= Rule->ConditionYellow) {
-		if (!In_Radio_Contact() ||
-			(HeightAGL == 0 &&
-				(Contact_With_Whom()->RTTI != RTTI_BUILDING || ((BuildingClass *)Contact_With_Whom())->Class_Of() != Rule->RepairBay))) {
-
-			BuildingClass * building = Find_Docking_Bay(Rule->RepairBay, true);
-			if (building != NULL) {
-				Assign_Mission(MISSION_ENTER);
-				Assign_Destination(building);
-				Assign_Target(NULL);
-				return(1);
+			if (Team == NULL) {
+				IsCarryallNotLanding = true; // RA2: as above
+				Enter_Idle_Mode(false, true); // RA2: as above
 			}
 		}
+		return(1);
 	}
 
 	/*
@@ -3268,27 +3418,28 @@ int AircraftClass::Do_MISSION_GUARD(void)
 	**	abort any normal guard logic in order to look for a helipad
 	**	to rearm.
 	*/
-	if (!House->Is_Human_Player() && Ammo == 0 && Is_Weapon_Equipped()) {
-		if (!In_Radio_Contact()) {
-			BuildingClass * building = NULL;
-			for (int index = 0; index < Class->Dock.Count(); index++) {
-				building = Find_Docking_Bay(Class->Dock[index], false);
-				if (building != NULL) {
-					break;
-				}
-			}
-
-			if (building != NULL) {
-				Assign_Mission(MISSION_ENTER);
-				Assign_Destination(building);
+	bool rearm = false; // RA2: three rules choose when to look for a helipad
+	if (AircraftRearmWhenEmpty) { // RA2: as above
+		rearm = (Ammo == 0 && Is_Weapon_Equipped()); // RA2: as above
+	} else if (AircraftRearmWhenHalf) { // RA2: as above
+		rearm = (Is_Weapon_Equipped() && Ammo < Class->MaxAmmo / 2); // RA2: as above
+	} else {
+		rearm = (Is_Weapon_Equipped() && Ammo < Class->MaxAmmo); // RA2: as above
+	}
+	if (rearm) { // RA2: as above
+		if (!HasAnyLink()) { // RA2: HasAnyLink, not In_Radio_Contact
+			TechnoClass * dock = TryNearestDockBuilding((TypeList<BuildingTypeClass *> *)&Class->Dock, 0, 0); // RA2: the whole Dock list at once
+			if (dock != NULL) {
+				QueueMission(MISSION_ENTER, false); // RA2: as above
+				Assign_Destination(dock, true); // RA2: as above
 				Assign_Target(NULL);
 				return(1);
 			}
 		}
 	}
 
-	if (Ammo != -1 && Ammo < (Class->MaxAmmo / 2) && In_Radio_Contact()) {
-		if (Contact_With_Whom()->RTTI == RTTI_BUILDING && ((BuildingClass *)Contact_With_Whom())->Class->IsCanUnitReload) {
+	if (Ammo != -1 && Ammo < (Class->MaxAmmo / 2) && HasAnyLink()) { // RA2: as above
+		if (Radio_Link(0)->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)Radio_Link(0))->Class->IsCanUnitReload) { // RA2: as above
 			return(1);
 		}
 	}
@@ -3297,7 +3448,7 @@ int AircraftClass::Do_MISSION_GUARD(void)
 	**	If the aircraft already has a target, then attack it if possible.
 	*/
 	if (TarCom != NULL) {
-		Assign_Mission(MISSION_ATTACK);
+		QueueMission(MISSION_ATTACK, false); // RA2: as above
 		return(1);
 	}
 
@@ -3312,8 +3463,7 @@ int AircraftClass::Do_MISSION_GUARD(void)
 	**	Computer controlled helicopters will defend themselves by bouncing around
 	**	and looking for a free helipad.
 	*/
-	if (HeightAGL == 0 && !In_Radio_Contact()) {
-		//Scatter(COORD_NONE, true);
+	if (HeightAGL == 0 && !HasAnyLink()) { // RA2: as above
 		return(TICKS_PER_SECOND*3);
 	}
 
@@ -3321,21 +3471,22 @@ int AircraftClass::Do_MISSION_GUARD(void)
 	**	Perform a special check to hunt for harvesters that are outside of the protective
 	**	shield of their base.
 	*/
-	if (!House->Is_Human_Player() && House->State != STATE_ATTACKED) {
+	if (!House->Is_Human_Player()) { // RA2: no State test
 		AbstractClass * target = House->Find_Juicy_Target(PositionCoord);
 
 		if (target != NULL) {
 			Assign_Target(target);
-			Assign_Mission(MISSION_ATTACK);
+			QueueMission(MISSION_ATTACK, false); // RA2: as above
 		}
 	}
 
 	if (House->Is_Human_Player() && !In_Air()) {
-		return(MISSION_GUARD);
+		return(Current_Mission_Control().Normal_Delay() + Scen->RandomNumber(0, 2)); // RA2: the mission delay plus a random 0-2
 	}
 
 	return(BASECLASS::Do_MISSION_GUARD());
 }
+
 
 
 /***********************************************************************************************
@@ -3445,37 +3596,31 @@ void AircraftClass::Assign_Destination(AbstractClass * dest, bool immediate)
 			 * Special docking logic applies when this aircraft has been ordered to
 			 * enter a building (a helipad or a repair facility).
 			 */
-			if (dest->What_Am_I() == RTTI_BUILDING && (Mission == MISSION_ENTER || MissionQueue == MISSION_ENTER)) {
+			if (dest->What_Am_I() == RTTI_BUILDING && (Get_Mission() == MISSION_ENTER || MissionQueue == MISSION_ENTER)) { // RA2: the mission is read through the virtual
 				BuildingClass * destination = (BuildingClass *)dest;
 
-				if (!In_Radio_Contact()) {
+				if (!HasAnyLink()) { // RA2: HasAnyLink, not In_Radio_Contact
 
 					/*
 					 * The destination building is already occupied (in radio contact).
 					 * Try to find an alternate docking bay to head for instead.
 					 */
-					if (((TechnoClass *)dest)->In_Radio_Contact()) {
-						ArchiveTarget = dest;
+					if (!destination->HasFreeLink(this)) { // RA2: HasFreeLink(this) of the building
+						Assign_Archive_Target(dest); // RA2: the archive target is set through Assign_Archive_Target
 
 						if (destination->Class->IsHelipad) {
-							dest = NULL;
-							for (int index = 0; index < Class->Dock.Count(); index++) {
-								dest = Find_Docking_Bay(Class->Dock[index], false, true);
-								if (dest != NULL) {
-									break;
-								}
-							}
-
-							Assign_Destination(NULL);
+							TechnoClass * dock = TryNearestDockBuilding((TypeList<BuildingTypeClass *> *)&Class->Dock, 0, 0); // RA2: the whole Dock list at once
+							Assign_Destination(NULL, true); // RA2: explicit second argument
 
 							MissionType mission = MISSION_MOVE;
-							if (dest != NULL && Transmit_Message(RADIO_CAN_LOAD, (TechnoClass *)dest) == RADIO_ROGER) {
-								Transmit_Message(RADIO_HELLO, (TechnoClass *)dest);
+							if (dock != NULL && Transmit_Message(RADIO_CAN_LOAD, dock) == RADIO_ROGER) { // RA2: as above
+								Transmit_Message(RADIO_HELLO, dock); // RA2: as above
+								dest = dock; // RA2: as above
 								mission = MISSION_ENTER;
 							} else {
 								dest = Good_LZ();
 							}
-							Assign_Mission(mission);
+							QueueMission(mission, false); // RA2: QueueMission in place of Assign_Mission
 							if (Ready_To_Commence()) {
 								Commence();
 							}
@@ -3492,20 +3637,20 @@ void AircraftClass::Assign_Destination(AbstractClass * dest, bool immediate)
 						 * The destination is free. Ask permission to dock; if refused,
 						 * break contact and fall back on the archive target.
 						 */
-						if (Transmit_Message(RADIO_DOCKING, (TechnoClass *)dest) != RADIO_ROGER) {
-							Transmit_Message(RADIO_OVER_OUT, LParam, NULL);
-							if (((BuildingClass *)dest)->Class->IsCanUnitRepair || ((BuildingClass *)dest)->Class->IsCanUnitReload) {
-								ArchiveTarget = dest;
+						if (Transmit_Message(RADIO_DOCKING, destination) != RADIO_ROGER) { // RA2: the building is passed as a TechnoClass
+							Transmit_Message(RADIO_OVER_OUT); // RA2: the message-only overload
+							if (destination->Class->IsCanUnitRepair || destination->Class->IsCanUnitReload) {
+								Assign_Archive_Target(dest); // RA2: as above
 								dest = NULL;
 							}
 						}
 
 						if (destination->Class->IsCanUnitRepair || destination->Class->IsCanUnitReload) {
 							if (NavCom != NULL) {
-								ArchiveTarget = NavCom;
+								Assign_Archive_Target(NavCom); // RA2: as above
 							}
 						} else {
-							ArchiveTarget = dest;
+							Assign_Archive_Target(dest); // RA2: as above
 						}
 					}
 
@@ -3519,20 +3664,16 @@ void AircraftClass::Assign_Destination(AbstractClass * dest, bool immediate)
 					 */
 					TechnoClass * building = Dynamic_Cast<TechnoClass *>(dest);
 					if (building != NULL) {
-						if (building->In_Radio_Contact()) {
-							if (Contact_With_Whom() != building) {
-								ArchiveTarget = dest;
+						if (!building->HasFreeLink(this)) { // RA2: as above
+							Assign_Archive_Target(dest); // RA2: as above
+						} else if (!building->ContainsLink(this)) { // RA2: as above
+							if (Transmit_Message(RADIO_DOCKING) == RADIO_ROGER) { // RA2: the message-only overload
+								return; // RA2: as above
 							}
-						} else {
-							if (Transmit_Message(RADIO_HELLO, building) == RADIO_ROGER) {
-								if (Transmit_Message(RADIO_DOCKING, LParam, NULL) == RADIO_ROGER) {
-									return;
-								}
-								Transmit_Message(RADIO_OVER_OUT, LParam, NULL);
-								if (((BuildingClass *)dest)->Class->IsCanUnitRepair || ((BuildingClass *)dest)->Class->IsCanUnitReload) {
-									ArchiveTarget = dest;
-									dest = NULL;
-								}
+							Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+							if (destination->Class->IsCanUnitRepair || destination->Class->IsCanUnitReload) {
+								Assign_Archive_Target(dest); // RA2: as above
+								dest = NULL;
 							}
 						}
 					}
@@ -3549,20 +3690,19 @@ void AircraftClass::Assign_Destination(AbstractClass * dest, bool immediate)
 				BuildingClass * occupier = (BuildingClass *)cellptr->Cell_Occupier();
 
 				while (occupier != NULL) {
-					if (occupier != (BuildingClass *)this && occupier->RTTI == RTTI_BUILDING) {
+					if (occupier != (BuildingClass *)this && occupier->Fetch_RTTI() == RTTI_BUILDING) { // RA2: the virtual Fetch_RTTI
 						break;
 					}
 					occupier = (BuildingClass *)occupier->Next;
 				}
 
 				if (occupier != NULL && (occupier->Class->IsCanUnitRepair || occupier->Class->IsCanUnitReload)) {
-					if (!Locomotion->Is_Powered() && !IonStormClass::Is_Ion_Storm_Active()) {
+					if (!Locomotion->Is_Powered() && !House->Ion_Sensitives_Should_Be_Offline()) { // RA2: the house's ion storm check
 						Locomotion->Power_On();
 					}
 
-					BuildingClass * contact = (BuildingClass *)Contact_With_Whom();
-					if ((FootClass *)contact == (FootClass *)occupier && (FootClass *)dest != (FootClass *)contact) {
-						Transmit_Message(RADIO_OVER_OUT, LParam, NULL);
+					if (Radio_Link(0) == occupier && dest != Radio_Link(0)) { // RA2: Radio_Link(0), not Contact_With_Whom
+						Transmit_Message(RADIO_OVER_OUT); // RA2: the message-only overload
 					}
 				}
 			}
@@ -3571,6 +3711,7 @@ void AircraftClass::Assign_Destination(AbstractClass * dest, bool immediate)
 
 	BASECLASS::Assign_Destination(dest, immediate);
 }
+
 
 
 /***********************************************************************************************
@@ -3729,7 +3870,6 @@ static inline bool Aircraft_Fire_Shrouded(Coord const & coord)
 void AircraftClass::Read_INI(CCINIClass const & ini)
 {
 	AircraftClass	* air;      // Working unit pointer.
-	HousesType		inhouse;    // Unit house.
 	AircraftType	classid;    // Unit class.
 	char				buf[128];
 
@@ -3740,13 +3880,13 @@ void AircraftClass::Read_INI(CCINIClass const & ini)
 
 		ini.Get_String(INI_NAME, entry, NULL, buf, sizeof(buf));
 
-		inhouse = HouseTypeClass::From_Name(strtok(buf, ","));
-		if (inhouse != HOUSE_NONE) {
+		int house_index = House_Index_From_Name(strtok(buf, ",")); // RA2: the house is found by index in Houses
+		if (house_index != -1) { // RA2: as above
 			classid = AircraftTypeClass::From_Name(strtok(NULL, ","));
 
 			if (classid != AIRCRAFT_NONE) {
 
-				HouseClass * inhousep = House_From_HousesType(inhouse);
+				HouseClass * inhousep = Houses[house_index]; // RA2: as above
 
 				air = new AircraftClass(AircraftTypes[classid], inhousep);
 				if (air) {
@@ -3759,12 +3899,12 @@ void AircraftClass::Read_INI(CCINIClass const & ini)
 					Cell cell;
 					Coord coord;
 					if (NewINIFormat >= 4) {
-						unsigned short x = atoi(strtok(NULL, ","));
-						unsigned short y = atoi(strtok(NULL, ","));
-						cell = Cell(x,y);
+						int x = atoi(strtok(NULL, ","));
+						int y = atoi(strtok(NULL, ","));
+						cell = Cell((short)x, y); // RA2: x is narrowed to a short
 					} else {
 						int c = atoi(strtok(NULL, ","));
-						cell = Cell(c);
+						cell = Cell(c % 128, c / 128); // RA2: the cell number is split by hand
 					}
 
 					coord = cell;
@@ -3802,14 +3942,15 @@ void AircraftClass::Read_INI(CCINIClass const & ini)
 					}
 
 					if (air->Unlimbo(coord, dir)) {
-						air->Strength = ((double)air->Class->MaxStrength) * strength / 256.0;
+						air->Strength = ((double)strength) * air->Class->MaxStrength / 256.0; // RA2: the strength is scaled first
 						if (air->Strength > air->Class->MaxStrength-3) air->Strength = air->Class->MaxStrength;
 						if (air->Strength == 0) air->Strength = 1;
+						air->EstimatedHealth = air->Strength; // RA2: the health the owner last saw
 						if (Session.Type == GAME_NORMAL || air->House->Is_Human_Player()) {
-							air->Assign_Mission(mission);
+							air->QueueMission(mission, false); // RA2: the mission is queued
 							air->Commence();
 						} else {
-							air->Enter_Idle_Mode();
+							air->Enter_Idle_Mode(false, true); // RA2: explicit arguments
 						}
 					} else {
 						/*
@@ -3823,6 +3964,7 @@ void AircraftClass::Read_INI(CCINIClass const & ini)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -4154,6 +4296,7 @@ void AircraftClass::Set_Mission(MissionType mission) // RA2: not in TibSun, at 0
 
 
 
+
 void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in TibSun, at 0x41B160
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4171,6 +4314,7 @@ void AircraftClass::QueueMission(MissionType mission, bool start) // RA2: not in
 
 
 
+
 void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom, AbstractClass * navcom) // RA2: not in TibSun, at 0x41B1A0
 {
 	if ((CurrentMission == MISSION_RETREAT || (CurrentMission > MISSION_PATROL && CurrentMission <= MISSION_PARADROP_OVERFLY)) && mission != MISSION_RETREAT && (mission <= MISSION_PATROL || mission > MISSION_PARADROP_OVERFLY)) { // RA2: only retreat and paradrop guarded
@@ -4178,6 +4322,7 @@ void AircraftClass::Override_Mission(MissionType mission, AbstractClass * tarcom
 	}
 	BASECLASS::Override_Mission(mission, tarcom, navcom); // RA2: as above
 }
+
 
 
 
