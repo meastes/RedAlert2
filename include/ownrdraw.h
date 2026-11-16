@@ -18,6 +18,10 @@
 #include "wstring.h"
 
 
+struct TextNode;
+class BitFont;
+class WideWstring;
+
 namespace OwnerDraw {
 
 	struct CellData {
@@ -118,7 +122,7 @@ namespace OwnerDraw {
 		 * This is the text displayed in the tooltip. If the owning control supplies none,
 		 * then the placeholder "Tool Tip" is used.
 		 */
-		char text[128];
+		wchar_t text[128]; // RA2: wide
 
 		/*
 		 * If a tooltip currently exists, then this flag will be true. It stays true while
@@ -168,121 +172,86 @@ namespace OwnerDraw {
 	};
 
 	/*
-	 * Per-control data block stored by value in ODWinData, keyed by the control's HWND.
-	 * A common header and footer are shared by the framework (CtrlProc) and every control;
-	 * the middle is a union overlaid differently by each control type.
-	 */
+	**	RA2's control record (0x200 bytes): one per subclassed window, kept in the control table.
+	*/
 	struct WinData {
+		WinData(void); // RA2: 0x6002F0
+		~WinData(void); // RA2: frees the text, the node list and the wide text
+		void Copy_List(TextNode const * source); // RA2: 0x600460
+		WinData & operator = (WinData const & other); // RA2: 0x6005C0, keeps WideText
+		WinData & Copy(WinData const & other); // RA2: 0x6006E0, without the self test
+		void Set_Text(char const * text); // RA2: 0x600560, a wide copy
+		void Set_Wide_Text(wchar_t const * text); // RA2: 0x600510
 
-		/*
-		 * These fields precede the per-control union and are common to every control type.
-		 * They are maintained by the framework rather than by any one control's handler.
-		 */
-		LPARAM userData;		/// value handed in when the control was subclassed; nothing reads it back
-		int scrollBarWidth;		/// width of the attached scrollbar, or zero if there is none
-		HWND ownerWindow;		/// in a scrollbar's own record, the control that created it
-		HWND attachedWindow;	/// attached scrollbar or dropdown; 1 while one is being created
-		Surface *cachedSurface;	/// cached copy of the control's backdrop, rebuilt when it resizes
-		Surface *image;			/// image the control draws (OD_SETIMAGE)
-		Surface *altImage;		/// image drawn instead while the control is pressed (OD_SETALTIMAGE)
-		int itemHeightSet;		/// combo box: the item height has already been set up once
-		int paintDisabled;		/// suppress painting, for this control and its attached window (OD_DISABLEPAINT)
-		int toolTipsEnabled;	/// show a tooltip while the mouse rests over the control (OD_TOOLTIPS)
-
-		/*
-		 * Per-control state. The same bytes mean different things per control type.
-		 */
+		int SubclassParam;				// RA2: +0x00 the lparam Subclass_Control was given
+		int ScrollWidth;				// RA2: +0x04 a combo drop list's scroll bar width
+		HWND ScrollOwner;				// RA2: +0x08 the window the drop list's scroll bar reports to
+		HWND ScrollBar;					// RA2: +0x0C the drop list's scroll bar (1 while it is made)
+		Surface * Back;					// RA2: +0x10 a BSurface of the background
+		Surface * Image;				// RA2: +0x14 set by Set_Control_Image
 		union {
-			struct {							/// list box -- columns, colors and selection
-				ArrayList<int> *rowColors;		/// per-row background color, -1 for the default (OD_SETCOLOR)
-				ArrayList<int> *selStates;		/// per-row selected flag, indexed alongside rowColors
-				int topIndex;					/// the row drawn at the top of the visible area
-				int curSel;						/// the currently selected row, or -1 if there is none
-				ArrayList<ColumnData> *columns;	/// the columns the rows are divided into (OD_ADDCOLUMN)
-			} ListBox;
-
-			struct {							/// scroll bar -- range, thumb position and arrows
-				int result;						/// the left button is being held down on the scrollbar
-				int dragging;					/// the grip is being dragged with the mouse
-				int range;						/// number of scroll positions, defaulting to 100
-				int position;					/// the current scroll position within the range
-				int upPressed;					/// the up arrow is held, and is drawn depressed
-				int downPressed;				/// the down arrow is held, and is drawn depressed
-				int keepCapture;				/// hand the mouse back to the owner on release (OD_SETKEEPCAPTURE)
-			} ScrollBar;
-
-			struct {							/// track bar (slider) -- range, value and thumb
-				int result;						/// the left button is being held down on the track bar
-				int dragging;					/// the thumb is being dragged with the mouse
-				int range;						/// span of the value, the maximum less the minimum
-				int value;						/// the current value, measured up from the minimum
-				int minimum;					/// the low end of the value range
-				int thumbPos;					/// how far along the slider the thumb is drawn, in pixels
-				int step;						/// the increment a click applies; reported values snap to it
-				int showNumbers;				/// draw the value as a number beside the slider (OD_TRACKNUMBERS)
-				int clickSuppress;				/// stay silent rather than click when the value changes (OD_TRACKSILENT)
-			} TrackBar;
-
-			struct {							/// combo box -- the closed control; see ComboDrop
-				int selIndex;					/// Unused
-				int reserved2C;					/// Unused
-				int reserved30;					/// Unused
-				HWND dropdown;					/// the open dropdown window, or NULL while the list is closed
-				int reserved38[6];				/// Unused
-				COLORREF itemColors[50];		/// per-item text color, -1 for the default (OD_SETCOLOR)
-			} ComboBox;
-
-			struct {							/// static text -- the owner-drawn caption
-				char *text;						/// the control's own copy of its caption, freed when it is destroyed
-				COLORREF textColor;				/// the color the caption is drawn in (OD_SETCOLOR)
-			} Static;
-
-			struct {							/// owner-draw button
-				int state;						/// item state from WM_DRAWITEM; ODS_SELECTED draws altImage
-			} Button;
-
-			struct {							/// auto-checkbox -- toggles itself when clicked
-				int checkState;					/// whether the box is checked (BM_GETCHECK / BM_SETCHECK)
-			} CheckBox;
-
-			struct {							/// edit box -- focus / tab-stop state during dialog reveal
-				int reserved28;					/// Unused
-				int reserved2C;					/// Unused
-				int focusPending;				/// focus arrived before the reveal finished, so OD_ACTIVATE must apply it
-				int focusEnabled;				/// clear until OD_ACTIVATE; while clear, focus is deflected to MainWindow
-				int hadTabStop;					/// WS_TABSTOP was stripped when subclassing, and OD_ACTIVATE restores it
-			} Edit;
-
-			struct {							/// combo box dropdown window
-				int selection;					/// the highlighted item, seeded from the owning combo box
-				int reserved2C;					/// Unused
-				int scrollTop;					/// the first item visible in the dropped-down list
-			} ComboDrop;
-
-			struct {							/// the item state any owner-draw control was last asked to draw
-				int itemState;					/// item state from WM_DRAWITEM; the same field as Button::state
-			} DrawItem;
-
-			struct {							/// progress bar -- the filled proportion of the bar
-				int minimum;					/// the value at which the bar reads as empty
-				int maximum;					/// the value at which the bar reads as full, 100 by default
-				int position;					/// the current value, clamped to the range
-			} ProgressBar;
-
-			unsigned char _size[0x100];			/// pads the union out so that the footer lands at the right offset
+			char Reserved_18[0x20 - 0x18];
+			Surface * AlternateImage;	// RA2: +0x18 a button's second image
 		};
-
-		/*
-		 * These fields follow the per-control union and are common to every control type.
-		 * They hold the device context state CtrlProc saves and restores around a paint.
-		 */
-		HFONT font;				/// the control's font, or the object OD_SAVEDC displaced out of the device context
-		int bkMode;				/// the background mode saved by OD_SAVEDC
-		COLORREF bkColor;		/// the background color saved by OD_SAVEDC
-		COLORREF textColor;		/// the text color saved by OD_SAVEDC
-		int field_138;			/// Unused
-		int animState;			/// reveal state of the owning dialog -- 0 hidden, 1 awaiting the animated reveal, 2 shown
+		int SkipCheckPaint;				// RA2: +0x20 a check box skips painting when set
+		char Reserved_24[0x28 - 0x24];
+		wchar_t * Text;					// RA2: +0x28 owned wide text
+		int Reserved_2C;
+		char Reserved_30[0x34 - 0x30];
+		TextNode * Nodes;				// RA2: +0x34 owned node list
+		int Reserved_38;
+		WideWstring * WideText;			// RA2: +0x3C made by the constructor
+		int Reserved_40;
+		int EditScroll;					// RA2: +0x44 an edit control's scroll position
+		char Reserved_48[0x54 - 0x48];
+		int UserDataWord;				// RA2: +0x54 the second word of the GWL_USERDATA block
+		char Reserved_58[0x5C - 0x58];
+		int Reserved_5C;
+		int Reserved_60;
+		BitFont * Font;					// RA2: +0x64 the game font by default
+		int SkipTests;					// RA2: +0x68 nonzero skips the owner-draw tests
+		int Kind;						// RA2: +0x6C the dialog kind (Set_Dialog_Kind)
+		int PictureMode;				// RA2: +0x70 1 animated by rows, 2 image, 3 unused, 4 animation
+		int Drawer;						// RA2: +0x74 the background drawer (Control_Drawer)
+		char Animation[0x90 - 0x78];	// RA2: +0x78 animation state (Init_Control_Animation)
+		int TypingSound;				// RA2: +0x90 -1 by default (Control_Typing_Sound)
+		char Reserved_94[0xB0 - 0x94];
+		int ButtonKind;					// RA2: +0xB0 1 campaign, 2 network, 3 cancel (Assign_Button_Kind)
+		char Reserved_B4[0xBC - 0xB4];
+		bool IsDisabled;				// RA2: +0xBC (Set_Control_Disabled)
+		bool IsHidden;					// RA2: +0xBD kept while the dialog is hidden
+		bool IsNotifyPending;			// RA2: +0xBE cleared after notifying control 0x71A
+		char Reserved_BF;
+		int Result;						// RA2: +0xC0 what the button returns (Set_Control_Result)
+		bool IsFlashing;				// RA2: +0xC4 an owner-drawn button flashes (message 0x4DC, a 1 s timer)
+		bool IsFlashLit;				// RA2: +0xC5 its lit phase
+		char Reserved_C6[0xC8 - 0xC6];
+		int TextStyle;					// RA2: +0xC8 0xC0 for text controls of the listed dialogs
+		bool IsItemFilled;				// RA2: +0xCC a drop list fills its coloured rows
+		bool IsAlternateColors;			// RA2: +0xCD a drop list uses the alternate colours
+		char Reserved_CE[0xD0 - 0xCE];
+		int ComboStyle;					// RA2: +0xD0 combo message 0x4DE's lparam
+		bool IsWaiting;					// RA2: +0xD4 a WOL wait is showing
+		bool IsLobbyArt;				// RA2: +0xD5 lobby dialog art
+		bool IsLobbyFrame;				// RA2: +0xD6 lobby dialog frame
+		bool IsChat;					// RA2: +0xD7 chat dialogs 0x103 / 0xBC7
+		bool IsSetup;					// RA2: +0xD8 setup dialogs 0x108 / 0xBC6
+		bool IsCheckAltArt;				// RA2: +0xD9 a check box's alternate art
+		bool IsCheckAltSelected;		// RA2: +0xDA which alternate art
+		char Reserved_DB;
+		int SoundSlot;					// RA2: +0xDC (Control_Sound_Slot)
+		int Shape640;					// RA2: +0xE0 the 640-wide background shape
+		int Shape;						// RA2: +0xE4 the background shape
+		int ItemState;					// RA2: +0xE8 the last WM_DRAWITEM itemState; a progress bar's minimum
+		int RangeMax;					// RA2: +0xEC a progress bar's maximum
+		int Position;					// RA2: +0xF0 a progress bar's position
+		int IsEditFocus;				// RA2: +0xF4 an edit control takes the focus
+		int HadTabStop;					// RA2: +0xF8 an edit control had WS_TABSTOP
+		char Reserved_FC[0x110 - 0xFC];
+		int ItemColors[50];				// RA2: +0x110 a combo box's item colours, negative for none
+		char Reserved_1D8[0x200 - 0x1D8];
 	};
+
 
 	void Initialize(void);
 	void Register_Control_Classes(void);
@@ -303,7 +272,7 @@ namespace OwnerDraw {
 	bool Dialog_Message_Handler(void);
 	void Set_Control_Result(HWND control, int value); // RA2: what an owner-draw button returns (0x5E2040)
 
-	bool Start_Tooltip(Rect const & rect, char const * text, HWND window);
+	bool Start_Tooltip(Rect const & rect, wchar_t const * text, HWND window); // RA2: wide text
 	bool Show_Tooltip(bool save_background);
 	bool Hide_Tooltip(void);
 	bool End_Tooltip(void);
