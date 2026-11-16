@@ -559,9 +559,9 @@ startup,0x0068DBC0,0x006913F0,tibsun,"functions compiled from src/startup.cpp, w
 unk_006913F0,0x006913F0,0x006915B0,unknown,code not assigned to a module
 unk_006915B0,0x006915B0,0x00698760,unknown,code not assigned to a module
 statbtn,0x00698760,0x00698AA0,tibsun,"functions compiled from src/statbtn.cpp, matched, without gaps"
-unk_00698AA0,0x00698AA0,0x0069A110,unknown,code not assigned to a module
-unk_0069A110,0x0069A110,0x0069A160,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_0069A160,0x0069A160,0x0069A1A0,unknown,code not assigned to a module
+unk_00698AA0,0x00698AA0,0x00698D00,unknown,code not assigned to a module
+stats,0x00698D00,0x0069A180,tibsun,"functions compiled from src/stats.cpp, matched, without gaps"
+unk_0069A180,0x0069A180,0x0069A1A0,unknown,code not assigned to a module
 stbuffer,0x0069A1A0,0x0069A430,tibsun,"functions compiled from src/stbuffer.cpp, matched, without gaps"
 stimer,0x0069A430,0x0069A450,tibsun,"functions compiled from src/stimer.cpp, matched, without gaps; two placed by definition order"
 unk_0069A450,0x0069A450,0x0069ADA0,unknown,code not assigned to a module
