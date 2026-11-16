@@ -46,6 +46,7 @@
 #include "planmgr.h" // RA2: the includes this file needs
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006101B0)
 #include "mission.h" // RA2: the includes this file needs
+#include "cell.h" // RA2: the includes this file needs
 
 extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30
 extern void __fastcall Enqueue_Event(EventClass * event); // RA2: 0x0062E6E0 (queue.cpp); puts the event on the list to run
@@ -1615,7 +1616,7 @@ inline void __fastcall Planning_Path_Add(TechnoClass * techno, PlanningNodeClass
 	}
 }
 
-inline PlanningNodeClass * __fastcall Planning_Find_Node(int house, int id, Coord coord) // RA2: 0x00615FB0; the planned node at a coordinate (of an id and a house unless -1)
+inline PlanningNodeClass * __fastcall Planning_Find_Node(int house, int id, Coord coord) // RA2: the planned node at a coordinate (of an id and a house unless -1)
 {
 	int count = PlanningNodeClass::Unknown1.Count(); // RA2: as above
 	for (int i = 0; i < count; i++) { // RA2: as above
@@ -1760,4 +1761,178 @@ inline int __fastcall Planning_Bright_Color(TechnoClass * techno) // RA2: 0x0061
 	return ((color.Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) // RA2: as above
 		| ((color.Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) // RA2: as above
 		| ((color.Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+}
+
+void __fastcall Planning_Cancel_Token(TechnoClass * techno); // RA2: 0x006155E0
+bool __fastcall Planning_Same_Last_Node(PlanningTokenClass * first, PlanningTokenClass * second); // RA2: 0x00616BD0
+
+void __fastcall Planning_Clear_Techno(TechnoClass * techno, EventClass * event) // RA2: 0x00615480; after an order that is not a planned one, lets go of the planning token of a techno that has nodes, and lets the token run again
+{
+	if (techno) { // RA2: as above
+		PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+		if (token) { // RA2: as above
+			int planned = event ? event->Data.MegaMission.IsPlanningEvent : 0; // RA2: as above
+			if (!planned && token->Node_Count() > 0) { // RA2: as above
+				Planning_Cancel_Token(techno); // RA2: as above
+			}
+			token->Clear_F1C(); // RA2: as above
+		}
+	}
+}
+
+void __fastcall Planning_Cancel_Token(TechnoClass * techno) // RA2: 0x006155E0; lets go of the planning token of a techno, when it has one
+{
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	if (token != NULL) { // RA2: as above
+		token->Cancel_Owner(); // RA2: as above
+	}
+}
+
+void __fastcall Planning_Add_To_Drawn(PlanningNodeClass * node) // RA2: 0x006157C0; puts a node on the list of the nodes drawn on the tactical view
+{
+	PlanningNodeClass::DrawnNodes.Add(node); // RA2: as above
+}
+
+bool __fastcall Planning_Stop_Type(char type) // RA2: 0x006158F0; the order types planning mode refuses: deploy, stop and scatter
+{
+	return type == 9 || type == 6 || type == 7; // RA2: as above
+}
+
+bool __fastcall Planning_Order_Stays_Put(TechnoClass * techno, int mission, TargetClass target) // RA2: 0x00615910; an area guard order that aims at nothing, or at the cell the techno stands on already
+{
+	if (mission == 11) { // RA2: as above
+		if (!target.Is_Valid()) { // RA2: as above
+			return true; // RA2: as above
+		}
+		if (techno) { // RA2: as above
+			Cell here = techno->Get_Cell(); // RA2: as above
+			Cell cell = techno->Get_Cell(); // RA2: as above
+			CellClass * target_cell = target.As_Cell(); // RA2: as above
+			if (target_cell) { // RA2: as above
+				cell = target_cell->CellID; // RA2: as above
+			} else { // RA2: as above
+				TechnoClass * target_techno = target.As_Techno(); // RA2: as above
+				if (target_techno) { // RA2: as above
+					cell = target_techno->Get_Cell(); // RA2: as above
+				}
+			}
+			if (here == cell) { // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+	}
+	return false; // RA2: as above
+}
+
+void __fastcall Planning_Add_To_Nodes(PlanningNodeClass * node) // RA2: 0x00615B60; puts a node on the list of all nodes
+{
+	PlanningNodeClass::Unknown1.Add(node); // RA2: as above
+}
+
+void __cdecl Planning_Clear_Drawn(void) // RA2: 0x00615BC0; empties the list of the nodes drawn on the tactical view
+{
+	PlanningNodeClass::DrawnNodes.Clear(); // RA2: as above
+}
+
+inline int __fastcall Planning_Count(int house) // RA2: 0x00616D50 (expanded where it is used); the number of units of a house with a planned path, 0 for a number that is no house
+{
+	bool valid = Planning_Valid_House(house); // RA2: as above
+	int count = 0; // RA2: as above
+	if (valid) { // RA2: as above
+		count = PlanningUnitCounts[house]; // RA2: as above
+	}
+	return count; // RA2: as above
+}
+
+bool __fastcall Planning_Can_Add(void) // RA2: 0x00615ED0; whether the selected objects that have no path yet fit under the limit of planned objects
+{
+	if (PlanningNodeClass::PlanningModeActive) { // RA2: as above
+		int total = Planning_Count(PlayerPtr->HeapID); // RA2: as above
+		int added = 0; // RA2: as above
+		int count = CurrentObject.Count(); // RA2: as above
+		for (int i = 0; i < count; i++) { // RA2: as above
+			ObjectClass * object = CurrentObject[i]; // RA2: as above
+			bool techno; // RA2: as above
+			if (object != NULL) { // RA2: as above
+				techno = object->AbstractFlags & 1; // RA2: as above
+			}
+			if (object != NULL && techno) { // RA2: as above
+				PlanningTokenClass * token = ((TechnoClass *)object)->Get_Planning_Token(); // RA2: as above
+				if (token == NULL) { // RA2: as above
+					added++; // RA2: as above
+				} else if (token->Node_Count() == 0) { // RA2: as above
+					added++; // RA2: as above
+				}
+			}
+		}
+		if (total + added > 128) { // RA2: as above
+			Planning_Refuse("MSG:PlannerMaximum"); // RA2: as above
+			return false; // RA2: as above
+		}
+	}
+	return true; // RA2: as above
+}
+
+PlanningNodeClass * __stdcall Planning_Find_Drawn(Coord coord) // RA2: 0x00616210; the first drawn node whose lead order aims at the coordinate
+{
+	int count = PlanningNodeClass::DrawnNodes.Count(); // RA2: as above
+	for (int i = 0; i < count; i++) { // RA2: as above
+		PlanningNodeClass * node = PlanningNodeClass::DrawnNodes[i]; // RA2: as above
+		if (node->Lead_Coord() == coord) { // RA2: as above
+			return node; // RA2: as above
+		}
+	}
+	return NULL; // RA2: as above
+}
+
+void __fastcall Planning_Send_Pair(AbstractClass * source, PlanningNodeClass * node) // RA2: 0x00616280; asks all players to connect the object to the node of the target the first order of the node points at
+{
+	EventClass event = *node->PlanningMembers[0]->Packet; // RA2: as above
+	xTargetClass * target; // RA2: as above
+	if (event.Data.MegaMission.Target.Is_Valid()) { // RA2: as above
+		target = &event.Data.MegaMission.Target; // RA2: as above
+	} else if (event.Data.MegaMission.Follow.Is_Valid()) { // RA2: as above
+		target = &event.Data.MegaMission.Follow; // RA2: as above
+	} else if (event.Data.MegaMission.Destination.Is_Valid()) { // RA2: as above
+		target = &event.Data.MegaMission.Destination; // RA2: as above
+	} else { // RA2: as above
+		return; // RA2: as above
+	}
+	AbstractClass * object = target->As_Abstract(); // RA2: as above
+	if (object) { // RA2: as above
+		EventClass pair(PlayerPtr->HeapID, EventClass::PLAN_CONNECT, TargetClass(source), TargetClass(object)); // RA2: as above
+		Add_Outgoing_Event(pair); // RA2: as above
+	}
+}
+
+bool __fastcall Planning_Same_Last_Node(PlanningTokenClass * first, PlanningTokenClass * second) // RA2: 0x00616BD0; whether both paths (or none) end at nodes holding the owners of both
+{
+	if (first == NULL && second == NULL) { // RA2: as above
+		return true; // RA2: as above
+	}
+	int first_count = 0; // RA2: as above
+	if (first != NULL) { // RA2: as above
+		first_count = first->Node_Count(); // RA2: as above
+	}
+	int second_count = 0; // RA2: as above
+	if (second != NULL) { // RA2: as above
+		second_count = second->Node_Count(); // RA2: as above
+	}
+	if (first_count == 0 && second_count == 0) { // RA2: as above
+		return true; // RA2: as above
+	}
+	if (first_count == 0 || second_count == 0) { // RA2: as above
+		return false; // RA2: as above
+	}
+	PlanningNodeClass * first_last = first->Node_At(first_count - 1); // RA2: as above
+	PlanningNodeClass * second_last = second->Node_At(second_count - 1); // RA2: as above
+	TechnoClass * first_owner = first->OwnerUnit; // RA2: as above
+	TechnoClass * second_owner = second->OwnerUnit; // RA2: as above
+	if (!first_last->Has_Member(second_owner)) { // RA2: as above
+		return false; // RA2: as above
+	}
+	if (!second_last->Has_Member(first_owner)) { // RA2: as above
+		return false; // RA2: as above
+	}
+	return true; // RA2: as above
 }
