@@ -159,7 +159,7 @@ extern int ProbeDelay;	// RA2: 0x007D333C, 1200 ticks between two port probes
 void __fastcall Reload_Art_Set(void);	// RA2: 0x006F31B0 (txtlabel2.cpp), frees and loads again the art the end of a game replaced
 void __fastcall Diplomacy_Dialog(MouseClass * map);	// RA2: 0x00634A00 (radar.cpp), shows the diplomacy dialog (resource 115) and redraws the map; a member of RadarClass once radar.cpp lands (a declaration in radar.h would unmatch base.cpp)
 void __fastcall Register_Game_Start_Time(void);	// RA2: 0x0069A130, notes when the game started; the sibling of Register_Game_End_Time in internet.h (a declaration there would risk unmatching other files)
-void Options_Menu_Dialog(void);	// RA2: 0x004DD7D0, the options menu that Ingame_Menu_Dialog opens (dialog 181, 3002 or 255 by game type)
+void Game_Options_Dialog(void);	// RA2: 0x004DD7D0, the options menu that Ingame_Menu_Dialog opens (dialog 181, 3002 or 255 by game type)
 void Set_Type_Select_Mode(unsigned mode);	// RA2: 0x006F6780 (uicmnds.cpp), the select-by-type mode; 0 leaves it
 extern bool g_ConnectionLost;	// RA2: 0x00B2ABDA (wonline.cpp), the online connection is gone
 void Audio_Service(void);	// RA2: 0x00406EA0 (audio.cpp), the sound callback, theme and speech in one routine
@@ -241,7 +241,7 @@ void Ingame_Menu_Dialog(void)
 					break;
 
 				case SDLG_OPTIONS:
-					Options_Menu_Dialog();	// RA2: 0x004DD7D0, the options menu (Game_Options_Dialog at 0x004DDF20 is the abort menu below)
+					Game_Options_Dialog();	// RA2: 0x004DD7D0, the options menu (the abort menu below is Abort_Dialog, 0x004DDF20)
 					if (SpecialDialog != SDLG_OPTIONS) {
 						break;
 					}
@@ -267,7 +267,7 @@ void Ingame_Menu_Dialog(void)
 					break;
 
 				case SDLG_ABORT:
-					switch (Game_Options_Dialog()) {	// RA2: the abort menu returns 2 (leave), 3 (leave and destruct), 4 (destruct) or 5 (restart)
+					switch (Abort_Dialog()) {	// RA2: the abort menu returns 2 (leave), 3 (leave and destruct), 4 (destruct) or 5 (restart)
 
 						case 3:
 							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));	// RA2: queues the event inline, then leaves like case 2

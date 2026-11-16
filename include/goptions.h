@@ -42,4 +42,4 @@ class GameOptionsClass : public OptionsClass {
 };
 
 int Abort_Dialog(void);
-int Game_Options_Dialog(void); // RA2: returns the choice
+void Game_Options_Dialog(void); // RA2: 0x004DD7D0, the options menu (the abort menu at 0x004DDF20 is Abort_Dialog, which returns the choice)

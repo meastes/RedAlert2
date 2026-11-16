@@ -67,7 +67,7 @@ static int LeaveResult; // RA2: what the Leave button returns (0xA40E1C)
 static int RestartResult; // RA2: what the Restart button returns (0xA40E20)
 
 
-BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: defined after the dialog
+BOOL CALLBACK Abort_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: defined after the dialog
 
 
 /// <summary>
@@ -77,10 +77,10 @@ BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam,
 /// locked out for as long as the dialog is up, and if the player asked for the mission
 /// briefing it is restated on the way out.
 /// </summary>
-int Game_Options_Dialog(void) // RA2: at 0x4DDF20, returns the choice
+int Abort_Dialog(void) // RA2: at 0x4DDF20, returns the choice
 {
-	int result = 0; // RA2: Game_Options_Dialog at 0x4DDF20 matches only so
-	HWND dialog = OwnerDraw::Begin_Dialog(IDD_MISSION_ABORT, Game_Options_Dialog_Proc, 0); // RA2: as above
+	int result = 0; // RA2: Abort_Dialog at 0x4DDF20 matches only so
+	HWND dialog = OwnerDraw::Begin_Dialog(IDD_MISSION_ABORT, Abort_Dialog_Proc, 0); // RA2: as above
 	if (dialog) {
 		SetWindowLong(dialog, DWL_USER, (LONG)&result); // RA2: as above
 		OwnerDraw::Display_Dialog(dialog);
@@ -92,7 +92,7 @@ int Game_Options_Dialog(void) // RA2: at 0x4DDF20, returns the choice
 		OwnerDraw::End_Dialog(dialog);
 	}
 	return(result); // RA2: as above
-} // RA2: Game_Options_Dialog at 0x4DDF20 has no IgnoreInput, Scen, IsInputLocked and 2 more
+} // RA2: Abort_Dialog at 0x4DDF20 has no IgnoreInput, Scen, IsInputLocked and 2 more
 
 
 /// <summary>
@@ -100,11 +100,11 @@ int Game_Options_Dialog(void) // RA2: at 0x4DDF20, returns the choice
 /// This routine offers every message to the owner draw system first. What is left it uses
 /// to service the option buttons -- save, load, delete, briefing, resume, abort and
 /// settings -- either acting on them directly or noting the player's choice for
-/// Game_Options_Dialog to deal with once the dialog comes down. Dragging the game speed or
+/// Abort_Dialog to deal with once the dialog comes down. Dragging the game speed or
 /// connection quality slider updates the label beside it.
 /// </summary>
 /// <returns>Returns with TRUE if the owner draw system consumed the message.</returns>
-BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: at 0x4DDF90
+BOOL CALLBACK Abort_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: at 0x4DDF90
 {
 	int result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam); // RA2: as above
 	if (result) { // RA2: as above
