@@ -8493,7 +8493,7 @@ bool MapClass::Place_Cliff(CellClass * cellptr, int region_id)
 		Map.Set_Cursor_Pos(target); // RA2: as above
 
 		bool success = true; // RA2: as above
-		bool picked = Pick_Random_Tile_Variant(ISOTILE_CLEAR, 0, cellptr->Height, region_id, success); // RA2: as above
+		bool picked = Pick_Random_Tile_Variant(ISOTILE_CLEAR, 0, cellptr->Height, region_id, success, false); // RA2: the exe passes the region flag as 0 here
 
 		if (!picked && !success) { // RA2: as above
 			return(false);
@@ -8569,7 +8569,7 @@ int MapClass::Get_High_Ground_Mask(CellClass * cellptr)
 /// </summary>
 /// <param name="region_id">The region the flooded cells are marked as belonging to.</param>
 /// <returns>bool; Did every pass complete without running into another region?</returns>
-int MapClass::Build_All_Shores(int region_id, int set_region) // RA2: 0x55C2C0, names.csv: int return and a second int argument (the exe passes it on to Expand_Water, Prune_Water and Place_Shore, which take no such flag here yet)
+bool MapClass::Build_All_Shores(int region_id, bool set_region) // RA2: 0x55C2C0, returns bool (the exe returns al) and takes the region flag, passed on to Expand_Water, Prune_Water and Place_Shore
 {
 	Map.Set_Cursor_Shape(NULL);
 
@@ -8589,28 +8589,28 @@ int MapClass::Build_All_Shores(int region_id, int set_region) // RA2: 0x55C2C0, 
 	CellClass * cptr = Map.Iterate();
 	bool expanded = true;
 	while (cptr != NULL && expanded) {
-		expanded = Expand_Water(cptr, region_id);
+		expanded = Expand_Water(cptr, region_id, set_region); // RA2: passes the region flag on
 		cptr = Map.Iterate();
 	}
 
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		Prune_Water(cptr);
+		Prune_Water(cptr, region_id, set_region); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 1, region_id);
+		expanded = Place_Shore(cptr, 1, region_id, set_region); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 2, region_id);
+		expanded = Place_Shore(cptr, 2, region_id, set_region); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
@@ -8636,7 +8636,7 @@ int MapClass::Build_All_Shores(int region_id, int set_region) // RA2: 0x55C2C0, 
 /// no shore piece could tile, so the generator simply takes such cells back out again.
 /// </summary>
 /// <param name="cellptr">The water cell to test.</param>
-void MapClass::Prune_Water(CellClass * cellptr)
+void MapClass::Prune_Water(CellClass * cellptr, int region_id, bool set_region) // RA2: 0x55C520, takes the region and the flag (ret 12)
 {
 	IsometricTileType itype = cellptr->ITType;
 	if (itype >= IsometricTileTypeClass::WaterSet && itype < IsometricTileType(IsometricTileTypeClass::WaterSet + WATER_COUNT-2)) {
@@ -8652,6 +8652,9 @@ void MapClass::Prune_Water(CellClass * cellptr)
 
 			cellptr->ITType = ISOTILE_NONE;
 			cellptr->SubTile = 0;
+			if (set_region) { // RA2: with the flag the pruned cell is given the region
+				MapRegionClass::Get_Cell_Data(cellptr->CellID).RegionID = region_id; // RA2: the member is passed by reference, not through Fetch_CellID
+			}
 			for (FacingType facing = FACING_N; facing < FACING_COUNT; facing++) {
 				CellClass * adjptr = &cellptr->Adjacent_Cell(facing);
 				if (My_In_Radar(adjptr->Fetch_CellID())) {
@@ -8675,7 +8678,7 @@ void MapClass::Prune_Water(CellClass * cellptr)
 /// <param name="region_id">The region the flooded cells are marked as belonging to.</param>
 /// <returns>bool; Was the cell free to join this region? A cell already claimed by another
 /// region halts the fill.</returns>
-bool MapClass::Expand_Water(CellClass * cellptr, int region_id)
+bool MapClass::Expand_Water(CellClass * cellptr, int region_id, bool set_region) // RA2: 0x55C630, with the region flag
 {
 	bool expand = false;
 
@@ -8734,17 +8737,21 @@ bool MapClass::Expand_Water(CellClass * cellptr, int region_id)
 			expand) {
 
 			int cell_region_id = RandomMapGen.Get_Cell_Data_Region(cellptr->Fetch_CellID());
-			if (cell_region_id > 0 && cell_region_id != region_id) {
+			if (cell_region_id > 0 && cell_region_id != region_id && !set_region) { // RA2: a cell of another region only stops the fill without the flag
 				return(false);
 			}
 			cellptr->ITType = IsometricTileType(IsometricTileTypeClass::WaterSet);
 			cellptr->SubTile = 0;
-			RandomMapGen.Set_Cell_Data_Region(cellptr->Fetch_CellID(), region_id);
+			if (set_region) { // RA2: with the flag the cell's region is cleared, without it set to region_id
+				RandomMapGen.Set_Cell_Data_Region(cellptr->Fetch_CellID(), 0); // RA2: as above
+			} else { // RA2: as above
+				RandomMapGen.Set_Cell_Data_Region(cellptr->Fetch_CellID(), region_id); // RA2: as above
+			}
 			for (FacingType dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
 				CellClass * adjptr = &cellptr->Adjacent_Cell(dir);
 				if (My_In_Radar(adjptr->Fetch_CellID())) {
 					MapRegionClass::Get_Cell_Data(adjptr->Fetch_CellID()).WaterMask = -1;
-					Expand_Water(adjptr, region_id);
+					Expand_Water(adjptr, region_id, set_region); // RA2: passes the flag on
 				}
 			}
 		}
@@ -8852,7 +8859,7 @@ Cell ShorePieceOffsets[] = {
 /// side.</param>
 /// <param name="region_id">The water region being shored.</param>
 /// <returns>bool; Did the shore piece go down without a clash?</returns>
-bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id)
+bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id, bool set_region) // RA2: 0x55CEF0, with the region flag
 {
 	int random = Pick_Random_UInt(0, 5);
 
@@ -8866,7 +8873,7 @@ bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id)
 		return(true);
 	}
 
-	int index;
+	int index = -1; // RA2: starts at -1; the shore-less cases test for it
 	int count;
 	CellClass * adj1;
 	CellClass * adj2;
@@ -8879,19 +8886,31 @@ bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id)
 			if ((mask & (MG_FACINGF_NE | MG_FACINGF_SW)) == (MG_FACINGF_NE | MG_FACINGF_SW)) {
 				index = (random & 1) + 23;
 			} else {
-				index = (mask & MG_FACINGF_NE) != 0 ? 21 : 30;
+				if ((mask & MG_FACINGF_NE) != 0) { // RA2: written as if/else
+					index = 21; // RA2: as above
+				} else { // RA2: as above
+					index = 30; // RA2: as above
+				}
 			}
 		} else if ((mask & (MG_FACINGF_N | MG_FACINGF_E)) == (MG_FACINGF_N | MG_FACINGF_E)) {
 			if ((mask & (MG_FACINGF_NW | MG_FACINGF_SE)) == (MG_FACINGF_NW | MG_FACINGF_SE)) {
 				index = (random & 1) + 15;
 			} else {
-				index = (mask & MG_FACINGF_SE) != 0 ? 14 : 22;
+				if ((mask & MG_FACINGF_SE) != 0) { // RA2: written as if/else
+					index = 14; // RA2: as above
+				} else { // RA2: as above
+					index = 22; // RA2: as above
+				}
 			}
 		} else if ((mask & (MG_FACINGF_S | MG_FACINGF_E)) == (MG_FACINGF_S | MG_FACINGF_E)) {
 			if ((mask & (MG_FACINGF_NE | MG_FACINGF_SW)) == (MG_FACINGF_NE | MG_FACINGF_SW)) {
 				index = (random & 1) + 7;
 			} else {
-				index = (mask & MG_FACINGF_NE) != 0 ? 13 : 6;
+				if ((mask & MG_FACINGF_NE) != 0) { // RA2: written as if/else
+					index = 13; // RA2: as above
+				} else { // RA2: as above
+					index = 6; // RA2: as above
+				}
 			}
 		} else {
 			if ((mask & (MG_FACINGF_W | MG_FACINGF_S)) != (MG_FACINGF_W | MG_FACINGF_S)) {
@@ -8900,95 +8919,122 @@ bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id)
 			if ((mask & (MG_FACINGF_NW | MG_FACINGF_SE)) == (MG_FACINGF_NW | MG_FACINGF_SE)) {
 				index = (random & 1) + 31;
 			} else {
-				index = (mask & MG_FACINGF_SE) != 0 ? 5 : 29;
+				if ((mask & MG_FACINGF_SE) != 0) { // RA2: written as if/else
+					index = 5; // RA2: as above
+				} else { // RA2: as above
+					index = 29; // RA2: as above
+				}
 			}
 		}
 
-	} else if ((mask & MG_FACINGF_E) != 0) {
-		count = 1;
-		adj1 = &cellptr->Adjacent_Cell(FACING_S);
-		adj2 = &adj1->Adjacent_Cell(FACING_E);
-		side_1_is_land = adj1->Is_Tile_Water() == false;
-		side_2_is_water = adj2->Is_Tile_Water();
-		while (side_1_is_land && side_2_is_water) {
-			count++;
-			adj1 = &adj1->Adjacent_Cell(FACING_S);
-			adj2 = &adj2->Adjacent_Cell(FACING_S);
+	} else { // RA2: as above
+		if ((mask & MG_FACINGF_E) != 0) { // RA2: as above
+			count = 1; // RA2: as above
+			adj1 = &cellptr->Adjacent_Cell(FACING_S); // RA2: as above
+			adj2 = &adj1->Adjacent_Cell(FACING_E); // RA2: as above
 			side_1_is_land = adj1->Is_Tile_Water() == false;
 			side_2_is_water = adj2->Is_Tile_Water();
-		}
-		if ((count & 1) != 0 && (mask & MG_FACINGF_N) == 0 || (mask & MG_FACINGF_SE) == 0 || (mask & (MG_FACINGF_S | MG_FACINGF_SW)) != 0) {
-			index = 12;
-		} else {
-			index = abs(random % 3) + 9;
-		}
-	} else if ((mask & MG_FACINGF_W) != 0) {
-		count = 1;
-		adj1 = &cellptr->Adjacent_Cell(FACING_S);
-		adj2 = &adj1->Adjacent_Cell(FACING_W);
-		side_1_is_land = adj1->Is_Tile_Water() == false;
-		side_2_is_water = adj2->Is_Tile_Water();
-		while (side_1_is_land && side_2_is_water) {
-			count++;
-			adj1 = &adj1->Adjacent_Cell(FACING_S);
-			adj2 = &adj2->Adjacent_Cell(FACING_S);
-			side_1_is_land = adj1->Is_Tile_Water() == false;
-			side_2_is_water = adj2->Is_Tile_Water();
-		}
-		if ((count & 1) != 0 && (mask & MG_FACINGF_N) == 0 || (mask & MG_FACINGF_SW) == 0 || (mask & (MG_FACINGF_SE | MG_FACINGF_S)) != 0) {
-			index = 28;
-		} else {
-			index = random % 3 + 25;
-		}
-	} else if ((mask & MG_FACINGF_S) != 0) {
-		count = 1;
-		adj1 = &cellptr->Adjacent_Cell(FACING_E);
-		adj2 = &adj1->Adjacent_Cell(FACING_S);
-		side_1_is_land = adj1->Is_Tile_Water() == false;
-		side_2_is_water = adj2->Is_Tile_Water();
-		while (side_1_is_land && side_2_is_water) {
-			count++;
-			adj1 = &adj1->Adjacent_Cell(FACING_E);
-			adj2 = &adj2->Adjacent_Cell(FACING_E);
-			side_1_is_land = adj1->Is_Tile_Water() == false;
-			side_2_is_water = adj2->Is_Tile_Water();
-		}
-		if ((count & 1) != 0 || (mask & MG_FACINGF_SE) == 0 || (mask & (MG_FACINGF_NE | MG_FACINGF_E)) != 0) {
-			index = 4;
-		} else {
-			index = random % 3 + 1;
-		}
-	} else if ((mask & MG_FACINGF_N) != 0) {
-		count = 1;
-		adj1 = &cellptr->Adjacent_Cell(FACING_E);
-		adj2 = &adj1->Adjacent_Cell(FACING_N);
-		side_1_is_land = adj1->Is_Tile_Water() == false;
-		side_2_is_water = adj2->Is_Tile_Water();
-		while (side_1_is_land && side_2_is_water) {
-			count++;
-			adj1 = &adj1->Adjacent_Cell(FACING_E);
-			adj2 = &adj2->Adjacent_Cell(FACING_E);
-			side_1_is_land = adj1->Is_Tile_Water() == false;
-			side_2_is_water = adj2->Is_Tile_Water();
-		}
-		if ((count & 1) != 0 || (mask & MG_FACINGF_NE) == 0 || (mask & (MG_FACINGF_E | MG_FACINGF_SE)) != 0) {
-			index = 20;
-		} else {
-			index = random % 3 + 17;
-		}
-	} else {
-
-		if ((mask & MG_FACINGF_NE) != 0) {
-			index = (random & 1) + 35;
-		} else if ((mask & MG_FACINGF_SE) != 0) {
-			index = (random & 1) + 33;
-		} else if ((mask & MG_FACINGF_SW) != 0) {
-			index = (random & 1) + 39;
-		} else {
-			if ((mask & MG_FACINGF_NW) == 0) {
-				return(true);
+			while (side_1_is_land && side_2_is_water) { // RA2: as above
+				count++; // RA2: as above
+				adj1 = &adj1->Adjacent_Cell(FACING_S); // RA2: as above
+				adj2 = &adj2->Adjacent_Cell(FACING_S); // RA2: as above
+				side_1_is_land = adj1->Is_Tile_Water() == false; // RA2: as above
+				side_2_is_water = adj2->Is_Tile_Water(); // RA2: as above
 			}
-			index = (random & 1) + 37;
+			if ((count & 1) != 0 && (mask & MG_FACINGF_N) == 0) { // RA2: the first condition is its own statement; index stays -1 for the second block
+				index = 12; // RA2: as above
+			}
+			if (index == -1) { // RA2: as above
+				if ((mask & MG_FACINGF_SE) == 0 || (mask & (MG_FACINGF_S | MG_FACINGF_SW)) != 0) { // RA2: as above
+					index = 12; // RA2: as above
+				} else { // RA2: as above
+					index = abs(random % 3) + 9; // RA2: as above
+				}
+			}
+		} else if ((mask & MG_FACINGF_W) != 0) { // RA2: as above
+			count = 1; // RA2: as above
+			adj1 = &cellptr->Adjacent_Cell(FACING_S); // RA2: as above
+			adj2 = &adj1->Adjacent_Cell(FACING_W); // RA2: as above
+			side_1_is_land = adj1->Is_Tile_Water() == false;
+			side_2_is_water = adj2->Is_Tile_Water();
+			while (side_1_is_land && side_2_is_water) { // RA2: as above
+				count++; // RA2: as above
+				adj1 = &adj1->Adjacent_Cell(FACING_S); // RA2: as above
+				adj2 = &adj2->Adjacent_Cell(FACING_S); // RA2: as above
+				side_1_is_land = adj1->Is_Tile_Water() == false; // RA2: as above
+				side_2_is_water = adj2->Is_Tile_Water(); // RA2: as above
+			}
+			if ((count & 1) != 0 && (mask & MG_FACINGF_N) == 0) { // RA2: as above
+				index = 28; // RA2: as above
+			}
+			if (index == -1) { // RA2: as above
+				if ((mask & MG_FACINGF_SW) == 0 || (mask & (MG_FACINGF_SE | MG_FACINGF_S)) != 0) { // RA2: as above
+					index = 28; // RA2: as above
+				} else { // RA2: as above
+					index = random % 3 + 25; // RA2: as above
+				}
+			}
+		} else if ((mask & MG_FACINGF_S) != 0) { // RA2: as above
+			count = 1; // RA2: as above
+			adj1 = &cellptr->Adjacent_Cell(FACING_E); // RA2: as above
+			adj2 = &adj1->Adjacent_Cell(FACING_S); // RA2: as above
+			side_1_is_land = adj1->Is_Tile_Water() == false;
+			side_2_is_water = adj2->Is_Tile_Water();
+			while (side_1_is_land && side_2_is_water) { // RA2: as above
+				count++; // RA2: as above
+				adj1 = &adj1->Adjacent_Cell(FACING_E); // RA2: as above
+				adj2 = &adj2->Adjacent_Cell(FACING_E); // RA2: as above
+				side_1_is_land = adj1->Is_Tile_Water() == false; // RA2: as above
+				side_2_is_water = adj2->Is_Tile_Water(); // RA2: as above
+			}
+			if ((count & 1) != 0) { // RA2: as above
+				index = 4; // RA2: as above
+			}
+			if (index == -1) { // RA2: as above
+				if ((mask & MG_FACINGF_SE) == 0 || (mask & (MG_FACINGF_NE | MG_FACINGF_E)) != 0) { // RA2: as above
+					index = 4; // RA2: as above
+				} else { // RA2: as above
+					index = random % 3 + 1; // RA2: as above
+				}
+			}
+		} else if ((mask & MG_FACINGF_N) != 0) { // RA2: as above
+			count = 1; // RA2: as above
+			adj1 = &cellptr->Adjacent_Cell(FACING_E); // RA2: as above
+			adj2 = &adj1->Adjacent_Cell(FACING_N); // RA2: as above
+			side_1_is_land = adj1->Is_Tile_Water() == false;
+			side_2_is_water = adj2->Is_Tile_Water();
+			while (side_1_is_land && side_2_is_water) { // RA2: as above
+				count++; // RA2: as above
+				adj1 = &adj1->Adjacent_Cell(FACING_E); // RA2: as above
+				adj2 = &adj2->Adjacent_Cell(FACING_E); // RA2: as above
+				side_1_is_land = adj1->Is_Tile_Water() == false; // RA2: as above
+				side_2_is_water = adj2->Is_Tile_Water(); // RA2: as above
+			}
+			if ((count & 1) != 0) { // RA2: as above
+				index = 20; // RA2: as above
+			}
+			if (index == -1) { // RA2: as above
+				if ((mask & MG_FACINGF_NE) == 0 || (mask & (MG_FACINGF_E | MG_FACINGF_SE)) != 0) { // RA2: as above
+					index = 20; // RA2: as above
+				} else { // RA2: as above
+					index = random % 3 + 17; // RA2: as above
+				}
+			}
+		}
+
+		if (index == -1) { // RA2: as above
+			if ((mask & MG_FACINGF_NE) != 0) { // RA2: as above
+				index = (random & 1) + 35; // RA2: as above
+			} else if ((mask & MG_FACINGF_SE) != 0) { // RA2: as above
+				index = (random & 1) + 33; // RA2: as above
+			} else if ((mask & MG_FACINGF_SW) != 0) { // RA2: as above
+				index = (random & 1) + 39; // RA2: as above
+			} else { // RA2: as above
+				if ((mask & MG_FACINGF_NW) == 0) { // RA2: as above
+					return(true); // RA2: as above
+				}
+				index = (random & 1) + 37; // RA2: as above
+			}
 		}
 	}
 
@@ -9001,15 +9047,17 @@ bool MapClass::Place_Shore(CellClass * cellptr, int pass, int region_id)
 
 		bool result = true;
 		if (pass == 1) {
-			Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_CLEAR, cellptr->Height, region_id, result);
+			Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_CLEAR, cellptr->Height, region_id, result, set_region); // RA2: passes the flag on
 		} else {
 			if (pass != 2) {
 				return(true);
 			}
-			Pick_Random_Tile_Variant(IsometricTileTypeClass::ShorePieces, IsometricTileTypeClass::ShorePieces + SHORE_PIECES_COUNT - 1, cellptr->Height, region_id, result);
+			Pick_Random_Tile_Variant(IsometricTileTypeClass::ShorePieces, IsometricTileTypeClass::ShorePieces + SHORE_PIECES_COUNT - 1, cellptr->Height, region_id, result, set_region); // RA2: as above
 		}
 
-		return(result != false);
+		if (!result) { // RA2: tests the flag instead of returning it
+			return(false); // RA2: as above
+		}
 	}
 	return(true);
 }
@@ -9121,18 +9169,19 @@ int MapClass::Get_Water_Mask(CellClass * cellptr, int control)
 /// <param name="success">Cleared when the tile clashes with a shore or cliff already on the
 /// ground. Left alone otherwise.</param>
 /// <returns>bool; Did the placement go through without a clash?</returns>
-bool MapClass::Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, int base_height, int seed, bool & success)
+bool MapClass::Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, int base_height, int seed, bool & success, bool set_region) // RA2: 0x55D640, with the region flag
 {
 	if (Map.PendingObject->RTTI == RTTI_ISOTILETYPE) {
+		if (set_region) { // RA2: with the flag every cell counts as unclaimed and takes region 0
+			seed = 0; // RA2: as above
+		}
 
 		IsometricTileTypeClass * ttype = (IsometricTileTypeClass *)Map.PendingObject;
 		IsoTileSet const * image = (IsoTileSet const *)ttype->Get_Image_Data();
 		if (image != NULL) {
 
-			int row = 0;
-			if (ttype->Height > 0) {
-
-				do {
+			{ // RA2: as above
+				for (int row = 0; row < ttype->Height; row++) { // RA2: as above
 					for (int col = 0; col < ttype->Width; col++) {
 
 						Cell cell = Map.ZoneCell + Cell(col, row);
@@ -9156,6 +9205,10 @@ bool MapClass::Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, in
 						}
 
 						int id = RandomMapGen.Get_Cell_Data_Region(cell);
+						if (set_region) { // RA2: as above
+							id = 0; // RA2: as above
+						}
+						bool place = true; // RA2: a cell of another region is skipped by this flag, not by continue
 						if (id > 0 && id != seed && seed != -1) {
 
 							int existing = cellptr->ITType - IsometricTileTypeClass::ShorePieces;
@@ -9193,38 +9246,36 @@ bool MapClass::Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, in
 								success = false;
 								return(false);
 							}
-							continue;
+							place = false; // RA2: as above
 						}
 
-						if (cellptr->Is_Tile_Clear()
-							|| (cellptr->ITType >= tile && cellptr->ITType <= max_tile)) {
+						if (place) { // RA2: as above
+							if (cellptr->Is_Tile_Clear() // RA2: as above
+								|| (cellptr->ITType >= tile && cellptr->ITType <= max_tile)) { // RA2: as above
 
-							cellptr->ITType = ttype->HeapID;
-							cellptr->SubTile = subtile;
-							cellptr->Height = base_height + record->Height;
-							continue;
+								cellptr->ITType = ttype->HeapID; // RA2: as above
+								cellptr->SubTile = subtile; // RA2: as above
+								cellptr->Height = base_height + record->Height; // RA2: as above
+							} else { // RA2: as above
+								/*
+								 * The existing tile is outside the replaceable range. Only a shore-vs-cliff
+								 * conflict blocks placement; anything else is silently skipped.
+								 */
+								if (cellptr->Is_Tile_Shore() && MapClass::Is_Tile_Cliff(ttype->HeapID, subtile) // RA2: as above
+									|| (ttype->HeapID >= IsometricTileTypeClass::ShorePieces // RA2: as above
+										&& ttype->HeapID < IsometricTileTypeClass::ShorePieces + SHORE_PIECES_COUNT // RA2: as above
+										&& cellptr->Is_Tile_Cliff())) { // RA2: as above
+									success = false; // RA2: as above
+								}
+								return(false); // RA2: as above
+							}
 						}
-
-						/*
-						 * The existing tile is outside the replaceable range. Only a shore-vs-cliff
-						 * conflict blocks placement; anything else is silently skipped.
-						 */
-						if (cellptr->Is_Tile_Shore() && MapClass::Is_Tile_Cliff(ttype->HeapID, subtile)
-							|| (ttype->HeapID >= IsometricTileTypeClass::ShorePieces
-								&& ttype->HeapID < IsometricTileTypeClass::ShorePieces + SHORE_PIECES_COUNT
-								&& cellptr->Is_Tile_Cliff())) {
-							success = false;
-						}
-						return(false);
 					}
 
-					row++;
-				} while (row < ttype->Height);
+				}
 
 				return(true);
 			}
-
-			return(true);
 		}
 	}
 
@@ -12060,14 +12111,14 @@ bool MapClass::Rebuild_Shores_At(Cell const & origin)
 	CellClass * cptr = Map.Iterate();
 	bool expanded = true;
 	while (cptr != NULL && expanded) {
-		expanded = Expand_Water(cptr, 0);
+		expanded = Expand_Water(cptr, 0, false); // RA2: the region flag is passed as 0
 		cptr = Map.Iterate();
 	}
 
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		Prune_Water(cptr);
+		Prune_Water(cptr, 0, false); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
@@ -12076,14 +12127,14 @@ bool MapClass::Rebuild_Shores_At(Cell const & origin)
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 1, 0);
+		expanded = Place_Shore(cptr, 1, 0, false); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
 	Map.Reset_Iterator();
 	cptr = Map.Iterate();
 	while (cptr != NULL && expanded) {
-		expanded = Place_Shore(cptr, 2, 0);
+		expanded = Place_Shore(cptr, 2, 0, false); // RA2: as above
 		cptr = Map.Iterate();
 	}
 
@@ -12320,6 +12371,7 @@ int MapClass::Region_Threat(HouseClass * house, int level, int from_subzone, int
 				facing = FACING_N;
 			}
 
+			Cell fb(from_block_x, from_block_y); // RA2: as above
 			int from_threat1 = house->Regions[Cell_Region(RegionQuadrantOffsets[FromRegionQuadrants[facing][0]] + Cell(from_block_x, from_block_y))].Threat_Value();
 			int from_threat2 = house->Regions[Cell_Region(RegionQuadrantOffsets[FromRegionQuadrants[facing][1]] + Cell(from_block_x, from_block_y))].Threat_Value();
 			int from_threat = from_threat1;

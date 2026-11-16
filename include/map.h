@@ -118,7 +118,6 @@ class MapClass: public GScreenClass
 		void Place_Down(Cell const & cell, ObjectClass * object);
 		void Pick_Up(Cell const & cell, ObjectClass * object);
 		int Overpass(void);
-		int Build_All_Shores(int, int); // RA2: 0x55C2C0
 		ObjectClass * Close_Object(Coord const & coord) const;
 		Cell Nearby_Location(Cell const & cell, SpeedType speed, int zone=-1, MZoneType check=MZONE_NORMAL, bool checkbridge=false, Point2D dimensions=Point2D(1,1), bool checkoverlay=false, bool checkheight=false, bool checkburrow=false, bool allowunderbridge=true, Cell const & nearto=Cell(0, 0), bool flag=false) const; // RA2: flag added
 		bool Base_Region(Cell const & cell, HousesType & house, ZoneType & zone) const;
@@ -297,12 +296,14 @@ class MapClass: public GScreenClass
 		int Get_High_Ground_Mask(CellClass * cellptr);
 		bool Rebuild_Shores_At(Cell const & origin);
 		bool Build_All_Shores(int region_id);
-		bool Expand_Water(CellClass * cellptr, int region_id);
-		void Prune_Water(CellClass * cellptr);
-		bool Place_Shore(CellClass * cellptr, int pass, int region_id);
+		bool Build_All_Shores(int region_id, bool set_region); // RA2: 0x55C2C0, returns bool and takes the region flag (names.csv said int(int, int))
+		bool Expand_Water(CellClass * cellptr, int region_id, bool set_region); // RA2: 0x55C630, with the region flag
+		void Prune_Water(CellClass * cellptr, int region_id, bool set_region); // RA2: 0x55C520, with the region and the flag
+		void Prune_Water(CellClass * cellptr); // RA2: TibSun's one-argument form, declared only (no definition); dropping it moves a register choice in wonline.cpp Draw_Player_List 0x73FEE0 (header-count effect)
+		bool Place_Shore(CellClass * cellptr, int pass, int region_id, bool set_region); // RA2: 0x55CEF0, with the region flag
 		int Get_Water_Mask(CellClass * cellptr, int control);
 		static int Straight_Shore_Length(CellClass * cellptr, FacingType direction);
-		bool Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, int base_height, int seed, bool & success);
+		bool Pick_Random_Tile_Variant(IsometricTileType tile, int max_tile, int base_height, int seed, bool & success, bool set_region = false); // RA2: 0x55D640, with the region flag (mapgen.cpp calls it without)
 		static bool Is_Tile_Shore(IsometricTileType tile);
 		static bool Is_Tile_Cliff(IsometricTileType tile, int subtile);
 

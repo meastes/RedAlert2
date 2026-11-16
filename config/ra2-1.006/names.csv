@@ -3523,7 +3523,7 @@ address,symbol,evidence
 0x0055B210,?Expand_High_Ground@MapClass@@QAE_NPAVCellClass@@H@Z,"compiled from src/map.cpp, matched"
 0x0055B820,?Place_Cliff@MapClass@@QAE_NPAVCellClass@@H@Z,"inferred: referenced by matched src/map.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x0055BD70,?Get_High_Ground_Mask@MapClass@@QAEHPAVCellClass@@@Z,"compiled from src/map.cpp, matched"
-0x0055C2C0,?Build_All_Shores@MapClass@@QAEHHH@Z,"inferred: referenced by matched src/mapgen.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0055C2C0,?Build_All_Shores@MapClass@@QAE_NH_N@Z,"inferred: referenced by matched src/mapgen.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0055CB00,?Straight_Shore_Length@MapClass@@SIHPAVCellClass@@W4FacingType@@@Z,"compiled from src/map.cpp, matched"
 0x0055D410,?Get_Water_Mask@MapClass@@QAEHPAVCellClass@@H@Z,"compiled from src/map.cpp, matched"
 0x0055D990,?Area_Reduce_Tiberium@MapClass@@QAEXABVCell@@@Z,"compiled from src/map.cpp, matched"
