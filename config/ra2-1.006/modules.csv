@@ -685,7 +685,9 @@ unk_00725200,0x00725200,0x00725DE0,unknown,code not assigned to a module
 wdtcampaign,0x00725DE0,0x007269B0,tibsun,"functions compiled from src/wdtcampaign.cpp, matched, without gaps"
 unk_007269B0,0x007269B0,0x007273A0,unknown,code not assigned to a module
 wdtconflict,0x007273A0,0x00727B90,tibsun,"functions compiled from src/wdtconflict.cpp, matched, without gaps; two placed by the gap; ?Create@Conflict@WorldDominationTour@@SI?AV?$rc_ptr@VConflict@WorldDominationTour@@@@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; ??0Conflict@WorldDominationTour@@QAE@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; inline ??_GConflict@WorldDominationTour@@UAEPAXI@Z at 0x00727B30"
-unk_00727B90,0x00727B90,0x007291C0,unknown,code not assigned to a module
+unk_00727B90,0x00727B90,0x00728670,unknown,code not assigned to a module
+wdtgameoptions,0x00728670,0x00728BF0,tibsun,"functions compiled from src/wdtgameoptions.cpp, matched, without gaps; one placed by the gap"
+unk_00728BF0,0x00728BF0,0x007291C0,unknown,code not assigned to a module
 wdtmap,0x007291C0,0x0072A840,tibsun,"functions compiled from src/wdtmap.cpp, without gaps; matched except ?Load@Map@WorldDominationTour@@QAEXAAVINIClass@@PAVMSEngine@@H@Z; one placed by the gap; ?WDT_Write_Map_Ini@@YIXABVWstring@@0@Z not placed; ??8Centroid@WorldDominationTour@@QBE_NABV01@@Z not placed"
 unk_0072A840,0x0072A840,0x0072BDC0,unknown,code not assigned to a module
 wdtnet,0x0072BDC0,0x0072C9D0,tibsun,"functions compiled from src/wdtnet.cpp, matched, without gaps; one placed by the gap; ?Get_Game_Options@WDTTerritory@@QAEPAUGameOptionsType@@XZ not placed; ?To_String@WDTState@@QAEPADXZ not placed; ?To_String@WDTTerritory@@QAEPADXZ not placed"
