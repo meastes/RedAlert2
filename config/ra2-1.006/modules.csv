@@ -270,9 +270,9 @@ unk_0050AF90,0x0050AF90,0x0050B8D0,unknown,code not assigned to a module
 ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap"
 unk_005109B0,0x005109B0,0x00513080,unknown,code not assigned to a module
 unk_00513080,0x00513080,0x00513260,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00513260,0x00513260,0x00515710,unknown,code not assigned to a module
-init,0x00515710,0x005173A0,tibsun,"functions compiled from src/init.cpp, matched, without gaps; ?Leave_Game_Hook@@YIXXZ not placed"
-unk_005173A0,0x005173A0,0x00519240,unknown,code not assigned to a module
+unk_00513260,0x00513260,0x00513290,unknown,code not assigned to a module
+init,0x00513290,0x005173B0,tibsun,"functions compiled from src/init.cpp, matched, without gaps"
+unk_005173B0,0x005173B0,0x00519240,unknown,code not assigned to a module
 unk_00519240,0x00519240,0x00519480,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00519480,0x00519480,0x0051E820,unknown,code not assigned to a module
 interpal,0x0051E820,0x0051ECF0,tibsun,"functions compiled from src/interpal.cpp, matched, without gaps"
