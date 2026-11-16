@@ -677,8 +677,8 @@ unk_00721090,0x00721090,0x00721900,unknown,code not assigned to a module
 wave,0x00721900,0x00724600,tibsun,"functions compiled from src/wave.cpp, without gaps; matched except ?Load@WaveClass@@UAGJPAUIStream@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Wave_Shape_AI@WaveClass@@AAEXXZ and ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z; four placed by the gap; ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z placed where matched code calls them; ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z placed at their function starts; ??0WaveClass@@QAE@ABVCoord@@0PAVTechnoClass@@W4WaveType@@1@Z not placed; ??0WaveClass@@QAE@XZ not placed"
 unk_00724600,0x00724600,0x007249F0,unknown,code not assigned to a module
 waypoint,0x007249F0,0x00725200,tibsun,"functions compiled from src/waypoint.cpp, matched, without gaps; _$E5 and _$E3 not placed; four placed by the gap"
-unk_00725200,0x00725200,0x00726930,unknown,code not assigned to a module
-unk_00726930,0x00726930,0x007269B0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
+unk_00725200,0x00725200,0x00725DE0,unknown,code not assigned to a module
+wdtcampaign,0x00725DE0,0x007269B0,tibsun,"functions compiled from src/wdtcampaign.cpp, matched, without gaps"
 unk_007269B0,0x007269B0,0x007291C0,unknown,code not assigned to a module
 wdtmap,0x007291C0,0x0072A840,tibsun,"functions compiled from src/wdtmap.cpp, without gaps; matched except ?Load@Map@WorldDominationTour@@QAEXAAVINIClass@@PAVMSEngine@@H@Z; one placed by the gap; ?WDT_Write_Map_Ini@@YIXABVWstring@@0@Z not placed; ??8Centroid@WorldDominationTour@@QBE_NABV01@@Z not placed"
 unk_0072A840,0x0072A840,0x0072BDC0,unknown,code not assigned to a module
