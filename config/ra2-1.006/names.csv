@@ -6595,7 +6595,7 @@ address,symbol,evidence
 0x006FA0C0,?Char_To_Wide@@YIXPAGPBDH@Z,"inferred: referenced by matched src/campaign.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x006FA0F0,?WideToCharString@OwnerDraw@@YIPADPADPBGH@Z,"inferred: referenced by matched src/modemhst.cpp (8 references); across all matched code never at another address, and no other symbol here"
 0x006FA120,?Wide_To_Narrow@@YIPADPBG@Z,"inferred: referenced by matched src/modemhst.cpp (36 references); across all matched code never at another address, and no other symbol here"
-0x006FA180,?Narrow_To_Wide@@YIPAGPBD@Z,"inferred: referenced by matched src/modemhst.cpp (49 references); across all matched code never at another address, and no other symbol here"
+0x006FA180,?Narrow_To_Wide@@YIPAGPBD@Z,"inferred: referenced by matched src/modemhst.cpp (51 references); across all matched code never at another address, and no other symbol here"
 0x006FA400,??0UnitClass@@QAE@PBVUnitTypeClass@@PAVHouseClass@@@Z,"inferred: referenced by matched src/carry.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x006FBAB0,?Edge_Of_World_AI@UnitClass@@QAE_NXZ,"compiled from src/unit.cpp, matched"
 0x006FBB40,?Reload@UnitClass@@UAEXXZ,"compiled from src/unit.cpp, matched"
@@ -6822,6 +6822,7 @@ address,symbol,evidence
 0x00715EF0,?Set_Speech_Volume@@YIXH@Z,"compiled from src/vox.cpp, matched"
 0x00715F10,?Aux_Stream_Init@@YIHXZ,"compiled from src/vox.cpp, matched"
 0x00715F80,?Aux_Stream_Shutdown@@YIXXZ,"compiled from src/vox.cpp, matched"
+0x00715FB0,?Play_Taunt@@YIHD@Z,"compiled from src/vox.cpp, matched"
 0x007160D0,?Aux_Stream_Stop@@YIXXZ,"compiled from src/vox.cpp, matched; code at 4 addresses, placed by the gap"
 0x007160E0,??0VoxClass@@QAE@PBD@Z,"compiled from src/vox.cpp, matched"
 0x00716190,??1VoxClass@@QAE@XZ,"compiled from src/vox.cpp, matched; code at 6 addresses, placed by the gap"
@@ -7467,7 +7468,7 @@ address,symbol,evidence
 0x0077E1A0,?UnVQ2_C0_4x4_TRANS_HALF@@YAXPAE00KKK@Z,"compiled from src/vqalib_unvq.cpp, matched"
 0x0077E5B0,?UnVQ2_C0_4x2_TRANS@@YAXPAE00KKK@Z,"compiled from src/vqalib_unvq.cpp, matched"
 0x0077E9E0,?UnVQ2_C0_4x2_KEY@@YAXPAE00KKK@Z,"compiled from src/vqalib_unvq.cpp, matched"
-0x0077F110,__ftol,"inferred: referenced by matched src/xsurface.cpp (661 references); across all matched code never at another address, and no other symbol here"
+0x0077F110,__ftol,"inferred: referenced by matched src/xsurface.cpp (663 references); across all matched code never at another address, and no other symbol here"
 0x0077F14D,_Detect_MMX_Availability,"inferred: referenced by matched src/getcpu.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0077F20F,_Detect_CMOV_Availability,"inferred: referenced by matched src/getcpu.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0077F274,_Get_CPU_Clock,"inferred: referenced by matched src/bench.cpp (5 references); across all matched code never at another address, and no other symbol here"
@@ -7554,7 +7555,7 @@ address,symbol,evidence
 0x007831F0,__makepath,symbol of VC6 LIBCMT.LIB makepath.obj
 0x00783290,_memmove,"inferred: called as _memmove by matched VC6 LIBCMT.LIB objects (_fptostr.obj, sbheap.obj, w_str.obj) and by matched Tiberian Sun functions (52 call sites); the code section of VC6 LIBCMT.LIB memmove.obj matches here, and at 0x00788CB0, which matched objects call as _memcpy (memcpy.obj has the same code)"
 0x007835C5,_wcsrchr,symbol of VC6 LIBCMT.LIB wcsrchr.obj
-0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (62 references); across all matched code never at another address, and no other symbol here"
+0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (63 references); across all matched code never at another address, and no other symbol here"
 0x00783622,_wcsncpy,symbol of VC6 LIBCMT.LIB wcsncpy.obj
 0x0078365F,_wcscat,symbol of VC6 LIBCMT.LIB wcscat.obj
 0x00783689,_wcscpy,symbol of VC6 LIBCMT.LIB wcscat.obj
@@ -11652,7 +11653,7 @@ address,symbol,evidence
 0x00832448,?IsometricTiles@@3V?$DynamicVectorClass@PAVIsometricTileClass@@@@A,"inferred: referenced by matched src/isotile.cpp (15 references); across all matched code never at another address, and no other symbol here"
 0x00832468,?Keyboard@@3PAUKeyboardClass@@A,"inferred: referenced by matched src/gadget.cpp (68 references); across all matched code never at another address, and no other symbol here"
 0x00832470,?Logic@@3VLogicClass@@A,"inferred: referenced by matched src/tracker.cpp (18 references); across all matched code never at another address, and no other symbol here"
-0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (1978 references); across all matched code never at another address, and no other symbol here"
+0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (1979 references); across all matched code never at another address, and no other symbol here"
 0x008325D0,?MapSizeX@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x008325D4,?MapSizeY@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00833694,?CurrentSuperWeaponType@@3W4SuperWeaponType@@A,"inferred: referenced by matched src/super.cpp (1 reference); across all matched code never at another address, and no other symbol here"
@@ -11687,7 +11688,7 @@ address,symbol,evidence
 0x00839740,?ConfigINI@@3VCCINIClass@@A,"inferred: referenced by matched src/session.cpp (80 references); across all matched code never at another address, and no other symbol here"
 0x008397A0,?AIINI@@3VCCINIClass@@A,"inferred: referenced by matched src/rules.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x008397F0,?ArtINI@@3VCCINIClass@@A,"inferred: referenced by matched src/airctype.cpp (27 references); across all matched code never at another address, and no other symbol here"
-0x00839848,?Rule@@3PAVRulesClass@@A,"inferred: referenced by matched src/veteran.cpp (438 references); across all matched code never at another address, and no other symbol here"
+0x00839848,?Rule@@3PAVRulesClass@@A,"inferred: referenced by matched src/veteran.cpp (441 references); across all matched code never at another address, and no other symbol here"
 0x00839900,?Scripts@@3V?$DynamicVectorClass@PAVScriptClass@@@@A,"inferred: referenced by matched src/script.cpp (18 references); across all matched code never at another address, and no other symbol here"
 0x00839944,?TileSurface@@3PAVSurface@@A,"inferred: referenced by matched src/winstub.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x00839948,?SidebarSurface@@3PAVSurface@@A,"inferred: referenced by matched src/shapebtn.cpp (74 references); across all matched code never at another address, and no other symbol here"
@@ -11816,7 +11817,7 @@ address,symbol,evidence
 0x00A35D78,?Theme@@3VThemeClass@@A,"inferred: referenced by matched src/ccini.cpp (65 references); across all matched code never at another address, and no other symbol here"
 0x00A35DB0,?PlayerAborts@@3_NA,"inferred: referenced by matched src/mainloop.cpp (8 references); across all matched code never at another address, and no other symbol here"
 0x00A35DB1,?PlayerWins@@3_NA,"inferred: referenced by matched src/mainloop.cpp (10 references); across all matched code never at another address, and no other symbol here"
-0x00A35DB4,?PlayerPtr@@3PAVHouseClass@@A,"inferred: referenced by matched src/overlay.cpp (204 references); across all matched code never at another address, and no other symbol here"
+0x00A35DB4,?PlayerPtr@@3PAVHouseClass@@A,"inferred: referenced by matched src/overlay.cpp (205 references); across all matched code never at another address, and no other symbol here"
 0x00A35DB8,?TimedSuperWeapons@@3V?$DynamicVectorClass@PAVSuperClass@@@@A,"inferred: referenced by matched src/super.cpp (21 references); across all matched code never at another address, and no other symbol here"
 0x00A35DD0,?ParticleSystemTypes@@3V?$DynamicVectorClass@PAVParticleSystemTypeClass@@@@A,"inferred: referenced by matched src/psystype.cpp (31 references); across all matched code never at another address, and no other symbol here"
 0x00A35DE8,?OverlayTypes@@3V?$DynamicVectorClass@PAVOverlayTypeClass@@@@A,"inferred: referenced by matched src/tiberium.cpp (75 references); across all matched code never at another address, and no other symbol here"
