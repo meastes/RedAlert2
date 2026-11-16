@@ -10,6 +10,8 @@
 #include "always.h"
 
 #include "netshare.h"
+#include "bitfont.h" // RA2: the lobby messages are measured with BitFont
+#include "multiplayer.h" // RA2: MultiplayerGameMode
 
 #include "_rules.h"
 #include "cd.h"
@@ -38,7 +40,7 @@
 #include "stimer.h"
 #include "wdtnet.h"
 #include "windlg.h"
-#include "wolapi\wolapi.h"
+#include "wolapi.h" // RA2: main has no include/wolapi/; the part of the WOL API this file uses is one flat header
 #include "wonline.h"
 #include "worlddom.h"
 #include "wstring.h"
@@ -46,7 +48,28 @@
 #include "xstraw.h"
 
 #include <ctime>
+#include <wchar.h> // RA2: the wide string functions the lobby messages use
+#undef LoadString // RA2: windows.h maps it to LoadStringA
+#include "stringtable.h" // RA2: the messages are loaded from the string table
 
+// RA2: callees that are not in a header yet
+LRESULT __fastcall Get_List_Item_Wide_Text(HWND window, WPARAM index, WideWstring & text); // RA2: 0x00600F10, the text of a list box item
+void __fastcall Dialog_On_WM_PAINT(HWND dialog); // RA2: 0x005FEE70, defined in ownrdraw.cpp
+void __fastcall Dialog_On_WM_DRAWITEM(long item); // RA2: as above
+void __fastcall Show_Dialog(HWND dialog, int kind); // RA2: as above
+void __fastcall Move_Default_Button_Owner(HWND window); // RA2: as above
+void __fastcall Slide_Pending_Dialog(HWND window); // RA2: 0x005E5F20, defined in ownrdraw.cpp
+MultiplayerGameMode * First_Game_Mode(void); // RA2: 0x005B6EC0, defined in the game mode list
+int Net2SetHouseAndColor(char const * who, int house, int color); // RA2: 0x005BCCF0, defined in netdlg2.cpp
+rc_ptr<WDTTerritory> Find_WDT_Territory(int index); // RA2: 0x00769690, the tour's territory with this index (defined in worlddom.cpp)
+char * __fastcall Wide_To_Narrow(wchar_t const * text); // RA2: 0x006FA120, static buffer
+wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, static buffer
+unsigned int __fastcall Compute_Name_CRC(wchar_t const * name); // RA2: 0x005BBA50, the wide form of netdlg.h's
+void Join_Lobby_Start_Reminder(void); // RA2: 0x005C28E0, defined in netdlg2.cpp
+void __cdecl Join_Lobby_Reset_Ready(void); // RA2: 0x005C2940, defined in netdlg2.cpp
+void Wol_Send_Start_Reminder(void); // RA2: 0x0075C960, sends the game option "G" through the chat service (the counterpart of Send_Start_Reminder)
+void Wol_Handle_Start_Reminder(void); // RA2: 0x0075C980, the joiner is told to accept: makes the ready button available and prints GUI:HostGameStartJoiner
+void Wol_Reset_Ready(void); // RA2: 0x0075CA00, sends message 0x4DC to the ready button (the counterpart of Join_Lobby_Reset_Ready)
 
 struct IChat * g_pChat;
 struct INetUtil * g_pNetUtil;
@@ -107,6 +130,26 @@ unsigned int Wstring_Hash(Wstring & string)
 	return(hash);
 }
 
+/// <summary>
+/// Computes a hash value for a wide string.
+/// This routine supplies the bucket value for the dictionaries that key by a wide name.
+/// </summary>
+/// <param name="string">The string to hash.</param>
+/// <returns>Returns with the hash value of the string.</returns>
+unsigned int Wstring_Hash(WideWstring & string) // RA2: 0x005C2BF0, the wide string class has a hash of its own; the character and the index are added in one expression
+{
+	unsigned int hash = 0;
+
+	hash = string.length();
+
+	for (unsigned int i = 0; i < string.length(); i++) {
+		hash += *(string.get() + i) + i; // RA2: as above
+		hash = (hash << 8) ^ (hash >> 24);
+	}
+	return(hash);
+}
+
+
 
 /// <summary>
 /// Fetches the game options dialog that is currently up.
@@ -148,14 +191,14 @@ HWND GameoptWindow(void)
 /// </summary>
 /// <param name="color">Color to display the message in, or -1 for the default.</param>
 /// <param name="fmt">Printf style format string for the message.</param>
-void __cdecl PMessagePrintf(int color, const char * fmt, ...)
+void __cdecl Lobby_Chat_Printf(int color, const wchar_t * fmt, ...) // RA2: 0x005C2C80, the line is built from a wide format into a wide buffer; main names it Lobby_Chat_Printf (netdlg2.cpp)
 {
 	va_list va;
-	static char buffer[1024];
+	wchar_t buffer[1024]; // RA2: as above
 	memset(buffer, 0, sizeof(buffer));
 
 	va_start(va, fmt);
-	vsprintf(buffer, fmt, va);
+	vswprintf(buffer, fmt, va); // RA2: as above
 	va_end(va);
 
 	if (WS_Top_Window() != 0) {
@@ -177,6 +220,7 @@ void __cdecl PMessagePrintf(int color, const char * fmt, ...)
 }
 
 
+
 /// <summary>
 /// Prints a formatted system message to the player.
 /// This routine hunts down the topmost dialog that has somewhere to show system messages and
@@ -185,14 +229,14 @@ void __cdecl PMessagePrintf(int color, const char * fmt, ...)
 /// </summary>
 /// <param name="color">Color to display the message in, or -1 for the default.</param>
 /// <param name="fmt">Printf style format string for the message.</param>
-void __cdecl SMessagePrintf(int color, const char * fmt, ...)
+void __cdecl SMessagePrintf(int color, const wchar_t * fmt, ...) // RA2: 0x005C2D10, the line is built from a wide format into a wide buffer
 {
 	va_list va;
-	static char buffer[1024];
+	wchar_t buffer[1024]; // RA2: as above
 	memset(buffer, 0, sizeof(buffer));
 
 	va_start(va, fmt);
-	vsprintf(buffer, fmt, va);
+	vswprintf(buffer, fmt, va); // RA2: as above
 	va_end(va);
 
 	if (WS_Top_Window() != 0) {
@@ -214,6 +258,7 @@ void __cdecl SMessagePrintf(int color, const char * fmt, ...)
 }
 
 
+
 /// <summary>
 /// Draws a message into a message list box.
 /// This routine word wraps the message to the width of the list box and adds each resulting
@@ -224,11 +269,12 @@ void __cdecl SMessagePrintf(int color, const char * fmt, ...)
 /// default.</param>
 /// <param name="message">The text to display.</param>
 /// <param name="window">The message list box to display the text in.</param>
-void _DrawMessage(int color, const char * message, HWND window)
+void _DrawMessage(int color, const wchar_t * message, HWND window) // RA2: 0x005C2DA0, the text is wide and measured with the BitFont, and the leading blanks of a wrapped line are skipped
 {
 	RECT rect;
+	struct { HDC hdc; SIZE size; } l; // RA2: as above
 
-	int length = strlen(message);
+	int length = wcslen(message); // RA2: as above
 
 	int offset = 18;
 	Get_Display_Rect(window, &rect);
@@ -236,12 +282,12 @@ void _DrawMessage(int color, const char * message, HWND window)
 		offset = 1;
 	}
 
-	HDC hdc = GetDC(window);
-	SendMessage(window, OD_RESTOREDC, 0, (LPARAM)hdc);
+	l.hdc = GetDC(window); // RA2: as above
+	SendMessage(window, OD_RESTOREDC, 0, (LPARAM)l.hdc); // RA2: as above
 
 	while (length) {
 		if (message != NULL) {
-			char const * newline = strchr(message, '\n');
+			wchar_t const * newline = wcschr(message, L'\n'); // RA2: as above
 			if (newline != NULL) {
 				int linelen = newline - message + 1;
 				if (length >= linelen) {
@@ -250,13 +296,15 @@ void _DrawMessage(int color, const char * message, HWND window)
 			}
 		}
 
-		SIZE size;
-		GetTextExtentPoint32(hdc, message, length, &size);
+		wchar_t * copy = _wcsdup(message); // RA2: as above
+		copy[length] = 0; // RA2: as above
+		BitFont::Instance->Text_Dimensions(copy, (int *)&l.size.cx, (int *)&l.size.cy, 0); // RA2: as above
+		free(copy); // RA2: as above
 		int maxWidth = rect.right - rect.left - offset;
 
-		if (size.cx >= maxWidth - 4) {
+		if (l.size.cx >= maxWidth - 4) { // RA2: as above
 			int reduceBy;
-			if (size.cx / 2 > maxWidth) {
+			if (l.size.cx / 2 > maxWidth) { // RA2: as above
 				reduceBy = 10;
 				length -= reduceBy;
 			} else {
@@ -267,7 +315,7 @@ void _DrawMessage(int color, const char * message, HWND window)
 			int idx = length - 1;
 
 			while (idx > 0) {
-				if (!isgraph(message[idx])) {
+				if (!iswgraph(message[idx])) { // RA2: as above
 					found = idx;
 					break;
 				}
@@ -282,12 +330,16 @@ void _DrawMessage(int color, const char * message, HWND window)
 		} else {
 			_SetMessageString(window, message, length, color);
 			message += length;
-			length = strlen(message);
+			while (*message == L' ') { // RA2: as above
+				message++; // RA2: as above
+			}
+			length = wcslen(message); // RA2: as above
 		}
 	}
 
-	ReleaseDC(window, hdc);
+	ReleaseDC(window, l.hdc); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -300,36 +352,84 @@ void _DrawMessage(int color, const char * message, HWND window)
 /// <param name="message">The text to add; only the leading characters are taken.</param>
 /// <param name="length">Number of characters of the message to add.</param>
 /// <param name="color">Color to display the line in, or -1 for the list box default.</param>
-void _SetMessageString(HWND window,  const char * message, int length, int color)
+void _SetMessageString(HWND window, const wchar_t * message, int length, int color) // RA2: 0x005C2F20, the text is wide; the list only scrolls to the new line when it was showing its end
 {
-	static char buffer[1024];
+	static wchar_t buffer[512]; // RA2: as above
 	memset(buffer, 0, sizeof(buffer));
-	strncpy(buffer, message, length);
-	char * line_end = strchr(buffer, '\r');
+	wcsncpy(buffer, message, length); // RA2: as above
+	wchar_t * line_end = wcschr(buffer, L'\r'); // RA2: as above
 	if (line_end != NULL) {
-		line_end[0] = '\0';
+		line_end[0] = L'\0'; // RA2: as above
 	} else {
-		line_end = strchr(buffer, '\n');
+		line_end = wcschr(buffer, L'\n'); // RA2: as above
 		if (line_end != NULL) {
-			line_end[0] = '\0';
+			line_end[0] = L'\0'; // RA2: as above
 		}
 	}
 
 	int old = SendMessage(window, OD_DISABLEPAINT, 0, 1);
-	int topindex = ListBox_GetCount(window);
-	if (topindex > 500) {
-		ListBox_DeleteString(window, 0);
-		topindex--;
+	int topindex = SendMessage(window, LB_GETTOPINDEX, 0, 0); // RA2: as above
+	int count = SendMessage(window, LB_GETCOUNT, 0, 0); // RA2: as above
+	int itemheight = SendMessage(window, LB_GETITEMHEIGHT, topindex, 0); // RA2: as above
+	RECT rect;
+	GetWindowRect(window, &rect); // RA2: as above
+	bool atbottom = (count - topindex) <= (rect.bottom - rect.top) / itemheight; // RA2: as above
+	if (count > 500) { // RA2: as above
+		SendMessage(window, LB_DELETESTRING, 0, 0); // RA2: as above
+		count--; // RA2: as above
 	}
 
-	int index = ListBox_InsertString(window, -1, buffer);
+	int index = SendMessage(window, OD_ADDSTRINGW, 0, (LPARAM)buffer); // RA2: as above
 	if (color != -1) {
 		SendMessage(window, OD_SETCOLOR, index, color);
 	}
 
-	ListBox_SetTopIndex(window, topindex);
+	if (atbottom) { // RA2: as above
+		SendMessage(window, LB_SETTOPINDEX, count, 0); // RA2: as above
+	}
 	SendMessage(window, OD_DISABLEPAINT, 0, old);
 }
+
+
+/// <summary>
+/// Adds a dot to the last chat line.
+/// This routine finds the chat list of the topmost dialog and appends a dot to its last line. Once
+/// that line is long enough the dot starts a new line, so a long wait shows progress.
+/// </summary>
+void Add_Chat_Dot(void) // RA2: 0x005C3040, TibSun has no such routine
+{
+	if (WS_Top_Window() != 0) {
+		HWND top = WS_Top_Window();
+		HWND msg = GetDlgItem(top, IDC_PMESSAGES);
+		while (msg == 0) {
+			top = WS_Next_Lower_Dialog(top);
+			if (top == 0) {
+				return;
+			}
+			msg = GetDlgItem(top, IDC_PMESSAGES);
+		}
+
+		int old = SendMessage(msg, OD_DISABLEPAINT, 0, 1); // RA2: as above
+		int count = SendMessage(msg, LB_GETCOUNT, 0, 0); // RA2: as above
+		WideWstring text; // RA2: as above
+		if (count > 0) { // RA2: as above
+			Get_List_Item_Wide_Text(msg, count - 1, text); // RA2: as above
+		}
+		if (text.length() < 0x24) { // RA2: as above
+			SendMessage(msg, LB_DELETESTRING, count - 1, 0); // RA2: as above
+			text += L"."; // RA2: as above
+		} else {
+			text = L"."; // RA2: as above
+			count++;
+		}
+		SendMessage(msg, OD_ADDSTRINGW, 0, (LPARAM)text.text()); // RA2: as above
+		while (count > 500) { // RA2: as above
+			SendMessage(msg, LB_DELETESTRING, 0, 0); // RA2: as above
+		}
+		SendMessage(msg, OD_DISABLEPAINT, 0, old); // RA2: as above
+	}
+}
+
 
 
 /// <summary>
@@ -382,37 +482,46 @@ int CountAliveTeams(HouseClass * house)
 /// <param name="large">Should the large version of the box be used?</param>
 /// <returns>Returns with the control ID of the button the player pressed. Zero is returned
 /// if there was nothing to display.</returns>
-int ODMessageBox(const char * text, int type, bool (*callback)(void), bool large)
+int ODMessageBox(const wchar_t * text, int type, bool (*callback)(void), bool large) // RA2: 0x005C3230, the text is wide and the box has RA2's dialogs: 0xD0 for OK, 0xFC for OK and Cancel, 0x126 for Yes and No, 0xFB for the large box
 {
-	if (text != NULL && strlen(text) > 0) {
-		HWND dialog;
-		if (type == MB_OKCANCEL) {
-			dialog = WS_Create_Dialog(ProgramInstance, IDD_MSGBOX_2, MainWindow, ODMessageBox_Proc, false);
+	if (text != NULL && wcslen(text) != 0) { // RA2: as above
+		int id; // RA2: as above
+		if (large) {
+			id = 0xfb; // RA2: as above
+		} else if (type == MB_OK) { // RA2: as above
+			id = IDD_MSGBOX_3_SMALL; // RA2: as above
+		} else if (type == MB_OKCANCEL) { // RA2: as above
+			id = 0xfc; // RA2: as above
 		} else {
-			if (large) {
-				dialog = WS_Create_Dialog(ProgramInstance, IDD_MSGBOX_3_LARGE, MainWindow, ODMessageBox_Proc, false);
-			} else {
-				dialog = WS_Create_Dialog(ProgramInstance, IDD_MSGBOX_3_SMALL, MainWindow, ODMessageBox_Proc, false);
-			}
-			if (type == MB_OK) {
-				HWND ok = GetDlgItem(dialog, IDOK);
-				SetWindowLong(ok, GWL_STYLE, GetWindowLong(ok, GWL_STYLE) | WS_VISIBLE);
-			}
-			if (type == MB_YESNO) {
-				HWND yes = GetDlgItem(dialog, IDYES);
-				SetWindowLong(yes, GWL_STYLE, GetWindowLong(yes, GWL_STYLE) | WS_VISIBLE);
-				HWND no = GetDlgItem(dialog, IDNO);
-				SetWindowLong(no, GWL_STYLE, GetWindowLong(no, GWL_STYLE) | WS_VISIBLE);
-			}
+			id = (type != MB_YESNO) ? 0xfb : 0x126; // RA2: as above
 		}
-		Center_Window_Within_Window(dialog);
-		SendDlgItemMessage(dialog, IDC_MSGBOX_TEXT, WM_SETTEXT, 0, (LPARAM)text);
-		OwnerDraw::Subclass_Dialog(dialog, 0);
+		HWND dialog = WS_Create_Dialog(ProgramInstance, id, MainWindow, ODMessageBox_Proc, false); // RA2: as above
+		Show_Dialog(dialog, id); // RA2: as above
+		if (type == MB_OK) {
+			HWND ok = GetDlgItem(dialog, IDOK);
+			SetWindowLong(ok, GWL_STYLE, GetWindowLong(ok, GWL_STYLE) | WS_VISIBLE);
+			if (large) {
+				Move_Default_Button_Owner(ok); // RA2: as above
+			}
+		} else if (type == MB_OKCANCEL) { // RA2: as above
+			HWND ok = GetDlgItem(dialog, IDOK);
+			SetWindowLong(ok, GWL_STYLE, GetWindowLong(ok, GWL_STYLE) | WS_VISIBLE);
+			HWND cancel = GetDlgItem(dialog, IDCANCEL); // RA2: as above
+			SetWindowLong(cancel, GWL_STYLE, GetWindowLong(cancel, GWL_STYLE) | WS_VISIBLE); // RA2: as above
+		} else if (type == MB_YESNO) { // RA2: as above
+			HWND yes = GetDlgItem(dialog, IDYES);
+			SetWindowLong(yes, GWL_STYLE, GetWindowLong(yes, GWL_STYLE) | WS_VISIBLE);
+			HWND no = GetDlgItem(dialog, IDNO);
+			SetWindowLong(no, GWL_STYLE, GetWindowLong(no, GWL_STYLE) | WS_VISIBLE);
+		}
+		HWND label = GetDlgItem(dialog, IDC_MSGBOX_TEXT); // RA2: as above
+		SendMessage(label, OD_SETTEXTW, 0, (LPARAM)text); // RA2: as above
 		ShowWindow(dialog, SW_NORMAL);
-		return(WS_Wait_Dialog(dialog, callback));
+		return(WS_Wait_Dialog(dialog, callback, false, true, true)); // RA2: as above
 	}
 	return(0);
 }
+
 
 
 /// <summary>
@@ -424,16 +533,17 @@ int ODMessageBox(const char * text, int type, bool (*callback)(void), bool large
 int CALLBACK ODMessageBox_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	switch (message) {
-		case WM_DRAWITEM:
-			OwnerDraw::Draw_Item((LPDRAWITEMSTRUCT)lparam);
+		case WM_ERASEBKGND: // RA2: the cases come in this order in the executable
 			return(TRUE);
 
 		case WM_PAINT:
-			OwnerDraw::Draw_Dialog_Back(window);
+			Dialog_On_WM_PAINT(window); // RA2: the dialog is painted by the owner draw paint (0x005FEE70), not OwnerDraw::Draw_Dialog_Back
+			Slide_Pending_Dialog(window); // RA2: a dialog waiting to slide in does so now (0x005E5F20)
 			ValidateRect(window, NULL);
 			return(TRUE);
 
-		case WM_ERASEBKGND:
+		case WM_DRAWITEM:
+			Dialog_On_WM_DRAWITEM(lparam); // RA2: as above
 			return(TRUE);
 
 		case WM_COMMAND:
@@ -452,6 +562,82 @@ int CALLBACK ODMessageBox_Proc(HWND window, UINT message, WPARAM wparam, LPARAM 
 
 
 /// <summary>
+/// Shows the name of a game mode in a lobby dialog.
+/// The name is put into the game mode text control of the dialog.
+/// </summary>
+/// <param name="dialog">The lobby dialog.</param>
+/// <param name="mode">The game mode whose name is shown.</param>
+void __fastcall Set_Item_Text(HWND dialog, MultiplayerGameMode * mode) // RA2: 0x005C3450, TibSun has no such routine
+{
+	HWND item = GetDlgItem(dialog, 0x6ec); // RA2: as above
+	SendMessage(item, OD_SETTEXTW, 0, (LPARAM)mode->UIName.text()); // RA2: as above
+}
+
+/// <summary>
+/// Shows a scenario in a lobby dialog.
+/// The scenario at the given index of the session's scenario list is handed to the scenario text
+/// control of the dialog.
+/// </summary>
+/// <param name="dialog">The lobby dialog.</param>
+/// <param name="index">Index of the scenario in the session's list.</param>
+void __fastcall Set_Scenario_Item_Text(HWND dialog, int index) // RA2: 0x005C3480, TibSun has no such routine
+{
+	MultiMission * map = Session.Scenarios[index]; // RA2: as above
+	HWND item = GetDlgItem(dialog, 0x5a8); // RA2: as above
+	SendMessage(item, OD_SETTEXTW, 0, (LPARAM)map); // RA2: as above
+}
+
+/// <summary>
+/// Shows the description of the chosen scenario in a lobby dialog.
+/// </summary>
+/// <param name="dialog">The lobby dialog.</param>
+void __fastcall Set_Skirmish_Dialog_Text(HWND dialog) // RA2: 0x005C34B0, TibSun has no such routine
+{
+	HWND item = GetDlgItem(dialog, 0x5a8); // RA2: as above
+	SendMessage(item, OD_SETTEXTW, 0, (LPARAM)Session.Options.ScenarioDescription); // RA2: as above
+}
+
+/// <summary>
+/// Fetches the game mode the session options name.
+/// The first game mode of the list is used when the options name none that exists.
+/// </summary>
+/// <returns>Returns with the current game mode.</returns>
+MultiplayerGameMode * Get_Current_Game_Mode(void) // RA2: 0x005C34D0, TibSun has no such routine
+{
+	MultiplayerGameMode * mode = MultiplayerGameMode::Get(Session.Options.MPModeIndex); // RA2: as above
+	if (mode == NULL) { // RA2: as above
+		mode = First_Game_Mode(); // RA2: as above
+	}
+	return(mode); // RA2: as above
+}
+
+/// <summary>
+/// Passes a change of the game mode on to the game mode itself.
+/// In the game mode dialog the mode picked in its list is told; elsewhere the session's own mode is.
+/// </summary>
+void __fastcall Handle_Mode_Selection(void) // RA2: 0x005C34F0, TibSun has no such routine; slot 31 (offset 0x7C) of the game mode is called
+{
+	if (WS_Top_Window_ID() == 0x6b) { // RA2: as above
+		HWND dialog = WS_Top_Window(); // RA2: as above
+		int selected = SendDlgItemMessage(dialog, 0x6eb, LB_GETCURSEL, 0, 0); // RA2: as above
+		if (selected != -1) { // RA2: as above
+			MultiplayerGameMode * mode = (MultiplayerGameMode *)SendDlgItemMessage(dialog, 0x6eb, LB_GETITEMDATA, selected, 0); // RA2: as above
+			if (mode != NULL) { // RA2: as above
+				mode->vt_entry_7C(); // RA2: as above
+			}
+		}
+	} else if (Session.MPGameMode != NULL) { // RA2: as above
+		Session.MPGameMode->vt_entry_7C(); // RA2: as above
+	}
+}
+
+
+
+
+
+
+
+/// <summary>
 /// Displays the current game options in the setup dialog.
 /// This routine pushes the session options out to the sliders and check boxes. On the
 /// initializing pass it also establishes the slider ranges and greys out whichever options a
@@ -459,83 +645,54 @@ int CALLBACK ODMessageBox_Proc(HWND window, UINT message, WPARAM wparam, LPARAM 
 /// </summary>
 /// <param name="window">The game options dialog to update.</param>
 /// <param name="initialize">Is this the first call for a freshly created dialog?</param>
-void DisplayGameopts(HWND window, BOOL initialize)
+void __fastcall Fill_Options_Dialog(HWND window, int initialize) // RA2: 0x005C3550, RA2 has the options of its own: only the credits, unit count, short game, MCV and crates controls are limited by a tour territory
 {
-	#define MP_MIN_MONEY 2500
+	int unit_count = Session.Options.UnitCount; // RA2: as above
+	int credits = Session.Options.Credits; // RA2: as above
+	int game_speed = Session.Options.GameSpeed; // RA2: as above
 
 	if (initialize) {
-		if (Session.Type == GAME_INTERNET && Session.IsWDT) {
-			WDTTerritory * territory = WDT_Get_Territory(Session.WDTTerritory);
-			if (territory != NULL) {
-				EnableWindow(GetDlgItem(window, IDC_YOURSIDE), FALSE);
-				EnableWindow(GetDlgItem(window, IDC_AIPLAYERS), FALSE);
-				EnableWindow(GetDlgItem(window, IDC_AILEVEL_SLIDER), FALSE); /// AI Difficulty
-
-				if (!territory->UserModUnitCount) {
-					EnableWindow(GetDlgItem(window, IDC_UNITCOUNT), FALSE);
-				}
-				if (!territory->UserModTechLevel) {
-					EnableWindow(GetDlgItem(window, IDC_TECHLEVEL), FALSE);
-				}
-				if (!territory->UserModCredits) {
-					EnableWindow(GetDlgItem(window, IDC_CREDITS), FALSE);
-				}
-				if (!territory->UserModAlliances) {
-					EnableWindow(GetDlgItem(window, IDC_ALLIES), FALSE);
-				}
-				if (!territory->UserModHarvesterTruce) {
-					EnableWindow(GetDlgItem(window, IDC_HARVTRUCE), FALSE);
-				}
-				if (!territory->UserModBases) {
-					EnableWindow(GetDlgItem(window, IDC_BASES), FALSE);
-				}
-				if (!territory->UserModMCVRedeploy) {
-					EnableWindow(GetDlgItem(window, IDC_REDEPLOY_MCV), FALSE); /// Re-Deployable MCV
-				}
-				if (!territory->UserModFogOfWar) {
-					EnableWindow(GetDlgItem(window, IDC_FOG_OF_WAR), FALSE); /// Fog of War
-				}
-				if (!territory->UserModBridgeDestruction) {
-					EnableWindow(GetDlgItem(window, IDC_BRIDGE_DESTROY), FALSE);
-				}
-				if (!territory->UserModCrates) {
-					EnableWindow(GetDlgItem(window, IDC_CRATES), FALSE);
-				}
-				if (!territory->UserModShortGame) {
+		rc_ptr<WDTTerritory> territory; // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: as above
+			territory = Find_WDT_Territory(Session.TournamentTerritory); // RA2: as above
+		}
+		if (territory.Get() != NULL) { // RA2: as above
+			EnableWindow(GetDlgItem(window, IDC_YOURSIDE), FALSE);
+			EnableWindow(GetDlgItem(window, 0x6d4), FALSE); // RA2: as above
+			if (!(territory->UserModBooleans & 0x20000)) { // RA2: as above
+				EnableWindow(GetDlgItem(window, IDC_CREDITS), FALSE);
+			}
+			if (!(territory->UserModBooleans & 0x8000)) { // RA2: as above
+				EnableWindow(GetDlgItem(window, IDC_UNITCOUNT), FALSE);
+			}
+			if (!(territory->UserModBooleans & 0x400)) { // RA2: as above
 					EnableWindow(GetDlgItem(window, IDC_SHORT_GAME), FALSE); /// Short Game
-				}
-				if (!territory->UserModCrapEngineer) {
-					EnableWindow(GetDlgItem(window, IDC_MULTI_ENGINEER), FALSE); /// Crap Engineers
-				}
+			}
+			if (!(territory->UserModBooleans & 0x20)) { // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_REDEPLOY_MCV), FALSE); /// Re-Deployable MCV
+			}
+			if (!(territory->UserModBooleans & 0x100)) { // RA2: as above
+				EnableWindow(GetDlgItem(window, IDC_CRATES), FALSE);
 			}
 		}
-		SendDlgItemMessage(window, IDC_UNITCOUNT, TBM_SETRANGE, TRUE, MAKELONG(1, 10));
-		SendDlgItemMessage(window, IDC_TECHLEVEL, TBM_SETRANGE, TRUE, MAKELONG(1, MPLAYER_BUILD_LEVEL_MAX));
-		SendDlgItemMessage(window, IDC_CREDITS, TBM_SETRANGE, TRUE, MAKELONG(MP_MIN_MONEY, Rule->MPMaxMoney));
-		SendDlgItemMessage(window, IDC_CREDITS, OD_SETTRACKSTEP, 0, 100);
-		SendDlgItemMessage(window, IDC_AIPLAYERS, TBM_SETRANGE, TRUE, MAKELONG(0, 6));
-		SendDlgItemMessage(window, IDC_AILEVEL_SLIDER, TBM_SETRANGE, TRUE, MAKELONG(0, 2)); /// AI Difficulty
 		SendDlgItemMessage(window, IDC_GAME_SPEED_SLIDER, TBM_SETRANGE, TRUE, MAKELONG(0, 6)); /// Game Speed
+		SendDlgItemMessage(window, IDC_CREDITS, TBM_SETRANGE, TRUE, MAKELONG(Rule->MinMoney, Rule->MPMaxMoney)); // RA2: as above
+		SendDlgItemMessage(window, IDC_CREDITS, OD_SETTRACKSTEP, 0, Rule->MoneyIncrement); // RA2: as above
+		SendDlgItemMessage(window, IDC_UNITCOUNT, TBM_SETRANGE, TRUE, MAKELONG(Rule->MinUnitCount, Rule->MaxUnitCount)); // RA2: as above
 	}
 
-	SendDlgItemMessage(window, IDC_UNITCOUNT, TBM_SETPOS, TRUE, Session.Options.UnitCount);
-	SendDlgItemMessage(window, IDC_TECHLEVEL, TBM_SETPOS, TRUE, BuildLevel);
-	SendDlgItemMessage(window, IDC_CREDITS, TBM_SETPOS, TRUE, Session.Options.Credits);
-	SendDlgItemMessage(window, IDC_AIPLAYERS, TBM_SETPOS, TRUE, Session.Options.AIPlayers);
-	SendDlgItemMessage(window, IDC_AILEVEL_SLIDER, TBM_SETPOS, TRUE, Session.Options.AIDifficulty);
-	SendDlgItemMessage(window, IDC_GAME_SPEED_SLIDER, TBM_SETPOS, TRUE, 6 - Session.Options.GameSpeed);
+	SendDlgItemMessage(window, IDC_GAME_SPEED_SLIDER, TBM_SETPOS, TRUE, 6 - game_speed); // RA2: as above
+	SendDlgItemMessage(window, IDC_CREDITS, TBM_SETPOS, TRUE, credits); // RA2: as above
+	SendDlgItemMessage(window, IDC_UNITCOUNT, TBM_SETPOS, TRUE, unit_count); // RA2: as above
 
 	int button_state[] = { BST_UNCHECKED, BST_CHECKED };
-	SendDlgItemMessage(window, IDC_BRIDGE_DESTROY, BM_SETCHECK, button_state[Session.Options.BridgeDestruction], 0);
-	SendDlgItemMessage(window, IDC_FOG_OF_WAR, BM_SETCHECK, button_state[Session.Options.FogOfWar], 0);
-	SendDlgItemMessage(window, IDC_CRATES, BM_SETCHECK, button_state[Session.Options.Goodies], 0);
-	SendDlgItemMessage(window, IDC_ALLIES, BM_SETCHECK, button_state[Session.Options.AlliesAllowed], 0);
-	SendDlgItemMessage(window, IDC_HARVTRUCE, BM_SETCHECK, button_state[Session.Options.HarvTruce], 0);
-	SendDlgItemMessage(window, IDC_BASES, BM_SETCHECK, button_state[Session.Options.Bases], 0);
-	SendDlgItemMessage(window, IDC_REDEPLOY_MCV, BM_SETCHECK, button_state[Session.Options.MCVRedeploy], 0);
 	SendDlgItemMessage(window, IDC_SHORT_GAME, BM_SETCHECK, button_state[Session.Options.ShortGame], 0);
-	SendDlgItemMessage(window, IDC_MULTI_ENGINEER, BM_SETCHECK, button_state[Session.Options.CrapEngineers], 0);
+	SendDlgItemMessage(window, 0x69a, BM_SETCHECK, button_state[Session.Options.SWAllowed], 0); // RA2: as above
+	SendDlgItemMessage(window, 0x69d, BM_SETCHECK, button_state[Session.Options.BuildOffAlly], 0); // RA2: as above
+	SendDlgItemMessage(window, IDC_REDEPLOY_MCV, BM_SETCHECK, button_state[Session.Options.MCVRedeploy], 0);
+	SendDlgItemMessage(window, IDC_CRATES, BM_SETCHECK, button_state[Session.Options.Goodies], 0);
 }
+
 
 
 void Encode_Game_Options(char *out);
@@ -551,33 +708,23 @@ void Net2EncodeGameopt(char *out);
 /// <param name="force">Should the options be sent even though nothing has changed?</param>
 /// <param name="now">Should the send happen immediately rather than waiting for the next
 /// opportunity?</param>
-void PumpGameopts(bool force, bool now)
+void __fastcall Send_Lobby_Options(bool force, bool now) // RA2: 0x005C3810, RA2 sends fewer options than TibSun (no tech level, AI players, difficulty, allies, truce, flag, fog or bases)
 {
-	static int _last_pump_time = 0;
-	static bool _need_to_pump = false;
-
-	static int _last_unit_count = -1;
-	static int _last_tech_level = -1;
-	static int _last_credits = -1;
-	static int _last_ai_players = -1;
-	static int _last_ai_difficulty = 1;
+	static int _last_pump_time; // RA2: as above
+	static bool _need_to_pump; // RA2: as above
+	static bool _last_short_game; // RA2: as above
+	static bool _last_sw_allowed; // RA2: as above
+	static bool _last_build_off_ally; // RA2: as above
+	static bool _last_mcv_redeploy; // RA2: as above
+	static bool _last_crates; // RA2: as above
 	static int _last_game_speed = -1;
-	static bool _last_mcv_redeploy = false;
-	static bool _last_allies_allowed = false;
-	static bool _last_harvester_truce = false;
-	static bool _last_capture_the_flag = false;
-	static bool _last_fog_of_war = false;
-	static bool _last_bases = false;
-	static bool _last_bridge_destruction = false;
-	static bool _last_goodies = false;
-	static bool _last_short_game = false;
-	static bool _last_crap_engineers = false;
-
-	static char _last_scenario_description[DESCRIP_MAX];
+	static int _last_credits = -1;
+	static int _last_unit_count = -1;
+	static bool _last_scenario_is_official = true;
+	static unsigned int _last_scenario_file_length = -1;
+	static wchar_t _last_scenario_description[45]; // RA2: as above
 	static char _last_scenario_file_name[14];
 	static char _last_scenario_digest[33];
-	static unsigned int _last_scenario_file_length = -1;
-	static bool _last_scenario_is_official = true;
 
 	bool do_pump = false;
 	bool it_is_time = false;
@@ -612,29 +759,21 @@ void PumpGameopts(bool force, bool now)
 			}
 		}
 
-		if (force == true) {
+		if (force) {
 			do_pump = true;
 		}
 
-		if (_last_unit_count != Session.Options.UnitCount) do_pump = true;
-		if (_last_tech_level != BuildLevel) do_pump = true;
-		if (_last_credits != Session.Options.Credits) do_pump = true;
-		if (_last_ai_players != Session.Options.AIPlayers) do_pump = true;
-		if (_last_bases != Session.Options.Bases) do_pump = true;
-		if (_last_bridge_destruction != Session.Options.BridgeDestruction) do_pump = true;
-		if (_last_goodies != Session.Options.Goodies) do_pump = true;
-		if (_last_short_game != Session.Options.ShortGame) do_pump = true;
 		if (_last_game_speed != Session.Options.GameSpeed) do_pump = true;
-		if (_last_crap_engineers != Session.Options.CrapEngineers) do_pump = true;
+		if (_last_credits != Session.Options.Credits) do_pump = true;
+		if (_last_unit_count != Session.Options.UnitCount) do_pump = true;
+		if (_last_short_game != Session.Options.ShortGame) do_pump = true;
+		if (_last_sw_allowed != Session.Options.SWAllowed) do_pump = true; // RA2: as above
+		if (_last_build_off_ally != Session.Options.BuildOffAlly) do_pump = true; // RA2: as above
 		if (_last_mcv_redeploy != Session.Options.MCVRedeploy) do_pump = true;
-		if (_last_allies_allowed != Session.Options.AlliesAllowed) do_pump = true;
-		if (_last_harvester_truce != Session.Options.HarvTruce) do_pump = true;
-		if (_last_capture_the_flag != Session.Options.CTF) do_pump = true;
-		if (_last_fog_of_war != Session.Options.FogOfWar) do_pump = true;
-		if (_last_ai_difficulty != Session.Options.AIDifficulty) do_pump = true;
+		if (_last_crates != Session.Options.Goodies) do_pump = true; // RA2: as above
 
 		_last_scenario_description[43] = 0;
-		if (stricmp(_last_scenario_description, Session.Options.ScenarioDescription)) do_pump = true;
+		if (wcsicmp(_last_scenario_description, Session.Options.ScenarioDescription)) do_pump = true; // RA2: as above
 
 		_last_scenario_file_name[13] = 0;
 		if (stricmp(_last_scenario_file_name, Session.ScenarioFileName)) do_pump = true;
@@ -647,41 +786,99 @@ void PumpGameopts(bool force, bool now)
 
 		if (do_pump) {
 			_last_pump_time = time(0);
-			_last_unit_count = Session.Options.UnitCount;
-			_last_tech_level = BuildLevel;
-			_last_credits = Session.Options.Credits;
-			_last_ai_players = Session.Options.AIPlayers;
-			_last_ai_difficulty = Session.Options.AIDifficulty;
-			_last_bases = Session.Options.Bases;
-			_last_bridge_destruction = Session.Options.BridgeDestruction;
-			_last_goodies = Session.Options.Goodies;
-			_last_mcv_redeploy = Session.Options.MCVRedeploy;
-			_last_short_game = Session.Options.ShortGame;
 			_last_game_speed = Session.Options.GameSpeed;
-			_last_crap_engineers = Session.Options.CrapEngineers;
-			_last_allies_allowed = Session.Options.AlliesAllowed;
-			_last_harvester_truce = Session.Options.HarvTruce;
-			_last_capture_the_flag = Session.Options.CTF;
-			_last_fog_of_war = Session.Options.FogOfWar;
-			strcpy(_last_scenario_description, Session.Options.ScenarioDescription);
+			_last_credits = Session.Options.Credits;
+			_last_unit_count = Session.Options.UnitCount;
+			_last_short_game = Session.Options.ShortGame;
+			_last_sw_allowed = Session.Options.SWAllowed; // RA2: as above
+			_last_build_off_ally = Session.Options.BuildOffAlly; // RA2: as above
+			_last_mcv_redeploy = Session.Options.MCVRedeploy;
+			_last_crates = Session.Options.Goodies; // RA2: as above
+			wcscpy(_last_scenario_description, Session.Options.ScenarioDescription); // RA2: as above
 			strcpy(_last_scenario_digest, Session.ScenarioDigest);
 			strcpy(_last_scenario_file_name, Session.ScenarioFileName);
 			_last_scenario_file_length = Session.ScenarioFileLength;
 			_last_scenario_is_official = Session.ScenarioIsOfficial;
 
-			char buffer[513];
+			char buffer[520]; // RA2: as above
 			memset(buffer, '\0', sizeof(buffer));
 
 			if (g_pChat != NULL) {
 				Encode_Game_Options(buffer);
+				Send_Host_Option(buffer); // RA2: as above
 			} else {
 				Net2EncodeGameopt(buffer);
+				Send_Host_Option(buffer); // RA2: as above
 			}
-
-			SendPublicGameopts(buffer);
 		}
 	}
 }
+
+
+/// <summary>
+/// Reminds the guests that the host is about to start the game.
+/// A reminder packet goes to every other player of the lobby over the network layer.
+/// </summary>
+void Send_Start_Reminder(void) // RA2: 0x005C3AE0, TibSun has no such routine
+{
+	GlobalPacketType packet;
+	memset(&packet, 0, sizeof(packet));
+	packet.Command = NET_COMMAND_28; // RA2: as above
+	strcpy(packet.Name, Session.Handle);
+	int count = Session.Players.Count(); // RA2: as above
+	for (int i = 1; i < count; i++) { // RA2: as above
+		Ipx.Send_Global_Message(&packet, sizeof(packet), 1, &Session.Players[i]->Address, 0, 0); // RA2: as above
+		Call_Back();
+	}
+}
+
+/// <summary>
+/// Sends the start reminder through whichever layer the game is played over.
+/// </summary>
+void __fastcall Dispatch_Game_Mode(void) // RA2: 0x005C3B70, TibSun has no such routine
+{
+	switch (Session.Type) {
+		case GAME_IPX:
+			Send_Start_Reminder(); // RA2: as above
+			break;
+
+		case GAME_INTERNET:
+			Wol_Send_Start_Reminder(); // RA2: as above
+			break;
+	}
+}
+
+/// <summary>
+/// Handles the host's start reminder in the guest's lobby.
+/// The guest is marked as reminded and told, through the chat service or the network layer.
+/// </summary>
+void __fastcall Handle_Start_Reminder(void) // RA2: 0x005C3C20, TibSun has no such routine
+{
+	Session.IsStartReminded = true; // RA2: as above
+	if (g_pChat != NULL) {
+		Wol_Handle_Start_Reminder(); // RA2: as above
+	} else {
+		Join_Lobby_Start_Reminder(); // RA2: as above
+	}
+}
+
+/// <summary>
+/// Handles the host taking the start reminder back in the guest's lobby.
+/// The reminded mark is cleared and the ready button is reset, through the chat service or the network layer.
+/// </summary>
+void __fastcall Handle_Reset_Ready(void) // RA2: 0x005C3C40, TibSun has no such routine
+{
+	Session.IsStartReminded = false; // RA2: as above
+	if (g_pChat != NULL) {
+		Wol_Reset_Ready(); // RA2: as above
+	} else {
+		Join_Lobby_Reset_Ready(); // RA2: as above
+	}
+}
+
+
+
+
 
 
 /// <summary>
@@ -690,25 +887,29 @@ void PumpGameopts(bool force, bool now)
 /// network layer, so the game options only have to be encoded once.
 /// </summary>
 /// <param name="options">The encoded option string to send.</param>
-void SendPublicGameopts(char const * options)
+void __fastcall Send_Host_Option(char * options) // RA2: 0x005C3C60, the options go out as a plain string and the player color is the preferred one; main names it Send_Host_Option (netdlg2.cpp)
 {
 	if (g_pChat != NULL) {
-		g_pChat->RequestPublicGameOptions((LPCSTR)options);
+		char buffer[0x400]; // RA2: as above
+		strncpy(buffer, options, 0x3ff); // RA2: as above
+		g_pChat->RequestPublicGameOptions((LPCSTR)buffer); // RA2: as above
 	} else {
 		GlobalPacketType packet;
 		memset(&packet, 0, sizeof(packet));
 		packet.Command = NET_PUB_GAMEOPT;
 		strcpy(packet.Name, Session.Handle);
 		strcpy(packet.Options.Buf, options);
-		packet.Options.Color = Session.ColorIdx;
+		packet.Options.Color = Session.PrefColor; // RA2: as above
 		packet.Options.NameCRC = Compute_Name_CRC(Session.GameName);
 		for (int i = 1; i < Session.Players.Count(); i++) {
-			DebugString("Sending public game options to %s\n", Session.Players[i]->Name);
-			Ipx.Send_Global_Message(&packet, sizeof(packet), 1, &Session.Players[i]->Address);
+			NodeNameType * node = Session.Players[i]; // RA2: as above
+			DebugString("Sending public game options to %s\n", Wide_To_Narrow(node->Name)); // RA2: as above
+			Ipx.Send_Global_Message(&packet, sizeof(packet), 1, &node->Address, 0, 0); // RA2: as above
 			Call_Back();
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -718,7 +919,7 @@ void SendPublicGameopts(char const * options)
 /// </summary>
 /// <param name="player">Name of the player to send the options to.</param>
 /// <param name="options">The encoded option string to send.</param>
-void SendPrivateGameopts(char const * player, char const * options)
+void __fastcall Send_Player_Choice(char const * player, char const * options) // RA2: 0x005C3D90, the packet carries the chosen color and the wide host name; main names it Send_Player_Choice (netdlg2.cpp)
 {
 	if (g_pChat != NULL) {
 		User user;
@@ -726,21 +927,56 @@ void SendPrivateGameopts(char const * player, char const * options)
 		strcpy((char *)user.name, player);
 		g_pChat->RequestPrivateGameOptions(&user, (LPCSTR)options);
 	} else {
-		memset(&Session.GPacket, 0, sizeof(Session.GPacket));
-		Session.GPacket.Command = NET_PRIV_GAMEOPT;
-		strcpy(Session.GPacket.Name, Session.Handle);
-		strcpy(Session.GPacket.Options.Buf, options);
-		Session.GPacket.Options.Color = Session.ColorIdx;
+		GlobalPacketType packet;
+		memset(&packet, 0, sizeof(packet));
+		packet.Command = NET_PRIV_GAMEOPT; // RA2: as above
+		strcpy(packet.Name, Session.Handle);
+		strcpy(packet.Options.Buf, options);
+		Session.GPacket.Options.Color = Session.Chosen_Color(); // RA2: as above
 		Session.GPacket.Options.NameCRC = Compute_Name_CRC(Session.GameName);
 		for (int i = 1; i < Session.Players.Count(); i++) {
-			if (stricmp(Session.Players[i]->Name, player) == 0) {
-				DebugString("Sending private game options to %s\n", Session.Players[i]->Name);
-				Ipx.Send_Global_Message(&Session.GPacket, sizeof(Session.GPacket), 1, &Session.Players[i]->Address);
+			if (stricmp(Wide_To_Narrow(Session.Players[i]->Name), player) == 0) { // RA2: as above
+				DebugString("Sending private game options to %ls\n", Session.Players[i]->Name); // RA2: as above
+				Ipx.Send_Global_Message(&packet, sizeof(packet), 1, &Session.Players[i]->Address, 0, 0); // RA2: as above
 				Call_Back();
 			}
 		}
 	}
 }
+
+
+/// <summary>
+/// Records whether a player has the host's map.
+/// The state is kept with the player; when a player lacks the map or is being sent it, the lobby
+/// chat says so. The host always has the map.
+/// </summary>
+/// <param name="name">Name of the player, or NULL for the local player.</param>
+/// <param name="state">The map state: 0 for none, 1 for present, 2 for being transferred.</param>
+void __fastcall Set_Player_Map_State(char const * name, int state) // RA2: 0x005C3F00, TibSun has no such routine
+{
+	if (name == NULL) { // RA2: as above
+		name = Session.Handle; // RA2: as above
+	}
+	if (wcscmp(Narrow_To_Wide(name), Session.GameName) == 0) { // RA2: as above
+		state = 1; // RA2: as above
+	}
+	int found = -1;
+	for (int i = 0; i < Session.Players.Count(); i++) { // RA2: as above
+		if (stricmp(Wide_To_Narrow(Session.Players[i]->Name), name) == 0) { // RA2: as above
+			found = i; // RA2: as above
+			break;
+		}
+	}
+	if (found != -1) { // RA2: as above
+		Session.Players[found]->Slot.Unknown7F = state; // RA2: as above
+		if (state == 0) { // RA2: as above
+			Lobby_Chat_Printf(-1, StringTable::LoadString("GUI:HostNoMap", NULL, "D:\\Ra2\\netshare.cpp", 1115), Session.Players[found]->Name, Session.Options.ScenarioDescription); // RA2: as above
+		} else if (state == 2) { // RA2: as above
+			Lobby_Chat_Printf(-1, StringTable::LoadString("GUI:HostMapTransfer", NULL, "D:\\Ra2\\netshare.cpp", 1119), Session.Players[found]->Name, Session.Options.ScenarioDescription); // RA2: as above
+		}
+	}
+}
+
 
 
 /// <summary>
@@ -911,22 +1147,22 @@ bool DecodePubGameopt(char * options, char * name)
 		strncpy(Session.ScenarioDigest, digest, sizeof(Session.ScenarioDigest)-1);
 	}
 
-	if (!same_scenario || strlen(Session.Options.ScenarioDescription) == 0) {
+	if (!same_scenario || wcslen(Session.Options.ScenarioDescription) == 0) { // RA2: the scenario description is wide
 		same_scenario = false;
 		bool found = false;
 		for (int i = 0; i < Session.Scenarios.Count(); i++) {
 			MultiMission * scenario = Session.Scenarios[i];
 			if (stricmp(Session.ScenarioFileName, scenario->Get_Filename()) == 0 && stricmp(Session.ScenarioFileName, RANDOM_MAP_FILE_NAME) != 0) {
-				strcpy(Session.Options.ScenarioDescription, scenario->Description());
+				wcscpy(Session.Options.ScenarioDescription, scenario->Description()); // RA2: the scenario description is wide
 				found = true;
 				break;
 			}
 		}
 		if (!found && scenario_description != NULL) {
-			strcpy(Session.Options.ScenarioDescription, scenario_description);
+			wcscpy(Session.Options.ScenarioDescription, Narrow_To_Wide(scenario_description)); // RA2: the scenario description is wide
 		}
 		if (stricmp(Session.ScenarioFileName, RANDOM_MAP_FILE_NAME) == 0) {
-			strcpy(Session.Options.ScenarioDescription, Fetch_String(TXT_RANDOM_MAP_DESCRIPTION));
+			wcscpy(Session.Options.ScenarioDescription, Narrow_To_Wide(Fetch_String(TXT_RANDOM_MAP_DESCRIPTION))); // RA2: the scenario description is wide
 		}
 	}
 
@@ -946,7 +1182,7 @@ bool DecodePubGameopt(char * options, char * name)
 	}
 
 	if (digest == NULL) {
-		PMessagePrintf(-1, "Gameopt parse failed");
+		Lobby_Chat_Printf(-1, L"Gameopt parse failed"); // RA2: the chat lines are wide
 	}
 
 	for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -963,7 +1199,7 @@ bool DecodePubGameopt(char * options, char * name)
 		int color = atol(token);
 
 		if (stricmp(handle, Session.Handle) == 0 && color != Session.PrefColor && !IsColorChangePending) {
-			PMessagePrintf(-1, Fetch_String(TXT_COLOR_IN_USE));
+			Lobby_Chat_Printf(-1, Narrow_To_Wide(Fetch_String(TXT_COLOR_IN_USE))); // RA2: the chat lines are wide
 			Session.PrefColor = color;
 		}
 
@@ -980,7 +1216,7 @@ bool DecodePubGameopt(char * options, char * name)
 
 	free(string);
 
-	DisplayGameopts(GameoptWindow(), false);
+	Fill_Options_Dialog(GameoptWindow(), false); // RA2: main names the function at 0x005C3550 Fill_Options_Dialog
 
 	if (_last_unit_count != Session.Options.UnitCount) do_decode = true;
 	if (_last_tech_level != BuildLevel) do_decode = true;
@@ -1014,11 +1250,11 @@ bool DecodePubGameopt(char * options, char * name)
 				Net2SetAccept(NULL, 0);
 			}
 
-			PMessagePrintf(-1, Fetch_String(TXT_HOST_CHANGED_OPTIONS));
+			Lobby_Chat_Printf(-1, Narrow_To_Wide(Fetch_String(TXT_HOST_CHANGED_OPTIONS))); // RA2: the chat lines are wide
 
 			char buffer[64];
 			sprintf(buffer, "A0");
-			SendPublicGameopts(buffer);
+			Send_Host_Option(buffer); // RA2: main names the function at 0x005C3C60 Send_Host_Option
 
 			EnableWindow(GetDlgItem(GameoptWindow(), IDC_ACCEPT), TRUE);
 			InvalidateRect(GetDlgItem(GameoptWindow(), IDC_ACCEPT), NULL, FALSE);
@@ -1563,7 +1799,7 @@ bool Set_Scenario_Info_From_Index(int index)
 
 	if (unavailable) {
 		if (CD::Get_Required_Disk() != DISK_LOCAL) {
-			if (!Session.Scenarios[index]->Is_On_CD(CD::Get_Current_Disk()) && !CD().Force_Available(Session.Scenarios[index]->On_Which_CD())) {
+			if (!Session.Scenarios[index]->Is_On_CD(CD::Get_Current_Disk(0)) && !CD().Force_Available(Session.Scenarios[index]->On_Which_CD())) { // RA2: the current disk is asked for with a timeout
 				return(false);
 			}
 		} else {
@@ -1572,7 +1808,7 @@ bool Set_Scenario_Info_From_Index(int index)
 		}
 	}
 
-	strcpy(Session.Options.ScenarioDescription, Session.Scenarios[index]->Description());
+	wcscpy(Session.Options.ScenarioDescription, Session.Scenarios[index]->Description()); // RA2: the scenario description is wide
 	strcpy(Session.ScenarioDigest, (Session.Scenarios[index])->Get_Digest());
 	strcpy(Session.ScenarioFileName, (Session.Scenarios[index])->Get_Filename());
 	strcpy(Scen->ScenarioName, Session.ScenarioFileName);
@@ -1709,7 +1945,7 @@ char * CalcRandomMapDigest(void)
 
 	/// Hash all of SeedData except UseTransitions
 	data = (unsigned char *)&RandomMapGen.SeedData.Biome;
-	size = (sizeof(RandomMapGen.SeedData) - offsetof(MapSeedClass, Biome) - sizeof(RandomMapGen.SeedData.UseTransitions));
+	size = (sizeof(RandomMapGen.SeedData) - offsetof(MapSeedClass, Biome)); // RA2: the digest covers everything from Biome on
 	memset(RandomMapGen.SeedData.MapDescription, '\0', sizeof(description));
 
 	while (size > 0) {
@@ -1783,7 +2019,7 @@ int CreateRandomMap(void)
 
 	if (!found) {
 		char * digest = CalcRandomMapDigest();
-		MultiMission * scenario = new MultiMission(RANDOM_MAP_FILE_NAME, RandomMapGen.SeedData.MapDescription, digest);
+		MultiMission * scenario = new MultiMission(RANDOM_MAP_FILE_NAME, RandomMapGen.SeedData.MapDescription, digest, true, NULL, 2, 4); // RA2: the constructor takes the official flag, game modes and the player range
 		Session.Scenarios.Add(scenario);
 		delete digest;
 	} else {

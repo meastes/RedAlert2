@@ -33,8 +33,7 @@ extern struct IDownload * g_pDownload;
 unsigned int Wstring_Hash(Wstring & string);
 unsigned int Wstring_Hash(WideWstring & string);
 
-void __cdecl PMessagePrintf(int color, const wchar_t * fmt, ...);
-void __cdecl PMessagePrintf(int color, const char * fmt, ...);
+void __cdecl Lobby_Chat_Printf(int color, const wchar_t * fmt, ...); // RA2: 0x005C2C80, named so by netdlg2.cpp
 void __cdecl SMessagePrintf(int color, const wchar_t * fmt, ...);
 
 void _DrawMessage(int color, const wchar_t * msg, HWND window);
@@ -42,11 +41,11 @@ void _SetMessageString(HWND window, const wchar_t * msg, int len, int color);
 
 HWND GameoptWindow(void);
 
-void PumpGameopts(bool, bool = false);
+void __fastcall Send_Lobby_Options(bool force, bool now = false); // RA2: 0x005C3810, named so by netdlg2.cpp
 bool DecodePubGameopt(char * options, char * name);
-void SendPublicGameopts(char const * options);
-void SendPrivateGameopts(char const * player, char const * options);
-void DisplayGameopts(HWND window, BOOL initialize);
+void __fastcall Send_Host_Option(char * options); // RA2: 0x005C3C60, named so by netdlg2.cpp
+void __fastcall Send_Player_Choice(char const * player, char const * options); // RA2: 0x005C3D90, named so by netdlg2.cpp
+void __fastcall Fill_Options_Dialog(HWND window, int initialize); // RA2: 0x005C3550, named so by netdlg2.cpp
 
 void LBSaveSelections(HWND win, Dictionary<WideWstring,bool> & lbdict);
 void LBRestoreSelections(HWND win, Dictionary<WideWstring,bool> & lbdict);

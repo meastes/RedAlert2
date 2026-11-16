@@ -20,7 +20,7 @@ bool WS_Destroy_Dialog(HWND window, int id);
 HWND WS_Find_Dialog(int id);
 BOOL WS_Has_Dialog(HWND window);
 
-int WS_Wait_Dialog(HWND window, bool (*callback)(void), bool=false, bool place_on_top=true);
+int WS_Wait_Dialog(HWND window, bool (*callback)(void), bool=false, bool place_on_top=true, bool show=true); // RA2: windlg.cpp defines the fifth parameter; ODMessageBox (0x005C3230) passes it
 
 HWND WS_Top_Window(void);
 int WS_Top_Window_ID(void);
