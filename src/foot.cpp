@@ -2523,14 +2523,13 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 	BuildingClass const * building = NULL;
 	ObjectClass *object = NULL;
 
-	enum {RA2_RADIO_REPAIR = 28, RA2_RADIO_ON_DEPOT = 35}; // RA2: the exe's message numbers (two extra messages sit at 26 and 27)
 
 	switch ((int)message) { // RA2: the cases mix main's enumerators with RA2's numbers
 
 		/*
 		**	Answers if this object is located on top of a service depot.
 		*/
-		case RA2_RADIO_ON_DEPOT: // RA2: number 35
+		case RADIO_ON_DEPOT: // RA2: number 35
 			building = Map[Center_Coord()].Cell_Building();
 			if (building == (RadioClass const *)from) {
 				return(RADIO_ROGER);
@@ -2541,7 +2540,7 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 		**	Intercept the repair request and if this object is moving, then no repair
 		**	is possible.
 		*/
-		case RA2_RADIO_REPAIR: // RA2: number 28
+		case RADIO_REPAIR: // RA2: number 28
 			if (NavCom != NULL) return(RADIO_NEGATIVE);
 			break;
 

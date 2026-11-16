@@ -154,10 +154,8 @@ static inline Cell Aircraft_Destination_Cell(AbstractClass * target, TechnoClass
 }
 
 
-enum {RA2_RADIO_WANT_RIDE = 36}; // RA2: the radio message number of the executable (two extra messages sit at 26 and 27)
 
 
-enum {RA2_RADIO_PREPARED = 29, RA2_RADIO_RELOAD = 31, RA2_RADIO_ALL_DONE = 33}; // RA2: the radio message numbers of the executable (two extra messages sit at 26 and 27)
 
 
 static inline bool Aircraft_Accepts_Radio(int mission) // RA2: an aircraft that retreats or paradrops answers no radio message
@@ -1534,7 +1532,7 @@ int AircraftClass::Do_MISSION_MOVE_Carryall(void)
 				}
 				if (Transmit_Message(RADIO_HELLO, target) == RADIO_ROGER) {
 					DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - RADIO_HELLO got RADIO_ROGER\n");
-					if (Transmit_Message((RadioMessageType)RA2_RADIO_WANT_RIDE) != RADIO_ROGER) { // RA2: RA2's message number 36
+					if (Transmit_Message(RADIO_WANT_RIDE) != RADIO_ROGER) { // RA2: RA2's message number 36
 						DebugString("Do_MISSION_MOVE_Carryall - VALIDATE_LZ - RADIO_WANT_RIDE did not get RADIO_ROGER\n");
 						Transmit_Message(RADIO_OVER_OUT);
 						Enter_Idle_Mode(false, true); // RA2: explicit arguments
@@ -2704,18 +2702,18 @@ RadioMessageType AircraftClass::Receive_Message(RadioClass * from, RadioMessageT
 
 	switch ((int)message) { // RA2: the message numbers are RA2's (two extra messages sit at 26 and 27)
 
-		case RA2_RADIO_RELOAD: // RA2: RA2's number
+		case RADIO_RELOAD: // RA2: RA2's number
 			if (Ammo >= (Class->MaxAmmo / 2) && TarCom != NULL) {
 				return(RADIO_ROGER);
 			}
 			return(BASECLASS::Receive_Message(from, message, param));
 
-		case RA2_RADIO_PREPARED: // RA2: RA2's number
+		case RADIO_PREPARED: // RA2: RA2's number
 			if (TarCom != NULL) return(RADIO_NEGATIVE);
 			if (Ammo == Class->MaxAmmo) return(RADIO_ROGER); // RA2: no height test
 			return(RADIO_NEGATIVE);
 
-		case RA2_RADIO_ALL_DONE: // RA2: RA2's number
+		case RADIO_ALL_DONE: // RA2: RA2's number
 			if (Ammo == Class->MaxAmmo) {
 				return(RADIO_ROGER);
 			}

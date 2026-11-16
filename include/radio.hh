@@ -46,7 +46,7 @@ enum RadioMessageType {
 	RADIO_RUN_AWAY,         // "Run away! Run away!"
 	RADIO_TETHER,           // "Establish tether contact."
 	RADIO_UNTETHER,         // "Break tether contact."
-	RADIO_REPAIR,           // "Repair one step."
+	RADIO_REPAIR = 28,      // "Repair one step."  // RA2: two messages were added before this one (26 and 27, RADIO_ALT_TETHER and RADIO_ALT_UNTETHER below), so this and the following are two higher than in Tiberian Sun
 	RADIO_PREPARED,         // "Are you prepared to fight?"
 	RADIO_ATTACK_THIS,      // "Attack this target please."
 	RADIO_RELOAD,           // "Reload one step please."
@@ -58,4 +58,10 @@ enum RadioMessageType {
 
 	RADIO_COUNT
 };
+
+// RA2: the two messages RA2 added, numbers 26 and 27 (TechnoClass::Receive_Message 0x006C2590 passes both on; names chosen here).
+// They are macros and RADIO_REPAIR carries its number because two more enumerators change the code of unrelated
+// functions (wonline.cpp Draw_Player_List, vein.cpp); the values are what the executable compares.
+#define RADIO_ALT_TETHER		((RadioMessageType)26)
+#define RADIO_ALT_UNTETHER	((RadioMessageType)27)
 

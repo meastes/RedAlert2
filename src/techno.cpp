@@ -220,7 +220,6 @@
 #include "stringtable.h" // RA2: Draw_Text_Overlay: StringTable::LoadString
 #include "dialog.h" // RA2: Draw_Text_Overlay: Simple_Text_Print
 #include "dsurface.h" // RA2: Draw_Text_Overlay: Build_Hicolor_Pixel
-enum {RA2_RADIO_ALT_TETHER = 26, RA2_RADIO_ALT_UNTETHER = 27, RA2_RADIO_REPAIR = 28, RA2_RADIO_ATTACK_THIS = 30, RA2_RADIO_RELOAD = 31, RA2_RADIO_CANT = 32, RA2_RADIO_ALL_DONE = 33}; // RA2: the radio message numbers of the executable (main's RadioMessageType lacks the two alternative tether messages at 26 and 27), Receive_Message
 bool __fastcall Can_Force_Order(void); // RA2: 0x6F6670 (uicmnds.cpp), Player_Assign_Mission
 void __fastcall Planning_Cancel_Token(TechnoClass * techno); // RA2: 0x6155E0 (planmgr.cpp), Captured
 Rect * Drawing_GetTextDimensions(Rect * out, wchar_t const * text, Point2D loc, unsigned short flags, int marginX, int marginY); // RA2: 0x497360 (dialog.cpp), Draw_Text_Overlay
@@ -1078,7 +1077,7 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	Just received instructions to attack the specified target.
 		*/
-		case RA2_RADIO_ATTACK_THIS: // RA2: the message numbers are RA2's (two alternative tether messages sit at 26 and 27)
+		case RADIO_ATTACK_THIS: // RA2: the message numbers are RA2's (two alternative tether messages sit at 26 and 27)
 			{
 				WeaponDataStruct const * weapon = GetTurretWeapon(); // RA2: needs a weapon on the turret in use
 				if (weapon == NULL || weapon->Weapon == NULL) { // RA2: as above
@@ -1120,20 +1119,20 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	The alternative tether, used by RA2's docking, works the same way on its own flag.
 		*/
-		case RA2_RADIO_ALT_TETHER: // RA2: as above
+		case RADIO_ALT_TETHER: // RA2: as above
 			if (IsAlternativeTether) { // RA2: as above
 				break;
 			}
 			IsAlternativeTether = true; // RA2: as above
-			Transmit_Message((RadioMessageType)RA2_RADIO_ALT_TETHER, from); // RA2: as above
+			Transmit_Message(RADIO_ALT_TETHER, from); // RA2: as above
 			return(RADIO_ROGER);
 
-		case RA2_RADIO_ALT_UNTETHER: // RA2: as above
+		case RADIO_ALT_UNTETHER: // RA2: as above
 			if (!IsAlternativeTether) { // RA2: as above
 				break;
 			}
 			IsAlternativeTether = false; // RA2: as above
-			Transmit_Message((RadioMessageType)RA2_RADIO_ALT_UNTETHER, from); // RA2: as above
+			Transmit_Message(RADIO_ALT_UNTETHER, from); // RA2: as above
 			return(RADIO_ROGER);
 
 		/*
@@ -1170,7 +1169,7 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	Handle reloading one ammo point for this unit.
 		*/
-		case RA2_RADIO_RELOAD: // RA2: RA2's number
+		case RADIO_RELOAD: // RA2: RA2's number
 			if (Ammo == Techno_Type_Class()->MaxAmmo) return(RADIO_NEGATIVE); // RA2: as above
 			Ammo++;
 			return(RADIO_ROGER);
@@ -1178,7 +1177,7 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	Handle repair of this unit.
 		*/
-		case RA2_RADIO_REPAIR: // RA2: RA2's number
+		case RADIO_REPAIR: // RA2: RA2's number
 
 			/*
 			**	Determine if this unit can be repaired becaause it is under strength. If so, then
@@ -1227,10 +1226,10 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 						int strength = Techno_Type_Class()->MaxStrength; // RA2: the estimate is set with the strength
 						Strength = strength; // RA2: as above
 						EstimatedHealth = strength; // RA2: as above
-						return((RadioMessageType)RA2_RADIO_ALL_DONE); // RA2: RA2's number
+						return(RADIO_ALL_DONE); // RA2: RA2's number
 					}
 				} else {
-					return((RadioMessageType)RA2_RADIO_CANT); // RA2: RA2's number
+					return(RADIO_CANT); // RA2: RA2's number
 				}
 			}
 			return(RADIO_NEGATIVE);
