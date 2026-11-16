@@ -186,6 +186,14 @@ class PlanningTokenClass
 		bool F99;
 };
 
+struct PlanningEventTargets : public EventClass // RA2: a view of an event for the planning helpers: its mission and its first target
+{
+	int CurrentMission(void) const {return (signed char)Data.MegaMission.Mission;}
+	TargetClass const & Target(void) const {return *(TargetClass const *)&Data.MegaMission.Target;}
+};
+bool __fastcall Planning_Add_Order(TechnoClass * techno, EventClass * event); // RA2: 0x614EC0; plans an order for a techno
+void __fastcall Planning_Execute(EventClass * event); // RA2: 0x614BA0; carries out a planning event
+
 class RGBClass; // RA2: the helpers below and the globals of the planning module
 
 struct PlanningPoint {
@@ -210,7 +218,12 @@ bool __fastcall Planning_Allows_Event_Type(int type); // RA2: 0x614B50
 void __stdcall Planning_Send_Event(EventClass event); // RA2: 0x614B70
 void __cdecl Planning_Hover(void); // RA2: 0x615C00 (not in this part yet)
 void __fastcall Planning_Refuse_Command(int kind); // RA2: 0x617250 (not in this part yet)
-bool __fastcall Planning_Mission_Allows(TechnoClass * techno); // RA2: 0x615A10 (not in this part yet)
+inline bool __fastcall Planning_Mission_Allows(TechnoClass * techno); // RA2: 0x615A10; expanded in Commit_Plans
+int __fastcall Planning_Order_Kind(TechnoClass * techno, PlanningEventTargets const * event); // RA2: 0x615A80 (not in this part yet); how an order relates to the path of the techno: 0 refused outright, 1 and 2 past a terminating or a continual order, -1 taken
+void __fastcall Planning_Path_Append(TechnoClass * techno, PlanningNodeClass * node); // RA2: 0x6165A0 (not in this part yet); gives the techno the rest of the path of the node's first member from the node on
+void __fastcall Planning_Copy_Members(PlanningNodeClass * node, PlanningNodeClass * from, EventClass event); // RA2: 0x6167F0 (not in this part yet); adds every member of one node to another, each with a copy of the event aimed at its techno
+void __fastcall Planning_Remove_Node(PlanningNodeClass * node); // RA2: 0x616960 (not in this part yet); takes a node out of the paths of its members
+void __fastcall Planning_Convert_Loop_Moves(TechnoClass * techno); // RA2: 0x616A50 (not in this part yet); in the path of the techno turns the move orders after the loop start into the other move mission (event mission 2 into 0x29)
 Rect __fastcall Planning_Centered_Rect(Point2D center, int size); // RA2: 0x6112D0; a size by size rectangle centered on a pixel
 
 inline void __fastcall Planning_Uncount(int house); // RA2: 0x616D20 (expanded where it is used); lowers the count of a house, never below 0

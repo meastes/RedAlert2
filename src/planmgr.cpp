@@ -1388,26 +1388,21 @@ bool Planning_Is_Active(void) // RA2: 0x00614840
 	return PlanningNodeClass::PlanningModeActive; // RA2: as above
 }
 
-static inline void Commit_Unit_Orders(TechnoClass * techno) // RA2: no function of its own; expanded in Commit_Plans
-{
-	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
-	if (token != NULL) { // RA2: as above
-		bool started = token->Has_Started(); // RA2: as above
-		token->Reset_Node_Colors(); // RA2: as above
-		bool permitted = Planning_Mission_Allows(techno); // RA2: as above
-		if (!started && permitted) { // RA2: as above
-			techno->TryNextPlanningTokenNode(); // RA2: as above
-		}
-	}
-}
-
-void __fastcall Commit_Plans(int house) // RA2: 0x00614850; for every object of a house: starts the path again when it is not under way and its mission allows it; not matched: the executable is 592 bytes with the expansion of TechnoClass::TryNextPlanningTokenNode (0x00615360, outside this part), this is 368
+void __fastcall Commit_Plans(int house) // RA2: 0x00614850; for every object of a house: starts the path again when it is not under way and its mission allows it; the expansion of TechnoClass::TryNextPlanningTokenNode (0x00615360) and of Planning_Mission_Allows stand in it
 {
 	int count = Technos.Count(); // RA2: as above
 	for (int i = 0; i < count; i++) { // RA2: as above
 		TechnoClass * techno = Technos[i]; // RA2: as above
 		if (house == Planning_House(techno)) { // RA2: as above
-			Commit_Unit_Orders(techno); // RA2: as above
+			PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+			if (token != NULL) { // RA2: as above
+				bool started = token->Has_Started(); // RA2: as above
+				token->Reset_Node_Colors(); // RA2: as above
+				bool permitted = Planning_Mission_Allows(techno); // RA2: as above
+				if (!started && permitted) { // RA2: as above
+					techno->TryNextPlanningTokenNode(); // RA2: as above
+				}
+			}
 		}
 	}
 }
@@ -1446,6 +1441,308 @@ void __stdcall Planning_Send_Event(EventClass event) // RA2: 0x00614B70; sends a
 		event.Data.MegaMission.IsPlanningEvent = true; // RA2: as above
 		Add_Outgoing_Event(event); // RA2: as above
 	}
+}
+
+extern void __fastcall Show_Player_Message(wchar_t const * text, int delay); // RA2: 0x006F58E0 (uicmnds); puts a text on the message list in the player's color, -1 for the default delay
+
+inline void __fastcall Planning_Message(char const * label) // RA2: 0x00616FB0 (expanded in Planning_Refuse); shows a text of the string table
+{
+	wchar_t const * text = StringTable::LoadString(label, NULL, "D:\\Ra2\\PlanMgr.cpp", 3231); // RA2: as above
+	Show_Player_Message(text, 0x1E0); // RA2: as above
+}
+
+inline void __fastcall Planning_Refuse(char const * label) // RA2: 0x00616FD0; shows a refusal once per frame and scolds
+{
+	if (!PlanningRefusalShown) { // RA2: as above
+		PlanningRefusalShown = true; // RA2: as above
+		Planning_Message(label); // RA2: as above
+		VocClass::PlayGlobal(Rule->ScoldSound, 1.0f, 0x2000); // RA2: as above
+	}
+}
+
+inline bool __fastcall Planning_Target_Fits(int mission, TargetClass target) // RA2: no function of its own; whether an attack or an area guard order aims at a cell or (for the area guard) at nothing
+{
+	if (mission == 1 || mission == 11) { // RA2: as above
+		do { // RA2: as above
+			if (RTTIType(target) == RTTI_CELL) { // RA2: as above
+				break; // RA2: as above
+			}
+			if (mission != 11 || target.Is_Valid()) { // RA2: as above
+				return false; // RA2: as above
+			}
+		} while (false); // RA2: as above
+		return true; // RA2: as above
+	}
+	return false; // RA2: as above
+}
+
+inline bool __fastcall Planning_Mission_Allows(TechnoClass * techno) // RA2: 0x00615A10; whether the current mission of a techno lets planning mode take over: guarding, or attacking or guarding an area with a cell or (for the area) nothing as the target
+{
+	if (techno) { // RA2: as above
+		int mission = techno->Get_Mission(); // RA2: as above
+		if (mission == 5) { // RA2: as above
+			return true; // RA2: as above
+		}
+		return Planning_Target_Fits(mission, TargetClass(techno->TarCom)); // RA2: as above
+	}
+	return false; // RA2: as above
+}
+
+inline void __fastcall Planning_Refuse_Order(EventClass const * event) // RA2: 0x00617020; says why planning mode refuses an order of this type
+{
+	if (event->Type == 9) { // RA2: as above
+		Planning_Refuse("MSG:PlanningModeNoDeploy"); // RA2: as above
+	} else if (event->Type == 6) { // RA2: as above
+		Planning_Refuse("MSG:PlanningModeNoStop"); // RA2: as above
+	} else if (event->Type == 7) { // RA2: as above
+		Planning_Refuse("MSG:PlanningModeNoScatter"); // RA2: as above
+	}
+}
+
+inline bool __fastcall Planning_Terminal_Mission(int mission) // RA2: 0x006159C0 (no function of its own); the missions that end a path
+{
+	return mission == 7 || mission == 8 || mission == 9; // RA2: as above
+}
+
+inline bool __fastcall Planning_Cell_Mission(int mission, TargetClass target) // RA2: 0x006159E0; an attack or an area guard aimed at a cell, or for the area guard at nothing
+{
+	if (mission == 1 || mission == 11) { // RA2: as above
+		if (RTTIType(target) == RTTI_CELL) { // RA2: as above
+			return true; // RA2: as above
+		}
+		if (mission == 11 && !target.Is_Valid()) { // RA2: as above
+			return true; // RA2: as above
+		}
+	}
+	return false; // RA2: as above
+}
+
+inline int __fastcall Planning_Event_Result(PlanningTokenClass * token, PlanningEventTargets const * event) // RA2: 0x006171E0; what planning mode shows for an order: 0 for one that ends the path, 2 at the last free node, -1 for none
+{
+	int mission = event->CurrentMission(); // RA2: as above
+	TargetClass const & target = event->Target(); // RA2: as above
+	if (Planning_Terminal_Mission(mission)) { // RA2: as above
+		return 0; // RA2: as above
+	}
+	if (Planning_Cell_Mission(mission, target)) { // RA2: as above
+		return 0; // RA2: as above
+	}
+	if (token->Node_Count() == 15) { // RA2: as above
+		return 2; // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
+inline bool Planning_Valid_House(int house) // RA2: no function of its own; whether a house number indexes the counters
+{
+	return house >= 0 && house < 8; // RA2: as above
+}
+
+inline void __fastcall Planning_Recount(int house) // RA2: 0x00616D00; raises the count of a house
+{
+	if (Planning_Valid_House(house)) { // RA2: as above
+		PlanningUnitCounts[house]++; // RA2: as above
+	}
+}
+
+inline void __fastcall Planning_Set_Pending_Refusal(int value) // RA2: 0x00617240; sets the refusal to show at the end of the frame
+{
+	PlanningPendingRefusal = value; // RA2: as above
+}
+
+inline bool Planning_Token_Looped(PlanningTokenClass * token) // RA2: no function of its own; the path of the token has closed a loop
+{
+	return token->Loop_Start_Positive() || token->Loop_Start_Zero(); // RA2: as above
+}
+
+inline void __fastcall Planning_Attach_Order(PlanningNodeClass * const & node, PlanningTokenClass * token, TechnoClass * techno, EventClass * event) // RA2: no function of its own; puts the techno on the node: with the members of the last node of its path, or alone
+{
+	PlanningNodeClass * last = token->Last_Node(); // RA2: as above
+	if (last) { // RA2: as above
+		Planning_Copy_Members(node, last, *event); // RA2: as above
+	} else { // RA2: as above
+		node->Add_Member(techno, event); // RA2: as above
+	}
+}
+
+PlanningTokenClass * __fastcall Planning_New_Token(TechnoClass * techno) // RA2: 0x00615820; makes the planning token of a techno and lists it
+{
+	PlanningTokenClass * token = new PlanningTokenClass(techno); // RA2: as above
+	PlanningTokenClass::Array.Add(token); // RA2: as above
+	techno->Set_Planning_Token(token); // RA2: as above
+	return token; // RA2: as above
+}
+
+inline int Planning_Token_Index(PlanningTokenClass * token, PlanningNodeClass * node) // RA2: no function of its own; the index of a node in the path of a token
+{
+	return token->Node_Index(node); // RA2: as above
+}
+
+inline void __fastcall Planning_Close_Loop(TechnoClass * techno, PlanningNodeClass * node) // RA2: 0x006164E0; makes the path of a techno loop back to a node
+{
+	int start = Planning_Token_Index(techno->Get_Planning_Token(), node); // RA2: as above
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	token->ClosedLoopNodeCount = token->PlanningNodes.Count() - start; // RA2: as above
+	token->StepsToClosedLoop = start; // RA2: as above
+	token->F98 = true; // RA2: as above
+	if (!PlanningLoopClosed) { // RA2: as above
+		if (techno->House->Is_Player_Control()) { // RA2: as above
+			PlanningLoopClosed = true; // RA2: as above
+			PlanningNodeClass * last = token->Last_Node(); // RA2: as above
+			int count = last->PlanningMembers.Count(); // RA2: as above
+			for (int i = 0; i < count; i++) { // RA2: as above
+				TechnoClass * member = last->PlanningMembers[i]->Owner; // RA2: as above
+				if (member->IsSelected) { // RA2: as above
+					member->Unselect(); // RA2: as above
+				}
+			}
+		}
+		Planning_Convert_Loop_Moves(techno); // RA2: as above
+	}
+	node->Update_Active(); // RA2: as above
+}
+
+inline void __fastcall Planning_Path_Add(TechnoClass * techno, PlanningNodeClass * node) // RA2: 0x00616350; puts a node on the path of a techno, closing the path into a loop when it holds the node already
+{
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	if (!token) { // RA2: as above
+		token = Planning_New_Token(techno); // RA2: as above
+	}
+	if (token->Node_Index(node) != -1) { // RA2: as above
+		Planning_Close_Loop(techno, node); // RA2: as above
+	} else { // RA2: as above
+		Planning_Path_Append(techno, node); // RA2: as above
+	}
+}
+
+inline PlanningNodeClass * __fastcall Planning_Find_Node(int house, int id, Coord coord) // RA2: 0x00615FB0; the planned node at a coordinate (of an id and a house unless -1)
+{
+	int count = PlanningNodeClass::Unknown1.Count(); // RA2: as above
+	for (int i = 0; i < count; i++) { // RA2: as above
+		PlanningNodeClass * node = PlanningNodeClass::Unknown1[i]; // RA2: as above
+		if (node->Lead_At(coord) && (id == -1 || id == node->Id)) { // RA2: as above
+			if (house == -1 || house == Planning_House(node->Member_Owner(0))) { // RA2: as above
+				return node; // RA2: as above
+			}
+		}
+	}
+	return NULL; // RA2: as above
+}
+
+void __fastcall Planning_Execute(EventClass * event) // RA2: 0x00614BA0; carries out a planning event: plan commit restarts the paths of the event's house, plan connect adds the node at the second target's coordinate to the first target's path, plan node delete takes the node at the target's coordinate out of every path (remembering the next node for the player); any other event is an order for its techno
+{
+	if (event->Type == EventClass::PLAN_COMMIT) { // RA2: as above
+		Commit_Plans(event->ID); // RA2: as above
+	} else if (event->Type == EventClass::PLAN_CONNECT) { // RA2: as above
+		TechnoClass * techno = event->Data.NavCom.Whom.As_Techno(); // RA2: as above
+		if (techno) { // RA2: as above
+			AbstractClass * object = event->Data.NavCom.Where.As_Abstract(); // RA2: as above
+			if (object) { // RA2: as above
+				Coord coord = object->As_Coord(); // RA2: as above
+				PlanningNodeClass * node = Planning_Find_Node(event->ID, -1, coord); // RA2: as above
+				if (node) { // RA2: as above
+					Planning_Path_Add(techno, node); // RA2: as above
+				}
+			}
+		}
+	} else if (event->Type == EventClass::PLAN_NODE_DELETE) { // RA2: as above
+		AbstractClass * object = event->Data.Target.Whom.As_Abstract(); // RA2: as above
+		if (object) { // RA2: as above
+			Coord coord = object->As_Coord(); // RA2: as above
+			int house = event->ID; // RA2: as above
+			PlanningNodeClass * node = Planning_Find_Node(house, -1, coord); // RA2: as above
+			if (node) { // RA2: as above
+				TechnoClass * owner = node->PlanningMembers[0]->Owner; // RA2: as above
+				int index = owner->Get_Planning_Token()->Node_Index(node); // RA2: as above
+				PlanningNodeClass * next = owner->Get_Planning_Token()->Node_At(index + 1); // RA2: as above
+				Planning_Remove_Node(node); // RA2: as above
+				if (next && house == PlayerPtr->HeapID) { // RA2: as above
+					PlanningSelectedNode = next; // RA2: as above
+				}
+			}
+		}
+	} else { // RA2: as above
+		TechnoClass * techno = event->Data.Target.Whom.As_Techno(); // RA2: as above
+		Planning_Add_Order(techno, event); // RA2: as above
+	}
+}
+
+bool __fastcall Planning_Add_Order(TechnoClass * techno, EventClass * event) // RA2: 0x00614EC0; plans an order for a techno: adds it to the node at the order's coordinate, or to a new node, unless the order or the techno's path refuses it
+{
+	if (!techno) { // RA2: as above
+		return false; // RA2: as above
+	}
+	bool player = event->ID == PlayerPtr->HeapID; // RA2: as above
+	Coord const & coord = Planning_Event_Coord(*event); // RA2: as above
+	if (coord == Coord(-1, -1, -1)) { // RA2: as above
+		return false; // RA2: as above
+	}
+	int id = event->Frame; // RA2: as above
+	PlanningNodeClass * node = Planning_Find_Node(event->ID, id, coord); // RA2: as above
+	if (node && node->Has_Member(techno)) { // RA2: as above
+		return true; // RA2: as above
+	}
+	int kind = Planning_Order_Kind(techno, (PlanningEventTargets const *)event); // RA2: as above
+	if (kind != -1) { // RA2: as above
+		if (!player) { // RA2: as above
+			return false; // RA2: as above
+		}
+		if (kind == 0) { // RA2: as above
+			Planning_Refuse_Order(event); // RA2: as above
+		} else if (kind == 1) { // RA2: as above
+			Planning_Refuse("MSG:PostTerminatingCommand"); // RA2: as above
+		} else if (kind == 2) { // RA2: as above
+			Planning_Refuse("MSG:PostContinualCommand"); // RA2: as above
+		}
+		return false; // RA2: as above
+	}
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	if (!token) { // RA2: as above
+		token = Planning_New_Token(techno); // RA2: as above
+	}
+	if (player) { // RA2: as above
+		int result = Planning_Event_Result(token, (PlanningEventTargets const *)event); // RA2: as above
+		if (result != -1) { // RA2: as above
+			Planning_Set_Pending_Refusal(result); // RA2: as above
+		}
+	}
+	if (Planning_Token_Looped(token)) { // RA2: as above
+		if (player) { // RA2: as above
+			Planning_Refuse("MSG:PostLoop"); // RA2: as above
+		}
+		return false; // RA2: as above
+	}
+	if (token->Node_Count() == 0) { // RA2: as above
+		PlanningTokenClass::Technos.Add(techno); // RA2: as above
+		Planning_Recount(event->ID); // RA2: as above
+	} else if (token->Node_Count() == 16) { // RA2: as above
+		if (player) { // RA2: as above
+			Planning_Refuse("MSG:NodeMaximum"); // RA2: as above
+		}
+		return false; // RA2: as above
+	}
+	if (!node) { // RA2: as above
+		node = new PlanningNodeClass(event->Frame); // RA2: as above
+		PlanningNodeClass::Unknown1.Add(node); // RA2: as above
+	}
+	Planning_Attach_Order(node, token, techno, event); // RA2: as above
+	if (player) { // RA2: as above
+		VocClass::PlayGlobal(Rule->AddPlanningModeCommandSound, 1.0f, 0x2000); // RA2: as above
+	}
+	return true; // RA2: as above
+}
+
+inline bool TechnoClass::TryNextPlanningTokenNode(void) // RA2: 0x00615360; starts carrying out the techno's planned path once: queues the planning mission, holds the token's first event and marks the token started
+{
+	PlanningTokenClass * token = Get_Planning_Token(); // RA2: as above
+	if (token != NULL && token->Node_Count() > 0 && (token->Get_F8C() == -1 || token->Get_F8C() > 0) && !token->Get_F1C()) { // RA2: as above
+		QueueMission(MISSION_WAIT, true); // RA2: as above
+		EventClass event = token->Pop_Front(); // RA2: as above
+		Planning_Store_Event(event); // RA2: as above
+		token->Set_F1C(); // RA2: as above
+		return true; // RA2: as above
+	}
+	return false; // RA2: as above
 }
 
 inline void __fastcall Planning_Uncount(int house) // RA2: 0x00616D20 (outside this part); lowers the count of a house, never below 0
