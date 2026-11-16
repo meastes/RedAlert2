@@ -49,6 +49,7 @@ int WestwoodOnline_PortNumber = 1234;
 #include "globals.h"
 #include "goptions.h"
 #include "house.h"
+#include "houstype.h" // RA2: HouseTypeClass::House, the country
 #include "infantry.h"
 #include "infatype.h"
 #include "internet.h"
@@ -61,9 +62,13 @@ int WestwoodOnline_PortNumber = 1234;
 #include "unit.h"
 #include "unittype.h"
 #include "win.h"
-#include "wolapi\wolapi.h"
+#include "wolapi.h" // RA2: main has the WOL API headers flat in include/
 #include "wonline.h"
 
+#define FIELD_SHORT_GAME						"SHRT" // RA2: new, replaces BASE
+#define FIELD_SUPER_WEAPONS						"SUPR" // RA2: new, replaces TIBR
+#define FIELD_GAME_MODE							"MODE" // RA2: new
+#define FIELD_BUILD_OFF_ALLY_MCV				"BAMR" // RA2: new
 #define FIELD_GAME_ID							"IDNO"
 #define FIELD_START_CREDITS						"CRED"
 #define FIELD_BASES								"BASE"
@@ -112,16 +117,24 @@ enum {
 /***************************************************************************
 **	Internet specific globals
 */
-bool								ConnectionLost;			//Flag that the connection to the other player was lost
-bool								GameTimerInUse = false;
-BasicTimerClass<SystemTimerClass>	GameTimer;
-int								GameEndTime;
-void								*PacketLater = NULL;
+BasicTimerClass<SystemTimerClass>	GameTimer; // RA2: 0x00ABD4C0, its constructor is this unit's first code (0x00698CD0)
+int								GameEndTime; // RA2: 0x00ABD4E0
+bool								GameTimerInUse = false; // RA2: 0x00ABD52C
+void								*PacketLater = NULL; // RA2: 0x00ABD530
 
-int Get_Unit_Count(int *buf, int count);
+extern HouseClass * ObserverHouse; // RA2: 0x00A72D28, the house of the observer (the player with team -1), set up in scenario.cpp
+extern int g_WDTGameSKU; // RA2: 0x00B2668C, 0x2300, the product of the tournament ladder, set at game start in wonline.cpp
+extern long GameStartTime; // RA2: 0x00B2A638, time(0) when the game started
+extern char GameHostName[]; // RA2: 0x00B2A808, the name of the first user of the channel, the host
+extern char g_WDTServerHost[]; // RA2: 0x00B2AB00, the address of the second results server, from the server list
+extern int g_WDTServerPort; // RA2: 0x00B28DD4, its port
+extern int Online_Session_State; // RA2: 0x00A3D2A4, 2 in a tournament session (as in ownrdraw.cpp)
+int __fastcall Get_Unit_Count(int *buf, int count); // RA2: 0x0069A110, defined after Send_Statistics_Packet
+extern int GameID; // RA2: 0x00B2A7FC, the game's number (mpcoop.cpp declares it the same way)
+extern int GameProduct; // RA2: 0x00B2AB84
+extern char PlayerNickname[]; // RA2: 0x00B2A6D8
 
-#define _GET_UNIT_TOTALS(tracker, tracker2) (void*) player->tracker2->Get_All_Totals(), Get_Unit_Count(player->tracker->Get_All_Totals(),player->tracker->Get_Unit_Count())*4
-#define GET_UNIT_TOTALS(tracker) (void*) player->tracker->Get_All_Totals(), Get_Unit_Count(player->tracker->Get_All_Totals(),player->tracker->Get_Unit_Count())*4
+#define GET_UNIT_TOTALS(tracker) (void*) player->tracker.Get_All_Totals(), Get_Unit_Count(player->tracker.Get_All_Totals(),player->tracker.Get_Unit_Count())*4 // RA2: as above
 
 /***********************************************************************************************
  * Send_Statistics_To_Server -- sends internet game statistics to the Westeood server          *
@@ -138,7 +151,7 @@ int Get_Unit_Count(int *buf, int count);
  *    5/29/96 12:38PM ST : Created                                                             *
  *=============================================================================================*/
 
-void Send_Statistics_Packet(void)
+void __fastcall Send_Statistics_Packet(bool alt_server) // RA2: 0x00698D00, __fastcall with a flag; true sends to the second results server and keeps the real product
 {
 //	DebugString( "Stats: Send_Statistics_Packet() called.\n" );
 #ifndef INTERNET_OFF // Denzil 5/4/98
@@ -146,9 +159,12 @@ void Send_Statistics_Packet(void)
 	PacketClass		stats;
 	unsigned int 	playercount = 0;
 	unsigned int 	statsid = 0;
+
+	if (ObserverHouse != NULL && PlayerPtr == ObserverHouse) { // RA2: nothing is sent when the local player is the observer
+		return; // RA2: as above
+	} // RA2: as above
 	HouseClass		*player;
 	static int		packet_size;
-	int				index;
 	unsigned int	i;
 	void			*packet;
 	unsigned int	temp;
@@ -157,6 +173,7 @@ void Send_Statistics_Packet(void)
 	static char	field_player_team[5] 				= { "SID?" };
 	static char	field_player_t_team[5] 				= { "TID?" };
 	static char	field_player_color[5]				= { "COL?" };
+	static char	field_player_country[5]				= { "CTY?" }; // RA2: the country field, after the color
 	static char field_player_credits[5]				= { "CRD?" };
 	static char field_player_units_left[5]			= { "UNL?" };
 	static char field_player_infantry_left[5]		= { "INL?" };
@@ -183,23 +200,30 @@ void Send_Statistics_Packet(void)
 	/*
 	**	Game ID. A unique game identifier assigned by WChat.
 	*/
-	stats.Add_Field(FIELD_GAME_ID, (unsigned int)WestwoodOnline_GameID);
+	stats.Add_Field(FIELD_GAME_ID, (unsigned int)GameID); // RA2: 0x00B2A7FC is GameID in this executable, not TibSun's WestwoodOnline_GameID
 
 	/*
 	**	Product SKU
 	*/
-	if (Session.IsWDT) {
-		stats.Add_Field(FIELD_GAME_SKU, (unsigned int)WestwoodOnline_GameSKU_WDT);
-	} else if (Addon_Installed(ADDON_FIRESTORM) && Addon_Enabled(ADDON_FIRESTORM)) {
-		stats.Add_Field(FIELD_GAME_SKU, (unsigned int)WestwoodOnline_GameSKU_FS);
-	} else {
-		stats.Add_Field(FIELD_GAME_SKU, (unsigned int)WestwoodOnline_GameSKU_TS);
-	}
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: a tournament session, not TibSun's Session.IsWDT
+		stats.Add_Field(FIELD_WDT_TERRITORY, Session.TournamentTerritory); // RA2: the territory is a signed int field and goes first here
+		if (alt_server) { // RA2: as above
+			stats.Add_Field(FIELD_GAME_SKU, (unsigned int)GameProduct); // RA2: as above
+		} else { // RA2: as above
+			stats.Add_Field(FIELD_GAME_SKU, (unsigned int)g_WDTGameSKU); // RA2: as above
+		} // RA2: as above
+	} else { // RA2: as above
+		stats.Add_Field(FIELD_GAME_SKU, (unsigned int)GameProduct); // RA2: as above
+	} // RA2: as above
 
 	/*
 	**	Whether or not this was a tournament game.
 	*/
 	stats.Add_Field(FIELD_TOURNAMENT, (unsigned int)WestwoodOnline_Tournament);
+
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2 && alt_server) { // RA2: the tournament flag is cleared once the second server has the results
+		WestwoodOnline_Tournament = 0; // RA2: as above
+	} // RA2: as above
 
 	/*
 	**
@@ -224,13 +248,25 @@ void Send_Statistics_Packet(void)
 
 	/*
 	**	Bases (On/Off)
+	**	Short game (On/Off)
 	*/
-	stats.Add_Field(FIELD_BASES, (unsigned char)(Session.Options.Bases != false));
+	stats.Add_Field(FIELD_SHORT_GAME, (unsigned char)(Session.Options.ShortGame != false)); // RA2: the field replaces TibSun's Bases
 
 	/*
 	**	Tiberium (On/Off)
+	**	Superweapons (On/Off)
 	*/
-	stats.Add_Field(FIELD_TIBERIUM, (unsigned char)(Session.Options.BridgeDestruction != false));
+	stats.Add_Field(FIELD_SUPER_WEAPONS, (unsigned char)(Session.Options.SWAllowed != false)); // RA2: the field replaces TibSun's Tiberium
+
+	/*
+	**	Game mode
+	*/
+	stats.Add_Field(FIELD_GAME_MODE, (unsigned int)Session.Options.MPModeIndex); // RA2: new
+
+	/*
+	**	Build off allies and MCV redeploy
+	*/
+	stats.Add_Field(FIELD_BUILD_OFF_ALLY_MCV, (unsigned int)(((Session.Options.BuildOffAlly == true) << 1) + (Session.Options.MCVRedeploy == true))); // RA2: new
 
 	/*
 	**	Crates (On/Off)
@@ -243,24 +279,9 @@ void Send_Statistics_Packet(void)
 	stats.Add_Field(FIELD_AI_PLAYERS, (unsigned int)Session.Options.AIPlayers);
 
 	/*
-	**	Shadow regrowth enabled
-	*/
-	stats.Add_Field(FIELD_SHADOW_REGROWS, (unsigned char)(Special.IsShadowGrow));
-
-	/*
-	**	Capture the flag mode (On/Off)
-	*/
-	stats.Add_Field(FIELD_CAPTURE_THE_FLAG, (unsigned char)(Special.IsCaptureTheFlag));
-
-	/*
 	**	Start unit count
 	*/
 	stats.Add_Field(FIELD_START_UNIT_COUNT, (unsigned int)Session.Options.UnitCount);
-
-	/*
-	**	Tech level.
-	*/
-	stats.Add_Field(FIELD_TECH_LEVEL, (unsigned int)BuildLevel);
 
 	/*
 	**	Scenario
@@ -278,19 +299,12 @@ void Send_Statistics_Packet(void)
 	stats.Add_Field(FIELD_PINGS_RECEIVED, (unsigned int)g_PingsReceived);
 
 	/*
-	 * WDT territory
-	 */
-	if (Session.IsWDT) {
-		stats.Add_Field(FIELD_WDT_TERRITORY, (unsigned int)Session.WDTTerritory);
-	}
-
-	/*
 	**
 	*/
 	HouseClass *houses[MAX_PLAYERS];
 	for (int h = 0; h < Houses.Count(); h++) {
 		HouseClass *ptr = Houses[h];
-		if (ptr->IsHuman){
+		if (ptr->IsHuman && ptr != ObserverHouse) { // RA2: the observer is not a player
 			houses[playercount] = ptr;
 			playercount++;
 		}
@@ -315,7 +329,7 @@ void Send_Statistics_Packet(void)
 	*/
 	for (i = 1; i < playercount; i++) {
 		HouseClass *ptr = houses[i];
-		if (strcmpi(ptr->IniName, WestwoodOnline_UserName) == 0) {
+		if (strcmpi(ptr->IniName, GameHostName) == 0) { // RA2: the host of the game goes first, not TibSun's user name
 			HouseClass *tmp = houses[0];
 			houses[0] = ptr;
 			houses[i] = tmp;
@@ -327,7 +341,7 @@ void Send_Statistics_Packet(void)
 	*/
 	for (i = 0; i < playercount; i++) {
 		HouseClass *ptr = houses[i];
-		if (strcmpi(ptr->IniName, WestwoodOnline_LoginName) == 0) {
+		if (strcmpi(ptr->IniName, PlayerNickname) == 0) { // RA2: the local nickname, not TibSun's login name
 			statsid = i;
 			break;
 		}
@@ -367,7 +381,7 @@ void Send_Statistics_Packet(void)
 	/*
 	**	Game start time (GMT or Pacific?)
 	*/
-	stats.Add_Field (FIELD_START_TIME, (int) WestwoodOnline_StartTime);
+	stats.Add_Field (FIELD_START_TIME, (int) GameStartTime); // RA2: the time the game started, not TibSun's WestwoodOnline_StartTime
 
 	/*
 	**	Avg. frame rate.
@@ -441,40 +455,41 @@ void Send_Statistics_Packet(void)
 	**	Build the player specific statistics
 	**
 	*/
-	for (unsigned house = 0 ; house < playercount; house++){
-		player = houses[(HousesType) (house)];
+	for (i = 0; i < playercount; i++) { // RA2: the loop counter is the function's i
+		player = houses[i]; // RA2: as above
+		char digit = '0' + (char)i; // RA2: the player's digit is computed once
 
 		/*
 		**	Player handle.
 		*/
-		field_player_handle[3] = '0' + (char)house;
+		field_player_handle[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_handle, (char*) player->IniName);
 
 		/*
 		 * Player IP Address.
 		 */
 		temp = player->IPAddress;
-		field_player_ip[3] = '0' + (char)house;
+		field_player_ip[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_ip, (unsigned int)(temp));
 
 		/*
 		 * Player clan.
 		 */
 		temp = player->SquadID;
-		field_player_clan[3] = '0' + (char)house;
+		field_player_clan[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_clan, (unsigned int)(temp));
 
 		/*
 		**	Player team. (NOD or GDI)
 		*/
-		field_player_team[3] = '0' + (char)house;
+		field_player_team[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_team, (unsigned int)player->ActLike);
 
 		/*
 		 * Player team.
 		 */
-		field_player_t_team[3] = '0' + (char)house;
-		temp = house;
+		field_player_t_team[3] = digit; // RA2: as above
+		temp = i; // RA2: as above
 		if (WestwoodOnline_Tournament == 2) {
 			temp = player->SquadID;
 		}
@@ -483,13 +498,13 @@ void Send_Statistics_Packet(void)
 		/*
 		 * Player completion.
 		 */
-		field_player_completion[3] = '0' + (char)house;
-		stats.Add_Field (field_player_completion, (unsigned int)(completion[house]));
+		field_player_completion[3] = digit; // RA2: as above
+		stats.Add_Field (field_player_completion, (unsigned int)(completion[i])); // RA2: as above
 
 		/*
 		 * LCN
 		 */
-		field_player_lost_connection[3] = '0' + (char)house;
+		field_player_lost_connection[3] = digit; // RA2: as above
 		bool lcn = false;
 		if (player->LostConnection && !player->IsResigner) {
 			lcn = true;
@@ -499,86 +514,92 @@ void Send_Statistics_Packet(void)
 		/*
 		**	Player color
 		*/
-		field_player_color[3] = '0' + (char)house;
+		field_player_color[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_color, (unsigned int) (player->Scheme));
+
+		/*
+		**	Player country.
+		*/
+		field_player_country[3] = digit; // RA2: the country is sent after the color
+		stats.Add_Field (field_player_country, (unsigned int)player->Class->House); // RA2: as above
 
 		/*
 		**	Player end credits.
 		*/
-		field_player_credits[3] = '0' + (char)house;
+		field_player_credits[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_credits, (int)player->Available_Money());
 
 		/*
 		**	Number of each unit/building type built
 		*/
-		field_player_infantry_bought[3] = '0' + (char)house;
-		field_player_units_bought[3] = '0' + (char)house;
-		field_player_planes_bought[3] = '0' + (char)house;
-		field_player_buildings_bought[3] = '0' + (char)house;
+		field_player_infantry_bought[3] = digit; // RA2: as above
+		field_player_units_bought[3] = digit; // RA2: as above
+		field_player_planes_bought[3] = digit; // RA2: as above
+		field_player_buildings_bought[3] = digit; // RA2: as above
 
-		player->InfantryTotals->To_Network_Format();
-		player->UnitTotals->To_Network_Format();
-		player->AircraftTotals->To_Network_Format();
-		player->BuildingTotals->To_Network_Format();
+		player->InfantryTotals.To_Network_Format(); // RA2: as above
+		player->UnitTotals.To_Network_Format(); // RA2: as above
+		player->AircraftTotals.To_Network_Format(); // RA2: as above
+		player->BuildingTotals.To_Network_Format(); // RA2: as above
 
 		stats.Add_Field (field_player_infantry_bought, GET_UNIT_TOTALS(InfantryTotals));
 		stats.Add_Field (field_player_units_bought, GET_UNIT_TOTALS(UnitTotals));
 		stats.Add_Field (field_player_planes_bought, GET_UNIT_TOTALS(AircraftTotals));
 		stats.Add_Field (field_player_buildings_bought, GET_UNIT_TOTALS(BuildingTotals));
 
-		player->InfantryTotals->To_PC_Format();
-		player->UnitTotals->To_PC_Format();
-		player->AircraftTotals->To_PC_Format();
-		player->BuildingTotals->To_PC_Format();
+		player->InfantryTotals.To_PC_Format(); // RA2: as above
+		player->UnitTotals.To_PC_Format(); // RA2: as above
+		player->AircraftTotals.To_PC_Format(); // RA2: as above
+		player->BuildingTotals.To_PC_Format(); // RA2: as above
 
 		/*
 		**	Clear out the counts and use the space to count up the current number of units/buildings
 		*/
-		player->InfantryTotals->Clear_Unit_Total();
-		player->AircraftTotals->Clear_Unit_Total();
-		player->UnitTotals->Clear_Unit_Total();
-		player->BuildingTotals->Clear_Unit_Total();
+		player->InfantryTotals.Clear_Unit_Total(); // RA2: as above
+		player->AircraftTotals.Clear_Unit_Total(); // RA2: as above
+		player->UnitTotals.Clear_Unit_Total(); // RA2: as above
+		player->BuildingTotals.Clear_Unit_Total(); // RA2: as above
 
 		/*
 		**	Number of units remaining to player
 		*/
+		int index; // RA2: declared where it is first used
 		for (index = 0; index < Units.Count(); index++) {
 			UnitClass const * unit = Units[index];
 			if (player == unit->House) {
-				player->UnitTotals->Increment_Unit_Total (unit->Class->HeapID);
+				player->UnitTotals.Increment_Unit_Total (unit->Class->HeapID); // RA2: as above
 			}
 		}
 
 		for (index = 0; index < Infantry.Count(); index++) {
 			InfantryClass const * infantry = Infantry[index];
 			if (player == infantry->House && !infantry->Class->IsCivilian) {
-				player->InfantryTotals->Increment_Unit_Total (infantry->Class->HeapID);
+				player->InfantryTotals.Increment_Unit_Total (infantry->Class->HeapID); // RA2: as above
 			}
 		}
 
 		for (index = 0; index < Aircraft.Count(); index++) {
 			AircraftClass const * aircraft = Aircraft[index];
 			if (player == aircraft->House) {
-				player->AircraftTotals->Increment_Unit_Total (aircraft->Class->HeapID);
+				player->AircraftTotals.Increment_Unit_Total (aircraft->Class->HeapID); // RA2: as above
 			}
 		}
 
-		for (index = 0; index < Buildings.Count(); index++) {
-			BuildingClass const * building = Buildings[index];
-			if (player == building->House) {
-				player->BuildingTotals->Increment_Unit_Total (building->Class->HeapID);
-			}
-		}
+		int count = player->Buildings.Count(); // RA2: the house's own building list, no test of the owner
+		for (index = 0; index < count; index++) { // RA2: as above
+			BuildingClass const * building = player->Buildings[index]; // RA2: as above
+			player->BuildingTotals.Increment_Unit_Total (building->Class->HeapID); // RA2: as above
+		} // RA2: as above
 
-		player->InfantryTotals->To_Network_Format();
-		player->UnitTotals->To_Network_Format();
-		player->AircraftTotals->To_Network_Format();
-		player->BuildingTotals->To_Network_Format();
+		player->InfantryTotals.To_Network_Format(); // RA2: as above
+		player->UnitTotals.To_Network_Format(); // RA2: as above
+		player->AircraftTotals.To_Network_Format(); // RA2: as above
+		player->BuildingTotals.To_Network_Format(); // RA2: as above
 
-		field_player_infantry_left[3] = '0' + (char)house;
-		field_player_units_left[3] = '0' + (char)house;
-		field_player_planes_left[3] = '0' + (char)house;
-		field_player_buildings_left[3] = '0' + (char)house;
+		field_player_infantry_left[3] = digit; // RA2: as above
+		field_player_units_left[3] = digit; // RA2: as above
+		field_player_planes_left[3] = digit; // RA2: as above
+		field_player_buildings_left[3] = digit; // RA2: as above
 
 		stats.Add_Field (field_player_infantry_left, GET_UNIT_TOTALS(InfantryTotals));
 		stats.Add_Field (field_player_units_left,GET_UNIT_TOTALS(UnitTotals));
@@ -588,39 +609,39 @@ void Send_Statistics_Packet(void)
 		/*
 		**	Number of enemy units/buildings of each type destroyed.
 		*/
-		player->DestroyedInfantry->To_Network_Format();
-		player->DestroyedUnits->To_Network_Format();
-		player->DestroyedAircraft->To_Network_Format();
-		player->DestroyedBuildings->To_Network_Format();
+		player->DestroyedInfantry.To_Network_Format(); // RA2: as above
+		player->DestroyedUnits.To_Network_Format(); // RA2: as above
+		player->DestroyedAircraft.To_Network_Format(); // RA2: as above
+		player->DestroyedBuildings.To_Network_Format(); // RA2: as above
 
-		field_player_infantry_killed[3] = '0' + (char)house;
-		field_player_units_killed[3] = '0' + (char)house;
-		field_player_planes_killed[3] = '0' + (char)house;
-		field_player_buildings_killed[3] = '0' + (char)house;
+		field_player_infantry_killed[3] = digit; // RA2: as above
+		field_player_units_killed[3] = digit; // RA2: as above
+		field_player_planes_killed[3] = digit; // RA2: as above
+		field_player_buildings_killed[3] = digit; // RA2: as above
 
-		stats.Add_Field (field_player_infantry_killed, _GET_UNIT_TOTALS(DestroyedInfantry, InfantryTotals));
-		stats.Add_Field (field_player_units_killed,_GET_UNIT_TOTALS(DestroyedUnits, UnitTotals));
-		stats.Add_Field (field_player_planes_killed, _GET_UNIT_TOTALS(DestroyedAircraft, AircraftTotals));
-		stats.Add_Field (field_player_buildings_killed, _GET_UNIT_TOTALS(DestroyedBuildings, BuildingTotals));
+		stats.Add_Field (field_player_infantry_killed, GET_UNIT_TOTALS(DestroyedInfantry) /* RA2: the count comes from the same tracker */); // RA2: as above
+		stats.Add_Field (field_player_units_killed,GET_UNIT_TOTALS(DestroyedUnits) /* RA2: the count comes from the same tracker */); // RA2: as above
+		stats.Add_Field (field_player_planes_killed, GET_UNIT_TOTALS(DestroyedAircraft) /* RA2: the count comes from the same tracker */); // RA2: as above
+		stats.Add_Field (field_player_buildings_killed, GET_UNIT_TOTALS(DestroyedBuildings) /* RA2: the count comes from the same tracker */); // RA2: as above
 
 		/*
 		**	Number and type of enemy buildings captured
 		*/
-		field_player_buildings_captured[3] = '0' + (char)house;
-		player->CapturedBuildings->To_Network_Format();
+		field_player_buildings_captured[3] = digit; // RA2: as above
+		player->CapturedBuildings.To_Network_Format(); // RA2: as above
 		stats.Add_Field (field_player_buildings_captured, GET_UNIT_TOTALS(CapturedBuildings));
 
 		/*
 		**	Number of crates discovered and their contents
 		*/
-		field_player_crates_found[3] = '0' + (char)house;
-		player->TotalCrates->To_Network_Format();
+		field_player_crates_found[3] = digit; // RA2: as above
+		player->TotalCrates.To_Network_Format(); // RA2: as above
 		stats.Add_Field (field_player_crates_found, GET_UNIT_TOTALS(TotalCrates));
 
 		/*
 		**	Amount of tiberium turned into credits
 		*/
-		field_player_harvested[3] = '0' + (char)house;
+		field_player_harvested[3] = digit; // RA2: as above
 		stats.Add_Field (field_player_harvested, (unsigned int) player->HarvestedCredits);
 	}
 
@@ -632,7 +653,13 @@ void Send_Statistics_Packet(void)
 	/*
 	**	Send it.....
 	*/
-	g_pNetUtil->RequestGameresSend(g_GameServerHost, g_GameServerPort, (unsigned char*)packet, packet_size);
+	if (g_pNetUtil != NULL) { // RA2: tested here
+		if (alt_server) { // RA2: the second server has its own address and port
+			g_pNetUtil->RequestGameresSend(g_WDTServerHost, g_WDTServerPort, (unsigned char*)packet, packet_size); // RA2: as above
+		} else { // RA2: as above
+			g_pNetUtil->RequestGameresSend(g_GameServerHost, g_GameServerPort, (unsigned char*)packet, packet_size); // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
 
 	/*
 	**	Save it to disk as well so I can see it
@@ -661,7 +688,7 @@ void Send_Statistics_Packet(void)
 /// <param name="count">The number of entries held in the tracker totals.</param>
 /// <returns>Returns with the entry count up to and including the last non-zero total.
 /// Zero is returned if the tracker recorded nothing at all.</returns>
-int Get_Unit_Count(int *buf, int count)
+int __fastcall Get_Unit_Count(int *buf, int count) // RA2: 0x0069A110, __fastcall (buf in ecx, count in edx)
 {
 	int n = 0;
 	for (int i = 0; i < count; i++) {
@@ -678,7 +705,7 @@ int Get_Unit_Count(int *buf, int count)
 /// This routine is called as the game begins so that the statistics gathering code has a
 /// running clock to measure the game against.
 /// </summary>
-void Register_Game_Start_Time(void)
+void __fastcall Register_Game_Start_Time(void) // RA2: 0x0069A130, __fastcall like the others declared in internet.h
 {
 	GameTimer = 0;
 	GameTimerInUse = true;
@@ -690,7 +717,7 @@ void Register_Game_Start_Time(void)
 /// This routine is called as the game ends and records how long the game ran, so that the
 /// statistics packet can report the duration and the average frame rate.
 /// </summary>
-void Register_Game_End_Time(void)
+void __fastcall Register_Game_End_Time(void) // RA2: 0x0069A160, __fastcall as declared in internet.h
 {
 	GameEndTime = GameTimer;
 	GameTimerInUse = false;
