@@ -4064,7 +4064,6 @@ address,symbol,evidence
 0x005C3C60,?Send_Host_Option@@YIXPAD@Z,"compiled from src/netshare.cpp, matched"
 0x005C3D90,?Send_Player_Choice@@YIXPBD0@Z,"compiled from src/netshare.cpp, matched"
 0x005C3F00,?Set_Player_Map_State@@YIXPBDH@Z,"compiled from src/netshare.cpp, matched"
-0x005C3FF0,?Net2DecodeGameopt@@YIXPBD0@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C5FF0,?LBSaveSelections@@YIXPAUHWND__@@AAV?$Dictionary@VWideWstring@@_N@@@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C6310,?LBRestoreSelections@@YIXPAUHWND__@@AAV?$Dictionary@VWideWstring@@_N@@@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C6600,?RandomMapWaypointCount@@YIHH@Z,"inferred: referenced by matched src/modemhst.cpp (2 references); across all matched code never at another address, and no other symbol here"

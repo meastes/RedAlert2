@@ -20,7 +20,7 @@ bool Set_Scenario_Info_From_Index(int index);
 void PregameSetup(void);
 void Update_Network_Dialog_Preview(HWND win);
 void Receive_Random_Map_Preview(void);
-void Send_Preview_To_Guests(void);
+void __fastcall Send_Map_Preview(MapPreviewClass * preview); // RA2: 0x005C7EF0, replaces TibSun's Send_Preview_To_Guests(void); named so by netdlg2.cpp
 int CountAliveTeams(HouseClass * house);
 
 int RandomMapWaypointCount(int index);
@@ -42,7 +42,7 @@ void _SetMessageString(HWND window, const wchar_t * msg, int len, int color);
 HWND GameoptWindow(void);
 
 void __fastcall Send_Lobby_Options(bool force, bool now = false); // RA2: 0x005C3810, named so by netdlg2.cpp
-bool DecodePubGameopt(char * options, char * name);
+bool __fastcall Net2DecodeGameopt(char const * options, char const * name); // RA2: 0x005C3FF0, replaces TibSun's DecodePubGameopt; named so by netdlg2.cpp; returns true when the scenario changed
 void __fastcall Send_Host_Option(char * options); // RA2: 0x005C3C60, named so by netdlg2.cpp
 void __fastcall Send_Player_Choice(char const * player, char const * options); // RA2: 0x005C3D90, named so by netdlg2.cpp
 void __fastcall Fill_Options_Dialog(HWND window, int initialize); // RA2: 0x005C3550, named so by netdlg2.cpp

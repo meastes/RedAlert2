@@ -152,7 +152,7 @@ void __fastcall Enable_Start_Button(void); // RA2: 0x005C9700
 bool __fastcall Is_Color_Taken(int color); // RA2: 0x005C95D0
 void __fastcall Release_Slot_By_Address(IPXAddressClass const & address); // RA2: 0x005C91C0
 int __fastcall Assign_Slot(NodeNameType * node); // RA2: 0x005C9170
-void __fastcall Net2DecodeGameopt(char const * options, char const * name); // RA2: 0x005C3FF0
+bool __fastcall Net2DecodeGameopt(char const * options, char const * name); // RA2: 0x005C3FF0, returns true when the scenario changed (the executable ends with sete al on its same flag), TibSun's DecodePubGameopt returns bool too
 void __fastcall Handle_Start_Reminder(void); // RA2: 0x005C3C20, the host's start message reached the joiner
 void __fastcall Handle_Mode_Selection(void); // RA2: 0x005C34F0
 void __fastcall Dispatch_Game_Mode(void); // RA2: 0x005C3B70

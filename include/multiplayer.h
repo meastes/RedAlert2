@@ -17,6 +17,7 @@ class CCINIClass;
 class NoInitClass;
 class HouseClass;
 class MultiMission;
+struct MPlayerScoreType;
 
 class MultiplayerTeam
 {
@@ -71,14 +72,14 @@ class MultiplayerGameMode
 		virtual void DrawTeamDropdown(HWND hwnd, DynamicVectorClass<MultiMission const *> * maps, MultiMission const * map);
 		virtual void PopulateTeamDropdownForPlayer(HWND hwnd, int index);
 		virtual bool vt_entry_44(int a, DynamicVectorClass<int> picks, int b) { return(false); }
-		virtual bool vt_entry_48(int a, DynamicVectorClass<int> picks, char const * map, char const * name, int b) { return(false); }
-		virtual bool vt_entry_4C(unsigned a, unsigned b, unsigned c) { return(true); }
+		virtual bool vt_entry_48(int a, DynamicVectorClass<int> picks, char const * map, char const * name) { return(false); } // RA2: four arguments (Net2DecodeGameopt pushes the index, the list by value and two names)
+		virtual bool vt_entry_4C(unsigned a, unsigned b, struct MPlayerScoreType * scores) { return(true); } // RA2: the third argument points to the two score records Net2DecodeGameopt filled
 		virtual bool vt_entry_50(void);
 		virtual bool vt_entry_54(void);
 		virtual bool vt_entry_58(void) { return(true); }
 		virtual int RandomHumanCountryIndex(void);
 		virtual int RandomAICountryIndex(void);
-		virtual void vt_entry_64(unsigned a, unsigned b) {}
+		virtual void vt_entry_64(unsigned a, char const * text) {} // RA2: Net2DecodeGameopt passes the digit after C and the rest of the text
 		virtual bool UnfixAlliances(void);
 		virtual bool StartingPositionsToHouseBaseCells(char unused);
 		virtual bool vt_entry_70(void);
