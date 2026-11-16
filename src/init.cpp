@@ -1733,7 +1733,7 @@ void Init_Random(void)
 	NonCriticalRandomNumber = Seed;
 }
 
-extern bool __fastcall Fill_Surface_Rect(Surface * surface, Rect const & rect, int color); // RA2: 0x006F3A20, fills a rectangle of a surface with a colour
+extern void __fastcall Draw_Interface_Screen(Surface * surface, Rect const & rect, bool arg3); // RA2: 0x006F3A20, draws the dialog frame and its backdrop (txtlabel2.cpp)
 
 /// <summary>
 /// Dims a surface and shows it.
@@ -1752,7 +1752,7 @@ void Darken_Surface(Surface * surface, bool update) // RA2: 0x005159B0, not in T
 	int height = surface->Get_Height(); // RA2: as above
 	Rect rect(0, 0, width, height); // RA2: as above
 	BSurface * work = new BSurface(width, height, 2); // RA2: as above
-	Fill_Surface_Rect(work, rect, false); // RA2: as above
+	Draw_Interface_Screen(work, rect, false); // RA2: as above
 	surface->Blit_From(*work, false, true); // RA2: as above
 	delete work; // RA2: as above
 	if (update) { // RA2: as above

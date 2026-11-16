@@ -512,7 +512,7 @@ int __fastcall IME_Service_Message(HWND hwnd, UINT message, WPARAM wParam, LPARA
 }
 
 extern int WideScreenThreshold;	// RA2: 0x007ADD70
-extern bool __fastcall Fill_Surface_Rect(Surface * surface, Rect const & rect, int color);	// RA2: 0x006F3A20
+extern void __fastcall Draw_Interface_Screen(Surface * surface, Rect const & rect, bool arg3);	// RA2: 0x006F3A20, draws the dialog frame and its backdrop (txtlabel2.cpp)
 extern Rect __fastcall Get_Title_Screen_Area(void);	// RA2: 0x006F1F30
 
 int IME_Get_Result(void)
@@ -572,7 +572,7 @@ void __fastcall Load_Title_Screen(char const * name, Surface * surface, PaletteC
 		int surface_height = surface->Get_Height();
 		Rect screen(0, 0, surface_width, surface_height);
 		BSurface * black = new BSurface(surface_width, surface_height, 2);
-		Fill_Surface_Rect(black, screen, 0);
+		Draw_Interface_Screen(black, screen, false);
 		surface->Blit_From(*black, false, true);
 		delete black;
 

@@ -171,8 +171,8 @@ extern Rect BriefingButtonRect; // RA2: 0x00AB6468
 extern Rect OptionsButtonRect; // RA2: 0x00AB6338
 extern ShapeButtonClass BriefingButton; // RA2: 0x00AB63E8
 extern ShapeButtonClass OptionsButton; // RA2: 0x00AB6380
-extern void const * RadarFrameShape; // RA2: 0x00AC0FF0
-extern void const * RadarAnimShape; // RA2: 0x00AC1070
+extern ShapeSet const * RadarFrameShape; // RA2: 0x00AC0FF0
+extern ShapeSet const * RadarAnimShape; // RA2: 0x00AC1070
 
 
 /***********************************************************************************************

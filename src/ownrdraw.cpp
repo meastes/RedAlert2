@@ -2837,18 +2837,18 @@ void *__fastcall Get_Alternate_Drawer(); // RA2: as above
 void *Get_Chat_Art(); // RA2: as above
 Point2D __fastcall Point_Copy(Point2D const *source); // RA2: as above
 void __cdecl Audio_Update(); // RA2: as above
-extern ShapeSet *Slide_Shape_E8; // RA2: as above
+extern ShapeSet *ArtSlideTop; // RA2: as above
 extern ShapeSet *Slide_Button_Shape; // RA2: as above
-extern ShapeSet *Slide_Shape_EC; // RA2: as above
-extern ShapeSet *Slide_Shape_B4; // RA2: as above
-extern ShapeSet *Slide_Shape_F0; // RA2: as above
+extern ShapeSet *ArtSlideMPButton; // RA2: as above
+extern ShapeSet *ArtSlideWarning; // RA2: as above
+extern void *ArtScoreTop; // RA2: as above
 extern ShapeSet *Art_Chat_Back; // RA2: as above
-extern int Art_Count; // RA2: as above
-extern Rect *Slide_Rect_B4; // RA2: as above
-extern Rect *Slide_Rect_B8; // RA2: as above
-extern Rect *Slide_Rect_BC; // RA2: as above
-extern Rect *Slide_Rect_C0; // RA2: as above
-extern Rect *Slide_Rect_C4; // RA2: as above
+extern int SlideButtonCount; // RA2: as above
+extern Rect *SlideButtonRect; // RA2: as above
+extern Rect *SlideMPButtonRect; // RA2: as above
+extern Rect *SlideWarningRect; // RA2: as above
+extern Rect *DialogBackRect; // RA2: as above
+extern Rect *SlideTopRect; // RA2: as above
 extern Rect *Button_Strip_Bottom; // RA2: as above
 
 namespace OwnerDraw { // RA2: as above
@@ -2921,19 +2921,19 @@ void __fastcall Slide_Dialog(HWND dialog, bool reverse) // RA2: as above
 
     ConvertClass *drawer = (ConvertClass *)Get_Drawer(); // RA2: as above
     ConvertClass *drawer_b = (ConvertClass *)Get_Alternate_Drawer(); // RA2: as above
-    ShapeSet *shape_e8 = Slide_Shape_E8; // RA2: as above
+    ShapeSet *shape_e8 = ArtSlideTop; // RA2: as above
     ShapeSet *shape_b8 = Slide_Button_Shape; // RA2: as above
-    ShapeSet *shape_ec = Slide_Shape_EC; // RA2: as above
-    ShapeSet *shape_b4 = Slide_Shape_B4; // RA2: as above
+    ShapeSet *shape_ec = ArtSlideMPButton; // RA2: as above
+    ShapeSet *shape_b4 = ArtSlideWarning; // RA2: as above
     ConvertClass *drawer_c = (ConvertClass *)Get_Chat_Art(); // RA2: as above
-    ShapeSet *shape_f0 = Slide_Shape_F0; // RA2: as above
-    int count = Art_Count; // RA2: as above
+    ShapeSet *shape_f0 = (ShapeSet *)ArtScoreTop; // RA2: as above
+    int count = SlideButtonCount; // RA2: as above
     Rect window = AlternateSurface->Get_Rect(); // RA2: as above
-    Rect rect_c4 = *Slide_Rect_C4; // RA2: as above
-    Rect rect_b8 = *Slide_Rect_B8; // RA2: as above
-    Rect rect_bc = *Slide_Rect_BC; // RA2: as above
-    Rect rect_b4 = *Slide_Rect_B4; // RA2: as above
-    Rect rect_c0 = *Slide_Rect_C0; // RA2: as above
+    Rect rect_c4 = *SlideTopRect; // RA2: as above
+    Rect rect_b8 = *SlideMPButtonRect; // RA2: as above
+    Rect rect_bc = *SlideWarningRect; // RA2: as above
+    Rect rect_b4 = *SlideButtonRect; // RA2: as above
+    Rect rect_c0 = *DialogBackRect; // RA2: as above
 
     RECT client;
     Get_Display_Rect(dialog, &client); // RA2: as above
