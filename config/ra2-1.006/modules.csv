@@ -709,7 +709,9 @@ unk_00736210,0x00736210,0x00736230,unknown,code not assigned to a module
 winfix,0x00736230,0x007371B0,tibsun,"functions compiled from src/winfix.cpp, matched, without gaps; one placed by the gap"
 unk_007371B0,0x007371B0,0x007373A0,unknown,code not assigned to a module
 winstub,0x007373A0,0x00738420,tibsun,"functions compiled from src/winstub.cpp, matched, without gaps; eight placed by the gap"
-unk_00738420,0x00738420,0x0073A8E0,unknown,code not assigned to a module
+unk_00738420,0x00738420,0x00738670,unknown,code not assigned to a module
+wolpersonainformation,0x00738670,0x0073A090,source,"functions compiled from src/wolpersonainformation.cpp, matched, without gaps; eight placed by the gap"
+unk_0073A090,0x0073A090,0x0073A8E0,unknown,code not assigned to a module
 unk_0073A8E0,0x0073A8E0,0x0073A900,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_0073A900,0x0073A900,0x0073C040,unknown,code not assigned to a module
 wonline,0x0073C040,0x0073FEE0,tibsun,"functions compiled from src/wonline.cpp, without gaps; matched except ?Encode_Game_Options@@YIXPAD@Z and ?WOL_Wait_Callback@@YI_NXZ and ?Reset_WOL_Globals@@YIXXZ; one placed by the gap; ?WOL_Wait_Callback@@YI_NXZ to ?Reset_WOL_Globals@@YIXXZ share the room between their neighbours; ?Close_Wait_Window@@YIXI@Z not placed; ?Reset_Wait_Events@@YIXXZ not placed"
