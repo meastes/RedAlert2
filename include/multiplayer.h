@@ -41,7 +41,16 @@ class MultiplayerGameMode
 			public:
 				InitializerBase(void);
 				virtual ~InitializerBase(void);
-				virtual MultiplayerGameMode * Allocate(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex) = 0;
+				virtual MultiplayerGameMode * Create(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex) = 0; // RA2: named Create by the instances at 0x005B9060..0x005B91A0 (was Allocate)
+		};
+
+		template<class T> class Initializer : public InitializerBase // RA2: one for each game mode class; Init_Game_Modes (0x005B8BD0) makes one of each, their Create are the functions at 0x005B9060..0x005B91A0
+		{
+			public:
+				virtual MultiplayerGameMode * Create(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex)
+				{
+					return(new T(title, tooltip, inifile, mapfilter, aiallowed, modeindex));
+				}
 		};
 
 		static MultiplayerGameMode * __fastcall Get(int index);
@@ -51,6 +60,7 @@ class MultiplayerGameMode
 		MultiplayerTeam * GetTeam(int index);
 		void DeleteTeams(void);
 		bool GenerateUnits(void); // RA2: 0x005B7CE0, gives every house its base unit and starting units
+		int TeamOfHouse(int house); // RA2: 0x005B8430, the team of the player that has the house, -1 when none does
 
 		MultiplayerGameMode(NoInitClass const &) {}
 		MultiplayerGameMode(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex);
