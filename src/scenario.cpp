@@ -186,6 +186,7 @@ void __fastcall AudioLevelMute(AudioLevel * level); // RA2: 0x406FA0
 void __fastcall AudioLevelWaitFade(AudioLevel * level); // RA2: 0x406FE0
 char * Wide_To_Narrow(wchar_t const * text); // RA2: 0x6FA120, static buffer (wonline.cpp declares it the same way)
 extern HouseClass * ObserverHouse; // RA2: 0x00A72D28, the house of the observer (stats.cpp and house.cpp declare it the same way)
+extern int GameID; // RA2: 0x00B2A7FC, the game's number (TXT_GAME_ID), as stats.cpp and mpcoop.cpp declare it
 Wstring Wstring_Narrow(WideWstring const & text); // RA2: 0x00771280 (wonline.cpp declares it the same way)
 extern int SavedSpeechVolume; // RA2: 0x7F1DEC, set to full volume with EVA's level when a scenario is cleared
 void __fastcall Set_Frame_Rate_Limit(int value); // RA2: 0x53D820 (logic.cpp)
@@ -910,7 +911,7 @@ bool Read_Scenario(char const * fname)
 		wchar_t prog_msg_buffer[130]; // RA2: as above
 
 		if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) {
-			swprintf(prog_msg_buffer, StringTable::LoadString("TXT_GAME_ID", NULL, "D:\\Ra2\\Scenario.CPP", 1303), WestwoodOnline_GameID); // RA2: as above
+			swprintf(prog_msg_buffer, StringTable::LoadString("TXT_GAME_ID", NULL, "D:\\Ra2\\Scenario.CPP", 1303), GameID); // RA2: as above
 			prog_msg = prog_msg_buffer; // RA2: as above
 		}
 
