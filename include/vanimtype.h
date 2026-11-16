@@ -36,7 +36,7 @@ class VoxelAnimTypeClass : public ObjectTypeClass
 		virtual RTTIType Fetch_RTTI(void) const override {return(RTTI_VOXELANIMTYPE);}
 		virtual int Fetch_Object_Size(void) const override {return(sizeof(*this));}
 
-		virtual bool Read_INI(CCINIClass & ini) override;
+		virtual bool Read_INI(CCINIClass const & ini) override; // RA2: const, so it overrides ObjectTypeClass::Read_INI (the executable calls it through slot 25)
 
 		virtual bool Create_And_Place(Cell const & cell, HouseClass * house) const override {return(false);}
 		virtual ObjectClass * Create_One_Of(HouseClass *) const override {return(NULL);}

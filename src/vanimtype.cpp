@@ -100,7 +100,7 @@ VoxelAnimTypeClass::~VoxelAnimTypeClass(void)
 /// of its own, or is borrowed from the body, turret or barrel of some other object type.
 /// </summary>
 /// <returns>bool; Was the data read from the database?</returns>
-bool VoxelAnimTypeClass::Read_INI(CCINIClass & ini)
+bool VoxelAnimTypeClass::Read_INI(CCINIClass const & ini) // RA2: const, as the base class declares it
 {
 	if (BASECLASS::Read_INI(ini)) {
 		IsNormalized = ini.Get_Bool(IniName, "Normalized", IsNormalized);
