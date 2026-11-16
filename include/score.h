@@ -103,7 +103,7 @@ class ScoreClass {
 		void Pulse_Bar_Graph(void);
 		void Print_Graph_Title(int,int);
 		void Print_Minutes(int time);
-		Rect Count_Up_Print(Surface * surf, char *str, int percent, int max, int xpos, int ypos);
+		Rect Count_Up_Print(Surface * surf, wchar_t const *str, int percent, int max, int xpos, int ypos); // RA2: 0x666DD0 takes the format as a wide string
 		void Show_Credits(void);
 		void Do_Graph(int gdikilled, int nodkilled, int ypos);
 		void Do_Nod_Casualties_Graph(void);
@@ -249,7 +249,7 @@ class ScorePrintClass : public ScoreAnimClass {
 		ScoreFontClass * Font;
 
 		ScorePrintClass(void const * string, int xpos, int ypos, ScoreFontClass * font, bool is_fully_lit);
-		ScorePrintClass( int string, int xpos, int ypos, ScoreFontClass * font, bool is_fully_lit);
+		// RA2: TibSun's string-id constructor is not in the executable (0x6680A0 is the only one), so it is gone
 		virtual ~ScorePrintClass(void) override {};
 		virtual bool Update(Surface * surf) override;
 
@@ -300,10 +300,12 @@ class ScoreFontClass
 		ScoreFontClass(void);
 		ScoreFontClass(int w, int h, void const * data, ConvertClass * drawer);
 		virtual ~ScoreFontClass(void);
-		virtual int Char_Width(char ch);
-		virtual int String_Width(const char * string);
-		virtual void Print_String(Surface *surf, const char * string, int x, int y, int brightness_frame);
-		virtual void Print_Char(Surface *surf, char ch, int x, int y, int v, bool play_sound);
+		virtual int Char_Width(wchar_t ch); // RA2: 0x667AA0 takes a wide character
+		virtual int String_Width(const wchar_t * string); // RA2: 0x667A60 takes a wide string
+		virtual void Print_String(Surface *surf, const wchar_t * string, // RA2: 0x667C70 takes a wide string
+			 int x, int y, int brightness_frame);
+		virtual void Print_Char(Surface *surf, wchar_t ch, // RA2: 0x667B60 takes a wide character
+			 int x, int y, int v, bool play_sound);
 
 		void Load_Sounds(void);
 		int Get_Width(void) { return(Width); }

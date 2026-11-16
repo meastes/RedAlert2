@@ -117,7 +117,7 @@ void ScoreClass::Presentation(void)
 	int index;
 	int total;
 	int x, y;
-	const char *str;
+	const wchar_t *str; // RA2: the font and print classes take wide strings (0x667A60/0x6680F0); the labels below are still cast from the narrow string table, as TibSun fetched them
 	ScoreAnimClass *obj;
 
 	CCFileClass file;
@@ -244,7 +244,7 @@ void ScoreClass::Presentation(void)
 	SurfacePtr->Blit_From(rect, *HiddenSurface, rect);
 	AlternateSurface->Blit_From(rect, *HiddenSurface, rect);
 
-	str = Fetch_String(TXT_MISSION_EFFICIENCY);
+	str = (const wchar_t *)Fetch_String(TXT_MISSION_EFFICIENCY); // RA2: as above
 	FullFont->String_Width(str);
 	x = XPos - FullFont->String_Width(str) / 2 + 552;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 13, FullFont, false));
@@ -273,7 +273,7 @@ void ScoreClass::Presentation(void)
 	SurfacePtr->Blit_From(rect, *HiddenSurface, rect);
 	AlternateSurface->Blit_From(rect, *HiddenSurface, rect);
 
-	str = Fetch_String(TXT_CURRENCY);
+	str = (const wchar_t *)Fetch_String(TXT_CURRENCY); // RA2: as above
 	FullFont->String_Width(str);
 	x = XPos - FullFont->String_Width(str) / 2 + 560;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 193, FullFont, false));
@@ -297,7 +297,7 @@ void ScoreClass::Presentation(void)
 	SurfacePtr->Blit_From(rect, *HiddenSurface, rect);
 	AlternateSurface->Blit_From(rect, *HiddenSurface, rect);
 
-	str = Fetch_String(TXT_MISSION_TIME_LAPSE);
+	str = (const wchar_t *)Fetch_String(TXT_MISSION_TIME_LAPSE); // RA2: as above
 	FullFont->String_Width(str);
 	x = XPos - FullFont->String_Width(str) / 2 + 542;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 366, FullFont, false));
@@ -323,7 +323,7 @@ void ScoreClass::Presentation(void)
 	/*
 	** Show stats on # of units killed
 	*/
-	str = Fetch_String(TXT_CASUALTIES);
+	str = (const wchar_t *)Fetch_String(TXT_CASUALTIES); // RA2: as above
 	FullFont->String_Width(str);
 	x = XPos - FullFont->String_Width(str) / 2 + 316;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 300, FullFont, false));
@@ -333,7 +333,7 @@ void ScoreClass::Presentation(void)
 	/*
 	** Print out stats on buildings destroyed
 	*/
-	str = Fetch_String(TXT_STRUCTURES);
+	str = (const wchar_t *)Fetch_String(TXT_STRUCTURES); // RA2: as above
 	x = XPos + 194;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 247, FullFont, false));
 	x = XPos + 328;
@@ -341,7 +341,7 @@ void ScoreClass::Presentation(void)
 
 	Wait_For_Print(obj);
 
-	str = Fetch_String(TXT_UNITS);
+	str = (const wchar_t *)Fetch_String(TXT_UNITS); // RA2: as above
 	x = XPos - FullFont->String_Width(str) / 2 + 290;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 247, FullFont, false));
 	x = XPos - FullFont->String_Width(str) / 2 + 422;
@@ -376,7 +376,7 @@ void ScoreClass::Presentation(void)
 	SurfacePtr->Blit_From(rect, *HiddenSurface, rect);
 	AlternateSurface->Blit_From(rect, *HiddenSurface, rect);
 
-	str = Fetch_String(TXT_BEST_SCORES);
+	str = (const wchar_t *)Fetch_String(TXT_BEST_SCORES); // RA2: as above
 	FullFont->String_Width(str);
 	x = XPos - FullFont->String_Width(str) / 2 + 84;
 	Alloc_Object(obj = new ScorePrintClass(str, x, YPos + 217, FullFont, false));
@@ -438,7 +438,7 @@ void ScoreClass::Presentation(void)
 	if (index < NUMFAMENAMES) {
 		Input_Name(hallfame[index].name, XPos + HALLFAME_X - 4, YPos + HALLFAME_Y + (index * 16));
 	} else {
-		str = Fetch_String(TXT_CLICK_CONTINUE);
+		str = (const wchar_t *)Fetch_String(TXT_CLICK_CONTINUE); // RA2: as above
 		x = XPos + (640 - FullFont->String_Width(str)) / 2;
 		y = YPos - FullFont->Get_Height() / 2 + 357;
 		Alloc_Object(obj = new ScorePrintClass(str, x, y, FullFont, false));
@@ -762,9 +762,9 @@ void ScoreClass::Do_Graph(int gkilled, int nkilled, int xpos)
 		if (gdicount <= gdikilled) {
 			trect.Set(xpos, i, 15, gdicount);
 			HiddenSurface->Blit_From(trect, *SurfacePtr, trect);
-			rect1 = Count_Up_Print(HiddenSurface, (char *)"%d", gdirun / maxval, gkilled, xpos, i);
+			rect1 = Count_Up_Print(HiddenSurface, L"%d", gdirun / maxval, gkilled, xpos, i);
 		} else {
-			rect1 = Count_Up_Print(HiddenSurface, (char *)"%d", gkilled, gkilled, xpos, ypos - gdikilled);
+			rect1 = Count_Up_Print(HiddenSurface, L"%d", gkilled, gkilled, xpos, ypos - gdikilled);
 		}
 
 		if (rect2.Is_Valid()) {
@@ -774,9 +774,9 @@ void ScoreClass::Do_Graph(int gkilled, int nkilled, int xpos)
 		if (nodcount <= nodkilled) {
 			trect.Set(xpos + 132, i, 15, nodcount);
 			HiddenSurface->Blit_From(trect, *SurfacePtr, trect);
-			rect2 = Count_Up_Print(HiddenSurface, (char *)"%d", nodrun / maxval, nkilled, xpos + 132, i);
+			rect2 = Count_Up_Print(HiddenSurface, L"%d", nodrun / maxval, nkilled, xpos + 132, i);
 		} else {
-			rect2 = Count_Up_Print(HiddenSurface, (char *)"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
+			rect2 = Count_Up_Print(HiddenSurface, L"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
 		}
 
 		DoSound("BarGraph", 96);
@@ -798,16 +798,16 @@ void ScoreClass::Do_Graph(int gkilled, int nkilled, int xpos)
 	}
 	trect.Set(xpos, ypos - gdikilled, 15, gdikilled);
 	AlternateSurface->Blit_From(trect, *SurfacePtr, trect);
-	Count_Up_Print(HiddenSurface, (char *)"%d", gkilled, gkilled, xpos, ypos - gdikilled);
-	Count_Up_Print(AlternateSurface, (char *)"%d", gkilled, gkilled, xpos, ypos - gdikilled);
+	Count_Up_Print(HiddenSurface, L"%d", gkilled, gkilled, xpos, ypos - gdikilled);
+	Count_Up_Print(AlternateSurface, L"%d", gkilled, gkilled, xpos, ypos - gdikilled);
 
 	if (rect2.Is_Valid()) {
 		HiddenSurface->Blit_From(rect2, *AlternateSurface, rect2);
 	}
 	trect.Set(xpos + 132, ypos - nodkilled, 15, nodkilled);
 	AlternateSurface->Blit_From(trect, *SurfacePtr, trect);
-	Count_Up_Print(HiddenSurface, (char *)"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
-	Count_Up_Print(AlternateSurface, (char *)"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
+	Count_Up_Print(HiddenSurface, L"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
+	Count_Up_Print(AlternateSurface, L"%d", nkilled, nkilled, xpos + 132, ypos - nodkilled);
 
 	Call_Back_Delay(20);
 }
@@ -852,7 +852,7 @@ void ScoreClass::Show_Credits(void)
  *=========================================================================*/
 void ScoreClass::Print_Minutes(int time)
 {
-	char str[20];
+	wchar_t str[20]; // RA2: 0x666C70 builds a wide string
 
 	//if ((time/60) > 9) time = (9*60 + 59);
 	if (((unsigned)time/3600) > 99) time = 359999;
@@ -863,7 +863,7 @@ void ScoreClass::Print_Minutes(int time)
 	time		-= minutes * 60;
 	int seconds	 = (unsigned)time;
 
-	sprintf(str, "%02ld:%02ld:%02ld", hours, minutes, seconds);
+	swprintf(str, L"%02ld:%02ld:%02ld", hours, minutes, seconds); // RA2: swprintf
 
 	int x = XPos - (BigFont->String_Width(str) / 2) + 542;
 
@@ -894,12 +894,11 @@ void ScoreClass::Print_Minutes(int time)
  * HISTORY:                                                                                    *
  *   04/07/1995 BWG : Created.                                                                 *
  *=============================================================================================*/
-Rect ScoreClass::Count_Up_Print(Surface * surf, char *str, int percent, int maxval, int xpos, int ypos)
-{
-	char destbuf[64];
+Rect ScoreClass::Count_Up_Print(Surface * surf, wchar_t const *str, int percent, int maxval, int xpos, int ypos)
+{ // RA2: 0x666DD0 takes the format as a wide string
+	wchar_t destbuf[64];
 
-	sprintf(destbuf, str, percent >= maxval ? maxval : percent);
-	ScoreFontClass * font = FullFont;
+	swprintf(destbuf, str, percent >= maxval ? maxval : percent);
 	ypos = ypos - FullFont->Get_Height();
 	FullFont->Print_String(surf, destbuf, xpos, ypos, 2);
 	return(Rect(xpos, ypos, FullFont->String_Width(destbuf), FullFont->Get_Height()));
@@ -934,7 +933,7 @@ void ScoreClass::Input_Name(char str[], int xpos, int ypos)
 		Timing();
 
 		if (Keyboard->Check()) {
-			key = Keyboard->To_ASCII(Keyboard->Get()) & 0xFF;
+			key = Keyboard->To_Char(Keyboard->Get()) & 0xFF; // RA2: 0x666F10 calls To_Char (0x532800)
 			Call_Back();
 
 			/*
@@ -1177,25 +1176,19 @@ void ScoreClass::Timing(void)
 
 
 /// <summary>
-/// Plays one of the score screen's sound effects by name.
-/// The sound is looked up in the list the score screen loaded at startup. A name that is
-/// not in the list, or one whose sample failed to load, simply plays nothing.
+/// Looks up one of the score screen's sound effects by name.
+/// The name is searched for in the list the score screen loaded at startup, but nothing
+/// is played: this version of the game only finds the entry and returns.
 /// </summary>
 /// <param name="name">The name the sound was registered under.</param>
 /// <param name="volume">The volume to play at, before the player's sound setting is
 /// applied.</param>
 void ScoreClass::DoSound(const char * name, int volume)
 {
-	if (name != NULL && Audio_Available()) {
-
+	if (name != NULL && AudioDeviceAvailable()) { // RA2: 0x6677F0 calls AudioDeviceAvailable (0x406F30)
 		for (int i = 0; i < ScoreSnds.Count(); i++) {
-			SfxEntry * snd = ScoreSnds[i];
-
-			if (stricmp(name, snd->Get_Name()) == 0) {
-				if (snd->Get_Sample() != NULL) {
-					Audio.Play_Sample(snd->Get_Sample(), 255, int(volume * Options.SoundVolume));
-				}
-				break;
+			if (stricmp(name, ScoreSnds[i]->Get_Name()) == 0) {
+				break; // RA2: a found name plays nothing; the loop only returns
 			}
 		}
 	}
@@ -1273,7 +1266,7 @@ ScoreFontClass::~ScoreFontClass(void)
 /// </summary>
 void ScoreFontClass::Load_Sounds(void)
 {
-	if (Audio_Available()) {
+	if (AudioDeviceAvailable()) { // RA2: 0x667900 calls AudioDeviceAvailable (0x406F30)
 		CCFileClass file;
 		text_sounds[0].mSound = (void *)MFCD::Retrieve("TEXT1.AUD");
 		if (text_sounds[0].mSound == NULL) {
@@ -1309,12 +1302,11 @@ void ScoreFontClass::Load_Sounds(void)
 /// not known until the mission is over.
 /// </summary>
 /// <returns>Returns with the width in pixels that the string would occupy.</returns>
-int ScoreFontClass::String_Width(const char * string)
-{
-	const char * str = string;
+int ScoreFontClass::String_Width(const wchar_t * string)
+{ // RA2: 0x667A60 takes a wide string
 	int w = 0;
-	while (*str) {
-		w += Char_Width((char)*str++) + 1;
+	while (*string != 0) {
+		w += Char_Width(*string++) + 1;
 	}
 	return(w);
 }
@@ -1325,47 +1317,44 @@ int ScoreFontClass::String_Width(const char * string)
 /// The font is proportional, so every glyph must be measured rather than assumed.
 /// </summary>
 /// <returns>Returns with the width in pixels that the character occupies.</returns>
-int ScoreFontClass::Char_Width(char ch)
-{
-	char out[1];
+int ScoreFontClass::Char_Width(wchar_t ch)
+{ // RA2: 0x667AA0 takes a wide character and keeps only its low byte for the OEM conversion
+	char c = (char)ch;
+	char out;
 
 	if (ch == 32) {
 		return(8);
 	}
 
-	CharToOemBuff(&ch, out, sizeof(out));
+	CharToOemBuff(&c, &out, 1);
 
-	int frame;
-	frame = MAX((out[0] & 0xFF) - 33, 0);
-	frame = 3 * MIN(frame, 216);
+	int frame = ((out - 33) > 0U ? (out - 33) : 0U); // RA2: unsigned comparison, so a negative byte gives the large frame
+	if (frame >= 216) {
+		frame = 216;
+	}
 
-	return(ShapePtr->Get_Rect(frame + 2).Width);
+	return(ShapePtr->Get_Rect(frame * 3 + 2).Width);
 }
 
 
 /// <summary>
 /// Prints a single character with this font.
 /// This is the low level glyph blitter that the score screen's typewriter effect is built
-/// out of. It will also play one of the typing sounds as the character lands.
+/// out of. No typing sound is played in this version.
 /// </summary>
 /// <param name="v">The brightness frame to draw the glyph with.</param>
-/// <param name="play_sound">Should a typing sound be played along with the character?</param>
-void ScoreFontClass::Print_Char(Surface *surf, char ch, int x, int y, int v, bool play_sound)
-{
-	CharToOemBuff(&ch, &ch, sizeof(ch));
+/// <param name="play_sound">Unused.</param>
+void ScoreFontClass::Print_Char(Surface *surf, wchar_t ch, int x, int y, int v, bool play_sound)
+{ // RA2: 0x667B60 takes a wide character, plays no sound (the last argument is unused)
+	char c = (char)ch;
+	CharToOemBuff(&c, &c, 1);
 
-	if (ch != 32) {
-		int frame;
-		frame = MAX((ch & 0xFF) - 33, 0);
-		frame = 3 * MIN(frame, 216);
-
-		if (play_sound == true && v == 0) {
-			void *snd = text_sounds[rand() % 3].mSound;
-			if (snd != NULL) {
-				Audio.Play_Sample(snd, 255, Options.SoundVolume * 128);
-			}
+	if (c != 32) {
+		int frame = ((c - 33) > 0U ? (c - 33) : 0U); // RA2: unsigned comparison, as in Char_Width
+		if (frame >= 216) {
+			frame = 216;
 		}
-		Draw_Shape(*surf, *Drawer, ShapePtr, frame + v, Point2D(x - ShapePtr->Get_Rect(frame + 2).X, y), surf->Get_Rect(), SHAPE_WIN_REL);
+		Draw_Shape(*surf, *Drawer, ShapePtr, frame * 3 + v, Point2D(x - ShapePtr->Get_Rect(frame * 3 + 2).X, y), surf->Get_Rect(), SHAPE_WIN_REL);
 	}
 }
 
@@ -1376,20 +1365,27 @@ void ScoreFontClass::Print_Char(Surface *surf, char ch, int x, int y, int v, boo
 /// the score screen builds out of Print_Char.
 /// </summary>
 /// <param name="brightness_frame">The brightness frame to draw the glyphs with.</param>
-void ScoreFontClass::Print_String(Surface *surf, const char * string, int x, int y, int brightness_frame)
-{
-	unsigned char buf[2];
-	while (*string != '\0') {
+void ScoreFontClass::Print_String(Surface *surf, const wchar_t * string, int x, int y, int brightness_frame)
+{ // RA2: 0x667C70 takes a wide string
+	while (*string != 0) {
 		if (*string != 32) {
-			CharToOemBuff(string, (LPSTR)buf, sizeof(char));
-			int frame = 3 * min(MAX(buf[0] - 33, 0), 216);
+			char c = (char)*string;
+			char out;
+			CharToOemBuff(&c, &out, 1);
+			int frame = ((out - 33) > 0U ? (out - 33) : 0U); // RA2: unsigned comparison, as in Char_Width
+			if (frame >= 216) {
+				frame = 216;
+			}
 
-			Draw_Shape(*surf, *Drawer, ShapePtr, frame + brightness_frame, Point2D(x - ShapePtr->Get_Rect(frame + 2).X, y), surf->Get_Rect(), SHAPE_WIN_REL);
+			Draw_Shape(*surf, *Drawer, ShapePtr, frame * 3 + brightness_frame, Point2D(x - ShapePtr->Get_Rect(frame * 3 + 2).X, y), surf->Get_Rect(), SHAPE_WIN_REL);
 		}
 		x += Char_Width(*string) + 1;
 		string++;
 	}
 }
+
+
+
 
 
 
@@ -1478,24 +1474,6 @@ bool ScoreTimeClass::Update(Surface * surf)
 
 
 /// <summary>
-/// Constructs a score screen text object from a string table entry.
-/// This is the form used for the fixed labels of the score screen, which must come out of
-/// the string table so that they follow the language the game was installed in.
-/// </summary>
-/// <param name="string">The string table identifier of the text to print.</param>
-/// <param name="font">The score screen font to print the text with.</param>
-/// <param name="is_fully_lit">Should the text appear fully lit instead of typing itself in?</param>
-ScorePrintClass::ScorePrintClass(int string, int xpos, int ypos, ScoreFontClass * font, bool is_fully_lit) :
-	ScoreAnimClass(xpos, ypos, Fetch_String(string)),
-	Pos(0),
-	Stage(0),
-	State(is_fully_lit),
-	Font(font)
-{
-}
-
-
-/// <summary>
 /// Constructs a score screen text object from a literal string.
 /// This is the form used for the figures the score screen builds for itself, such as the
 /// credit and time totals.
@@ -1522,20 +1500,20 @@ ScorePrintClass::ScorePrintClass(void const * string, int xpos, int ypos, ScoreF
 /// </summary>
 /// <returns>bool; Has the text finished printing, so that the object may be deleted?</returns>
 bool ScorePrintClass::Update(Surface * surf)
-{
+{ // RA2: 0x6680F0 treats DataPtr as a wide string (wcslen, wide String_Width)
 
 	StillUpdating = true;
 
 	if (!Timer) {
 		Timer = 2;
 
-		if ((unsigned)Pos > strlen((const char *)DataPtr) && Stage > 2) {
+		if ((unsigned)Pos > wcslen((const wchar_t *)DataPtr) && Stage > 2) {
 			return(true);
 		}
 
 		if (State == false) {
 			Rect rect;
-			int w = Font->String_Width((const char *)DataPtr);
+			int w = Font->String_Width((const wchar_t *)DataPtr);
 			rect.Set(XPos - 8 <= 0 ? 0 : XPos - 8, YPos, w + 10, Font->Get_Height());
 			HiddenSurface->Blit_From(rect, *AlternateSurface, rect);
 		}
@@ -1544,7 +1522,7 @@ bool ScorePrintClass::Update(Surface * surf)
 		for (int i = 0; i <= Pos; i++) {
 
 			char localstr;
-			localstr = ((char *)DataPtr)[i];
+			localstr = (char)((wchar_t *)DataPtr)[i]; // RA2: 0x6680F0 reads wide characters but keeps only the low byte
 			if (localstr == '\0') {
 				Stage++;
 				break;
@@ -1573,27 +1551,17 @@ bool ScorePrintClass::Update(Surface * surf)
 
 /// <summary>
 /// Constructs a score screen sound effect entry.
-/// The sample is fetched from the mixfiles when it lives there, and otherwise loaded from
-/// disk with this entry taking ownership of the buffer. Nothing is loaded at all when
-/// audio is unavailable.
+/// Only the name is kept, and only when audio is available; no sample is loaded.
 /// </summary>
 /// <param name="name">The name the score screen will ask for this sound by.</param>
-/// <param name="filename">The file the sample is loaded from.</param>
+/// <param name="filename">The file the sample would be loaded from; it is not used.</param>
 SfxEntry::SfxEntry(char const * name, char const *filename) :
 	Name(NULL),
 	Sample(NULL),
 	IsAllocated(false)
 {
-	if (Audio_Available()) {
-		Name = strdup(name);
-		Sample = (void *)MFCD::Retrieve(filename);
-		if (Sample == NULL) {
-			CCFileClass file(filename);
-			Sample = Load_Alloc_Data(file);
-			IsAllocated = true;
-			file.Close();
-			DebugString("ScoreScreen: Loaded %s\n", filename);
-		}
+	if (AudioDeviceAvailable()) { // RA2: 0x668280 calls AudioDeviceAvailable (0x406F30)
+		Name = strdup(name); // RA2: the constructor only copies the name; the sample is never loaded and filename is unused
 	}
 }
 
