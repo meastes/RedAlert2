@@ -667,7 +667,9 @@ unk_007269B0,0x007269B0,0x007291C0,unknown,code not assigned to a module
 wdtmap,0x007291C0,0x0072A840,tibsun,"functions compiled from src/wdtmap.cpp, without gaps; matched except ?Load@Map@WorldDominationTour@@QAEXAAVINIClass@@PAVMSEngine@@H@Z; one placed by the gap; ?WDT_Write_Map_Ini@@YIXABVWstring@@0@Z not placed; ??8Centroid@WorldDominationTour@@QBE_NABV01@@Z not placed"
 unk_0072A840,0x0072A840,0x0072BDC0,unknown,code not assigned to a module
 wdtnet,0x0072BDC0,0x0072C9D0,tibsun,"functions compiled from src/wdtnet.cpp, matched, without gaps; one placed by the gap; ?Get_Game_Options@WDTTerritory@@QAEPAUGameOptionsType@@XZ not placed; ?To_String@WDTState@@QAEPADXZ not placed; ?To_String@WDTTerritory@@QAEPADXZ not placed"
-unk_0072C9D0,0x0072C9D0,0x00732A50,unknown,code not assigned to a module
+unk_0072C9D0,0x0072C9D0,0x0072DC20,unknown,code not assigned to a module
+wdtsel,0x0072DC20,0x00730290,tibsun,"functions compiled from src/wdtsel.cpp, without gaps; matched except ?Pick_Territory@Selection@WorldDominationTour@@QAE?AV?$rc_ptr@VTerritory@WorldDominationTour@@@@XZ and ?Do_Target_Anim@Selection@WorldDominationTour@@QAEXABV?$rc_ptr@VState@WorldDominationTour@@@@_N1@Z; two placed by the gap; ??0Selection@WorldDominationTour@@QAE@ABV?$rc_ptr@VCampaign@WorldDominationTour@@@@H@Z not placed; ??1Selection@WorldDominationTour@@UAE@XZ not placed"
+unk_00730290,0x00730290,0x00732A50,unknown,code not assigned to a module
 unk_00732A50,0x00732A50,0x00732AE0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00732AE0,0x00732AE0,0x00732BE0,unknown,code not assigned to a module
 unk_00732BE0,0x00732BE0,0x00732C10,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
