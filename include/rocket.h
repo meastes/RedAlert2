@@ -28,7 +28,7 @@ class RocketLocomotionClass : public LocomotionClass
 
 		virtual HRESULT STDMETHODCALLTYPE GetClassID(CLSID * retval) override;
 		virtual HRESULT STDMETHODCALLTYPE Load(IStream * stream) override;
-		virtual HRESULT STDMETHODCALLTYPE Save(IStream * stream, BOOL cleardirty) override;
+		// RA2: Save, Do_Turn and Mark_All_Occupation_Bits are LocomotionClass's (the vtables at 0x7A8EDC and 0x7A8FA4 point at its code)
 
 		virtual boolean STDMETHODCALLTYPE Is_Moving(void) override;
 		virtual CoordStruct STDMETHODCALLTYPE Destination(void) override;
@@ -36,10 +36,8 @@ class RocketLocomotionClass : public LocomotionClass
 		virtual boolean STDMETHODCALLTYPE Process(void) override;
 		virtual void STDMETHODCALLTYPE Move_To(CoordStruct to) override;
 		virtual void STDMETHODCALLTYPE Stop_Moving(void) override;
-		virtual void STDMETHODCALLTYPE Do_Turn(DirStruct coord) override;
 		virtual LayerType STDMETHODCALLTYPE In_Which_Layer(void) override;
 		virtual boolean STDMETHODCALLTYPE Is_Moving_Now(void) override;
-		virtual void STDMETHODCALLTYPE Mark_All_Occupation_Bits(int mark) override;
 
 		virtual int Fetch_Object_Size(void) const override {return(sizeof(*this));}
 

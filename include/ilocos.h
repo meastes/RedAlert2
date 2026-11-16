@@ -25,3 +25,4 @@ EXTERN_C const CLSID CLSID_TeleportLocomotion;
 EXTERN_C const CLSID CLSID_MechLocomotion;
 EXTERN_C const CLSID CLSID_JumpjetLocomotion;
 EXTERN_C const CLSID CLSID_LevitateLocomotion;
+EXTERN_C const CLSID CLSID_RocketLocomotion; // RA2: 0x007A2010

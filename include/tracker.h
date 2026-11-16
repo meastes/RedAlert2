@@ -50,12 +50,15 @@ extern DynamicVectorClass<AbstractClass *> ObjectsToDelete;
 **	interface commands; both forget an object when it goes away.
 */
 class FootClass;
+class Cell; // RA2: AircraftTrackerClass::Update takes cells by value
 
 class AircraftTrackerClass
 {
 	public:
 		void Detach(AbstractClass * target);
 		void Remove(FootClass * object); // RA2: 0x413310 (YR name)
+		void Add(FootClass * object); // RA2: 0x4131E0 (YR name); files the object under its cell
+		void Update(FootClass * object, Cell oldcell, Cell newcell); // RA2: 0x413600 (YR name); moves the object's filing from one cell to the next
 };
 
 extern AircraftTrackerClass AircraftTracker;
