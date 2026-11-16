@@ -75,6 +75,7 @@ class IPXAddressClass
 		void Get_Node(NetNodeType node); // RA2
 		void Set_Node(NetNodeType node); // RA2
 		void Set_Port(unsigned short port); // RA2: only for UDP addresses
+		unsigned short Get_Port(void) { return *(unsigned short *)NetworkNumber; } // RA2: the port of a UDP address
 		bool Is_Same_Node(IPXAddressClass & addr); // RA2: compares the node addresses only
 		void Get_Address(IPXHeaderType *header); // RA2: not defined
 

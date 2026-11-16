@@ -129,6 +129,7 @@
 #include "ipxmgr.h" // RA2: Ipx.Set_Socket
 #include "obscure.h" // RA2: Obfuscate
 #include "wsproto.h" // RA2: Set_Packet_Loss_Percent, for -DROP=
+#include "firewall.h" // RA2: FirewallHelper.Port
 
 
 #include <conio.h>
@@ -1292,7 +1293,7 @@ BOOL CALLBACK Campaign_Choice_Dialog_Proc(HWND window, UINT message, WPARAM wpar
 }
 
 
-extern int PortPool; // RA2: 0x00A71B28, the written PortPool value of RA2.INI's [MultiPlayer] section
+extern FirewallHelperClass FirewallHelper; // RA2: 0x00A71B18; its Port (0x00A71B28) is the PortPool value of RA2.INI's [MultiPlayer] section
 
 /***********************************************************************************************
  * Start_Network_Session -- Opens the UDP network for a multiplayer game.                      *
@@ -1359,7 +1360,7 @@ bool Start_Network_Session(void) // RA2: 0x00514EE0, not in TibSun
 
 	RawFileClass file("RA2.INI"); // RA2: as above
 	ConfigINI.Put_Int("MultiPlayer", "PortBase", Session.PortBase); // RA2: as above
-	ConfigINI.Put_Int("MultiPlayer", "PortPool", PortPool); // RA2: as above
+	ConfigINI.Put_Int("MultiPlayer", "PortPool", FirewallHelper.Port); // RA2: as above
 	ConfigINI.Save(file, false); // RA2: as above
 	OwnerTalk.Reset(); // RA2: as above
 	Session.NetOpen = true; // RA2: as above

@@ -12861,7 +12861,6 @@ address,symbol,evidence
 0x00A71A3C,_ObserverCellTaken,"inferred: referenced by matched src/multiplayer.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00A71A3D,_ObserverCellShared,"inferred: referenced by matched src/multiplayer.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00A71B18,?FirewallHelper@@3VFirewallHelperClass@@A,"inferred: referenced by matched src/session.cpp (2 references); across all matched code never at another address, and no other symbol here"
-0x00A71B28,?PortPool@@3HA,"inferred: referenced by matched src/init.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00A71BC4,?SerialNumber@@3PADA,"inferred: referenced by matched src/netdlg2.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00A71DE8,?Net2_g_Col_Name@@3HA,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00A71E18,?Net2_g_Col_House@@3HA,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"

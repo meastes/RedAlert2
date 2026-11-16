@@ -88,6 +88,8 @@ enum ProtocolEnum {
 */
 class WinsockInterfaceClass {
 
+	friend class FirewallHelperClass; // RA2: Send_Probe reads the count of the queued packets (OutBuffers)
+
 	public:
 
 		WinsockInterfaceClass(void);

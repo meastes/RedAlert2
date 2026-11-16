@@ -146,7 +146,7 @@ extern int g_LadderPos; // RA2: 0x00B29CE8
 extern int g_JoinLobbyNow; // RA2: 0x00B2ABF0
 extern int g_UserAge; // RA2: 0x00B2AC6C
 extern int g_UserConsent; // RA2: 0x00B2AC70
-extern int CurrentLevel; // RA2: 0x00B2AC38, the view of the lobby (0 is the server choice)
+extern int ManglerIndex; // RA2: 0x00B2AC38, the mangler server picked for the port probes (FirewallHelperClass::Get_Next_Mangled_Source_Port reads it)
 extern int g_Col_ChanName; // RA2: 0x00B29CCC, the column of the channel names in the lobby lists
 extern int g_Col_GameName; // RA2: 0x00B2A8A8, the columns of the game list (TibSun's g_Col_GameName, g_Col_GameIcon, g_Col_GamePrivate, g_Col_GamePingTime and the observer column RA2 adds)
 extern int g_Col_GameIcon; // RA2: 0x00B2A6F8
@@ -1387,7 +1387,7 @@ void Reset_WOL_Globals(void) // RA2: 0x0073E8D0, loads the default profile, clea
 	g_ArtCRC = RulesClass::Get_Art_Unique_ID();
 	g_AICRC = RulesClass::Get_AI_Unique_ID();
 
-	CurrentLevel = 0; // RA2: as above
+	ManglerIndex = 0; // RA2: as above
 }
 
 void Refresh_Lobby_List(void) // RA2: 0x0073EE80, fills the lobby list of dialog 0x113 with the "Lob_33_" channels in number order, the current one selected
