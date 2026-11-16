@@ -702,7 +702,7 @@ class SessionClass
 
 		int unknown_2854;
 		NodeNameType * Slots[8];
-		bool unknown_2878;
+		bool IsStartReminded;	// RA2: +0x2878, set while the host's start reminder stands (0x005C3C20 sets, 0x005C3C40 clears)
 
 		int Suspended;
 

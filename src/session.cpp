@@ -447,7 +447,7 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	TrapCheckHeap = 0;          // start checking the Heap
 	TrapPrintCRC = 0;           // output CRC file
 
-	unknown_2878 = false; // RA2: as above
+	IsStartReminded = false; // RA2: as above
 	Options.AIPlayers = 0; // RA2: as above
 	for (int i = 0; i < 8; i++) { // RA2: as above
 		Options.AISlots.Countries[i] = -1; // RA2: as above
