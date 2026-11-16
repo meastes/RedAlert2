@@ -120,7 +120,7 @@ void __fastcall Refresh_Slot_Colors(HWND dialog); // RA2: 0x005CA540, defined be
 void __fastcall Refresh_Slot_Combos(HWND dialog); // RA2: 0x005CA6C0, defined below
 extern char const * LobbyHostImage; // RA2: 0x007E6DB8, the picture of the host in the slot list
 extern char const * LobbyAcceptImage; // RA2: 0x007E6DBC, the picture of a player who accepted
-int __fastcall Player_Control_ID(int player); // RA2: 0x004D0EE0, the id of the control that shows a player's name
+int __fastcall Player_Control_ID(int player); // RA2: 0x004D0EE0, the id of the flag control of a player
 void __fastcall Set_Player_Map_State(char const * name, int state); // RA2: 0x005C3F00, defined above
 Wstring __fastcall Wstring_FromWide(WideWstring const & text); // RA2: 0x00771450, as netdlg2.cpp
 void Join_Lobby_Start_Reminder(void); // RA2: 0x005C28E0
