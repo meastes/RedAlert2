@@ -3363,24 +3363,24 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 	ini.Clear(BASIC);
 	ini.Clear(BASIC, "CivEvac");
 	if (strlen(Scen->BriefingCSF) != 0) { // RA2: as above
-		ini.Put_String(BASIC, "BriefingCSF", Scen->BriefingCSF); // RA2: as above
+		ini.Put_String(BASIC, "Briefing", Scen->BriefingCSF); // RA2: as above
 	}
 	if (strlen(Scen->UIName) != 0) { // RA2: as above
 		ini.Put_String(BASIC, "UIName", Scen->UIName); // RA2: as above
 	}
 	Special.Write_INI(ini); // RA2: as above
-	ini.Put_String(BASIC, "NextScenarioName", NextScenarioName); // RA2: as above
-	ini.Put_String(BASIC, "AltNextScenarioName", AltNextScenarioName); // RA2: as above
+	ini.Put_String(BASIC, "NextScenario", NextScenarioName); // RA2: as above
+	ini.Put_String(BASIC, "AltNextScenario", AltNextScenarioName); // RA2: as above
 	ini.Put_UnicodeString(BASIC, "Name", Description); // RA2: as above
 	ini.Put_Int(BASIC, "NewINIFormat", 4); // RA2: as above
 	ini.Put_Int(BASIC, "CarryOverCap", CarryOverCap / 100);
-	ini.Put_Bool(BASIC, "IsEndOfGame", IsEndOfGame); // RA2: as above
-	ini.Put_Bool(BASIC, "IsSkipScore", IsSkipScore); // RA2: as above
-	ini.Put_Bool(BASIC, "IsOneTimeOnly", IsOneTimeOnly); // RA2: as above
-	ini.Put_Bool(BASIC, "IsNoMapSel", IsNoMapSel); // RA2: as above
+	ini.Put_Bool(BASIC, "EndOfGame", IsEndOfGame); // RA2: as above
+	ini.Put_Bool(BASIC, "SkipScore", IsSkipScore); // RA2: as above
+	ini.Put_Bool(BASIC, "OneTimeOnly", IsOneTimeOnly); // RA2: as above
+	ini.Put_Bool(BASIC, "SkipMapSelect", IsNoMapSel); // RA2: as above
 	ini.Put_Bool(BASIC, "Official", true);
 	ini.Put_Bool(BASIC, "IgnoreGlobalAITriggers", IsIgnoreGlobalAITriggers);
-	ini.Put_Bool(BASIC, "IsTruckCrate", IsTruckCrate); // RA2: as above
+	ini.Put_Bool(BASIC, "TruckCrate", IsTruckCrate); // RA2: as above
 	ini.Put_Bool(BASIC, "TrainCrate", IsTrainCargo);
 	ini.Put_Int(BASIC, "Percent", Percent);
 	ini.Put_TechnoType_List(BASIC, "AllowableUnits", AllowableUnits);
@@ -3398,19 +3398,19 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 		ini.Put_VQType(BASIC, "Action", ActionMovie);
 		ini.Put_VQType(BASIC, "PostScore", PostScoreMovie);
 		ini.Put_VQType(BASIC, "PreMapSelect", PreMapSelectMovie);
-		ini.Put_Float(BASIC, "CarryOverPercent", CarryOverPercent); // RA2: as above
+		ini.Put_Float(BASIC, "CarryOverMoney", CarryOverPercent); // RA2: as above
 		ini.Put_Bool(BASIC, "TimerInherit", IsInheritTimer);
-		ini.Put_Bool(BASIC, "IsMoneyTiberium", IsMoneyTiberium); // RA2: as above
+		ini.Put_Bool(BASIC, "FillSilos", IsMoneyTiberium); // RA2: as above
 		ini.Put_Int(BASIC, "StartingDropships", StartingDropships);
-		ini.Put_Int(BASIC, "Home", Home); // RA2: as above
-		ini.Put_Int(BASIC, "AltHome", AltHome); // RA2: as above
+		ini.Put_Int(BASIC, "HomeCell", Home); // RA2: as above
+		ini.Put_Int(BASIC, "AltHomeCell", AltHome); // RA2: as above
 	}
-	ini.Put_Int(BASIC, "IsMultiplayerOnly", IsMultiplayerOnly); // RA2: as above
+	ini.Put_Int(BASIC, "MultiplayerOnly", IsMultiplayerOnly); // RA2: as above
 	ini.Put_Bool(BASIC, "TiberiumGrowthEnabled", IsTibGrowth);
 	ini.Put_Bool(BASIC, "VeinGrowthEnabled", IsVeinGrowth);
 	ini.Put_Bool(BASIC, "IceGrowthEnabled", IsIceGrowth);
-	ini.Put_Bool(BASIC, "IsTiberiumDeathToVisceroid", IsTiberiumDeathToVisceroid); // RA2: as above
-	ini.Put_Bool(BASIC, "IsFreeRadar", IsFreeRadar); // RA2: as above
+	ini.Put_Bool(BASIC, "TiberiumDeathToVisceroid", IsTiberiumDeathToVisceroid); // RA2: as above
+	ini.Put_Bool(BASIC, "FreeRadar", IsFreeRadar); // RA2: as above
 	ini.Put_Int(BASIC, "InitTime", InitTime);
 
 	ini.Clear(VARIABLE_NAMES); // RA2: as above
@@ -3427,7 +3427,7 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 
 	ini.Put_Time("Ranking", "ParTimeEasy", ParTimeEasy); // RA2: as above
 	ini.Put_Time("Ranking", "ParTimeMedium", ParTimeMedium); // RA2: as above
-	ini.Put_Time("Ranking", "ParTimeDifficult", ParTimeDifficult); // RA2: as above
+	ini.Put_Time("Ranking", "ParTimeHard", ParTimeDifficult); // RA2: as above
 	ini.Put_String("Ranking", "UnderParTitle", UnderParTitle); // RA2: as above
 	ini.Put_String("Ranking", "UnderParMessage", UnderParMessage); // RA2: as above
 	ini.Put_String("Ranking", "OverParTitle", OverParTitle); // RA2: as above
@@ -3447,17 +3447,17 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 	double level = LevelLight * 0.001; // RA2: as above
 	ini.Put_Float("Lighting", "Level", level); // RA2: as above
 	double ionambient = IonAmbientLight * 0.01; // RA2: as above
-	ini.Put_Float("Lighting", "IonAmbientLight", ionambient); // RA2: as above
+	ini.Put_Float("Lighting", "IonAmbient", ionambient); // RA2: as above
 	double ionred = IonRedTint * 0.01; // RA2: as above
-	ini.Put_Float("Lighting", "IonRedTint", ionred); // RA2: as above
+	ini.Put_Float("Lighting", "IonRed", ionred); // RA2: as above
 	double iongreen = IonGreenTint * 0.01; // RA2: as above
-	ini.Put_Float("Lighting", "IonGreenTint", iongreen); // RA2: as above
+	ini.Put_Float("Lighting", "IonGreen", iongreen); // RA2: as above
 	double ionblue = IonBlueTint * 0.01; // RA2: as above
-	ini.Put_Float("Lighting", "IonBlueTint", ionblue); // RA2: as above
+	ini.Put_Float("Lighting", "IonBlue", ionblue); // RA2: as above
 	double ionground = IonGroundLight * 0.001; // RA2: as above
-	ini.Put_Float("Lighting", "IonGroundLight", ionground); // RA2: as above
+	ini.Put_Float("Lighting", "IonGround", ionground); // RA2: as above
 	double ionlevel = IonLevelLight * 0.001; // RA2: as above
-	ini.Put_Float("Lighting", "IonLevelLight", ionlevel); // RA2: as above
+	ini.Put_Float("Lighting", "IonLevel", ionlevel); // RA2: as above
 	return(true);
 }
 
