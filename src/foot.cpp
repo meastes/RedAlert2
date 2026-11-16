@@ -113,6 +113,8 @@
 #include "loco.h"
 #include "mono.h"
 #include "partsys.h"
+#include "warhead.h" // RA2: Take_Damage reads WarheadTypeClass::Sonic
+#include "parasite.h" // RA2: Detach tells the parasite that is eating this object (ParasiteImUsing->Detach)
 #include "revent.h"
 #include "rules.h"
 #include "session.h"
@@ -840,6 +842,19 @@ int FootClass::Do_MISSION_EATEN(void) // RA2: not in TibSun, at 0x4C4370
  *=============================================================================================*/
 int FootClass::Do_MISSION_ATTACK(void)
 {
+	if (Techno_Type_Class()->HoverAttack && HeightAGL == 0) { // RA2: a hover-attacker on the ground first moves to a nearby cell
+		Assign_Destination(&Map[Nearby_Location(this)], true); // RA2: as above
+	}
+
+	if (IsOverpowering) { // RA2: an electric-assault unit looks for a target to overpower
+		Coord coord = Position; // RA2: as above (the member, not the virtual Center_Coord)
+		AbstractClass * target = Greatest_Threat(THREAT_RANGE, coord, false); // RA2: as above
+		if (target != NULL) { // RA2: as above
+			Assign_Target(target); // RA2: as above
+			IsOverpowering = false; // RA2: as above
+		}
+	}
+
 	if (TarCom != NULL) {
 		Approach_Target();
 	} else {
@@ -852,15 +867,18 @@ int FootClass::Do_MISSION_ATTACK(void)
 
 
 
+
 /// <summary>
-/// RA2
+/// Finds an adjacent building this object can overpower.
+/// RA2: a member function (0x004C45B0). It walks the eight cells around the object in facing order and
+/// returns the first building whose type is Overpowerable and whose owner is this object's owner.
 /// </summary>
-static inline BuildingClass * Adjacent_Overpowerable(FootClass * foot)
+/// <returns>BuildingClass *; The building to overpower, or NULL.</returns>
+BuildingClass * FootClass::Find_Adjacent_Overpowerable(void)
 {
 	for (int face = FACING_FIRST; face < FACING_COUNT; face++) {
-		Cell cell = Adjacent_Cell(foot->Get_Cell(), (FacingType)face);
-		BuildingClass * building = Map[cell].Cell_Building();
-		if (building != NULL && building->Class->Overpowerable && building->Owner_HouseClass() == foot->Owner_HouseClass()) {
+		BuildingClass * building = Map[Adjacent_Cell(Get_Cell(), (FacingType)face)].Cell_Building();
+		if (building != NULL && building->Class->Overpowerable && building->Owner_HouseClass() == Owner_HouseClass()) {
 			return(building);
 		}
 	}
@@ -885,31 +903,58 @@ static inline BuildingClass * Adjacent_Overpowerable(FootClass * foot)
  *=============================================================================================*/
 int FootClass::Do_MISSION_GUARD(void)
 {
-	bool renovator = Is_Renovator();
-	if (TarCom == NULL && !renovator) {
-		if (!Target_Something_Nearby(PositionCoord, THREAT_RANGE)) {
-			Random_Animate();
+	if (TarCom == NULL) { // RA2: as above
+		if (Get_Class_Weapon_Data(1)->Weapon != NULL && Get_Class_Weapon_Data(1)->Weapon->WarheadPtr->ElectricAssault) { // RA2: an electric-assault unit looks for an adjacent building to overpower
+			BuildingClass * building = NULL; // RA2: as above
+			for (int face = FACING_FIRST; face < FACING_COUNT; face++) { // RA2: the adjacent cells are searched inline here
+				Cell cell = Adjacent_Cell(Get_Cell(), (FacingType)face); // RA2: as above
+				BuildingClass * candidate = Map[cell].Cell_Building(); // RA2: as above
+				if (candidate != NULL && candidate->Class->Overpowerable) { // RA2: as above
+					HouseClass * owner = Owner_HouseClass(); // RA2: as above
+					if (candidate->Owner_HouseClass() == owner) { // RA2: as above
+						building = candidate; // RA2: as above
+						break; // RA2: as above
+					}
+				}
+			}
+			if (building != NULL) { // RA2: as above
+				Assign_Target(building); // RA2: as above
+				IsOverpowering = true; // RA2: as above
+				QueueMission(MISSION_ATTACK, false); // RA2: as above
+			} else {
+				Random_Animate();
+			}
+		} else {
+			Random_Animate(); // RA2: the nearby-target scan is gone
 		}
+	} else if (Techno_Type_Class()->HoverAttack && HeightAGL == 0) { // RA2: a hover-attacker on the ground moves to a nearby cell
+		Assign_Destination(&Map[Nearby_Location(this)], true); // RA2: as above
 	}
 
 	int dtime = Current_Mission_Control().Normal_Delay();
 
-	InfantryClass * inf = dynamic_cast<InfantryClass *>(this);
-	if (inf != NULL) {
+	if (this != NULL && RTTI == RTTI_INFANTRY) { // RA2: the infantry test is inline, no cast local
 
 		/*
 		**	If this is a bomber type infantry and the current target is a building, then go into
 		**	sabotage mode if not already.
 		*/
-		if (!House->Is_Human_Player() && (inf->Class->IsBomber || inf->Has_Ability(ABILITY_C4)) && Mission != MISSION_SABOTAGE) {
+		if (!House->Is_Human_Player() && (((InfantryClass *)this)->Class->IsBomber || Has_Ability(ABILITY_C4)) && Mission != MISSION_SABOTAGE) { // RA2: as above
 			if (TarCom != NULL && TarCom->RTTI == RTTI_BUILDING) {
-				Assign_Mission(MISSION_SABOTAGE);
+				QueueMission(MISSION_SABOTAGE, false); // RA2: QueueMission, not Assign_Mission
 			}
 		}
 	}
 
-	return((Arm != 0) ? (int)Arm : (dtime+Random_Pick(0, 2)));
+	int result = 0; // RA2: one result variable, zero when distributed fire has targets queued
+	if (Arm != 0) { // RA2: an arming weapon returns its remaining time
+		result = (int)Arm; // RA2: as above
+	} else if (!Techno_Type_Class()->DistributedFire || CurrentTargets.Count() <= 0) { // RA2: as above
+		result = dtime + Random_Pick(0, 2); // RA2: as above
+	}
+	return(result); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -930,36 +975,47 @@ int FootClass::Do_MISSION_GUARD(void)
  *=============================================================================================*/
 int FootClass::Do_MISSION_HUNT(void)
 {
-	if (!Target_Something_Nearby(PositionCoord, THREAT_NORMAL)) {
-		Random_Animate();
-	} else {
+	if (!Techno_Type_Class()->StupidHunt && Target_Something_Nearby(PositionCoord, THREAT_NORMAL)) { // RA2: a StupidHunt type never scans for targets
 		InfantryClass * infantry = RTTI == RTTI_INFANTRY ? (InfantryClass *)this : NULL;
 		if (infantry != NULL && infantry->Class->IsEngineer && !infantry->Class->IsBomber && !infantry->Has_Ability(ABILITY_C4)) {
-			Assign_Destination(TarCom);
-			Assign_Mission(MISSION_CAPTURE);
+			Assign_Destination(TarCom, true); // RA2: Assign_Destination takes the follow flag explicitly, QueueMission replaces Assign_Mission
+			QueueMission(MISSION_CAPTURE, false); // RA2: as above
 			if (Ready_To_Commence()) {
 				Commence();
 			}
 		} else {
-			if (infantry != NULL && (infantry->Class->IsBomber || infantry->Has_Ability(ABILITY_C4)) && dynamic_cast<BuildingClass *>(TarCom)) {
-				Assign_Destination(TarCom);
-				Assign_Mission(MISSION_SABOTAGE);
+			if (infantry != NULL && (infantry->Class->IsBomber || infantry->Has_Ability(ABILITY_C4)) && TarCom != NULL && TarCom->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+				Assign_Destination(TarCom, true); // RA2: as above
+				QueueMission(MISSION_SABOTAGE, false); // RA2: as above
 				if (Ready_To_Commence()) {
 					Commence();
 				}
 			} else if (infantry != NULL && infantry->Class->IsVehicleThief) {
-				Assign_Destination(TarCom);
-				Assign_Mission(MISSION_CAPTURE);
+				Assign_Destination(TarCom, true); // RA2: as above
+				QueueMission(MISSION_CAPTURE, false); // RA2: as above
 				if (Ready_To_Commence()) {
 					Commence();
 				}
+			} else if (infantry != NULL) { // RA2: as above
+				Assign_Destination(NULL, true); // RA2: an infantry unit with nothing to do clears its destination first
+				Approach_Target();
 			} else {
 				Approach_Target();
 			}
 		}
+	} else if (!House->Is_Human_Player() && Session.Type == GAME_NORMAL) { // RA2: a computer-controlled unit in a campaign heads for the player's base
+		Cell cell = CELL_NONE; // RA2: as above
+		cell = Cell(PlayerPtr->Center); // RA2: as above
+		if (cell != CELL_NONE) { // RA2: as above
+			Assign_Destination(&Map[cell], true); // RA2: as above
+			QueueMission(MISSION_MOVE, true); // RA2: as above
+		}
+	} else {
+		Random_Animate();
 	}
 	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
 }
+
 
 
 /***********************************************************************************************
@@ -1346,6 +1402,42 @@ void FootClass::Approach_Target(void)
 }
 
 
+/// <summary>
+/// RA2
+/// </summary>
+static inline void Guard_Navigation(FootClass * foot) // RA2: the navigation queue step is its own inline function (one more inline layer)
+{
+	if (!foot->House->Is_Human_Player()) {
+		/*
+		**	The navigation queue only needs to be processed if there is
+		**	currently no navigation target for this object.
+		*/
+		if (foot->NavQueue.Count() > 0 && foot->NavCom == NULL && foot->NavQueue[0] == foot->ArchiveTarget) {
+			AbstractClass * target = foot->NavQueue[0];
+
+			/*
+			**	Check to see if the navigation queue even exists and
+			**	has at least one valid entry. If it does, then process it by
+			**	assigning the object's NavCom to the first entry on the list.
+			*/
+			if (target != NULL) {
+				foot->Assign_Destination(target, true); // RA2: the follow flag is explicit
+				foot->NavQueue.Delete_Index(0);
+
+				/*
+				**	If the navigation queue is to loop (indefinately), then append the
+				**	target value from the first part to the end of the queue.
+				*/
+				if (foot->IsNavQueueLoop) {
+					foot->NavQueue.Add(target);
+				}
+			}
+		}
+	}
+}
+
+
+
 /***********************************************************************************************
  * FootClass::Mission_Guard_Area -- Causes unit to guard an area about twice weapon range.     *
  *                                                                                             *
@@ -1366,38 +1458,12 @@ void FootClass::Approach_Target(void)
  *=============================================================================================*/
 int FootClass::Do_MISSION_GUARD_AREA(void)
 {
-	if (!House->Is_Human_Player()) {
-		/*
-		**	The navigation queue only needs to be processed if there is
-		**	currently no navigation target for this object.
-		*/
-		if (NavQueue.Count() > 0 && NavCom == NULL && NavQueue[0] == ArchiveTarget) {
-			AbstractClass * target = NavQueue[0];
-
-			/*
-			**	Check to see if the navigation queue even exists and
-			**	has at least one valid entry. If it does, then process it by
-			**	assigning the object's NavCom to the first entry on the list.
-			*/
-			if (target != NULL) {
-				Assign_Destination(target);
-				NavQueue.Delete_Index(0);
-
-				/*
-				**	If the navigation queue is to loop (indefinately), then append the
-				**	target value from the first part to the end of the queue.
-				*/
-				if (IsNavQueueLoop) {
-					NavQueue.Add(target);
-				}
-			}
-		}
-	}
+	Guard_Navigation(this); // RA2: as above
 
 	if (Is_Target_Cell(ArchiveTarget)) {
 		BuildingClass * building = Map[ArchiveTarget->Center_Coord()].Cell_Building();
 		if (building != NULL && House->Is_Ally(building->House) && !House->Is_Human_Player() && (RTTI != RTTI_UNIT || !static_cast<UnitClass *>(this)->Class->IsToHarvest)) {
-			Cell nearby = Map.Nearby_Location((Cell)ArchiveTarget->Center_Coord(), SPEED_TRACK, Map.Get_Cell_Zone((Cell)PositionCoord));
+			Cell nearby = Map.Nearby_Location((Cell)ArchiveTarget->Center_Coord(), SPEED_TRACK, Map.Get_Cell_Zone((Cell)PositionCoord), MZONE_NORMAL, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false); // RA2: the extra arguments are spelled out
 			if (nearby != CELL_NONE) {
 				ArchiveTarget = &Map[nearby];
 			}
@@ -1405,7 +1471,7 @@ int FootClass::Do_MISSION_GUARD_AREA(void)
 	}
 
 	if (RTTI == RTTI_UNIT && static_cast<UnitClass *>(this)->Class->IsToHarvest) {
-		Assign_Mission(MISSION_HARVEST);
+		QueueMission(MISSION_HARVEST, false); // RA2: QueueMission, not Assign_Mission
 		Commence();
 		return(1+Random_Pick(1, 10));
 	}
@@ -1421,9 +1487,9 @@ int FootClass::Do_MISSION_GUARD_AREA(void)
 	**	If this is a bomber type infantry and the current target is a building, then go into
 	**	sabotage mode if not already.
 	*/
-	InfantryClass * infantry = As_InfantryClass();
-	if (!House->Is_Human_Player() && infantry != NULL && (infantry->Class->IsBomber || infantry->Has_Ability(ABILITY_C4)) && Mission != MISSION_SABOTAGE && dynamic_cast<BuildingClass *>(TarCom) != NULL) {
-		Assign_Mission(MISSION_SABOTAGE);
+	InfantryClass * infantry = (this == NULL) ? NULL : (RTTI == RTTI_INFANTRY) ? (InfantryClass *)this : NULL; // RA2: the infantry cast is inline
+	if (!House->Is_Human_Player() && infantry != NULL && (infantry->Class->IsBomber || infantry->Has_Ability(ABILITY_C4)) && Mission != MISSION_SABOTAGE && TarCom != NULL && TarCom->Fetch_RTTI() == RTTI_BUILDING) { // RA2: the building test is inline
+		QueueMission(MISSION_SABOTAGE, false); // RA2: as above
 		return(1);
 	}
 
@@ -1433,14 +1499,25 @@ int FootClass::Do_MISSION_GUARD_AREA(void)
 	*/
 	int maxrange = (int)(Threat_Range(1) * 0.75);
 
+	AbstractClass * archive = ArchiveTarget; // RA2: the home position's foot flag goes through a local
+	bool foot; // RA2: as above
+	if (archive != NULL) { // RA2: as above
+		foot = (archive->AbstractFlags & 4); // RA2: as above
+	}
+	if (archive != NULL && foot) { // RA2: a Foot object as home position limits the stray distance to the rules value
+		maxrange = Rule->GuardModeStray; // RA2: as above
+	}
+
 	if (ArchiveTarget != NULL) {
 		if (!IsFiring && NavCom == NULL && Distance(ArchiveTarget) > maxrange) {
 			Assign_Target(NULL);
-			Assign_Destination(ArchiveTarget);
+			Assign_Destination(ArchiveTarget, true); // RA2: the follow flag is explicit
 		}
 
 		if (TarCom == NULL) {
-			Target_Something_Nearby(ArchiveTarget->Center_Coord(), THREAT_AREA);
+			if (Can_Scan_For_Target() && TargetingTimerFinished()) { // RA2: the scan waits for the targeting timer
+				Target_Something_Nearby(ArchiveTarget->Center_Coord(), THREAT_AREA);
+			}
 			if (TarCom != NULL) {
 				return(1);
 			}
@@ -1450,12 +1527,27 @@ int FootClass::Do_MISSION_GUARD_AREA(void)
 		}
 	}
 
+	if (TarCom == NULL && Get_Class_Weapon_Data(1)->Weapon != NULL && Get_Class_Weapon_Data(1)->Weapon->WarheadPtr->ElectricAssault) { // RA2: an electric-assault unit looks for an adjacent building to overpower
+		for (int face = FACING_FIRST; face < FACING_COUNT; face++) { // RA2: as above
+			BuildingClass * candidate = Map[Adjacent_Cell(Get_Cell(), (FacingType)face)].Cell_Building(); // RA2: the adjacent cell is indexed directly
+			if (candidate != NULL && candidate->Class->Overpowerable && candidate->Owner_HouseClass() == Owner_HouseClass()) { // RA2: as above
+				if (candidate != NULL) { // RA2: as above
+					Assign_Target(candidate); // RA2: as above
+					IsOverpowering = true; // RA2: as above
+					QueueMission(MISSION_ATTACK, false); // RA2: as above
+				}
+				break; // RA2: as above
+			}
+		}
+	}
+
 	int dtime = Current_Mission_Control().Normal_Delay();
 	if (RTTI == RTTI_AIRCRAFT) {
 		dtime *= 2;
 	}
 	return(dtime + Random_Pick(1, 5));
 }
+
 
 
 /***********************************************************************************************
@@ -1485,14 +1577,7 @@ bool FootClass::Unlimbo(Coord const & coord, Dir256 dir)
 
 		Locomotion->Unlimbo();
 
-		bool off = false;
-		if (IonStormClass::Is_Ion_Storm_Active()) {
-			if (Locomotion->Is_Ion_Sensitive()) {
-				off = true;
-			}
-		}
-
-		if (off) {
+		if (House->Ion_Sensitives_Should_Be_Offline() && Locomotion->Is_Ion_Sensitive()) { // RA2: the house decides (always false in RA2), no ion storm test here
 			Locomotion->Power_Off();
 		} else {
 			Locomotion->Power_On();
@@ -1508,23 +1593,29 @@ bool FootClass::Unlimbo(Coord const & coord, Dir256 dir)
 		*/
 		Path[0] = FACING_NONE;
 
-		Cell cell = PositionCell;
+		Cell cell = Get_Cell(); // RA2: the virtual cell query, not the PositionCell member
 		for (int face = FACING_FIRST; face < FACING_COUNT; face++) {
-			Cell c = Adjacent_Cell(cell, FacingType(face));
+			Cell c = AdjacentCell[face & 7] + cell; // RA2: the table entry is the left operand of the sum, not Adjacent_Cell's cell + entry
 			CellClass *cptr = &Map[c];
 			cptr->AdjacentObjectCount++;
 		}
 
 		if (!In_Air()) {
 			LastAdjacencyCell = cell;
+		} else if (TClass->ConsideredAircraft) { // RA2: an airborne object of an aircraft-like type is tracked
+			AircraftTracker.Add(this); // RA2: as above
 		}
 
 		double avoidance = TClass->ThreatAvoidanceCoefficient;
 		ThreatAvoidanceCoefficient = avoidance;
+		if (TClass->SensorsSight != 0) { // RA2: a sensor-carrying type registers its sensor cells
+			AddSensorsAt(CELL_NONE); // RA2: as above
+		}
 		return(true);
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -1552,6 +1643,22 @@ bool FootClass::Unlimbo(Coord const & coord, Dir256 dir)
  *=============================================================================================*/
 ResultType FootClass::Take_Damage(int & damage, int distance, WarheadTypeClass const * warhead, TechnoClass * source, bool forced, bool no_crew)
 {
+	if (warhead->Sonic && ParasiteEatingMe != NULL) { // RA2: a sonic hit makes the parasite eating this object let go
+		ParasiteEatingMe->ParasiteImUsing->ExitUnit(); // RA2: as above
+		if (source != NULL) { // RA2: as above
+			source->Assign_Target(NULL); // RA2: as above
+		}
+	}
+
+	if (ParasiteEatingMe != NULL && source != ParasiteEatingMe && damage > ParasiteEatingMe->Techno_Type_Class()->SuppressionThreshold) { // RA2: heavy damage from someone else suppresses the parasite
+		ParasiteEatingMe->ParasiteImUsing->SuppressionTimer = damage * 2 - ParasiteEatingMe->Techno_Type_Class()->SuppressionThreshold; // RA2: as above
+	}
+
+	if (ParasiteEatingMe != NULL && damage < 0) { // RA2: repair suppresses the parasite and frees the victim
+		ParasiteEatingMe->ParasiteImUsing->SuppressionTimer = 50; // RA2: as above
+		ParasiteEatingMe->ParasiteImUsing->ExitUnit(); // RA2: as above
+	}
+
 	ResultType result = BASECLASS::Take_Damage(damage, distance, warhead, source, forced, no_crew);
 
 	if (result == RESULT_ALREADY_DESTROYED) {
@@ -1631,6 +1738,7 @@ ResultType FootClass::Take_Damage(int & damage, int distance, WarheadTypeClass c
 	}
 	return(result);
 }
+
 
 
 /***********************************************************************************************
@@ -1975,6 +2083,7 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 			break;
 
 		case ACTION_MOVE:
+		case ACTION_ATTACK_MOVE_NAV: // RA2: the attack-move order shares the move handling
 			if (AllowVoice) {
 				Coord coord = cell;
 				coord.Z = Map.Get_Height_GL(coord);
@@ -2004,7 +2113,8 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 		}
 		return(false);
 
-		case ACTION_ATTACK: {
+		case ACTION_ATTACK:
+		case ACTION_ATTACK_MOVE_TAR: { // RA2: the attack-move target order shares the attack handling
 			VeinholeMonsterClass * veinhole = VeinholeMonsterClass::Get_Monster_At(cell);
 			if (veinhole != NULL && !veinhole->IsDead && veinhole->Strength > 0) {
 				Player_Assign_Mission(MISSION_ATTACK, veinhole);
@@ -2047,6 +2157,7 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2412,12 +2523,14 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 	BuildingClass const * building = NULL;
 	ObjectClass *object = NULL;
 
-	switch (message) {
+	enum {RA2_RADIO_REPAIR = 28, RA2_RADIO_ON_DEPOT = 35}; // RA2: the exe's message numbers (two extra messages sit at 26 and 27)
+
+	switch ((int)message) { // RA2: the cases mix main's enumerators with RA2's numbers
 
 		/*
 		**	Answers if this object is located on top of a service depot.
 		*/
-		case RADIO_ON_DEPOT:
+		case RA2_RADIO_ON_DEPOT: // RA2: number 35
 			building = Map[Center_Coord()].Cell_Building();
 			if (building == (RadioClass const *)from) {
 				return(RADIO_ROGER);
@@ -2428,7 +2541,7 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 		**	Intercept the repair request and if this object is moving, then no repair
 		**	is possible.
 		*/
-		case RADIO_REPAIR:
+		case RA2_RADIO_REPAIR: // RA2: number 28
 			if (NavCom != NULL) return(RADIO_NEGATIVE);
 			break;
 
@@ -2437,19 +2550,19 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 		**	activity with this object. Basically, ... run away! Run away!
 		*/
 		case RADIO_RUN_AWAY:
-			if (In_Radio_Contact()) {
-				if (NavCom == Contact_With_Whom()) {
+			if (HasAnyLink()) { // RA2: the link test is HasAnyLink, the partner comes from Radio_Link(0)
+				if (NavCom == Radio_Link(0)) { // RA2: as above
 					Assign_Destination(NULL);
 				}
 			}
 			if (Mission == MISSION_SLEEP) {
-				Assign_Mission(MISSION_GUARD);
+				QueueMission(MISSION_GUARD, false); // RA2: QueueMission (slot 116), not Assign_Mission
 				if (Ready_To_Commence()) {
 					Commence();
 				}
 			}
 			if (Mission == MISSION_ENTER) {
-				Assign_Mission(MISSION_GUARD);
+				QueueMission(MISSION_GUARD, false); // RA2: as above
 			}
 			if (!IsRotating && NavCom == NULL) {
 				Scatter(COORD_NONE, true, true);
@@ -2478,7 +2591,7 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 						return(RADIO_YEA_NOW_WHAT);
 				} else {
 					if (Mission == MISSION_GUARD && MissionQueue == MISSION_NONE) {
-						Assign_Mission(MISSION_MOVE);
+						QueueMission(MISSION_MOVE, false); // RA2: as above
 					}
 					if (MissionQueue == MISSION_ENTER && Ready_To_Commence()) {
 						Commence();
@@ -2502,6 +2615,7 @@ RadioMessageType FootClass::Receive_Message(RadioClass * from, RadioMessageType 
 	}
 	return(BASECLASS::Receive_Message(from, message, param));
 }
+
 
 
 /***********************************************************************************************
@@ -2676,7 +2790,8 @@ void FootClass::Detach_All(bool all)
 	}
 
 	if (!all) {
-		if (In_Radio_Contact() && !House->Is_Ally(Contact_With_Whom())) {
+		TechnoClass * whom = Radio_Link(0); // RA2: the out-of-line link accessor, not In_Radio_Contact/Contact_With_Whom's inline reads
+		if (whom != NULL && !House->Is_Ally(whom)) { // RA2: as above
 			Transmit_Message(RADIO_OVER_OUT);
 		}
 	} else {
@@ -2685,6 +2800,7 @@ void FootClass::Detach_All(bool all)
 
 	BASECLASS::Detach_All(all);
 }
+
 
 
 /***********************************************************************************************
@@ -2826,6 +2942,18 @@ void FootClass::Detach(AbstractClass const * target, bool all)
 		Team = NULL;
 	}
 
+	if (ParasiteEatingMe == target && (ParasiteEatingMe->Strength == 0 || !ScenarioActive)) { // RA2: the parasite that is eating this object is forgotten
+		ParasiteEatingMe = NULL; // RA2: as above
+	}
+
+	if (ParasiteEatingMe != NULL && ParasiteEatingMe->Strength > 0) { // RA2: as above, a living eater is told as well
+		ParasiteEatingMe->ParasiteImUsing->Detach(target, true); // RA2: as above
+	}
+
+	if (target == this) { // RA2: as above
+		ParasiteEatingMe = NULL; // RA2: as above
+	}
+
 	if (Member == target && all) {
 		if (target != NULL) {
 			Member = Member->Member;
@@ -2833,7 +2961,7 @@ void FootClass::Detach(AbstractClass const * target, bool all)
 	}
 
 	if (ArchiveTarget == target) {
-		ArchiveTarget = NULL;
+		Assign_Archive_Target(NULL); // RA2: the setter call, not a store
 	}
 
 	if (SuspendedNavCom == target) {
@@ -2845,11 +2973,27 @@ void FootClass::Detach(AbstractClass const * target, bool all)
 	**	computer must be cleared.
 	*/
 	if (NavCom == target) {
-		CellClass * cptr;
-		if (all || !target->Is_Techno() || (cptr = &Map[target->Center_Coord()], !cptr->Is_Sensed(House->HeapID))) {
+		bool forget = true; // RA2: a flag replaces the old single condition
+		bool techno = false; // RA2: as above
+		if (!all && target != NULL) { // RA2: as above
+			techno = target->AbstractFlags & 1; // RA2: the Is_Techno test is read into a local
+		}
+		if (!all && target != NULL && techno) { // RA2: as above
+			CellClass * cptr = &Map[target->Center_Coord()]; // RA2: as above
+			if (cptr->Is_Sensed(House->HeapID)) { // RA2: as above
+				forget = false; // RA2: as above
+			}
+		}
+		if (Mission == MISSION_CAPTURE && RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->Occupier && NavCom != NULL && (NavCom->AbstractFlags & 2) && ((ObjectClass *)NavCom)->IsActive && ((ObjectClass *)NavCom)->Strength > 0) { // RA2: an infantry unit capturing an occupiable building keeps its NavCom while the building lives
+		} else if (forget) { // RA2: as above
+			FollowTarget = NULL; // RA2: the follow target is dropped with the NavCom
 			NavCom = NULL;
 		}
-		//Restore_Mission();
+	}
+
+	if (MegaTarget == target) { // RA2: as above
+		MegaDestination = &Map[Cell(MegaTarget->Center_Coord())]; // RA2: a Mega order whose target goes away keeps its cell as the destination
+		MegaTarget = NULL; // RA2: as above
 	}
 
 	/*
@@ -2869,6 +3013,7 @@ void FootClass::Detach(AbstractClass const * target, bool all)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3033,10 +3178,10 @@ bool FootClass::Can_Demolish(void) const
 	switch ((RTTIType)RTTI) {
 		case RTTI_UNIT:
 		case RTTI_AIRCRAFT:
-			if (In_Radio_Contact() &&
-				Contact_With_Whom()->RTTI == RTTI_BUILDING &&
-				((BuildingClass *)Contact_With_Whom())->Class->IsCanUnitRepair &&
-				Distance(Contact_With_Whom()->Center_Coord()) < CELL_LEPTON / 2) {
+			if (HasAnyLink() && // RA2: the link test is HasAnyLink and the partner comes from Radio_Link(0), not the inline accessors
+				Radio_Link(0)->RTTI == RTTI_BUILDING && // RA2: as above
+				((BuildingClass *)Radio_Link(0))->Class->IsCanUnitRepair && // RA2: as above
+				(Center_Coord() - Radio_Link(0)->Center_Coord()).Length() < CELL_LEPTON / 2) { // RA2: as above
 
 				return(true);
 			}
@@ -3047,6 +3192,7 @@ bool FootClass::Can_Demolish(void) const
 	}
 	return(BASECLASS::Can_Demolish());
 }
+
 
 
 /***********************************************************************************************
@@ -3204,13 +3350,14 @@ void FootClass::Queue_Navigation_List(AbstractClass * target)
 		**	navigation queue now.
 		*/
 		if (NavCom == NULL && Mission == MISSION_GUARD) {
-			TechnoClass *tptr = Contact_With_Whom();
+			TechnoClass *tptr = Radio_Link(0); // RA2: the out-of-line link accessor, not Contact_With_Whom's inline array read
 			if (tptr == NULL || tptr->RTTI != RTTI_BUILDING || !((BuildingClass*)tptr)->Class->IsWeaponsFactory) {
 				Enter_Idle_Mode();
 			}
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3627,16 +3774,17 @@ void FootClass::Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_i
 /// <returns>Returns with the current speed of the object.</returns>
 int FootClass::Current_Speed(void)
 {
-	int speed = Get_Max_Speed() * House->GroundspeedBias * SpeedBias;
+	int speed = (int)(Get_Max_Speed() * (double)House->Speed_Multiplier(Techno_Type_Class()) * SpeedBias); // RA2: the house's per-type speed factor (a float the exe widens to double) replaces GroundspeedBias
 	if (Has_Ability(ABILITY_FASTER)) {
-		speed *= (1 + Rule->VeteranSpeed);
+		speed = (int)(speed * Rule->VeteranSpeed); // RA2: VeteranSpeed is the whole factor, not 1 + VeteranSpeed
 	}
-	speed *= Speed;
+	speed = (int)(speed * Speed); // RA2: as above, the product is truncated per step
 	if (RTTI == RTTI_UNIT && ((UnitClass *)this)->Flagged != HOUSE_NONE) {
 		speed /= 2;
 	}
 	return(speed);
 }
+
 
 
 /// <summary>
@@ -3865,7 +4013,7 @@ void FootClass::Link_DropPod(void)
 bool FootClass::Is_Docked_For_Repair(void)
 {
 	if (NavCom == NULL && TarCom == NULL) {
-		TechnoClass * whom = Contact_With_Whom();
+		TechnoClass * whom = Radio_Link(0); // RA2: the out-of-line link accessor, not Contact_With_Whom's inline array read
 		BuildingClass * bptr = NULL;
 		if (whom != NULL && whom->RTTI == RTTI_BUILDING) {
 			bptr = (BuildingClass *)whom;
@@ -3875,6 +4023,7 @@ bool FootClass::Is_Docked_For_Repair(void)
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -4250,7 +4399,7 @@ void FootClass::Set_Waypoint_Path(PathType path, char index)
 /// the path.
 /// </summary>
 /// <param name="waypoint">The waypoint to act upon. A NULL waypoint abandons the path.</param>
-void FootClass::Execute_Waypoint_Path(WaypointClass * waypoint)
+bool FootClass::Execute_Waypoint_Path(WaypointClass * waypoint) // RA2: returns bool (the old void had no result)
 {
 	bool action_succeeded = false;
 
@@ -4272,53 +4421,38 @@ void FootClass::Execute_Waypoint_Path(WaypointClass * waypoint)
 
 		Cell waypoint_cell = waypoint_coord;
 
-		ActionType waypoint_action = ACTION_NONE;
-		Cell waypoint_offset;
-		Cell adjusted_waypoint;
-		CellClass * adjusted_cell = NULL;
-		CellClass * waypoint_map_cell = NULL;
-		ActionType adjusted_action = ACTION_NONE;
-		int waypoint_zone = -1;
-		int adjusted_zone = -1;
-		int destination_zone = -1;
-		MoveType entry_result = MOVE_OK;
-		int walk_distance_limit = 0;
+		ActionType action; // RA2: one action variable serves the occupier, waypoint and adjusted queries
 		bool is_direct_waypoint = true;
 		bool should_click_occupier = false;
 
 		if (occupying_techno != NULL) {
-			BuildingClass * building;
-			bool needs_repair;
-			bool needs_reload;
-			bool is_allied_building;
-
-			ActionType occupier_action = What_Action(occupying_object, true);
+			action = What_Action(occupying_object, true); // RA2: as above
 
 			if (PlayerPtr->Is_Ally(occupying_techno->House)) {
 				if (occupying_techno->RTTI == RTTI_BUILDING) {
-					building = (BuildingClass *)occupying_techno;
+					BuildingClass * building = (BuildingClass *)occupying_techno; // RA2: as above
 
-					needs_repair = (building->Class->IsCanUnitRepair &&
+					bool needs_repair = (building->Class->IsCanUnitRepair && // RA2: as above
 						Strength < (int)TClass->MaxStrength &&
 						RTTI != RTTI_INFANTRY);
 
-					needs_reload = (building->Class->IsCanUnitReload &&
+					bool needs_reload = (building->Class->IsCanUnitReload && // RA2: as above
 						Ammo < TClass->MaxAmmo &&
 						Ammo != -1);
 
-					is_allied_building = building->House->Is_Ally(PlayerPtr);
+					bool is_allied_building = building->House->Is_Ally(PlayerPtr); // RA2: as above
 
 					if ((needs_repair || needs_reload) &&
 						is_allied_building &&
-						occupier_action != ACTION_SELECT &&
-						occupier_action != ACTION_TOGGLE_SELECT) {
+						action != ACTION_SELECT && // RA2: as above
+						action != ACTION_TOGGLE_SELECT) { // RA2: as above
 						should_click_occupier = true;
 					}
 				}
-			} else if (occupier_action != ACTION_TOGGLE_SELECT &&
-					   occupier_action != ACTION_SELECT &&
-					   occupier_action != ACTION_MOVE &&
-					   occupier_action != ACTION_NOMOVE) {
+			} else if (action != ACTION_TOGGLE_SELECT && // RA2: as above
+					   action != ACTION_SELECT && // RA2: as above
+					   action != ACTION_MOVE && // RA2: as above
+					   action != ACTION_NOMOVE) { // RA2: as above
 				should_click_occupier = true;
 			}
 
@@ -4349,37 +4483,38 @@ void FootClass::Execute_Waypoint_Path(WaypointClass * waypoint)
 		}
 
 		if (should_click_occupier) {
-			ActionType click_action = What_Action(occupying_object, true);
-			action_succeeded = Active_Click_With(click_action, occupying_object, true);
+			action = What_Action(occupying_object, true); // RA2: as above
+			action_succeeded = Active_Click_With(action, occupying_object, true); // RA2: as above
 			WaypointOffsetCell = Cell(0, 0);
 		} else {
 
-			waypoint_action = What_Action(waypoint_cell, false, true);
-			waypoint_offset = WaypointOffsetCell;
-			adjusted_waypoint = waypoint_cell + waypoint_offset;
-			adjusted_cell = &Map[adjusted_waypoint];
-			waypoint_map_cell = &Map[waypoint_cell];
-			adjusted_action = What_Action(adjusted_waypoint, false, true);
+			action = What_Action(waypoint_cell, false, true); // RA2: as above
+			Cell waypoint_offset = WaypointOffsetCell; // RA2: as above
+			Cell adjusted_waypoint = waypoint_cell + waypoint_offset; // RA2: as above
+			CellClass * adjusted_cell = &Map[adjusted_waypoint]; // RA2: as above
+			CellClass * waypoint_map_cell = &Map[waypoint_cell]; // RA2: as above
+			ActionType adjusted_action = What_Action(adjusted_waypoint, false, true); // RA2: as above
 
-			waypoint_zone = Map.Get_Cell_Zone(waypoint_cell, TClass->MZone, waypoint_map_cell->IsUnderBridge);
+			int adjusted_zone; // RA2: declared first, the exe keeps the adjusted zone in the lower slot
+			int waypoint_zone = Map.Get_Cell_Zone(waypoint_cell, TClass->MZone, waypoint_map_cell->IsUnderBridge); // RA2: as above
 			adjusted_zone = Map.Get_Cell_Zone(adjusted_waypoint, TClass->MZone, adjusted_cell->IsUnderBridge);
-			destination_zone = Map.Get_Cell_Zone(Destination_Coord().As_Cell(), TClass->MZone, Is_Moving_Onto_Bridge());
-			entry_result = Can_Enter_Cell(adjusted_cell, FACING_NONE,
+			int destination_zone = Map.Get_Cell_Zone(Destination_Coord().As_Cell(), TClass->MZone, Is_Moving_Onto_Bridge()); // RA2: as above
+			MoveType entry_result = Can_Enter_Cell(adjusted_cell, FACING_NONE, // RA2: as above
 				adjusted_cell->Height + (BRIDGE_CELL_HEIGHT * adjusted_cell->IsUnderBridge), 0, true);
 
-			walk_distance_limit = MAX(abs((int)waypoint_offset.X), abs((int)waypoint_offset.Y));
+			int walk_distance_limit = MAX(abs((int)waypoint_offset.X), abs((int)waypoint_offset.Y)); // RA2: as above
 			walk_distance_limit = MIN(5, walk_distance_limit + 3);
 
-			if (waypoint_action != adjusted_action && is_direct_waypoint ||
+			if (action != adjusted_action && is_direct_waypoint || // RA2: as above
 				entry_result != MOVE_OK ||
 				adjusted_zone != waypoint_zone ||
 				destination_zone != adjusted_zone ||
 				is_direct_waypoint && Search.Test_Cell_Walk(adjusted_waypoint, waypoint_cell, this,
 					adjusted_cell->IsUnderBridge, waypoint_map_cell->IsUnderBridge, MZONE_NONE) > walk_distance_limit) {
-				action_succeeded = Active_Click_With(waypoint_action, waypoint_cell, Cell(-1, -1), true); // RA2: a second cell, (-1, -1) at 0x4CB110
+				action_succeeded = Active_Click_With(action, waypoint_cell, Cell(-1, -1), true); // RA2: a second cell, (-1, -1) at 0x4CB110
 				WaypointOffsetCell = Cell(0, 0);
 			} else {
-				action_succeeded = Active_Click_With(waypoint_action, adjusted_waypoint, Cell(-1, -1), true); // RA2: as above
+				action_succeeded = Active_Click_With(action, adjusted_waypoint, Cell(-1, -1), true); // RA2: as above
 				WaypointTargetCell = adjusted_waypoint;
 			}
 		}
@@ -4397,7 +4532,9 @@ void FootClass::Execute_Waypoint_Path(WaypointClass * waypoint)
 	}
 
 	IsOnWaypointPatrol = false;
+	return(action_succeeded); // RA2: the success flag is the return value
 }
+
 
 
 /***********************************************************************************************
@@ -4480,10 +4617,7 @@ Cell FootClass::Search_For_Tiberium(int rad, bool allow_weighted)
 {
 	Cell bestcell = CELL_NONE;
 
-	if (!House->Is_Human_Player() && RTTI == RTTI_UNIT && ((UnitClass *)this)->Class->IsToHarvest && allow_weighted && Session.Type != GAME_NORMAL) {
-		return(Search_For_Tiberium_Weighted(rad));
-	}
-
+	// RA2: no weighted search here, whatever allow_weighted says
 	Cell center = Center_Coord().As_Cell();
 	if (Map[center].Land_Type() == LAND_TIBERIUM) {
 		return(center);
@@ -4537,6 +4671,7 @@ Cell FootClass::Search_For_Tiberium(int rad, bool allow_weighted)
 	}
 	return(bestcell);
 }
+
 
 
 /// <summary>
@@ -4993,11 +5128,12 @@ Cell FootClass::Move_Order(Cell const & where, bool consider_fog)
 		MZoneType mzone = TClass->MZone;
 		if (mzone == MZONE_SUBTERANNEAN) {
 			mzone = MZONE_NORMAL;
-		} else if (mzone == MZONE_FLYER && IonStormClass::Is_Ion_Storm_Active()) {
+		} else if (mzone == MZONE_FLYER && House->Ion_Sensitives_Should_Be_Offline()) { // RA2: the house decides, no ion storm test
 			mzone = MZONE_INFANTRY;
 		}
 
-		bool ontobridge = Is_Moving_Onto_Bridge(); // RA2: no IsJumpJet, moveanywhere (not in RA2's layout)
+		bool moveanywhere = (In_Air() || TClass->IsSubterranean || (RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->JumpJet && !House->Ion_Sensitives_Should_Be_Offline()) || RTTI == RTTI_AIRCRAFT) ? true : false; // RA2: an airborne unit also moves anywhere
+		bool ontobridge = Is_Moving_Onto_Bridge();
 
 		Coord coord2 = where.As_Coord();
 		coord2.Z = Map.Get_Height_GL(coord2);
@@ -5007,14 +5143,20 @@ Cell FootClass::Move_Order(Cell const & where, bool consider_fog)
 
 		bool shroud = Map.Is_Shrouded(coord2);
 
+		if (moveanywhere && action == ACTION_NOMOVE) {
+			cell = Map.Nearby_Location(where, TClass->Speed, -1, mzone, Map[where].IsUnderBridge, Point2D(1, 1), false, true, TClass->IsSubterranean && HeightAGL < 0, true, Cell(0, 0), false); // RA2: the extra arguments are spelled out
+		} else if (!inradar || shroud || (!moveanywhere && (!TClass->Teleporter || action == ACTION_NOMOVE) && !Map.Is_Same_Cell_Zone(cptr->CellID, cell, mzone, ontobridge, Map[where].IsUnderBridge, false))) { // RA2: a teleporter only needs the zone test for a refused move
+			cell = Map.Nearby_Location(where, TClass->Speed, Map.Get_Cell_Zone(cptr->CellID, mzone, ontobridge), mzone, Map[where].IsUnderBridge, Point2D(1, 1), false, true, false, true, Cell(0, 0), false); // RA2: as above
+		}
 
-		if (cell != CELL_NONE) { // RA2: no moveanywhere (not in RA2's layout)
+		if (cell != CELL_NONE) {
 			return(cell);
 		}
 	}
 
 	return(CELL_NONE);
 }
+
 
 
 /// <summary>

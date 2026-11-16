@@ -2292,7 +2292,6 @@ address,symbol,evidence
 0x004CAFB0,?Threat_Avoidance_Value@FootClass@@QBENXZ,"compiled from src/foot.cpp, matched"
 0x004CAFE0,?Should_Delete_Off_Map@FootClass@@UAE_NXZ,"compiled from src/foot.cpp, matched"
 0x004CB060,?Set_Waypoint_Path@FootClass@@UAEXW4PathType@@D@Z,"compiled from src/foot.cpp, matched"
-0x004CB110,?Execute_Waypoint_Path@FootClass@@QAEXPAVWaypointClass@@@Z,"inferred: referenced by matched src/foot.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x004CB6D0,?Tiberium_Check@FootClass@@QAE_NAAVCell@@@Z,"compiled from src/foot.cpp, matched"
 0x004CB830,?Goto_Tiberium@FootClass@@QAE_NH_N@Z,"compiled from src/foot.cpp, matched"
 0x004CB8F0,?Search_For_Tiberium@FootClass@@QAE?AVCell@@H_N@Z,"inferred: referenced by matched src/foot.cpp (1 reference); across all matched code never at another address, and no other symbol here"

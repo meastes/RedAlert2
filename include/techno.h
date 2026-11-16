@@ -845,6 +845,7 @@ class TechnoClass :	public RadioClass,
 		int Expected_Damage(TechnoClass * target, WeaponTypeClass const * weapon); // RA2: 0x6CA6C0
 		int Get_Sight_Bonus(Coord const & coord);
 		bool Can_Scan_For_Target(void); // RA2: 0x6D40C0
+		bool TargetingTimerFinished(void); // RA2: 0x6D9710 (YR name), no definition yet: the targeting timer has run out; read by FootClass::Do_MISSION_GUARD_AREA
 		bool Should_Scan_For_Target(void); // RA2: 0x6D4180
 		bool Scan_For_Target(void); // RA2: 0x6D4310
 		int Is_Moving_Guarding_Or_Harvesting(void) const; // RA2: 0x6D4390

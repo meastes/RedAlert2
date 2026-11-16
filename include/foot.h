@@ -506,7 +506,8 @@ class FootClass : public TechnoClass
 		virtual void AI(void) override;
 		virtual void Sell_Back(int control) override;
 		virtual void Set_Waypoint_Path(PathType path, char index) override;
-		void Execute_Waypoint_Path(WaypointClass * waypoint);
+		BuildingClass * Find_Adjacent_Overpowerable(void); // RA2: 0x4C45B0 (meastes unknown_4c45b0), the first adjacent Overpowerable building of this object's owner
+		bool Execute_Waypoint_Path(WaypointClass * waypoint); // RA2: returns whether the click succeeded (bool in al at 0x4CB110)
 		virtual int Offload_Tiberium_Bail(void);
 		virtual BuildingClass * TryNearestDockBuilding(TypeList<BuildingTypeClass *> * list, unsigned unk2, unsigned unk3) const; // RA2
 		virtual BuildingClass * FindCloserDockBuilding(BuildingTypeClass * type, unsigned unk2, unsigned unk3, int * distance) const; // RA2
