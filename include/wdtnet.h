@@ -710,6 +710,27 @@ namespace WorldDominationTour
 	};
 
 	/*
+	 * RA2: TibSun's option whose value falls into one of five bands. RA2 never makes one (no constructor, no
+	 * table of virtual functions); its members are in the executable (0x00728690-0x007287C6), which gives the
+	 * layout: a label whose text is completed by the band number, and the four limits of the bands.
+	 */
+	class RangedGameOption : public GameOption {
+		public:
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const override; // RA2: 0x007287B0
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const override; // RA2: 0x00728690
+			virtual int Get_Range(rc_ptr<WDTTerritory> const & territory) const = 0; // RA2: vtable +0x14, the band of the territory's value
+			int In_Range_Of(unsigned int value) const; // RA2: 0x00728770; the band of a value
+
+		public:
+			int Reserved; // RA2: +0x0C, not read by this unit
+			Wstring Label; // RA2: +0x10; the label of the text, completed by the band number
+			unsigned int Range0; // RA2: +0x14
+			unsigned int Range1; // RA2: +0x18
+			unsigned int Range2; // RA2: +0x1C
+			unsigned int Range3; // RA2: +0x20
+	};
+
+	/*
 	 * RA2: an on/off option, from the bit of its Bitmask in the territory's flags.
 	 */
 	class FlagGameOption : public GameOption {
@@ -724,6 +745,16 @@ namespace WorldDominationTour
 			int OnValue; // RA2: +0x10
 			Wstring OnString; // RA2: +0x14
 			Wstring OffString; // RA2: +0x18
+	};
+
+	/*
+	 * RA2: TibSun's option that restricts the battle to two or four players (TibSun's name; the executable has
+	 * no type information for it). RA2 never makes one either (0x00728970, 0x00728980 only).
+	 */
+	class NumberOfPlayersGameOption : public GameOption {
+		public:
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const override; // RA2: 0x00728970
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const override; // RA2: 0x00728980
 	};
 
 	/*

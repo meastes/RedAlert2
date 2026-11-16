@@ -9,16 +9,24 @@
 
 #include "always.h"
 
+#include "geoconst1.h" // RA2: this unit holds its own copy of the geometry constants (its first initializers)
+
 #include "data.h"
+#include "globals.h" // RA2: the includes this file needs
 #include "language\language.h"
 #include "wdtnet.h"
+#include "wstring.h" // RA2: as above
+#include "geoconst2.h" // RA2: the slope and bridge constants (after globals.h)
 
 using namespace WorldDominationTour;
+
+Wstring __fastcall operator+(Wstring const & left, Wstring const & right); // RA2: 0x0076F7D0, the label and the band number joined
+WideWstring __fastcall operator+(WideWstring const & left, WideWstring const & right); // RA2: 0x00771460, the text so far and the separator joined
 
 
 /// <summary>
 /// Destructor for game option objects.
-/// The options are static descriptors that own nothing of their own; this routine exists
+/// The options are counted descriptors that own nothing of their own; this routine exists
 /// so that the derived options can be destroyed through a base pointer.
 /// </summary>
 GameOption::~GameOption(void)
@@ -33,39 +41,29 @@ GameOption::~GameOption(void)
 /// set as he pleases before the battle begins.
 /// </summary>
 /// <returns>bool; Is this option left to the player's discretion?</returns>
-bool GameOption::Is_User_Modifiable(const WDTTerritory * territory)
+bool GameOption::Is_User_Modifiable(rc_ptr<WDTTerritory> const & territory) const // RA2: the territory is a counted pointer and no option is ever left to the player (0x00728680)
 {
-	return((territory->UserModBooleans & Bitmask) != 0);
+	return(false); // RA2: as above
 }
 
 
 /// <summary>
-/// Adds a separating comma to the option string.
-/// The game options append their descriptions one after another, so each calls this
-/// routine first in order to keep the list readable.
+/// Appends the wording for this option's band to the text so far.
+/// The option owns a label whose text is completed by the number of the band, so the
+/// description reads as low or high rather than as a raw number.
 /// </summary>
-/// <param name="str">The string being built up.</param>
-/// <param name="len">The maximum number of characters that may be appended.</param>
-void WDT_Game_Option_Append_Comma(char *str, int len)
+/// <param name="territory">The territory the option is described for.</param>
+/// <param name="prefix">The text built up so far.</param>
+/// <returns>Returns with the text so far and the wording of the band.</returns>
+WideWstring RangedGameOption::Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const // RA2: returns the text so far with the label of the band number appended (0x00728690); the label is completed by the number, loaded as a counted wide text
 {
-	if (*str != '\0') {
-		strncat(str, ", ", len);
+	int range = Get_Range(territory); // RA2: as above
+	Wstring label = operator+(Label, Wstring_FromInt(range)); // RA2: as above
+	if (prefix.length() != 0) { // RA2: as above
+		WideWstring separator(L", "); // RA2: as above
+		return(operator+(prefix, separator) + StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 22)); // RA2: as above
 	}
-}
-
-
-/// <summary>
-/// Appends the wording for this option's band to the display string.
-/// The option owns a run of strings, one per band, so the description reads as low or
-/// high rather than as a raw number.
-/// </summary>
-/// <param name="str">The string to append the description to.</param>
-/// <param name="len">The maximum number of characters that may be appended.</param>
-void RangedGameOption::Get_String(const WDTTerritory * territory, char * str, int len)
-{
-	int stringid = Get_In_Range_Of(territory);
-	WDT_Game_Option_Append_Comma(str, len);
-	strncat(str, Fetch_String(StringID + stringid), len);
+	return(WideWstring(StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 25))); // RA2: as above
 }
 
 
@@ -76,7 +74,7 @@ void RangedGameOption::Get_String(const WDTTerritory * territory, char * str, in
 /// </summary>
 /// <param name="value">The setting to classify.</param>
 /// <returns>Returns with the band the value belongs to.</returns>
-int RangedGameOption::In_Range_Of(unsigned int value)
+int RangedGameOption::In_Range_Of(unsigned int value) const // RA2: const (0x00728770)
 {
 	if (value <= Range0) {
 		return(WDT_GAME_OPT_RANGE_VERY_LOW);
@@ -96,16 +94,28 @@ int RangedGameOption::In_Range_Of(unsigned int value)
 
 /// <summary>
 /// Determines how prominently this ranged option should be listed for the territory.
-/// A setting sitting in the middle of its range is unremarkable and is treated the same
-/// as one the player is free to change.
+/// A setting sitting in the middle of its range is unremarkable and is left out of the
+/// first pass.
 /// </summary>
 /// <returns>Returns with the display priority this option has earned.</returns>
-int RangedGameOption::Get_Display_Priority(const WDTTerritory * territory)
+int RangedGameOption::Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const // RA2: no option is left to the player, so only the middle band is worth skipping (0x007287B0)
 {
-	if (Is_User_Modifiable(territory) || Get_In_Range_Of(territory) == WDT_GAME_OPT_RANGE_MIDDLE) {
+	if (Get_Range(territory) == WDT_GAME_OPT_RANGE_MIDDLE) { // RA2: the band comes from the option's own Get_Range
 		return(WDT_GAME_OPT_USER_MOD);
 	}
 	return(WDT_GAME_OPT_PRIORITY);
+}
+
+
+/// <summary>
+/// Creates a counted flag option.
+/// The option names the bit of the territory's flags it reads, the wording and the display
+/// priority of the flag being off, and the wording and the display priority of it being on.
+/// </summary>
+/// <returns>Returns with the new option.</returns>
+rc_ptr<FlagGameOption> __fastcall FlagGameOption::Create(unsigned int bitmask, Wstring off_string, int off_value, Wstring on_string, int on_value) // RA2: a counted option made from the bit, the two labels and the two priorities (0x007287D0)
+{
+	return(rc_ptr<FlagGameOption>(new FlagGameOption(bitmask, off_string, off_value, on_string, on_value))); // RA2: as above
 }
 
 
@@ -115,11 +125,8 @@ int RangedGameOption::Get_Display_Priority(const WDTTerritory * territory)
 /// switched on can be shown more urgently than one that is switched off.
 /// </summary>
 /// <returns>Returns with the display priority this option has earned.</returns>
-int FlagGameOption::Get_Display_Priority(const WDTTerritory * territory)
+int FlagGameOption::Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const // RA2: no option is left to the player, so the flag's state alone decides (0x00728850)
 {
-	if (Is_User_Modifiable(territory)) {
-		return(WDT_GAME_OPT_USER_MOD);
-	}
 	if (territory->Booleans & Bitmask) {
 		return(OnValue);
 	}
@@ -128,50 +135,78 @@ int FlagGameOption::Get_Display_Priority(const WDTTerritory * territory)
 
 
 /// <summary>
-/// Appends the on or off wording of this flag to the display string.
-/// A flag whose current state has no wording assigned to it stays silent.
+/// Appends the on or off wording of this flag to the text so far.
+/// A flag whose current state has no wording assigned to it leaves the text as it is.
 /// </summary>
-/// <param name="str">The string to append the description to.</param>
-/// <param name="len">The maximum number of characters that may be appended.</param>
-void FlagGameOption::Get_String(const WDTTerritory * territory, char * str, int len)
+/// <param name="territory">The territory the option is described for.</param>
+/// <param name="prefix">The text built up so far.</param>
+/// <returns>Returns with the text so far and the wording of the flag's state.</returns>
+WideWstring FlagGameOption::Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const // RA2: returns the text so far with the label of the flag's state appended (0x00728870); a state without a label leaves the text as it is
 {
-	int stringid = (territory->Booleans & Bitmask) ? OnString : OffString;
-	if (stringid != TXT_NONE) {
-		WDT_Game_Option_Append_Comma(str, len);
-		strncat(str, Fetch_String(stringid), len);
+	Wstring label = (territory->Booleans & Bitmask) ? OnString : OffString; // RA2: as above
+	if (label.length() == 0) { // RA2: as above
+		return(prefix); // RA2: as above
 	}
+	if (prefix.length() > 0) { // RA2: as above
+		WideWstring separator(L", "); // RA2: as above
+		return(operator+(prefix, separator) + StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 78)); // RA2: as above
+	}
+	return(WideWstring(StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 81))); // RA2: as above
 }
 
 
 /// <summary>
 /// Determines how prominently the player count should be listed for this territory.
-/// A count the player is stuck with matters more than one he may change himself.
 /// </summary>
 /// <returns>Returns with the display priority this option has earned.</returns>
-int NumberOfPlayersGameOption::Get_Display_Priority(const WDTTerritory * territory)
+int NumberOfPlayersGameOption::Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const // RA2: no option is left to the player (0x00728970)
 {
-	if (Is_User_Modifiable(territory)) {
-		return(WDT_GAME_OPT_USER_MOD);
-	}
 	return(WDT_GAME_OPT_PRIORITY);
 }
 
 
 /// <summary>
-/// Appends the player count restriction of the territory to the display string.
-/// Nothing is added when the player is free to pick the number of players for himself.
+/// Appends the player count restriction of the territory to the text so far.
 /// </summary>
-/// <param name="str">The string to append the description to.</param>
-/// <param name="len">The maximum number of characters that may be appended.</param>
-void NumberOfPlayersGameOption::Get_String(const WDTTerritory * territory, char * str, int len)
+/// <param name="territory">The territory the option is described for.</param>
+/// <param name="prefix">The text built up so far.</param>
+/// <returns>Returns with the text so far and the wording of the restriction.</returns>
+WideWstring NumberOfPlayersGameOption::Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const // RA2: returns the text so far with the label of the two or four player restriction appended (0x00728980)
 {
-	if (!Is_User_Modifiable(territory)) {
-		int stringid = territory->NumPlayers == 4 ? TXT_WDT_FOUR_PLAYER_ONLY : TXT_WDT_TWO_PLAYER_ONLY;
-		if (stringid != TXT_NONE) {
-			WDT_Game_Option_Append_Comma(str, len);
-			strncat(str, Fetch_String(stringid), len);
-		}
+	Wstring label(territory->NumPlayers == 4 ? "WDT:FourPlayerOnly" : "WDT:TwoPlayerOnly"); // RA2: the labels of the string table
+	if (prefix.length() > 0) { // RA2: as above
+		WideWstring separator(L", "); // RA2: as above
+		return(operator+(prefix, separator) + StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 104)); // RA2: as above
 	}
+	return(WideWstring(StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\WDTGameOptions.cpp", 107))); // RA2: as above
+}
+
+
+/// <summary>
+/// Creates a counted map size option.
+/// </summary>
+/// <returns>Returns with the new option.</returns>
+rc_ptr<MapSizeGameOption> __fastcall MapSizeGameOption::Create(unsigned int bitmask) // RA2: a counted option made from the bit (0x00728A60)
+{
+	return(rc_ptr<MapSizeGameOption>(new MapSizeGameOption(bitmask))); // RA2: as above
+}
+
+
+/// <summary>
+/// Appends a description of the territory's map size to the text so far.
+/// This routine is used while building the summary of a territory so that the player can
+/// see at a glance what shape of battlefield is being fought over.
+/// </summary>
+/// <param name="territory">The territory the option is described for.</param>
+/// <param name="prefix">The text built up so far.</param>
+/// <returns>Returns with the text so far and the wording of the map size.</returns>
+WideWstring MapSizeGameOption::Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const // RA2: returns the text so far with the label of the map size appended (0x00728AB0); one label per size step, read for the width after a comma and for the height otherwise
+{
+	static char const * const _labels[4] = { "WDT:SmallMap", "WDT:MediumMap", "WDT:LargeMap", "WDT:VeryLargeMap" }; // RA2: the labels of the string table (0x007AF140)
+	if (prefix.length() > 0) { // RA2: as above
+		return(operator+(prefix, L", ") + StringTable::LoadString(_labels[territory->Width], NULL, "D:\\Ra2\\WDTGameOptions.cpp", 129)); // RA2: the separator is made from the text where the executable joins the two
+	}
+	return(WideWstring(StringTable::LoadString(_labels[territory->Height], NULL, "D:\\Ra2\\WDTGameOptions.cpp", 131))); // RA2: as above
 }
 
 
@@ -181,7 +216,7 @@ void NumberOfPlayersGameOption::Get_String(const WDTTerritory * territory, char 
 /// left further down the summary.
 /// </summary>
 /// <returns>Returns with the display priority this option has earned.</returns>
-int MapSizeGameOption::Get_Display_Priority(const WDTTerritory * territory)
+int MapSizeGameOption::Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const // RA2: no option is left to the player, so the size alone decides (0x00728B70)
 {
 	static int _table[4][4] = {
 		{ WDT_GAME_OPT_PRIORITY, WDT_GAME_OPT_PRIORITY,	 WDT_GAME_OPT_PRIORITY,	 WDT_GAME_OPT_PRIORITY },
@@ -190,36 +225,23 @@ int MapSizeGameOption::Get_Display_Priority(const WDTTerritory * territory)
 		{ WDT_GAME_OPT_PRIORITY, WDT_GAME_OPT_PRIORITY,	 WDT_GAME_OPT_PRIORITY,	 WDT_GAME_OPT_PRIORITY }
 	};
 
-	if (Is_User_Modifiable(territory)) {
-		return(WDT_GAME_OPT_USER_MOD);
-	}
 	return(_table[territory->Width][territory->Height]);
 }
 
 
 /// <summary>
-/// Appends a description of the territory's map size to the display string.
-/// This routine is used while building the summary of a territory so that the player can
-/// see at a glance what shape of battlefield is being fought over.
+/// Creates a flag option.
 /// </summary>
-/// <param name="str">The string to append the description to.</param>
-/// <param name="len">The maximum number of characters that may be appended.</param>
-void MapSizeGameOption::Get_String(const WDTTerritory * territory, char * str, int len)
+/// <param name="bitmask">The bit of the territory's flags the option reads.</param>
+/// <param name="off_string">The wording of the flag being off.</param>
+/// <param name="off_value">The display priority of the flag being off.</param>
+/// <param name="on_string">The wording of the flag being on.</param>
+/// <param name="on_value">The display priority of the flag being on.</param>
+FlagGameOption::FlagGameOption(unsigned int bitmask, Wstring off_string, int off_value, Wstring on_string, int on_value) : // RA2: the option keeps the bit, the two labels and the two priorities, out of line for Create (0x00728B90)
+	GameOption(bitmask), // RA2: as above
+	OffValue(off_value), // RA2: as above
+	OnValue(on_value), // RA2: as above
+	OnString(on_string), // RA2: as above
+	OffString(off_string) // RA2: as above
 {
-	static int _table[4][4] = {
-		/// "Tiny Map" "Small Map" "Narrow Map" "Tall & Narrow Map"
-		{ TXT_WDT_MAP_TINY,	TXT_WDT_MAP_SMALL,	TXT_WDT_MAP_NARROW,	TXT_WDT_MAP_TALL_NARROW },
-		/// "Small Map" "Small Map" "" "Narrow Map"
-		{ TXT_WDT_MAP_SMALL,	TXT_WDT_MAP_SMALL,	TXT_NONE,	TXT_WDT_MAP_NARROW },
-		/// "Short Map" "" "Large Map" "Large Map"
-		{ TXT_WDT_MAP_SHORT,	TXT_NONE,	TXT_WDT_MAP_LARGE,	TXT_WDT_MAP_LARGE },
-		/// "Short & Wide Map" "Short Map" "Large Map" "Huge Map"
-		{ TXT_WDT_MAP_SHORT_WIDE,	TXT_WDT_MAP_SHORT,	TXT_WDT_MAP_LARGE,	TXT_WDT_MAP_HUGE }
-	};
-
-	int stringid = _table[territory->Width][territory->Height];
-	if (stringid != TXT_NONE) {
-		WDT_Game_Option_Append_Comma(str, len);
-		strncat(str, Fetch_String(stringid), len);
-	}
 }
