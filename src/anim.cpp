@@ -95,6 +95,11 @@
 
 #include "bench.hh"
 
+DynamicVectorClass<ColorScheme *> * __fastcall Generate_Palette(char const * name); // RA2: 0x00603380 (YR ColorScheme::GeneratePalette): the schemes built from the palette file of that name
+namespace FPSCounter { extern unsigned CurrentFrameRate; } // RA2: as in combat.cpp
+namespace Detail { unsigned GetMinFrameRate(void); } // RA2: as above
+bool __fastcall Psychic_Detector_Covers_Cell(HouseClass const * house, CellClass const * cell); // RA2: 0x00438A60 (meastes Building_Player_Detector_Covers_Cell): false for the player's allies, else whether one of the player's powered psychic detectors reaches the cell
+
 
 /***********************************************************************************************
  * AnimClass::AnimClass -- The constructor for animation objects.                              *
@@ -125,13 +130,20 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 	xObject(NULL),
 	OwnerHouse(HOUSE_NONE),
 	AlternativeDrawer(NULL),
+	LightConvertIndex(-1), // RA2: the saved scheme index starts as none
 	AlternativeBrightness(NORMAL_LIGHT),
-	ZAdjust(zadjust),
+	ZAdjust(0), // RA2: the z adjust is set in the body (the argument, else the type's)
 	YSortAdjust(0),
 	FlamingGuyCoords(COORD_NONE),
 	FlamingGuyRetries(0),
 	IsBuildingAnim(false),
+	UnderTemporal(false), // RA2: as above
+	Paused(false), // RA2: as above
+	Unpaused(false), // RA2: as above
+	PausedAnimFrame(0), // RA2: as above
 	Bounce(),
+	TimeToDie(false), // RA2: as above
+	AttachedBullet(NULL), // RA2: as above
 	Loops(1),
 	IsBouncing(false),
 	IsAttachedToCell(false),
@@ -148,7 +160,10 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 	TranslucencyLevel(0),
 	ShapeFlags(flags)
 {
+	PaletteName[0] = '\0'; // RA2: no palette name yet
 	Create_ID();
+	StartSoundAudioController.Init(); // RA2: the two sound handles are reset
+	StopSoundAudioController.Init(); // RA2: as above
 	Anims.Add(this);
 	IsActive = true;
 
@@ -156,10 +171,19 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 
 	if (Class->Stages == -1) {
 		Class->Stages = ((ShapeSet *)Class->Get_Image_Data())->Get_Count();
+		if (Class->Shadow) { // RA2: a type with a shadow keeps only the first half of the frames for the shape
+			Class->Stages = Class->Stages / 2;
+		}
 	}
 	if (Class->LoopEnd == -1) {
 		Class->LoopEnd = Class->Stages;
 	}
+	if (zadjust != 0) { // RA2: the argument wins over the type's z adjust
+		ZAdjust = zadjust;
+	} else {
+		ZAdjust = Class->ZAdjust;
+	}
+
 	int delay = Class->Delay;
 	if (Class->RandomRateMin != 0 || Class->RandomRateMax != 0) {
 		if (Class->RandomRateMin <= Class->RandomRateMax) {
@@ -174,6 +198,11 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 
 	Set_Stage(0);
 
+	if (Class->Layer == LAYER_AIR || Class->Layer == LAYER_TOP) { // RA2: an animation in the air layers starts at flight level, the others on the ground
+		Set_Height(Rule->FlightLevel);
+	} else {
+		BASECLASS::Set_Height_AGL(0);
+	}
 
 	if (Class->IsReverse) { // RA2: no IsGroundLayer (not in RA2's layout)
 		Set_Stage(Class->LoopEnd);
@@ -217,7 +246,8 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 	**	Drop zone smoke always reveals the map around itself.
 	*/
 	if (Class == Rule->FlareAnim) {
-		Map.Sight_From(coord, Rule->DropZoneRadius / CELL_LEPTON_W, PlayerPtr, false);
+		Map.Sight_From(coord, Rule->DropZoneRadius / CELL_LEPTON_W, PlayerPtr, false, false, false, true, false); // RA2: it reveals twice, the second time with the last flag set
+		Map.Sight_From(coord, Rule->DropZoneRadius / CELL_LEPTON_W, PlayerPtr, false, false, false, true, true); // RA2: as above
 	}
 
 	loop = MAX(loop, 1) * Class->Loops;
@@ -233,6 +263,7 @@ AnimClass::AnimClass(AnimTypeClass const * type, Coord const & coord, int timede
 }
 
 
+
 /// <summary>
 /// Constructs a blank animation object.
 /// This constructor serves the load system, which creates an empty animation through the
@@ -244,25 +275,34 @@ AnimClass::AnimClass(void) :
 	Class(NULL),
 	xObject(NULL),
 	OwnerHouse(HOUSE_NONE),
-	Loops(1),
-	IsToDelete(false),
-	IsBrandNew(true),
-	IsInvisible(false),
-	IsDisabled(false),
-	Delay(0),
-	Accum(0),
 	AlternativeDrawer(NULL),
+	LightConvertIndex(-1), // RA2: the saved scheme index starts as none
 	AlternativeBrightness(NORMAL_LIGHT),
 	ZAdjust(0),
 	YSortAdjust(0),
 	IsBuildingAnim(false),
+	UnderTemporal(false), // RA2: as above
+	Paused(false), // RA2: as above
+	Unpaused(false), // RA2: as above
+	PausedAnimFrame(0), // RA2: as above
+	TimeToDie(false), // RA2: as above
+	Delay(0),
+	Accum(0),
 	IsBouncing(false),
+	Loops(1),
 	IsAttachedToCell(false),
-	IsToDeleteOnOverpass(false)
+	IsToDeleteOnOverpass(false),
+	IsToDelete(false),
+	IsBrandNew(true),
+	IsInvisible(false),
+	IsDisabled(false)
 {
 	Anims.Add(this);
+	StartSoundAudioController.Init(); // RA2: the two sound handles are reset
+	StopSoundAudioController.Init(); // RA2: as above
 	IsActive = true;
 }
+
 
 
 /***********************************************************************************************
@@ -320,6 +360,11 @@ AnimClass::~AnimClass(void)
 
 	Class->Free_Image();
 
+	StartSoundAudioController.EndLooping(); // RA2: both sound handles are ended and released
+	StopSoundAudioController.EndLooping(); // RA2: as above
+	StartSoundAudioController.Release(); // RA2: as above
+	StopSoundAudioController.Release(); // RA2: as above
+
 	xObject = NULL;
 	Class = 0;
 
@@ -329,6 +374,7 @@ AnimClass::~AnimClass(void)
 		Anims.Delete(this);
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -486,13 +532,18 @@ bool AnimClass::Render(Rect & rect, bool forced, bool extras_only) const
  *=============================================================================================*/
 void AnimClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 {
+	if (FPSCounter::CurrentFrameRate < Detail::GetMinFrameRate() && Class->DetailLevel > 1) { // RA2: nothing is drawn below the minimum frame rate for a type of detail level 2
+		return;
+	}
 	if (!IsInvisible && Class->DetailLevel <= Options.DetailLevel && (!IsFogged || !Class->IsShouldFogRemove)) {
-		BStart(BENCH_ANIMS);
 		ShapeSet const * shapefile = (ShapeSet const *)Get_Image_Data();
 
 		if (shapefile != NULL) {
 			ShapeFlags_Type flags = ShapeFlags;
 			int shapenum = Class->Start + Fetch_Stage();
+			if (UnderTemporal) { // RA2: an animation under a temporal field is drawn 50% translucent
+				flags = ShapeFlags_Type(flags|SHAPE_TRANSLUCENT50);
+			}
 
 			/*
 			**	If the translucent table hasn't been determined yet, then check to see if it
@@ -570,8 +621,7 @@ void AnimClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 			**	Draw the animation shape.
 			*/
 			if (IsBouncing) {
-				Point2D drawpoint(point.X, point.Y + Class->YDrawOffset + TacticalMap->Z_Lepton_To_Pixel(height));
-				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, drawpoint, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), NULL, Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height));
+				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, point + Point2D(0, Class->YDrawOffset + TacticalMap->Z_Lepton_To_Pixel(height)), cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), NULL, Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, NORMAL_LIGHT, NULL, 0, Point2D(0, 0)); // RA2: the full argument list
 			}
 
 			if (Class->IsTiled) {
@@ -579,27 +629,25 @@ void AnimClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 				Point2D origin = point;
 				Point2D drawpoint = origin - Point2D(0, frameheight / 2);
 				bool done = false;
-				int height_offset = ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 2;
+				int height_offset = ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 50; // RA2: 50 pixels lower
 				while (!done) {
-					Draw_Shape(*LogicalSurface, *AnimDrawer, shapefile, shapenum, Point2D(origin.X, drawpoint.Y + Class->YDrawOffset), TacticalRect, flags, NULL, height_offset, ZGRAD_90DEG, brightness);
+					Draw_Shape(*LogicalSurface, *AnimDrawer, shapefile, shapenum, Point2D(origin.X, drawpoint.Y + Class->YDrawOffset), TacticalRect, ShapeFlags_Type(flags|SHAPE_ZGRAD), NULL, height_offset, ZGRAD_90DEG, brightness); // RA2: with the z gradient
 					if (drawpoint.Y < 0) done = true;
-					height_offset -= frameheight;
-					drawpoint.Y -= frameheight;
+					drawpoint.Y -= frameheight; // RA2: the next slice is a frame and a half further down
+					height_offset -= frameheight + frameheight / 2;
 				}
 			} else if (Class->IsFlat) {
-				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, Point2D(point.X, point.Y + Class->YDrawOffset), cliprect, ShapeFlags_Type(flags|SHAPE_ZGRAD), NULL, ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 2, ZGRAD_GROUND, brightness);
+				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, point + Point2D(0, Class->YDrawOffset), cliprect, ShapeFlags_Type(flags|SHAPE_ZGRAD), NULL, ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 3, ZGRAD_GROUND, brightness); // RA2: 3 pixels lower
 			} else {
-				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, Point2D(point.X, point.Y + Class->YDrawOffset), cliprect, ShapeFlags_Type(flags|SHAPE_ZGRAD), NULL, ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 2, ZGRAD_90DEG, brightness);
-			}
-
-			if (Class->IsFlamingGuy && !IsFalling) {
-				shapenum += shapefile->Get_Count() / 2;
-				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, Point2D(point.X, point.Y + Class->YDrawOffset), cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), NULL, ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 3, ZGRAD_GROUND, brightness);
+				Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum, point + Point2D(0, Class->YDrawOffset), cliprect, ShapeFlags_Type(flags|SHAPE_ZGRAD), NULL, ZAdjust + Class->YDrawOffset - TacticalMap->Z_Lepton_To_Pixel(Height) - 2, ZGRAD_90DEG, brightness);
+				if (Class->Shadow) { // RA2: a type with a shadow draws the shadow frames (the second half of the shape) darkened and without translucency
+					Draw_Shape(*LogicalSurface, *convert, shapefile, shapenum + shapefile->Get_Count() / 2, point, cliprect, ShapeFlags_Type((flags & ~SHAPE_TRANSLUCENT75) | SHAPE_DARKEN | SHAPE_CENTER | SHAPE_WIN_REL), NULL, -2 - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, NORMAL_LIGHT, NULL, 0, Point2D(0, 0));
+				}
 			}
 		}
-		BEnd(BENCH_ANIMS);
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -711,9 +759,41 @@ BounceResultType AnimClass::Bounce_AI(void)
  *=============================================================================================*/
 void AnimClass::AI(void)
 {
+	if (!IsInert && Class->StartSound != VOC_NONE) { // RA2: a non-inert type with a start sound keeps that sound playing at its center
+		VocClass::UpdateAt(Center_Coord(), &StartSoundAudioController);
+	}
+
 	if (Class->IsFlamingGuy) {
 		Flaming_Guy_AI();
 		BASECLASS::AI();
+	}
+
+	if (Class->PsiWarning) { // RA2: a psychic warning animation is visible only where an enemy psychic detector of the player covers its cell
+		CellClass * cell = &Map[Center_Coord()];
+		HouseClass * house = Owner;
+		bool covered = Psychic_Detector_Covers_Cell(house, cell);
+		IsInvisible = !covered;
+	}
+
+	if (Class == Rule->Behind) { // RA2: the Behind animation is shown only with the show hidden option
+		if (!Options.IsShowHidden) {
+			IsInvisible = true;
+		} else {
+			IsInvisible = false;
+		}
+	}
+
+	if (Class->HideIfNoOre) { // RA2: a type flagged HideIfNoOre is invisible over a cell without ore
+		CellClass * cell = Get_Cell_Ptr();
+		if (cell == NULL || !cell->Tiberium_Value()) {
+			IsInvisible = true;
+		} else {
+			IsInvisible = false;
+		}
+	}
+
+	if (Unpaused && PausedAnimFrame == Fetch_Stage()) { // RA2: the unpause request ends when the animation reaches the recorded frame
+		Unpaused = false;
 	}
 
 	if (IsBouncing) {
@@ -734,7 +814,7 @@ void AnimClass::AI(void)
 					Vector3 bouncecoord = Bounce.MyCoord;
 					new AnimClass(Class->ExpireAnim, Coord(bouncecoord.X, bouncecoord.Y, bouncecoord.Z), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), -30);
 					Explosion_Damage(Bounce.Get_Bounce_Coord(), Class->Damage, NULL, Class->Warhead);
-					Combat_Lighting(Bounce.Get_Bounce_Coord(), Class->Damage, Class->Warhead);
+					Combat_Lighting(Bounce.Get_Bounce_Coord(), Class->Damage, Class->Warhead, 0, 0); // RA2: the five argument form
 				}
 			} // RA2: no ExpireSound (not in RA2's layout)
 
@@ -752,8 +832,10 @@ void AnimClass::AI(void)
 				if (Class->IsTiberium && !bridge) {
 					for (int x = -Class->TiberiumSpreadRadius; x <= Class->TiberiumSpreadRadius; x++) {
 						for (int y = -Class->TiberiumSpreadRadius; y <= Class->TiberiumSpreadRadius; y++) {
-							if ((int)fastmath::sqrt((double)x * (double)x + (double)y * (double)y) <= Class->TiberiumSpreadRadius) {
-								CellClass * cellptr = &Map[Adjacent_Cell(Cell(coord), FacingType(x))];
+							double sq = (double)x * x + (double)y * y; // RA2: the squared distance is kept in a local
+							int distance = (int)fastmath::sqrt(sq);
+							if (distance <= Class->TiberiumSpreadRadius) {
+								CellClass * cellptr = &Map[Cell(coord) + AdjacentCell[x & 7]]; // RA2: the neighbor is looked up in the facing table by the x offset (for every y)
 								if (cellptr->Can_Tiberium_Germinate(NULL) && Class->TiberiumSpawnType != NULL) {
 									new OverlayClass(OverlayTypes[Class->TiberiumSpawnType->HeapID + Random_Pick(0, 3)], cellptr->Fetch_CellID());
 									cellptr->OverlayData = Random_Pick(0, 2);
@@ -825,6 +907,9 @@ void AnimClass::AI(void)
 
 		if (Class->Stages == -1) {
 			Class->Stages = ((ShapeSet const *)Class->Get_Image_Data())->Get_Count();
+			if (Class->Shadow) { // RA2: a type with a shadow keeps only the first half of the frames for the shape
+				Class->Stages /= 2;
+			}
 		}
 		if (Class->LoopEnd == -1) {
 			Class->LoopEnd = Class->Stages;
@@ -838,7 +923,7 @@ void AnimClass::AI(void)
 		*/
 		Mark(MARK_CHANGE);
 
-		if (!IsDisabled && StageClass::Graphic_Logic()) {
+		if (!IsDisabled && !Paused && StageClass::Graphic_Logic()) { // RA2: a paused animation does not advance
 			int stage = Fetch_Stage();
 
 			/*
@@ -892,7 +977,7 @@ void AnimClass::AI(void)
 			**	Check to see if the last frame has been displayed. If so, then the
 			**	animation either ends or loops.
 			*/
-			if ((Loops <= 1 && stage >= Class->Stages) || (Loops > 1 && stage >= Class->LoopEnd-Class->Start) || (Class->IsReverse && stage <= Class->Start)) {
+			if ((Loops <= 1 && stage >= Class->Stages) || (Loops > 1 && stage >= Class->LoopEnd-Class->Start) || (Class->Shadow && stage >= Class->LoopEnd-Class->Start) || (Class->IsReverse && stage <= Class->Start)) { // RA2: a type with a shadow also ends at its loop end
 
 				/*
 				**	Determine if this animation should loop another time. If so, then start the loop
@@ -906,7 +991,7 @@ void AnimClass::AI(void)
 						Set_Stage(Class->LoopStart-Class->Start);
 					}
 					if (Class->RandomLoopDelayMin != 0 || Class->RandomLoopDelayMax != 0) {
-						Delay = Sim_Random_Pick(Class->RandomLoopDelayMin, Class->RandomLoopDelayMax);
+						Delay = Scen->RandomNumber(Class->RandomLoopDelayMin, Class->RandomLoopDelayMax); // RA2: drawn from the scenario's random number generator
 					}
 				} else {
 
@@ -922,6 +1007,9 @@ void AnimClass::AI(void)
 
 						if (Class->Stages == -1) {
 							Class->Stages = ((ShapeSet const *)Class->Get_Image_Data())->Get_Count();
+							if (Class->Shadow) { // RA2: as above
+								Class->Stages /= 2;
+							}
 						}
 						if (Class->LoopEnd == -1) {
 							Class->LoopEnd = Class->Stages;
@@ -932,7 +1020,7 @@ void AnimClass::AI(void)
 						Accum = 0;
 						int delay = Class->Delay;
 						if (Class->RandomRateMin != 0 || Class->RandomRateMax != 0) {
-							delay = Random_Pick(Class->RandomRateMin, Class->RandomRateMax);
+							delay = Scen->RandomNumber(Class->RandomRateMin, Class->RandomRateMax); // RA2: as above
 						}
 						if (Class->IsNormalized) {
 							Set_Rate(Options.Normalize_Delay(delay));
@@ -942,6 +1030,7 @@ void AnimClass::AI(void)
 						Set_Stage(Class->Start);
 						Start();
 					} else {
+						TimeToDie = true; // RA2: the animation records that it ran its course
 						Delete_Me();
 					}
 				}
@@ -949,6 +1038,7 @@ void AnimClass::AI(void)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -1247,21 +1337,13 @@ void AnimClass::Detach(AbstractClass const * target, bool all)
  *=============================================================================================*/
 void AnimClass::Do_Atom_Damage(HousesType ownerhouse, Cell const & cell)
 {
-	int radius;
-	int rawdamage;
-	if (Session.Type == GAME_NORMAL) {
-		radius = 4;
-		rawdamage = Rule->AtomDamage;
-	} else {
-		radius = 3;
-		rawdamage = Rule->AtomDamage/5;
-	}
-
-	Wide_Area_Damage(cell, radius * CELL_LEPTON_W, rawdamage, NULL, Rule->NukeWarhead);
+	Coord coord(cell.X * CELL_LEPTON_W + CELL_LEPTON_W / 2, cell.Y * CELL_LEPTON_H + CELL_LEPTON_H / 2, 0); // RA2: the cell's center on the ground (no Wide_Area_Damage, no Single Player split)
+	Explosion_Damage(coord, Rule->AtomDamage, NULL, Rule->NukeWarhead, false); // RA2: one explosion of the full atom damage, no chain reaction
 	if (Session.Type == GAME_NORMAL) {
 		Set_Palette(GamePalette, FADE_PALETTE_SLOW, Call_Back);
 	}
 }
+
 
 
 /// <summary>
@@ -1296,13 +1378,35 @@ HRESULT STDMETHODCALLTYPE AnimClass::Load(IStream *stream)
 	if (SUCCEEDED(result)) {
 		new (this) AnimClass(NoInitClass());
 
+		StartSoundAudioController.Init(); // RA2: the two sound handles are reset
+		StopSoundAudioController.Init(); // RA2: as above
+
 		Swizzle_Pointer(&Class);
 		Swizzle_Pointer(&xObject);
+		Swizzle_Pointer(&AttachedBullet); // RA2: the attached bullet is remapped too
 
-		AlternativeDrawer = NULL; /// restored in Post_Load_Game()
+		if (LightConvertIndex > -1) { // RA2: the drawer is found again by the scheme index Save recorded
+			if (LightConvertIndex < ColorSchemes.Count()) {
+				AlternativeDrawer = ColorSchemes[LightConvertIndex]->Converter;
+				return(result);
+			}
+		} else {
+			if (PaletteName[0] != '\0') { // RA2: or by the palette name
+				DynamicVectorClass<ColorScheme *> * schemes = Generate_Palette(PaletteName); // RA2: Generate_Palette 0x00603380
+				if (schemes != NULL) {
+					ColorScheme * scheme = schemes->GetItem(0);
+					if (scheme != NULL) {
+						AlternativeDrawer = scheme->Converter;
+						return(result);
+					}
+				}
+			}
+			AlternativeDrawer = NULL;
+		}
 	}
 	return(result);
 }
+
 
 
 /// <summary>
@@ -1437,8 +1541,13 @@ void AnimClass::Vein_Attack_AI(void)
 void AnimClass::Delete_Me(void)
 {
 	Attach_To(NULL);
+	StartSoundAudioController.EndLooping(); // RA2: the start sound's loop is ended when the animation goes
+	if (!IsInert && Class->StopSound != VOC_NONE) { // RA2: a non-inert type with a stop sound plays it once at the center
+		VocClass::PlayAt(Class->StopSound, Center_Coord(), &StopSoundAudioController); // RA2: as above
+	}
 	BASECLASS::Delete_Me();
 }
+
 
 
 /// <summary>
@@ -1509,11 +1618,6 @@ static inline Coord _Move_Coord(Coord const & start, DirType const & dir, int di
 /// <remarks>Only call this routine once per animation per game logic loop.</remarks>
 void AnimClass::Flaming_Guy_AI(void)
 {
-	static const int _max_distance = 18;
-	static const int _max_tries = 7;
-	static const int _frame_divisor = 3;
-	static const int _min_stage = 0;
-
 	if (!IsFlamingGuyEnd) {
 		Set_Rate(0);
 	}
@@ -1523,11 +1627,11 @@ void AnimClass::Flaming_Guy_AI(void)
 		coord.Z = 0;
 		Coord target = FlamingGuyCoords;
 		target.Z = 0;
-		if (coord.Distance_To(target) <= _max_distance) {
+		if ((coord - target).Length() <= 18) { // RA2: the length of the offset between the two flat coordinates
 			if (!IsFalling) {
 				Coord nextcoord = Next_Flaming_Guy_Coord();
-				bool sink = Map[FlamingGuyCoords].Land_Type() == LAND_WATER && HeightAGL <= LEVEL_LEPTON_H;
-				if (nextcoord != COORD_NONE && FlamingGuyRetries < _max_tries && !sink) {
+				bool sink = (Map[FlamingGuyCoords].Land_Type() == LAND_WATER || Map[FlamingGuyCoords].Land_Type() == LAND_BEACH) && HeightAGL <= LEVEL_LEPTON_H; // RA2: beach sinks the victim as well
+				if (nextcoord != COORD_NONE && FlamingGuyRetries < 7 && !sink) {
 					FlamingGuyRetries++;
 					int z = PositionCoord.Z;
 					Coord oldcoord = FlamingGuyCoords;
@@ -1549,7 +1653,7 @@ void AnimClass::Flaming_Guy_AI(void)
 		} else {
 			int z = PositionCoord.Z;
 			DirType direction = DirType().Direction(Center_Coord(), FlamingGuyCoords);
-			Coord newcoord = Move_Coord(PositionCoord, direction, (float)_max_distance);
+			Coord newcoord = Move_Coord(PositionCoord, direction, 18);
 			if (z <= Map.Get_Height_GL(newcoord) + 2 * LEVEL_LEPTON_H) {
 				newcoord.Z = Map.Get_Height_GL(newcoord);
 			} else {
@@ -1583,11 +1687,11 @@ void AnimClass::Flaming_Guy_AI(void)
 	}
 
 	if (!IsFlamingGuyEnd) {
-		int stage = _min_stage;
+		int stage = 0;
 		if (FlamingGuyCoords != COORD_NONE) {
 			stage = Class->RunningFrames * (Facing_Sub(-1, ::Direction(Center_Coord(), FlamingGuyCoords).As_Dir8()));
 		}
-		Set_Stage(stage + Frame / _frame_divisor % Class->RunningFrames);
+		Set_Stage(stage + Frame / 3 % Class->RunningFrames);
 		return;
 	} else {
 		int stage = ((ShapeSet const *)Get_Image_Data())->Get_Count() / 2 - 1;
@@ -1596,6 +1700,7 @@ void AnimClass::Flaming_Guy_AI(void)
 		}
 	}
 }
+
 
 
 /// <summary>
