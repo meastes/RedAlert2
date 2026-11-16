@@ -7057,6 +7057,245 @@ int __fastcall Edit_Text(HWND window, wchar_t *text, int size, int *caret) // RA
 }
 
 
+unsigned short __fastcall IME_Char_To_Wide(unsigned int wparam, long lparam); // RA2: 0x738130 (winstub.cpp)
+
+/*
+**	RA2: a "NewEdit" control's view of its record: the wide text it edits, the caret and the limits.
+*/
+struct EditRecord { // RA2: the control record's fields 0x5F22A0 uses
+	char Reserved_00[0x28]; // RA2: as above
+	wchar_t * Text;					// RA2: +0x28 the text it starts with
+	int Reserved_2C; // RA2: as above
+	int IsAsciiOnly;				// RA2: +0x30 only characters below 0x100 are accepted
+	char Reserved_34[0x38 - 0x34]; // RA2: as above
+	int ImeState;					// RA2: +0x38 drawn with the text
+	WideWstring * Buffer;			// RA2: +0x3C the edited text
+	int Caret;						// RA2: +0x40
+	int Scroll;						// RA2: +0x44
+	int MaxLength;					// RA2: +0x48 0 for none
+	int IsCaretHidden;					// RA2: +0x4C toggled by the 1 s timer, drawn as Caret_Hidden
+	wchar_t const * Excluded;		// RA2: +0x50 characters it refuses
+	unsigned int Style;				// RA2: +0x54 the window style (ES_MULTILINE 4, ES_PASSWORD 0x20)
+	char Reserved_58[0x64 - 0x58]; // RA2: as above
+	BitFont * Font;					// RA2: +0x64
+	char Reserved_68[0xC8 - 0x68]; // RA2: as above
+	int TextStyle;					// RA2: +0xC8
+}; // RA2: as above
+
+namespace OwnerDraw { // RA2: as above
+
+extern int Caret_Hidden; // RA2: 0xA763EC, the caret blink state Draw_Edit_Text reads
+
+/*
+**	RA2: the window procedure of the "NewEdit" control, an edit control that keeps its text in the record as wide
+**	characters and draws itself. The cursor keys (the jump table at 0x5F2B04) move the caret in it.
+*/
+LRESULT __stdcall New_Edit_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x5F22A0, the NewEdit window procedure
+{ // RA2: as above
+	WinData * record = 0; // RA2: the record is looked up in Control_Table, the original procedure in Window_Proc_Table
+	WNDPROC previous = 0; // RA2: as above
+	BOOL inserted = FALSE; // RA2: the text was changed (zeroed at 0x5F22BD)
+	BOOL ime = FALSE; // RA2: the character came from the IME (zeroed at 0x5F22C1)
+	if (message == 0x87) { // RA2: WM_GETDLGCODE answers DLGC_WANTALLKEYS (0x5F22B2)
+		return 4; // RA2: as above
+	} // RA2: as above
+	Window_Proc_Table.getValue(window, previous); // RA2: as above
+	unsigned int const & key = (unsigned int const &)window; // RA2: as above
+	Control_Table.getPointer(key, &record); // RA2: as above
+	EditRecord * data = (EditRecord *)record; // RA2: as above
+	HWND parent = GetParent(window); // RA2: as above
+	if ((message == 0x101 || message == 0x100) && wparam == 9) { // RA2: as above
+		if (message == 0x100) { // RA2: as above
+			BYTE shift = ((unsigned int)GetAsyncKeyState(0x10) >> 15) & 1; // RA2: as above
+			SendMessageA(parent, 0x4DB, shift, (LPARAM)window); // RA2: as above
+		} // RA2: as above
+		return 0; // RA2: as above
+	} // RA2: as above
+	if (message == 0x497) { // RA2: as above
+		RECT bounds; // RA2: as above
+		RECT client; // RA2: as above
+		RECT parent_bounds; // RA2: as above
+		GetWindowRect(window, &bounds); // RA2: as above
+		GetClientRect(window, &client); // RA2: as above
+		GetWindowRect(parent, &parent_bounds); // RA2: as above
+		SetWindowPos(window, 0, bounds.left - parent_bounds.left + 1, bounds.top - parent_bounds.top + 1, client.right - 2, client.bottom - 2, 0x40); // RA2: as above
+		return 0; // RA2: as above
+	} // RA2: as above
+	if (message == 0xC5) { // RA2: as above
+		data->MaxLength = wparam; // RA2: as above
+		if (wparam) { // RA2: as above
+			data->Buffer->truncate(wparam); // RA2: as above
+		} // RA2: as above
+		return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+	} // RA2: as above
+	if (message == 0x4B5 || message == 0x4B3 || message == 0xE) { // RA2: as above
+		if (message == 0xE) { // RA2: as above
+			return data->Buffer->length(); // RA2: as above
+		} // RA2: as above
+		if (message == 0x4B3) { // RA2: as above
+			wcsncpy((wchar_t *)lparam, data->Buffer->get(), wparam); // RA2: as above
+			((wchar_t *)lparam)[wparam - 1] = 0; // RA2: as above
+			return wcslen((wchar_t *)lparam); // RA2: as above
+		} // RA2: as above
+		WideToCharString((char *)lparam, data->Buffer->get(), wparam); // RA2: as above
+		((char *)lparam)[wparam - 1] = 0; // RA2: as above
+		return strlen((char *)lparam); // RA2: as above
+	} // RA2: as above
+	if (message == 0x4B4 || message == 0x4B2) { // RA2: as above
+		data->Buffer->clear(); // RA2: as above
+		data->Caret = 0; // RA2: as above
+		data->Scroll = 0; // RA2: as above
+		if (data->Text) { // RA2: as above
+			data->Buffer->set(data->Text); // RA2: as above
+		} // RA2: as above
+		if (data->MaxLength) { // RA2: as above
+			data->Buffer->truncate((unsigned int)data->MaxLength); // RA2: as above
+		} // RA2: as above
+		data->Caret = data->Buffer->length(); // RA2: as above
+	} // RA2: as above
+	if (message == 0x100) { // RA2: as above
+		if (wparam == 0xD) { // RA2: as above
+			SendMessageA(parent, 0x4DA, 0, (LPARAM)window); // RA2: as above
+			if (data->Style & 4) { // RA2: as above
+				*data->Buffer += L"\r\n"; // RA2: as above
+				unsigned int id = GetWindowLongA(window, -12); // RA2: as above
+				SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x5010000, (LPARAM)window); // RA2: as above
+			} // RA2: as above
+			return 0; // RA2: as above
+		} // RA2: as above
+		goto invalidate; // RA2: as above
+	} else { // RA2: as above
+		if (message == 7) { // RA2: as above
+			data->IsCaretHidden = 0; // RA2: as above
+			SetTimer(window, 0, 1000, 0); // RA2: as above
+			goto invalidate; // RA2: as above
+		} // RA2: as above
+		if (message == 8) { // RA2: as above
+			KillTimer(window, 0); // RA2: as above
+			goto invalidate; // RA2: as above
+		} // RA2: as above
+		if (message == 0x113) { // RA2: as above
+			data->IsCaretHidden ^= 1; // RA2: as above
+			InvalidateRect(window, 0, 0); // RA2: as above
+			return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+		} // RA2: as above
+		if (message == 0xF || message == 0x14) { // RA2: as above
+			RECT display; // RA2: as above
+			RECT update; // RA2: as above
+			char class_name[80]; // RA2: as above
+			Get_Display_Rect(window, &display); // RA2: as above
+			GetClassNameA(parent, class_name, 80); // RA2: as above
+			bool combo = strcmp(class_name, "ComboBox") == 0; // RA2: as above
+			if (message == 0xF && GetUpdateRect(window, &update, 0)) { // RA2: as above
+				update.right += display.left; // RA2: as above
+				update.left += display.left; // RA2: as above
+				update.top += display.top; // RA2: as above
+				update.bottom += display.top; // RA2: as above
+			} // RA2: as above
+			Rect background(display.left, display.top, display.right - display.left + 1, display.bottom - display.top + 1); // RA2: as above
+			Draw_Dimmed_Back(background, window, data->TextStyle); // RA2: as above
+			if (!combo) { // RA2: as above
+				Draw_Frame(AlternateSurface, background, 1, -1); // RA2: as above
+			} // RA2: as above
+			display.left += 2; // RA2: as above
+			Rect text(display.left, display.top, display.right - display.left + 1, display.bottom - display.top + 1); // RA2: as above
+			Caret_Hidden = data->IsCaretHidden; // RA2: as above
+			Draw_Edit_Text(AlternateSurface, text, data->Buffer->get(), data->Caret, data->Font, Text_Color, &data->Scroll, data->ImeState, (data->Style >> 5) & 1, 0, 0); // RA2: as above
+			ValidateRect(window, 0); // RA2: as above
+		} // RA2: as above
+		if (message == 0x7B) { // RA2: as above
+			return 1; // RA2: as above
+		} // RA2: as above
+		if (message == 0x200) { // RA2: as above
+			return 1; // RA2: as above
+		} // RA2: as above
+		if (message == 0x101 || message == 0x104 || message == 0x105 || message == 0x106 || message == 0x107 || message == 0x201) { // RA2: as above
+invalidate: // RA2: as above
+			char class_name[32]; // RA2: as above
+			GetClassNameA(parent, class_name, 32); // RA2: as above
+			if (strcmp(class_name, "ComboBox") == 0) { // RA2: as above
+				InvalidateRect(parent, 0, 0); // RA2: as above
+			} // RA2: as above
+			InvalidateRect(window, 0, 0); // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	unsigned short ch; // RA2: as above
+	if (message == 0x102) { // RA2: as above
+		if (wparam <= 0x1F) { // RA2: as above
+			return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+		} // RA2: as above
+		ch = wparam; // RA2: as above
+	} else { // RA2: as above
+		if (message == 0x100) { // RA2: as above
+			switch (wparam) { // RA2: as above
+			case 0x2E: // RA2: as above
+				if (data->Caret < (int)data->Buffer->length()) { // RA2: as above
+					data->Buffer->remove(data->Caret, 1); // RA2: as above
+					goto changed; // RA2: as above
+				} // RA2: as above
+				break; // RA2: as above
+			case 8: // RA2: as above
+				if (data->Caret > 0) { // RA2: as above
+					data->Caret--; // RA2: as above
+					data->Buffer->remove(data->Caret, 1); // RA2: as above
+					goto changed; // RA2: as above
+				} // RA2: as above
+				break; // RA2: as above
+			case 0x25: // RA2: as above
+				if (data->Caret > 0) { // RA2: as above
+					data->Caret--; // RA2: as above
+				} // RA2: as above
+				return 0; // RA2: as above
+			case 0x27: // RA2: as above
+				if (data->Caret < (int)data->Buffer->length()) { // RA2: as above
+					data->Caret++; // RA2: as above
+				} // RA2: as above
+				return 0; // RA2: as above
+			case 0x23: // RA2: as above
+				data->Caret = data->Buffer->length(); // RA2: as above
+				return 0; // RA2: as above
+			case 0x24: // RA2: as above
+				data->Caret = 0; // RA2: as above
+				return 0; // RA2: as above
+			default: // RA2: as above
+				return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+			} // RA2: as above
+			goto notify; // RA2: as above
+		} // RA2: as above
+		if (message == 0x286) { // RA2: as above
+			ch = IME_Char_To_Wide(wparam, lparam); // RA2: as above
+		} else { // RA2: as above
+			if (message != 0x4D9) { // RA2: as above
+				return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+			} // RA2: as above
+			ch = wparam; // RA2: as above
+		} // RA2: as above
+		ime = TRUE; // RA2: as above
+	} // RA2: as above
+	if (ch == 0) { // RA2: as above
+		if (!ime) { // RA2: as above
+			return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+		} // RA2: as above
+	} else { // RA2: as above
+		if ((!data->Excluded || !wcschr(data->Excluded, ch)) && (!data->MaxLength || (int)data->Buffer->length() < data->MaxLength) && ch > 0x1F && (!data->IsAsciiOnly || ch < 0x100)) { // RA2: as above
+			data->Buffer->insert(ch, data->Caret++); // RA2: as above
+			changed: // RA2: as above
+			inserted = TRUE; // RA2: as above
+		} // RA2: as above
+		notify: // RA2: as above
+		if (inserted) { // RA2: as above
+			unsigned int id = GetWindowLongA(window, -12); // RA2: as above
+			SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x3000000, (LPARAM)window); // RA2: as above
+			SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x4000000, (LPARAM)window); // RA2: as above
+			return 0; // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	return 0; // RA2: as above
+} // RA2: as above
+
+} // RA2: as above
+
+
 #include "movie.h" // RA2: the includes this file needs
 #include "movies.h" // RA2: the includes this file needs
 MovieHandle * __fastcall OwnerDraw_InitMovieHandle(char const * name, Surface * surface, Rect * bounds); // RA2: 0x5A1D30 (movie.cpp)
