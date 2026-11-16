@@ -373,4 +373,337 @@ typedef struct Squad Squad;
         virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE SetClientVersion( 
             unsigned long version) = 0;
         
+        // RA2: IChat has ten more slots after SetClientVersion (vtable offsets 0xD8-0xFC)
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_D8(void) = 0;
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_DC(void) = 0;
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_E0(User *user) = 0;
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_E4(User *user) = 0;
+        virtual HRESULT STDMETHODCALLTYPE RequestPublicMessageWide(unsigned short const *message) = 0; // RA2: slot 58, called by 0x0073CA50 (Send_Chat_Message)
+        virtual HRESULT STDMETHODCALLTYPE RequestPrivateMessageWide(User *users, unsigned short const *message) = 0; // RA2: as above
+        virtual HRESULT STDMETHODCALLTYPE RequestPublicActionWide(unsigned short const *action) = 0; // RA2: slot 60, called by 0x0073CB80 (Send_Chat_Action)
+        virtual HRESULT STDMETHODCALLTYPE RequestPrivateActionWide(User *users, unsigned short const *action) = 0; // RA2: as above
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_F8(User *user, unsigned short const *message) = 0;
+        virtual HRESULT STDMETHODCALLTYPE Unknown_Virtual_FC(int update, int count) = 0;
+        
     };
+
+// RA2: wonline.cpp interfaces (IChatEvent, IDownload, IDownloadEvent, INetUtil, INetUtilEvent), TibSun's wolapi.h in vtable order; VC6 has no MIDL_INTERFACE
+struct __declspec(uuid("4DD3BAF6-7579-11D1-B1C6-006097176556")) IChatEvent : public IUnknown
+    {
+    public:
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnServerList( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Server *servers) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUpdateList( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Update *updates) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnServerError( 
+            /* [in] */ HRESULT res,
+            /* [in] */ LPCSTR ircmsg) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnConnection( 
+            /* [in] */ HRESULT res,
+            /* [in] */ LPCSTR motd) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnMessageOfTheDay( 
+            /* [in] */ HRESULT res,
+            /* [in] */ LPCSTR motd) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelList( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channels) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelCreate( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelJoin( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *user) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelLeave( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *user) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelTopic( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ LPCSTR topic) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPrivateAction( 
+            /* [in] */ HRESULT res,
+            /* [in] */ User *user,
+            /* [in] */ LPCSTR action) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPublicAction( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            User *user,
+            /* [in] */ LPCSTR action) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserList( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *users) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPublicMessage( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *user,
+            /* [in] */ LPCSTR message) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPrivateMessage( 
+            /* [in] */ HRESULT res,
+            /* [in] */ User *user,
+            /* [in] */ LPCSTR message) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnSystemMessage( 
+            /* [in] */ HRESULT res,
+            /* [in] */ LPCSTR message) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnNetStatus( 
+            /* [in] */ HRESULT res) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnLogout( 
+            /* [in] */ HRESULT status,
+            /* [in] */ User *user) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPrivateGameOptions( 
+            /* [in] */ HRESULT res,
+            /* [in] */ User *user,
+            /* [in] */ LPCSTR options) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPublicGameOptions( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *user,
+            /* [in] */ LPCSTR options) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnGameStart( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *users,
+            /* [in] */ int gameid) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserKick( 
+            /* [in] */ HRESULT res,
+            /* [in] */ Channel *channel,
+            /* [in] */ User *kicked,
+            /* [in] */ User *kicker) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserIP( 
+            /* [in] */ HRESULT res,
+            /* [in] */ User *user) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnFind( 
+            HRESULT res,
+            Channel *chan) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPageSend( 
+            HRESULT res) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnPaged( 
+            HRESULT res,
+            User *user,
+            LPCSTR message) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnServerBannedYou( 
+            HRESULT res,
+            time_t bannedTill) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserFlags( 
+            HRESULT res,
+            LPCSTR name,
+            unsigned int flags,
+            unsigned int mask) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnChannelBan( 
+            HRESULT res,
+            LPCSTR name,
+            int banned) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnSquadInfo( 
+            HRESULT res,
+            unsigned long id,
+            Squad *squad) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserLocale( 
+            HRESULT res,
+            User *users) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnUserTeam( 
+            HRESULT res,
+            User *users) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnSetLocale( 
+            HRESULT res,
+            Locale newlocale) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnSetTeam( 
+            HRESULT res,
+            int newteam) = 0;
+        
+    };
+
+struct __declspec(uuid("0BF5FCEB-9F03-11D1-9DC7-006097C54321")) IDownload : public IUnknown
+    {
+    public:
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE DownloadFile( 
+            LPCSTR server,
+            LPCSTR login,
+            LPCSTR password,
+            LPCSTR file,
+            LPCSTR localfile,
+            LPCSTR regkey) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE Abort( void) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE PumpMessages( void) = 0;
+        
+    };
+
+struct __declspec(uuid("6869E99D-9FB4-11D1-9DC8-006097C54321")) IDownloadEvent : public IUnknown
+    {
+    public:
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE OnEnd( void) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnError( 
+            int error) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnProgressUpdate( 
+            int bytesread,
+            int totalsize,
+            int timetaken,
+            int timeleft) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnQueryResume( void) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnStatusUpdate( 
+            int status) = 0;
+        
+    };
+
+struct __declspec(uuid("B832B0AA-A7D3-11D1-97C3-00609706FA0C")) INetUtil : public IUnknown
+    {
+    public:
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE RequestGameresSend( 
+            LPCSTR host,
+            int port,
+            unsigned char *data,
+            int length) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE RequestLadderSearch( 
+            LPCSTR host,
+            int port,
+            LPCSTR key,
+            unsigned long SKU,
+            int team,
+            int cond,
+            int sort,
+            int number,
+            int leading) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE RequestLadderList( 
+            LPCSTR host,
+            int port,
+            LPCSTR keys,
+            unsigned long SKU,
+            int team,
+            int cond,
+            int sort) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE RequestPing( 
+            LPCSTR host,
+            int timeout,
+            int *handle) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE PumpMessages( void) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE GetAvgPing( 
+            unsigned long ip,
+            int *avg) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE RequestNewNick( 
+            LPCSTR nick,
+            LPCSTR pass,
+            LPCSTR email,
+            LPCSTR parentEmail,
+            int newsletter,
+            int shareinfo) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE RequestAgeCheck( 
+            int month,
+            int day,
+            int year,
+            LPCSTR email) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE RequestWDTState( 
+            LPCSTR host,
+            int port,
+            unsigned char request) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE RequestLocaleLadderList( 
+            LPCSTR host,
+            int port,
+            LPCSTR keys,
+            unsigned long SKU,
+            int team,
+            int cond,
+            int sort,
+            Locale locale) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE RequestLocaleLadderSearch( 
+            LPCSTR host,
+            int port,
+            LPCSTR key,
+            unsigned long sku,
+            int team,
+            int cond,
+            int sort,
+            int number,
+            int leading,
+            Locale locale) = 0;
+        
+    };
+
+struct __declspec(uuid("B832B0AC-A7D3-11D1-97C3-00609706FA0C")) INetUtilEvent : public IUnknown
+    {
+    public:
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE OnPing( 
+            HRESULT res,
+            int time,
+            unsigned long ip,
+            int handle) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE OnLadderList( 
+            HRESULT res,
+            /* [in] */ Ladder *list,
+            int totalCount,
+            long timeStamp,
+            int keyRung) = 0;
+        
+        virtual /* [helpstring][id] */ HRESULT STDMETHODCALLTYPE OnGameresSent( 
+            HRESULT res) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnNewNick( 
+            HRESULT res,
+            LPCSTR message,
+            LPCSTR nick,
+            LPCSTR pass) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnAgeCheck( 
+            HRESULT res,
+            int years,
+            int consent) = 0;
+        
+        virtual /* [helpstring] */ HRESULT STDMETHODCALLTYPE OnWDTState( 
+            HRESULT res,
+            unsigned char *state,
+            int length) = 0;
+        
+    };
+

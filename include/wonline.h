@@ -17,6 +17,7 @@
 
 template <class T>
 class ArrayList;
+class WideWstring; // RA2: the wide chat text
 
 enum WonlineResult
 {
@@ -25,7 +26,7 @@ enum WonlineResult
 	WONLINE_OK = 1,
 };
 
-extern char g_NickName[];
+extern Wstring g_NickName; // RA2: a Wstring, the persona of the login (0x00B26CB8)
 
 extern char WestwoodOnline_Clan1_Players[];
 extern char WestwoodOnline_Clan2_Players[];
@@ -50,20 +51,20 @@ extern int g_GameServerPort;
 
 
 void DoFindPage(void);
-int Player_Name_To_Index(char *name);
+int Player_Name_To_Index(Wstring const & name); // RA2: 0x0073C2E0, the name is a Wstring
 void ViewHTML(const char * name, int no_ask);
 bool Switch_Server(int type);
 void Read_WOL_Settings(void);
 void Write_WOL_Settings(void);
 void Apply_WOL_Settings(void);
-int Send_Chat_Message(char *msg);
-int Send_Chat_Action(char *msg);
+int Send_Chat_Message(WideWstring const & msg); // RA2: 0x0073CA50, the text is wide
+int Send_Chat_Action(WideWstring const & msg); // RA2: 0x0073CB80, the text is wide
 void Encode_Game_Options(char *out);
 int GetINIHash(void);
 void Encode_Channel_ExInfo(char *out);
-void SetPlayerAccepted(char *who, int status);
-int GetPlayerAccepted(char *who);
-int Assign_House_And_Color(char *who, int house, int color);
+void SetPlayerAccepted(Wstring const & who, int status); // RA2: 0x0073D150, the name is a Wstring
+int GetPlayerAccepted(Wstring const & who); // RA2: 0x0073D3F0, the name is a Wstring
+int Assign_House_And_Color(Wstring const & who, int house, int color); // RA2: 0x0073D550, the name is a Wstring
 void GoBack(void);
 bool WOL_Wait_Callback(void);
 void Reset_WOL_Globals(void);

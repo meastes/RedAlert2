@@ -52,6 +52,7 @@ class WideWstring
 		WideWstring		toLower(void) const;
 		void			toUpper(void);
 		WideWstring		toUpper(void) const;
+		bool			Is_Narrow(void) const; // RA2: 0x00771080, is every character below 0x100 (true for no text)
 
 		bool			operator==(wchar_t const * other) const;
 		bool			operator==(WideWstring const & other) const;
