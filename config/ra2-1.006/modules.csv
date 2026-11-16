@@ -408,7 +408,9 @@ unk_005B6A40,0x005B6A40,0x005B6C30,unknown,code not assigned to a module
 multiplayer,0x005B6C30,0x005B8E10,source,"functions compiled from src/multiplayer.cpp, without gaps; matched except ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z and ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z and ?GenerateStartingUnits@MultiplayerGameMode@@UAE_NPAVHouseClass@@AAH@Z; 13 placed by the gap; ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z to ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z share the room between their neighbours"
 unk_005B8E10,0x005B8E10,0x005B9B20,unknown,code not assigned to a module
 multiplayerteam,0x005B9B20,0x005B9C20,source,"functions compiled from src/multiplayerteam.cpp, matched, without gaps"
-unk_005B9C20,0x005B9C20,0x005BB9D0,unknown,code not assigned to a module
+unk_005B9C20,0x005B9C20,0x005B9E60,unknown,code not assigned to a module
+firewall,0x005B9E60,0x005BB350,source,"functions compiled from src/firewall.cpp, matched, without gaps; one placed by the gap"
+unk_005BB350,0x005BB350,0x005BB9D0,unknown,code not assigned to a module
 unk_005BB9D0,0x005BB9D0,0x005BBA50,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_005BBA50,0x005BBA50,0x005BBD10,unknown,code not assigned to a module
 netdlg2,0x005BBD10,0x005C2970,tibsun,"functions compiled from src/netdlg2.cpp, without gaps; matched except ?Net2SetHouseAndColor@@YIHPBDHH@Z and ?MPlayer_Game_List_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?MPlayer_Host_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?Request_To_Join@@YIHH_N@Z"
