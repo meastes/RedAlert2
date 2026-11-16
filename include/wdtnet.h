@@ -32,6 +32,7 @@ class ConvertClass;
 class Wstring;
 void __fastcall WDT_Write_Map_Ini(Wstring const & prefix, Wstring const & filename); // RA2: 0x0072A880; a development tool that finds the territory targets in a click map and writes them to WDTMap.ini
 Wstring const & __fastcall Faction_Name(int faction); // RA2: 0x007685A0; the name a faction is called in the INI files
+Wstring const & __fastcall Faction_Code(int faction); // RA2: 0x007686D0; the short code of a faction that the LastDay<code> keys of WDTHist.INI end in (YR: WDT_Country_Name)
 void WDT_Game_Option_Append_Comma(char *str, int len);
 
 class WDTTerritory : public ReferenceCounted { // RA2: ReferenceCounted
@@ -529,6 +530,10 @@ namespace WorldDominationTour
 			bool Is_Different(int faction) const; // RA2: 0x00726370; the saved progress of the faction differs
 			int Get_Last_Day(int faction) const; // RA2: 0x007263A0
 			void Save_Progress(int faction); // RA2: 0x007263B0
+			void Reset_Progress(void); // RA2: 0x00726580; zeroes the cycle and every faction's last day in WDTHist.INI
+			CONFLICT_ITER Get_Conflict_Iterator(int index); // RA2: 0x00726730; the first conflict over that territory
+			void Set_Faction(int faction); // RA2: 0x007267C0; keeps the side and writes PlayerFaction
+			void Load_INI(INIClass & ini); // RA2: 0x00726930; loads WDTHist.INI, creating it when missing
 			int Get_Player_Faction(void) const { return(PlayerFaction); }
 
 		public:
