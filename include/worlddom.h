@@ -11,10 +11,8 @@
 
 #include "wdtnet.h"
 
-bool WDT_Setup_Game(bool first_time);
-WDTState * WDT_Get_New_State(void);
-void WDT_Start_New_Campaign(WDTState *state);
-WDTTerritory *WDT_Get_Territory(int index);
+int WDT_Setup_Game(bool first_time); // RA2: returns int (0x00768E90)
+rc_ptr<WDTTerritory> Find_WDT_Territory(int index); // RA2: 0x00769690, the tour keeps its campaign in counted pointers
 bool WDT_Is_Allowed(void);
 
 /// Owning smart pointer; deletes the held object on destruction and reassignment.
