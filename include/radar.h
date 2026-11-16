@@ -90,6 +90,7 @@ class RadarClass: public DisplayClass
 {
 		typedef DisplayClass BASECLASS;
 		friend class RadarEventClass;
+		friend class BeaconClass; // RA2: Draw_On_Radar (0x0042DE20) reads RadarRect
 
 	public:
 		virtual HRESULT Load(IStream * stream) override;
