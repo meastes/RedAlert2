@@ -5102,7 +5102,7 @@ address,size,evidence
 0x006261A0,864,"code of src/queue.cpp, matched"
 0x00626500,192,"code of src/queue.cpp, matched"
 0x006265C0,1392,"code of src/queue.cpp, matched"
-0x00626B30,,"inferred: target of the call at 0x00624A1A in matched src/queue.cpp; size not known"
+0x00626B30,384,"code of src/queue.cpp, matched"
 0x00626CB0,,"inferred: target of the call at 0x006273BA in matched src/queue.cpp; size not known"
 0x00626FA0,64,"function of the Tiberian Sun reconstruction, matched"
 0x00626FE0,432,"code of src/queue.cpp, matched"

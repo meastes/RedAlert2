@@ -4872,7 +4872,7 @@ address,symbol,evidence
 0x006261A0,?Send_Packets@@YIHPAVConnManClass@@PADHHH@Z,"compiled from src/queue.cpp, matched"
 0x00626500,?Send_FrameSync@@YIXPAVConnManClass@@H@Z,"compiled from src/queue.cpp, matched"
 0x006265C0,?Process_Receive_Packet@@YI?AW4RetcodeType@@PAVConnManClass@@PADHHPAUFrameSyncStruct@@PAV?$BasicTimerClass@VSystemTimerClass@@@@@Z,"compiled from src/queue.cpp, matched"
-0x00626B30,?Process_Serial_Packet@@YI?AW4RetcodeType@@PADH@Z,"inferred: referenced by matched src/queue.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x00626B30,?Process_Serial_Packet@@YI?AW4RetcodeType@@PADH@Z,"compiled from src/queue.cpp, matched"
 0x00626CB0,?Draw_Sync_Bars@@YIXPAUHWND__@@@Z,"inferred: referenced by matched src/queue.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00626FA0,?ListBox_Trim@@YIXPAUHWND__@@@Z,"compiled from src/queue.cpp, matched"
 0x00626FE0,?Propose_Kick_Player@@YIXPAUHWND__@@H@Z,"compiled from src/queue.cpp, matched"
