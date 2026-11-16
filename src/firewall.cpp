@@ -225,10 +225,10 @@ int FirewallHelperClass::Detect(bool * detected) // RA2: 0x005BA2C0
 	bool looks_good; // RA2: as above
 	int i; // RA2: as above
 
-	if (Session.unknown_301C) { // RA2: as above
+	if (Session.PortNumberOverride) { // RA2: as above
 		behavior = 1; // RA2: as above
-		DebugString("Source port %d specified by user\n", Session.unknown_301C); // RA2: as above
-		if (Session.unknown_2F48) { // RA2: as above
+		DebugString("Source port %d specified by user\n", Session.PortNumberOverride); // RA2: as above
+		if (Session.SendDelay) { // RA2: as above
 			behavior |= 8; // RA2: as above
 			DebugString("Netgear bug specified by command line or SendDelay flag\n"); // RA2: as above
 		}
@@ -457,7 +457,7 @@ int FirewallHelperClass::Detect(bool * detected) // RA2: 0x005BA2C0
 	}
 
 	DebugString("Testing for Netgear bug\n"); // RA2: as above
-	if (RouterType == 2 || Session.unknown_2F48) { // RA2: as above
+	if (RouterType == 2 || Session.SendDelay) { // RA2: as above
 		behavior |= 8; // RA2: as above
 		DebugString("Netgear bug specified by command line or SendDelay flag\n"); // RA2: as above
 	}

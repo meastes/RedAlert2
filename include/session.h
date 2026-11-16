@@ -742,7 +742,7 @@ class SessionClass
 		int ConnectionResultCount; // RA2: +0x2DBC, cleared by Start_Network_Session
 		unsigned short PeerPorts[MAX_PLAYERS]; // RA2: +0x2DC0, cleared by Start_Network_Session
 		char unknown_2E28[MAX_PLAYERS][36];
-		bool unknown_2F48;
+		bool SendDelay; // RA2: [MultiPlayer] SendDelay of RA2.INI
 		unsigned char unknown_2F49[0x23];
 		int unknown_2F6C[MAX_PLAYERS];
 		CDTimerClass<SystemTimerClass> unknown_2F8C[MAX_PLAYERS];
@@ -751,7 +751,7 @@ class SessionClass
 		int ForcePortBase;
 		int PlayerPortBase[MAX_PLAYERS]; // RA2: +0x2FA0, the port each player listens on (Address.Set_Port reads it)
 		bool RotatePortBase; // RA2: +0x2FC0, Start_Network_Session moves PortBase by 5 once when it is set
-		int unknown_301C;
+		int PortNumberOverride; // RA2: [MultiPlayer] PortNumberOverride of RA2.INI, the source port the user sets (0 none)
 		wchar_t MasterPlayerName[MPLAYER_NAME_MAX + 1];
 		int PlayerLastTime[8]; // RA2: +0x2FF4, set to the tick count when an Internet game starts (Select_Game)
 		bool PortProbeDue; // RA2: +0x3014, a port probe of the router is due (Conquer tests it, Start_Network_Session clears it)

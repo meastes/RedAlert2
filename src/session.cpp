@@ -361,8 +361,8 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	PortBase = 1250; // RA2: as above
 	ForcePortBase = 0; // RA2: as above
 	RotatePortBase = true; // RA2: as above
-	unknown_2F48 = false; // RA2: as above
-	unknown_301C = 0; // RA2: as above
+	SendDelay = false; // RA2: as above
+	PortNumberOverride = 0; // RA2: as above
 	memset(ManglerAddresses, 0, sizeof(ManglerAddresses)); // RA2: 0xB26CBC, the WOL mangler server addresses
 	memset(ManglerPorts, 0, sizeof(ManglerPorts)); // RA2: 0xB291A4
 
@@ -753,8 +753,8 @@ void SessionClass::Read_MultiPlayer_Settings(void)
 		PortsRead = true; // RA2: as above
 		FirewallHelper.Read_Settings(); // RA2: as above
 	}
-	Session.unknown_2F48 = ConfigINI.Get_Bool("MultiPlayer", "SendDelay", false); // RA2: as above
-	Session.unknown_301C = ConfigINI.Get_Int("MultiPlayer", "PortNumberOverride", 0); // RA2: as above
+	Session.SendDelay = ConfigINI.Get_Bool("MultiPlayer", "SendDelay", false); // RA2: as above
+	Session.PortNumberOverride = ConfigINI.Get_Int("MultiPlayer", "PortNumberOverride", 0); // RA2: as above
 
 	// Get the player's last-used Color
 	buf[0] = 0;
