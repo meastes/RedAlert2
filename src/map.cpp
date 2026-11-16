@@ -1856,7 +1856,7 @@ void MapClass::Place_Down(Cell const & cell, ObjectClass * object)
 		}
 
 		if (object->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
-			BuildingClass * building = (BuildingClass *)object; // RA2: as above
+			BuildingClass * building = object->Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass *)object : NULL; // RA2: RA2's form
 			if (building->Class->CanHideThings) { // RA2: as above
 				int height = building->Class->OccupyHeight - 1; // RA2: as above
 				if (height <= 0) height = 1; // RA2: as above
@@ -1885,19 +1885,19 @@ void MapClass::Place_Down(Cell const & cell, ObjectClass * object)
 					}
 				}
 				for (int index = 0; index < 8; index++) { // RA2: as above
-					if (Is_Occupy_Offset(building->Class->AddOccupy[index])) { // RA2: as above
+					if (Is_Occupy_Offset(building->Class->RemoveOccupy[index])) { // RA2: as above
 						Cell newcell = cell; // RA2: as above
-						newcell.X += building->Class->AddOccupy[index].X; // RA2: as above
-						newcell.Y += building->Class->AddOccupy[index].Y; // RA2: as above
+						newcell.X += building->Class->RemoveOccupy[index].X; // RA2: as above
+						newcell.Y += building->Class->RemoveOccupy[index].Y; // RA2: as above
 						if (Is_Valid(newcell)) {
 							CellClass & cellptr = (*this)[newcell]; // RA2: as above
 							cellptr.OccupyHeightsCoveringMe++; // RA2: as above
 						}
 					}
-					if (Is_Occupy_Offset(building->Class->RemoveOccupy[index])) { // RA2: as above
+					if (Is_Occupy_Offset(building->Class->AddOccupy[index])) { // RA2: as above
 						Cell newcell = cell; // RA2: as above
-						newcell.X += building->Class->RemoveOccupy[index].X; // RA2: as above
-						newcell.Y += building->Class->RemoveOccupy[index].Y; // RA2: as above
+						newcell.X += building->Class->AddOccupy[index].X; // RA2: as above
+						newcell.Y += building->Class->AddOccupy[index].Y; // RA2: as above
 						if (Is_Valid(newcell)) {
 							CellClass & cellptr = (*this)[newcell]; // RA2: as above
 							if (cellptr.OccupyHeightsCoveringMe) cellptr.OccupyHeightsCoveringMe--; // RA2: as above
@@ -1946,7 +1946,7 @@ void MapClass::Pick_Up(Cell const & cell, ObjectClass * object)
 		}
 
 		if (object->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
-			BuildingClass * building = (BuildingClass *)object; // RA2: as above
+			BuildingClass * building = object->Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass *)object : NULL; // RA2: RA2's form
 			if (building->Class->CanHideThings) { // RA2: as above
 				int height = building->Class->OccupyHeight - 1; // RA2: as above
 				if (height <= 0) height = 1; // RA2: as above
@@ -1975,10 +1975,10 @@ void MapClass::Pick_Up(Cell const & cell, ObjectClass * object)
 					}
 				}
 				for (int index = 0; index < 8; index++) { // RA2: as above
-					if (Is_Occupy_Offset(building->Class->AddOccupy[index])) { // RA2: as above
+					if (Is_Occupy_Offset(building->Class->RemoveOccupy[index])) { // RA2: as above
 						Cell newcell = cell; // RA2: as above
-						newcell.X += building->Class->AddOccupy[index].X; // RA2: as above
-						newcell.Y += building->Class->AddOccupy[index].Y; // RA2: as above
+						newcell.X += building->Class->RemoveOccupy[index].X; // RA2: as above
+						newcell.Y += building->Class->RemoveOccupy[index].Y; // RA2: as above
 						if (Is_Valid(newcell)) {
 							CellClass & cellptr = (*this)[newcell]; // RA2: as above
 							if (cellptr.OccupyHeightsCoveringMe) cellptr.OccupyHeightsCoveringMe--; // RA2: as above
