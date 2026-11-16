@@ -726,6 +726,7 @@ class TechnoClass :	public RadioClass,
 		int GetEffectTintIntensity(int brightness) const; // RA2: 0x6D86F0
 		void Update_Iron_Tint(void); // RA2: 0x6D8820
 		void UpdateThreatInCell(CellClass * cell); // RA2: 0x6D9610
+		void Shorten_Targeting_Timer(void); // RA2: 0x6D96A0; a TargetingTimer above 10 frames restarts at Random(4, 8)
 		void Set_Planning_Token(PlanningTokenClass * token); // RA2: 0x6D1420
 		PlanningTokenClass * Get_Planning_Token(void); // RA2: 0x6D1430
 		void Select_Planning_Members(void); // RA2: 0x6145E0; when planning mode is active (guarded against re-entry), selects every member of the last node of this object's planning token

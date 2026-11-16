@@ -86,6 +86,7 @@
 
 #include "_bench.h"
 #include "_convert.h"
+#include "_keyboar.h" // RA2: What_Action reads the force-move and force-fire keys
 #include "_mixfile.h"
 #include "_rtti.h"
 #include "_rules.h"
@@ -119,9 +120,12 @@
 #include "mono.h"
 #include "overlay.h"
 #include "overtype.h"
+#include "parasite.h" // RA2: Can_Enter_Cell reads the parasite victim
+#include "planning.h" // RA2: Planning_Allows_Event_Type
 #include "radsite.h" // RA2
 #include "rules.h"
 #include "scheme.h"
+#include "temporal.h" // RA2: AI calls TemporalClass::AI
 #include "session.h"
 #include "sun.h"
 #include "swizzle.h"
@@ -140,6 +144,15 @@
 
 #include "bench.hh"
 #include "stringtable.h" // RA2
+
+/*
+**	RA2: the nuke flash is the storm's lighting state (0x0051FC60 reads it).
+*/
+struct NukeFlash {
+	static bool IsFadingIn(void); // RA2: 0x0051FC60
+};
+
+static ShapeSet const * InfantryShadowShape = NULL; // RA2: 0x00A41134; INFSHDW.SHP, loaded on first use
 
 
 int const InfantryClass::HumanShape[32] = {7,7,6,6,6,6,5,5,5,5,4,4,4,4,3,3,3,3,2,2,2,2,1,1,1,1,0,0,0,0,7,7};
@@ -325,18 +338,9 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 		}
 	}
 
-	/*
-	 * If the warhead is webby and we're not web immune, paralyze us.
-	 */
-
-	res = BASECLASS::Take_Damage(damage, distance, warhead, source, forced, no_crew); // RA2: no ProneStruggleTimer, IsWebby, WebDurationVariation and 2 more (TibSun's use does not compile against RA2's declaration)
+	res = BASECLASS::Take_Damage(damage, distance, warhead, source, forced, no_crew); // RA2: no webby paralysis
 
 	if (res == RESULT_ALREADY_DESTROYED) return(res);
-
-	/*
-	** hack for dog: if you're hit by a dog, and you're the target, your
-	** damage gets upped to max.
-	*/
 
 	if (res == RESULT_NONE) return(res);
 
@@ -344,8 +348,8 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 		Death_Announcement(source);
 		Stop_Driver();
 		Stun();
-		Mission = MISSION_NONE;
-		Assign_Mission(MISSION_GUARD);
+		QueueMission(MISSION_NONE, false); // RA2: the mission is queued, not assigned
+		QueueMission(MISSION_GUARD, false); // RA2: as above
 		Commence();
 		Kill_Cargo(source);
 
@@ -364,7 +368,8 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 		} else if (Class->IsCyborg && IsProne) {
 			new AnimClass(Rule->InfantryExplode, PositionCoord);
 			delthis = true;
-			new AnimClass(Rule->InfantryExplode, PositionCoord); // RA2: no IsJumpJet (not in RA2's layout)
+		} else if (Class->JumpJet) { // RA2: a jumpjet soldier explodes
+			new AnimClass(Rule->InfantryExplode, PositionCoord);
 			delthis = true;
 		} else {
 
@@ -373,52 +378,75 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 			**	will perform when killed.
 			*/
 			int infdeath = warhead->InfantryDeath;
+			if (Doing == 33) { // RA2: a paradropping soldier explodes
+				infdeath = 3; // RA2: as above
+			}
 			if (source != NULL && source->RTTI == RTTI_BUILDING && reinterpret_cast<BuildingClass*>(source)->Class->IsLaserFence) {
 				infdeath = 5;
 			}
 
-			switch (infdeath) {
-				default:
-				case 0:
-					delthis = true;
-					break;
-
-				case 1:
-					Do_Action(DO_GUN_DEATH, true);
-					break;
-
-				case 2:
-					Do_Action(DO_EXPLOSION_DEATH, true);
-					break;
-
-				case 3:
-					new AnimClass(Rule->InfantryExplode, PositionCoord);
-					delthis = true;
-					break;
-
-				case 4:
-					if (Class->IsDoggie) {
-						Do_Action(DO_FIRE_DEATH, true);
-					} else {
-						AnimClass * anim = new AnimClass(Rule->FlamingInfantry, PositionCoord);
-						anim->AlternativeDrawer = ColorSchemes[PlayerPtr->Scheme]->Converter;
+			if (Class->DeathAnims.Count() > 0) { // RA2: the type's own death animations
+				if (infdeath < 0 || infdeath >= Class->DeathAnims.Count() || Class->DeathAnims[infdeath] == NULL) { // RA2: as above
+					infdeath = 0; // RA2: as above
+				}
+				if (Class->DeathAnims[infdeath] != NULL) { // RA2: as above
+					new AnimClass(Class->DeathAnims[infdeath], PositionCoord); // RA2: as above
+				}
+				delthis = true;
+			} else if (Class->NotHuman) { // RA2: animals simply fall
+				Do_Action(DO_GUN_DEATH, true);
+			} else {
+				switch (infdeath) {
+					default:
+					case 0:
 						delthis = true;
-					}
-					break;
+						break;
 
-				case 5:
-					if (Class->IsDoggie) {
-						Do_Action(DO_FIRE_DEATH, true);
-					} else {
-						AnimClass * anim = new AnimClass(AnimTypes[ANIM_ELECT_DIE], PositionCoord);
+					case 1:
+						Do_Action(DO_GUN_DEATH, true);
+						break;
+
+					case 2:
+						Do_Action(DO_EXPLOSION_DEATH, true);
+						break;
+
+					case 3:
+						new AnimClass(Rule->InfantryExplode, PositionCoord);
 						delthis = true;
-					}
-					break;
+						break;
+
+					case 4:
+						new AnimClass(Rule->FlamingInfantry, PositionCoord); // RA2: the executable's death animations and fear values
+						delthis = true;
+						break;
+
+					case 5:
+						new AnimClass(AnimTypes[ANIM_ELECT_DIE], PositionCoord); // RA2: the executable's death animations and fear values
+						delthis = true;
+						break;
+
+					case 6: // RA2: the head pop
+						new AnimClass(Rule->InfantryHeadPop, PositionCoord); // RA2: the executable's death animations and fear values
+						delthis = true;
+						break;
+
+					case 7: // RA2: nuked
+						new AnimClass(Rule->InfantryNuked, PositionCoord); // RA2: the executable's death animations and fear values
+						delthis = true;
+						break;
+				}
 			}
 		}
 
 		if (delthis) {
-			Delete_Me();
+			if (Class->Crashable) { // RA2: a crashable soldier may crash instead of vanishing
+				if (!Crash(NULL)) { // RA2: as above
+					Delete_Me();
+					return(res);
+				}
+			} else {
+				Delete_Me();
+			}
 		}
 		return(res);
 	}
@@ -433,27 +461,19 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 		**	If an engineer is damaged and it is just sitting there, then tell it
 		**	to go do something since it will definitely die if it doesn't.
 		*/
-		if (!House->Is_Human_Player() && Class->IsEngineer && (Mission == MISSION_GUARD || Mission == MISSION_GUARD_AREA)) {
-			Assign_Mission(MISSION_HUNT);
+		if (!House->Is_Human_Player() && Class->IsEngineer && (Get_Mission() == MISSION_GUARD || Get_Mission() == MISSION_GUARD_AREA)) { // RA2: the executable's death animations and fear values
+			QueueMission(MISSION_HUNT, false); // RA2: as above
 		}
 
 		if (source != NULL) {
-			Scatter(source_coord);
-		}
-
-		if (Rule->IsBerzerkAllowed && Class->IsCyborg && !IsBerzerk && res == RESULT_HALF) {
-			IsBerzerk = true;
-			Assign_Mission(MISSION_GUARD_AREA);
+			Scatter(source_coord, false, false); // RA2: the executable's death animations and fear values
 		}
 
 		if (source != NULL && Fear < FEAR_SCARED) {
 			if (Class->IsFraidyCat) {
-				Fear = FEAR_PANIC;
+				Fear = (FearType)300; // RA2: panic is 300
 			} else if (!Class->IsFearless && !Has_Ability(ABILITY_FEARLESS)) {
 				Fear = FEAR_SCARED;
-				if (Class->IsDoggie && HealthRatio <= Rule->ConditionRed) {
-					Fear = FEAR_PANIC;
-				}
 			}
 		} else {
 
@@ -462,10 +482,10 @@ ResultType InfantryClass::Take_Damage(int & damage, int distance, WarheadTypeCla
 				**	Increase the fear of the infantry by a bit. The fear increases more
 				**	quickly if the infantry is damaged.
 				*/
-				int morefear = FEAR_ANXIOUS;
+				int morefear = 50; // RA2: as above
 				if (HealthRatio > Rule->ConditionRed) morefear /= 2;
 				if (HealthRatio > Rule->ConditionYellow) morefear /= 2;
-				Fear = FearType(MIN((int)Fear + morefear, FEAR_MAXIMUM));
+				Fear = FearType(MIN((int)Fear + morefear, 300)); // RA2: as above
 			}
 		}
 	}
@@ -615,9 +635,18 @@ void InfantryClass::Draw_It(Point2D const & xpoint, Rect const & cliprect) const
 
 			TacticalMap->Add_To_Selectables((ObjectClass *)this, point);
 
+			int level_light; // RA2: the ion storm and the nuke flash have their own level lighting
+			if (IonStormClass::Is_Ion_Storm_Active()) {
+				level_light = Scen->IonLevelLight; // RA2: as above
+			} else if (NukeFlash::IsFadingIn()) { // RA2: as above
+				level_light = Scen->NukeLevelLight; // RA2: as above
+			} else {
+				level_light = Scen->LevelLight; // RA2: as above
+			}
+
 			int brightness;
 			if (IsOnBridge || (Map[(Coord const &)PositionCoord].IsOvershadowed && PositionCoord.Z > Map.Get_Height_GL(PositionCoord) + (BRIDGE_LEPTON_HEIGHT / 2))) {
-				int light = (IonStormClass::Is_Ion_Storm_Active() ? Scen->IonLevelLight : Scen->LevelLight) * (HeightAGL / (2 * LEVEL_LEPTON_H));
+				int light = level_light * (HeightAGL / (2 * LEVEL_LEPTON_H)); // RA2: the executable's level light and shadow shape
 				brightness = Map[tcell].Brightness + light;
 			} else {
 				brightness = Map[tcell].Brightness + (Map[(Coord const &)PositionCoord].IsOvershadowed ? -500 : 0);
@@ -634,12 +663,12 @@ void InfantryClass::Draw_It(Point2D const & xpoint, Rect const & cliprect) const
 				}
 			}
 
-			if (height > 0) {
+			if (height > 0 && (InfantryShadowShape != NULL || (InfantryShadowShape = (ShapeSet const *)MFCD::Retrieve("INFSHDW.SHP")) != NULL)) { // RA2: the shadow is a shape of its own
 				Draw_Shape(
 					*LogicalSurface,
 					*NormalDrawer,
-					shapefile,
-					Shape_Number(),
+					InfantryShadowShape, // RA2: the executable's level light and shadow shape
+					1, // RA2: as above
 					point + Point2D(0, -IonBlastYDrawOffset) + Point2D(0, TacticalMap->Z_Lepton_To_Pixel(height)),
 					cliprect,
 					ShapeFlags_Type(SHAPE_ZGRAD|SHAPE_WIN_REL|SHAPE_CENTER|SHAPE_DARKEN),
@@ -1111,19 +1140,32 @@ void InfantryClass::Detach(AbstractClass const * target, bool all)
  *=============================================================================================*/
 void InfantryClass::Assign_Destination(AbstractClass * target, bool immediate)
 {
+	if (Owner_HouseClass()->Is_Human_Player()) { // RA2: a deploying human soldier ignores new destinations
+		if (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) { // RA2: as above
+			return;
+		}
+	}
+
+	if (Class->JumpJet && target != NULL) { // RA2: a jumpjet already in the target cell stays
+		if (Cell(target->Center_Coord()) == Cell(Center_Coord())) { // RA2: as above
+			return;
+		}
+	}
+
 	/*
 	**	Special flag so that infantry will start heading in the right direction immediately.
 	*/
-	if (Locomotion->Is_Moving() && target != NULL && Map[Center_Coord()].Is_Clear_To_Move(Class->Speed, true, false)) {
-	} // RA2: no IsJumpJet (not in RA2's layout)
+	if (Locomotion->Is_Moving() && target != NULL && Map[Center_Coord()].Is_Clear_To_Move(Class->Speed, true, false, -1, MZONE_NORMAL, -1, true)) { // RA2: stops the driver unless it is attacking its target
+		if (Class->JumpJet || CurrentMission != MISSION_ATTACK || NavCom != target) { // RA2: as above
+			Stop_Driver();
+		}
+	}
 
 	/*
 	**	When telling an infantry soldier to move to a location twice, then this
 	**	means that movement is more important than safety. Get up and run!
 	*/
 	if (House->Is_Human_Player() && target != NULL && NavCom == target && IsProne && !Class->IsFraidyCat && !Class->IsCyborg) {
-		Do_Action(DO_GET_UP);
-	} else if (Class->IsDoggie && IsProne && target != NULL) {
 		Do_Action(DO_GET_UP);
 	}
 
@@ -1146,9 +1188,12 @@ void InfantryClass::Assign_Destination(AbstractClass * target, bool immediate)
 				**	toward the transport and try to establish contact at a later time.
 				*/
 				if (techno->In_Radio_Contact()) {
-// TCTCTC -- call for an update from the transport to get a good rendezvous position.
-
-					if (techno->RTTI == RTTI_BUILDING) {
+					if (techno->RTTI == RTTI_UNIT) { // RA2: a busy vehicle transport is queued up for
+						QueueUpToEnter = (UnitClass *)target; // RA2: as above
+						ArchiveTarget = NULL;
+						target = NULL;
+					} else if (techno->RTTI == RTTI_BUILDING) { // RA2: as above
+						QueueUpToEnter = (BuildingClass *)target; // RA2: as above
 						ArchiveTarget = NULL;
 						target = NULL;
 					} else {
@@ -1156,12 +1201,13 @@ void InfantryClass::Assign_Destination(AbstractClass * target, bool immediate)
 					}
 				} else {
 					if (Transmit_Message(RADIO_HELLO, techno) == RADIO_ROGER) {
-						if (Transmit_Message(RADIO_DOCKING) != RADIO_ROGER) {
+						RadioMessageType reply = Transmit_Message(RADIO_DOCKING); // RA2: leave at once when docking begins
+						if (reply == RADIO_DOCKING) { // RA2: as above
+							return;
+						}
+						if (reply != RADIO_ROGER) { // RA2: as above
 							Transmit_Message(RADIO_OVER_OUT);
-						} //else {
-							//BG: keep retransmitted navcom from radio-move-here.
-							//return;
-						//}
+						}
 					}
 				}
 			}
@@ -1172,9 +1218,48 @@ void InfantryClass::Assign_Destination(AbstractClass * target, bool immediate)
 		Path[0] = FACING_NONE;
 	}
 
+	if (target != NULL && Class->JumpJet && Locomotion->Is_Moving()) { // RA2: a walking jumpjet queues the target and heads for the target cell
+		IPersistPtr persist(Locomotion);
+		CLSID clsid;
+		persist->GetClassID(&clsid);
+		if (clsid == CLSID_WalkLocomotion) {
+			NavQueue.Add_Head(target);
+			target = Get_Target_Cell_Ptr();
+			if (target != NULL && ((CellClass *)target)->IsUnderBridge) {
+				target = NULL;
+			}
+		}
+	}
 
+	if (Class->JumpJet && target != NULL && !Locomotion->Is_Moving()) { // RA2: jumpjets switch between walking and flying here
+		bool should_fly = Should_JumpJet_Fly(Destination_Coord().As_Cell(), target->Center_Coord().As_Cell());
+		bool is_jumpjet = Is_JumpJet(); // RA2: as above
+		if (Class->HoverAttack) { // RA2: as above
+			should_fly = true; // RA2: as above
+		}
+		if (is_jumpjet) { // RA2: as above
+			if (!should_fly) {
+				IPiggybackPtr piggy(Locomotion);
+				if (piggy != NULL && piggy->Is_Piggybacking() && piggy->Is_Ok_To_End()) { // RA2: as above
+					piggy->End_Piggyback(&Locomotion);
+				}
+				ILocomotionPtr walk(CLSID_WalkLocomotion);
+				walk->Link_To_Object(this);
+				piggy = IPiggybackPtr(walk);
+				if (piggy != NULL) {
+					piggy->Begin_Piggyback(Locomotion);
+					Locomotion = walk;
+				}
+			}
+		} else if (should_fly) { // RA2: the executable's destination assignment (jumpjet, queue-up transports)
+			IPiggybackPtr piggy(Locomotion);
+			if (piggy != NULL && piggy->Is_Piggybacking() && piggy->Is_Ok_To_End()) { // RA2: as above
+				piggy->End_Piggyback(&Locomotion);
+			}
+		}
+	}
 
-	BASECLASS::Assign_Destination(target, immediate); // RA2: no IsJumpJet (not in RA2's layout)
+	BASECLASS::Assign_Destination(target, immediate);
 }
 
 
@@ -1199,24 +1284,27 @@ void InfantryClass::Assign_Target(AbstractClass * target)
 {
 	if (target != TarCom && Strength > 0) {
 		IsFiring = false;
-		if (IsProne) {
-			Do_Action(DO_PRONE);
+		if (Is_Deploying()) {
+			Do_Action((DoType)28, 0, 0);
+		} else if (IsProne) {
+			Do_Action(DO_PRONE, 0, 0);
 		} else {
-			Do_Action(DO_STAND_READY);
+			Do_Action(DO_STAND_READY, 0, 0);
 		}
 	}
-
-	Path[0] = FACING_NONE;
-	BASECLASS::Assign_Target(target);
-
-	/*
-	**	If this is an infantry that can only capture, then also assign its destination to the
-	**	target specified.
-	*/
-	if (NavCom == NULL && Class->IsCapture && !Is_Weapon_Equipped()) {
-		if (target != NULL && target->RTTI == RTTI_BUILDING && ((BuildingClass *)target)->Class->IsCaptureable) {
-			Assign_Destination(target);
+	if (!Is_Deploying() || Class->DeployFire) {
+		Path[0] = FACING_NONE;
+		TechnoClass::Assign_Target(target);
+		if (NavCom == 0 && Class->IsCapture) {
+			AbstractClass *object = target;
+			BuildingClass *building = (object != 0 && object->Fetch_RTTI() == RTTI_BUILDING) ? (BuildingClass *)object : 0;
+			if (!Class->IsAgent && building != 0 && building->Class->IsCaptureable) {
+				Assign_Destination(object, true);
+			} else if (Class->IsAgent && building != 0 && building->Class->Spyable) {
+				Assign_Destination(object, true);
+			}
 		}
+		IsOverpowering = false;
 	}
 }
 
@@ -1348,6 +1436,29 @@ void InfantryClass::AI(void)
 	}
 
 	/*
+	**	RA2: a chronoshifting soldier sparkles every 24th frame, and a chrono-warping one
+	**	cannot do anything else.
+	*/
+	if ((IsBeingWarpedOut() || IsWarpingIn()) && Frame % 24 == 0 && Rule->ChronoSparkle1 != NULL) { // RA2: the executable's AI order (chrono warp, guard area, inline Edge_Of_World_AI)
+		new AnimClass(Rule->ChronoSparkle1, PositionCoord + Coord(120, 120, 0), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+	}
+	if (TemporalTargetingMe != NULL) { // RA2: as above
+		TemporalTargetingMe->AI(); // RA2: as above
+	}
+	if (IsWarpingIn() || (IsBeingWarpedOut() && IsImmobilized)) { // RA2: as above
+		Locomotion->Process(); // RA2: as above
+	}
+	if (IsBeingWarpedOut()) { // RA2: as above
+		if (TarCom != NULL) {
+			Assign_Target(NULL);
+		}
+		if (NavCom != NULL) {
+			Assign_Destination(NULL, true); // RA2: the executable's AI order (chrono warp, guard area, inline Edge_Of_World_AI)
+		}
+		return;
+	}
+
+	/*
 	**	Act on new orders if the unit is at a good position to do so.
 	*/
 	if (Ready_To_Commence()) {
@@ -1356,12 +1467,7 @@ void InfantryClass::AI(void)
 	}
 
 	if (Strength <= 0) {
-		if (Doing != DO_GUN_DEATH &&
-			Doing != DO_EXPLOSION_DEATH &&
-			Doing != DO_EXPLOSION2_DEATH &&
-			Doing != DO_GRENADE_DEATH &&
-			Doing != DO_FIRE_DEATH &&
-			Doing != DO_TUMBLE) {
+		if (!Is_Dying()) { // RA2: Is_Dying() instead of the death sequences and Tumble
 			Strength = 1;
 		}
 	}
@@ -1372,7 +1478,7 @@ void InfantryClass::AI(void)
 		return;
 	}
 
-	if (Mission == MISSION_GUARD) {
+	if (Mission == MISSION_GUARD || Mission == MISSION_GUARD_AREA) { // RA2: guard area as well
 		BuildingClass *building = Map[(Coord const &)PositionCoord].Cell_Building();
 		if (building != NULL) {
 
@@ -1397,9 +1503,6 @@ void InfantryClass::AI(void)
 		}
 	}
 
-	if (Locomotion->Is_Moving_Now() && HeightAGL > 0 && IsOwnedByPlayer && Class->SightRange > 0) {
-	} // RA2: no LookTimer (TibSun's use does not compile against RA2's declaration)
-
 	/*
 	**	Infantry that are not on the ground should always be redrawn. Such is
 	**	the case when they are parachuting to the ground.
@@ -1414,7 +1517,11 @@ void InfantryClass::AI(void)
 	*/
 	if (IsFiring && Fetch_Rate() == 0) {
 		IsFiring = false;
-		Do_Action(DO_STAND_READY);
+		if (Is_Deploying()) { // RA2: a deployed soldier returns to the deployed sequence
+			Do_Action((DoType)28); // RA2: as above
+		} else {
+			Do_Action(DO_STAND_READY);
+		}
 	}
 
 	/*
@@ -1447,7 +1554,6 @@ void InfantryClass::AI(void)
 	*/
 	if (NavCom == NULL && !IsProne && IsStoked && Comment == 0) {
 		IsStoked = false;
-		//Do_Action(Percent_Chance(50) ? DO_GESTURE1 : DO_GESTURE2);
 	}
 
 	/*
@@ -1456,23 +1562,12 @@ void InfantryClass::AI(void)
 	*/
 	Firing_AI();
 
-	if (!IsActive) {
-		return;
+	if (IsActive) { // RA2: the animation and movement steps nest on IsActive
+		Doing_AI();
+		if (IsActive) {
+			Movement_AI();
+		}
 	}
-
-	/*
-	**	Handle the completion of the animation sequence.
-	*/
-	Doing_AI();
-
-	if (!IsActive) {
-		return;
-	}
-
-	/*
-	**	Perform movement operations at this time.
-	*/
-	Movement_AI();
 }
 
 
@@ -1493,10 +1588,6 @@ void InfantryClass::AI(void)
  *=============================================================================================*/
 MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, int cell_height, CellClass const * adj_cellptr, bool) const
 {
-	if (IsInLimbo && Locomotion != NULL && Locomotion->In_Which_Layer() == LAYER_AIR) {
-		return(MOVE_OK);
-	}
-
 	/*
 	**	If we are moving into an illegal cell, then we can't do that.
 	*/
@@ -1583,10 +1674,6 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
 				}
 			}
 		}
-
-		if (cellptr->Overlay >= OVERLAY_LARGE_TIBERIUM01 && cellptr->Overlay <= OVERLAY_LARGE_TIBERIUM12) {
-			return(MOVE_NO);
-		}
 	}
 
 	/*
@@ -1600,24 +1687,34 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
 		if (obj != (ObjectClass *)this) {
 
 			/*
+			**	RA2: a parasite that has its victim in this very cell may enter it.
+			*/
+			if (ParasiteImUsing != NULL && ParasiteImUsing->Victim != NULL) { // RA2: the executable's occupant checks (parasite, iron curtain, eaten mission)
+				if (obj->Get_Cell() == ParasiteImUsing->Victim->Get_Cell()) { // RA2: as above
+					return(MOVE_OK);
+				}
+			}
+
+			/*
 			**	Always allow movement if the cell is the object to be captured or sabotaged.
 			*/
-			if (Mission == MISSION_ENTER || Mission == MISSION_CAPTURE || Mission == MISSION_SABOTAGE ||
-				((Mission == MISSION_GUARD_AREA || Mission == MISSION_PATROL || Mission == MISSION_GUARD) && Class->IsEngineer)) {
+			if (Get_Mission() == MISSION_ENTER || Get_Mission() == MISSION_CAPTURE || Get_Mission() == MISSION_EATEN || // RA2: the executable's occupant checks (parasite, iron curtain, eaten mission)
+				(Get_Mission() == MISSION_SABOTAGE && Class->IsBomber) || // RA2: as above
+				((Get_Mission() == MISSION_GUARD_AREA || Get_Mission() == MISSION_PATROL || Get_Mission() == MISSION_GUARD) && Class->IsEngineer)) { // RA2: Get_Mission(), Eaten, and sabotage only for bombers
 				if (obj == NavCom || (&Map[(Coord const &)obj->PositionCoord] == NavCom || obj == TarCom)) {
-					if (!IsTethered && !isbridge && Ground[cellptr->Land_Type()].Cost[Class->Speed] == 0) {
-						return(MOVE_NO);
+					if (!obj->IsIronCurtained()) { // RA2: an invulnerable object is not entered
+						float cost = Ground[cellptr->Land_Type()].Cost[Class->Speed]; // RA2: the cost is read first
+						bool unrestricted = IsTethered || isbridge; // RA2: as above
+						if (!unrestricted && cost == 0) { // RA2: as above
+							return(MOVE_NO);
+						}
+						return(MOVE_OK);
 					}
-					return(MOVE_OK);
+					return(MOVE_NO);
 				}
 				BuildingClass *building = cellptr->Cell_Building();
 				if (building != NULL && obj != building) {
-					if (building == NavCom) {
-						obj = obj->Next;
-						continue;
-					}
-
-					if (&Map[building->Center_Coord()] == NavCom || building == TarCom) {
+					if (building == NavCom || &Map[building->Center_Coord()] == NavCom || building == TarCom) { // RA2: one test
 						obj = obj->Next;
 						continue;
 					}
@@ -1628,7 +1725,7 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
 			**	Guard area should not allow the guarding unit to enter the cell with the
 			**	guarded unit.
 			*/
-			//if (Mission == MISSION_GUARD_AREA && ArchiveTarget == obj && Is_Target_Unit(ArchiveTarget)) {
+			//if (Get_Mission() == MISSION_GUARD_AREA && ArchiveTarget == obj && Is_Target_Unit(ArchiveTarget)) {
 			if (Mission == MISSION_GUARD_AREA && ArchiveTarget == obj && ArchiveTarget->RTTI == RTTI_UNIT) {
 				return(MOVE_NO);
 			}
@@ -1701,7 +1798,7 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
 				**	Special check to always allow entry into the building that this infantry
 				**	is trying to capture.
 				*/
-				if (Mission == MISSION_ENTER && obj == NavCom && IsTethered) {
+				if (Get_Mission() == MISSION_ENTER && obj == NavCom && IsTethered) { // RA2: the executable's occupant checks (parasite, iron curtain, eaten mission)
 					return(MOVE_OK);
 				}
 
@@ -1783,7 +1880,10 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
 								break;
 #endif
 							case RTTI_INFANTRY:
-								break; // RA2: no IsDisguised (TibSun's use does not compile against RA2's declaration)
+								if (obj->IsDisguisedAs(House)) { // RA2: a disguised enemy infantryman is passable
+									retval = MOVE_TEMP;
+								}
+								break;
 
 							case RTTI_BUILDING:
 								if (((BuildingClass *)obj)->Class->IsBridgeRepairHut) {
@@ -1895,35 +1995,49 @@ MoveType InfantryClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir
  *=============================================================================================*/
 FireErrorType InfantryClass::Can_Fire(AbstractClass * target, int which, bool ignoreRange) const // RA2: ignoreRange
 {
+	if (Is_Dying()) { // RA2: a dying soldier cannot fire
+		return(FIRE_CANT); // RA2: as above
+	}
+
 	/*
 	**	If a medic is shooting at a healed target, let's declare the target
 	**	illegal so he won't be constantly healing healed infantrymen.
 	*/
 	if (Combat_Damage() < 0) {
-		InfantryClass * targ = target->As_InfantryClass();
-		if (targ == NULL || targ->HealthRatio >= Rule->ConditionGreen) {
+		if (target == NULL || target->Fetch_RTTI() != RTTI_INFANTRY || !(((ObjectClass *)target)->Get_Health_Ratio() < Rule->ConditionGreen)) { // RA2: Get_Health_Ratio() instead of the member
 			return(FIRE_ILLEGAL);
 		}
 	}
 
-	/*
-	**	If this unit cannot fire while moving, then bail.
-	*/
-	if (Speed > 0.1 || (NavCom != NULL && Doing != DO_NOTHING && !MasterDoControls[Doing].Interrupt)) {
-		return(FIRE_MOVING);
-	}
+	FireErrorType result = BASECLASS::Can_Fire(target, which, ignoreRange); // RA2: the base check comes first; the rest only refines FIRE_OK
+	if (result == FIRE_OK) { // RA2: as above
+		/*
+		**	If this unit cannot fire while moving, then bail.
+		*/
+		if (Speed > 0.1 || (NavCom != NULL && Doing != DO_NOTHING && !MasterDoControls[Doing].Interrupt)) {
+			return(FIRE_MOVING);
+		}
 
-	WeaponTypeClass const * weapon = Get_Class_Weapon_Data(which)->Weapon;
-	if (weapon != NULL && weapon->UseFireParticles && NavCom != NULL) {
-		return(FIRE_MOVING);
-	}
+		WeaponTypeClass const * weapon = Get_Class_Weapon_Data(which)->Weapon;
+		if (weapon != NULL) { // RA2: the executable's checks, in its order
+			if (weapon->UseFireParticles && NavCom != NULL) { // RA2: as above
+				return(FIRE_MOVING);
+			}
+			if (weapon->AreaFire && target != Get_Cell_Ptr()) { // RA2: an area weapon needs the cell as its target
+				return(FIRE_ILLEGAL);
+			}
+			WarheadTypeClass const * warhead = weapon->WarheadPtr; // RA2: no Ivan bomb on a target that already carries one
+			if (warhead != NULL && warhead->IvanBomb && target != NULL && (target->AbstractFlags & 2) && ((ObjectClass *)target)->AttachedBomb != NULL) { // RA2: as above
+				return(FIRE_ILLEGAL);
+			}
+		}
 
-	FireErrorType error = Locomotion->Can_Fire();
-	if (error) {
-		return(error);
+		FireErrorType error = Locomotion->Can_Fire();
+		if (error) {
+			return(error);
+		}
 	}
-
-	return(BASECLASS::Can_Fire(target, which));
+	return(result);
 }
 
 
@@ -1946,63 +2060,57 @@ FireErrorType InfantryClass::Can_Fire(AbstractClass * target, int which, bool ig
 bool InfantryClass::Enter_Idle_Mode(bool initial, bool resume_waypoint)
 {
 	bool result = BASECLASS::Enter_Idle_Mode(initial, resume_waypoint);
-
-	MissionType order = MISSION_GUARD;
-
-	if (TarCom != NULL) {
-		order = MISSION_ATTACK;
+	if (HaveMegaMission()) {
+		return result;
+	}
+	if (Mission == MISSION_WAIT) {
+		return result;
+	}
+	MissionType mission;
+	if (TarCom != 0) {
+		mission = MISSION_ATTACK;
 		if (Mission == MISSION_SABOTAGE) {
-			order = MISSION_SABOTAGE;
+			mission = MISSION_SABOTAGE;
 		}
 		if (Mission == MISSION_CAPTURE) {
-			order = MISSION_CAPTURE;
+			mission = MISSION_CAPTURE;
 		}
 	} else {
-
 		Handle_Navigation_List();
-
-		if (NavCom != NULL) {
-			order = MISSION_MOVE;
+		if (NavCom != 0) {
+			mission = MISSION_MOVE;
 			if (Mission == MISSION_CAPTURE) {
-				order = MISSION_CAPTURE;
+				mission = MISSION_CAPTURE;
 			}
 			if (Mission == MISSION_SABOTAGE) {
-				order = MISSION_SABOTAGE;
+				mission = MISSION_SABOTAGE;
 			}
 		} else {
-
-			if (Mission == MISSION_GUARD || Mission == MISSION_GUARD_AREA || Mission != MISSION_NONE && (Current_Mission_Control().IsZombie || Current_Mission_Control().IsParalyzed)) {
+			if (Mission == MISSION_GUARD || Mission == MISSION_GUARD_AREA) {
 				return(false);
 			}
-
-			if (House->Is_Human_Player() || Team != NULL) {
-				if (CurrentMission == MISSION_GUARD_AREA || (Has_Ability(ABILITY_GUARD_AREA) && Team == NULL)) {
-					order = MISSION_GUARD_AREA;
-				} else {
-					order = MISSION_GUARD;
-				}
-
-			} else {
+			if (Mission != MISSION_NONE && (Current_Mission_Control().IsZombie || Current_Mission_Control().IsParalyzed)) {
+				return(false);
+			}
+			if (!House->Is_Human_Player() && Team == 0) {
 				if (House->IQ < Rule->IQGuardArea && CurrentMission != MISSION_GUARD_AREA) {
-					order = MISSION_GUARD;
+					mission = MISSION_GUARD;
+				} else if (!Is_Weapon_Equipped() && !Class->IsEngineer && !Class->IsVehicleThief) {
+					mission = MISSION_GUARD;
 				} else {
-					if (Is_Weapon_Equipped()) {
-						order = MISSION_GUARD_AREA;
-					} else {
-						if (Class->IsEngineer || Class->IsVehicleThief) {
-							order = MISSION_GUARD_AREA;
-						} else {
-							order = MISSION_GUARD;
-						}
-					}
+					mission = MISSION_GUARD_AREA;
 				}
+			} else if (CurrentMission != MISSION_GUARD_AREA && ((!Has_Ability(ABILITY_GUARD_AREA) && !Class->DefaultToGuardArea) || Team != 0)) {
+				mission = MISSION_GUARD;
+			} else {
+				mission = MISSION_GUARD_AREA;
 			}
 		}
 	}
-	if (CurrentMission != MISSION_PATROL && CurrentMission != MISSION_GUARD_AREA && order != MISSION_NONE) {
-		Assign_Mission(order);
+	if (CurrentMission != MISSION_PATROL && CurrentMission != MISSION_GUARD_AREA && mission != MISSION_NONE) {
+		QueueMission(mission, false);
 	}
-	return(result);
+	return result;
 }
 
 
@@ -2033,12 +2141,18 @@ bool InfantryClass::Random_Animate(void)
 		**	Scared infantry will always follow the golden rule of civilians;
 		**		"When in darkness or in doubt, run in circles, scream, and shout!"
 		*/
-		if (Class->IsFraidyCat && !House->Is_Human_Player() && Fear > FEAR_ANXIOUS) {
+		if (Class->IsFraidyCat && !House->Is_Human_Player() && Fear > 50) { // RA2: scared from 50 up (TibSun's FEAR_ANXIOUS is 10)
 			Scatter(COORD_NONE, true);
 			return(true);
 		}
 
-		switch (Random_Pick(0, 10)) {
+		int pick = Random_Pick(0, 10); // RA2: the pick is a local; cows scatter a lot more often
+		bool cow = Is_Type_Named("COW"); // RA2: as above
+		if (cow && Random_Pick(0, 10) < 5) { // RA2: as above
+			pick = 8; // RA2: as above
+		}
+
+		switch (pick) { // RA2: as above
 			case 0:
 				break;
 
@@ -2049,16 +2163,15 @@ bool InfantryClass::Random_Animate(void)
 				break;
 
 			case 6:
-				PrimaryFacing.Set(Facing_Dir(Random_Pick(FACING_N, FACING_NW)));
+				PrimaryFacing.Set(DirType(DirType(Facing_Dir(Random_Pick(FACING_N, FACING_NW))).As_Dir256())); // RA2: the facing goes through As_Dir256
 				break;
 
 			case 1:
 			case 2:
 			case 7:
 				Do_Action(DO_IDLE2);
-				PrimaryFacing.Set(Facing_Dir(Random_Pick(FACING_N, FACING_NW)));
-				if (!IsSelected && IsOwnedByPlayer && Class->VoiceComment.Count() > 0 && Sim_Random_Pick(0, 2) == 0) {
-					Sound_Effect((VocType)Class->VoiceComment[0], PositionCoord);
+				if (!IsSelected && House->Is_Player_Control() && Class->VoiceComment.Count() > 0 && Sim_Random_Pick(0, 2) == 0) { // RA2: House->Is_Player_Control(), VocClass::PlayAt
+					VocClass::PlayAt(Class->VoiceComment[0], PositionCoord); // RA2: as above
 				}
 				break;
 
@@ -2066,15 +2179,15 @@ bool InfantryClass::Random_Animate(void)
 			**	On occasion, civilian types will wander about.
 			*/
 			case 8:
-				PrimaryFacing.Set(Facing_Dir(Random_Pick(FACING_N, FACING_NW)));
-				if (!House->Is_Human_Player() && Class->IsFraidyCat) {
+				PrimaryFacing.Set(DirType(DirType(Facing_Dir(Random_Pick(FACING_N, FACING_NW))).As_Dir256())); // RA2: the facing goes through As_Dir256
+				if (cow || (!House->Is_Human_Player() && Class->IsFraidyCat)) { // RA2: cows wander too
 					Scatter(COORD_NONE, true);
 				}
 				break;
 
 			case 9:
 			case 10:
-				PrimaryFacing.Set(Facing_Dir(Random_Pick(FACING_N, FACING_NW)));
+				PrimaryFacing.Set(DirType(DirType(Facing_Dir(Random_Pick(FACING_N, FACING_NW))).As_Dir256())); // RA2: the facing goes through As_Dir256
 				break;
 
 		}
@@ -2129,6 +2242,12 @@ static inline DirType Coord_Direction(Coord const & coord1, Coord const & coord2
  *=============================================================================================*/
 void InfantryClass::Scatter(Coord const & threat, bool forced, bool nokidding)
 {
+	if ((Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) && forced && nokidding) { // RA2: a deployed soldier undeploys when forced to scatter
+		Do_Action((DoType)31, false, false); // RA2: as above
+	} else if (House->Is_Human_Player()) { // RA2: as above
+		if (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) return; // RA2: as above
+	}
+
 	/*
 	**	A unit that is in the process of going somewhere will never scatter.
 	*/
@@ -2149,7 +2268,7 @@ void InfantryClass::Scatter(Coord const & threat, bool forced, bool nokidding)
 	/*
 	**	Don't scatter if performing an action that can't be interrupted.
 	*/
-	if (Doing != DO_NOTHING && !MasterDoControls[Doing].Interrupt) return;
+	if (Doing != DO_NOTHING && Doing != 31 && !MasterDoControls[Doing].Interrupt) return; // RA2: undeploying may be interrupted
 
 	/*
 	**	For human players, don't scatter the infantry, if the special
@@ -2158,14 +2277,13 @@ void InfantryClass::Scatter(Coord const & threat, bool forced, bool nokidding)
 	if (!Rule->IsScatter && !Has_Ability(ABILITY_SCATTER) && !nokidding && House->Is_Human_Player() && !forced && Team == NULL) return;
 
 	if (forced || Class->IsFraidyCat) {
-		FacingType	toface;
+		FacingType toface;
 
 		if (threat != COORD_NONE) {
-			toface = Dir_Facing(::Direction(threat, PositionCoord));
+			toface = Dir_Facing(Coord_Direction(threat, PositionCoord)); // RA2: the executable's scatter (deploy handling, bridge height, queued mission)
 			toface = (FacingType)(toface + Random_Pick(FACING_FIRST, FACING_180) - FACING_90);
 		} else {
-			Point2D coord(Center_Coord().X, Center_Coord().Y);
-			coord = Point2D(coord.X & (CELL_LEPTON_W-1), coord.Y & (CELL_LEPTON_H-1));
+			Point2D coord = Cell_Fraction(Center_Coord(), Center_Coord()); // RA2: as above
 
 			if (coord != Point2D(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2)) {
 				toface = ::Direction(Point2D(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2), coord).As_Dir8();
@@ -2176,7 +2294,8 @@ void InfantryClass::Scatter(Coord const & threat, bool forced, bool nokidding)
 			Cell nearbyloc = Map.Nearby_Location(Destination_Coord().As_Cell(), Class->Speed, -1, MZONE_NORMAL, IsOnBridge, Point2D(1, 1), false, true);
 
 			if (nearbyloc != CELL_NONE) {
-				Assign_Destination(&Map[nearbyloc]);
+				Assign_Destination(&Map[nearbyloc], true); // RA2: the executable's scatter (deploy handling, bridge height, queued mission)
+				Locomotion->Process(); // RA2: moves on at once
 				return;
 			}
 		}
@@ -2218,8 +2337,8 @@ void InfantryClass::Scatter(Coord const & threat, bool forced, bool nokidding)
 		}
 
 		if (destination != CELL_NONE) {
-			Assign_Mission(MISSION_MOVE);
-			Assign_Destination(&Map[destination]);
+			QueueMission(MISSION_MOVE, false); // RA2: the mission is queued, not assigned
+			Assign_Destination(&Map[destination], true); // RA2: as above
 		}
 	}
 }
@@ -2250,15 +2369,68 @@ bool InfantryClass::Do_Action(DoType todo, bool force, bool randomize)
 		return(false);
 	}
 
+	if (Doing == 33 && IsFalling) { // RA2: nothing interrupts the paradrop fall
+		return(false);
+	}
+
+	/*
+	**	RA2: amphibious infantry swap to the water sequences in water and play the splash sounds
+	**	when they enter or leave it.
+	*/
+	if (Class->MZone == MZONE_AMPHIBIOUS_DESTROYER) { // RA2: the executable's sequence mapping (water, hover, panic, deploy sounds)
+		LandType land = Map[Get_Cell()].Land_Type(); // RA2: as above
+		int onland = 1; // RA2: as above
+		if ((land == LAND_BEACH || land == LAND_WATER) && !IsOnBridge) { // RA2: as above
+			onland = 0; // RA2: as above
+			if (todo == DO_WALK || todo == DO_CRAWL) { // RA2: as above
+				todo = (DoType)17; // RA2: as above
+			} else if (todo == DO_PRONE || todo == DO_STAND_READY) { // RA2: as above
+				todo = (DoType)16; // RA2: as above
+			} else if (todo == DO_IDLE1) { // RA2: as above
+				todo = (DoType)18; // RA2: as above
+			} else if (todo == DO_IDLE2) { // RA2: as above
+				todo = (DoType)19; // RA2: as above
+			} else if (todo == DO_GUN_DEATH) { // RA2: as above
+				todo = (DoType)20; // RA2: as above
+			} else if (todo == DO_EXPLOSION_DEATH) { // RA2: as above
+				todo = (DoType)21; // RA2: as above
+			} else if (todo == DO_FIRE_WEAPON || todo == DO_FIRE_PRONE) { // RA2: as above
+				todo = (DoType)22; // RA2: as above
+			}
+		}
+		if (LastSurface == 0 && onland == 1) { // RA2: as above
+			VocClass::PlayAt(Class->LeaveWaterSound, PositionCoord); // RA2: as above
+		} else if (LastSurface == 1 && onland == 0) { // RA2: as above
+			VocClass::PlayAt(Class->EnterWaterSound, PositionCoord); // RA2: as above
+		}
+		LastSurface = onland; // RA2: as above
+	}
+
+	if (In_Air() && !IsOnBridge && Class->DoControls[23].Frame > 0 && todo == DO_STAND_READY) { // RA2: a flying soldier hovers
+		todo = (DoType)23; // RA2: as above
+	} else if (todo == DO_WALK && Fear >= FEAR_PANIC) { // RA2: panicked infantry run
+		todo = (DoType)37; // RA2: as above
+	}
+
 	if (todo != Doing && (Doing == DO_NOTHING || force || MasterDoControls[Doing].Interrupt)) {
+		if (todo == 27) { // RA2: the deploy and undeploy sounds
+			if (Techno_Type_Class()->DeploySound != -1) { // RA2: as above
+				VocClass::PlayAt(Techno_Type_Class()->DeploySound, PositionCoord); // RA2: as above
+			}
+		} else if (todo == 31) { // RA2: as above
+			if (Techno_Type_Class()->UndeploySound != -1) { // RA2: as above
+				VocClass::PlayAt(Techno_Type_Class()->UndeploySound, PositionCoord); // RA2: as above
+			}
+		}
+
 		Doing = todo;
-		if (todo == DO_IDLE1 || todo == DO_IDLE2) {
+		if (Is_Idle_Doing(todo)) { // RA2: all the idle sequences
 			Set_Rate(Options.Normalize_Delay(MasterDoControls[Doing].Rate));
 		} else {
 			Set_Rate(MasterDoControls[Doing].Rate);
 		}
 		if (randomize) {
-			Set_Stage(Sim_Random_Pick(0,MAX((int)Class->DoControls[todo].Count, 1) - 1));
+			Set_Stage(Random_Pick(0,MAX((int)Class->DoControls[todo].Count, 1) - 1)); // RA2: the synced random, not the sim one
 		} else {
 			Set_Stage(0);
 		}
@@ -2282,6 +2454,7 @@ bool InfantryClass::Do_Action(DoType todo, bool force, bool randomize)
 				break;
 
 			case DO_GET_UP:
+			case 27: // RA2: deploying stands up as well
 				IsProne = false;
 				break;
 
@@ -2501,6 +2674,7 @@ bool InfantryClass::Unlimbo(Coord const & xcoord, Dir256 facing)
 			Set_Occupy_Bit(coord);
 		}
 
+		LastSurface = 2;
 		return(true);
 	}
 	return(false);
@@ -2532,15 +2706,23 @@ AbstractClass * InfantryClass::Greatest_Threat(ThreatType threat, Coord const & 
 	**	are ignored. If there is a building that needs to be recaptured and it is nearby
 	**	then automatically head toward it to recapture it.
 	*/
-	if (!House->Is_Human_Player() && Class->IsCapture && !Is_Weapon_Equipped()) {
-		if (House->ToCapture != NULL && Distance_To(House->ToCapture) < 15 * CELL_LEPTON) {
-			return(House->ToCapture);
+	if (!House->Is_Human_Player() && Class->IsEngineer) { // RA2: IsEngineer instead of IsCapture, and no weapon test
+		ObjectClass * object = (ObjectClass *)House->ToCapture; // RA2: as above
+		if (object != NULL) { // RA2: as above
+			if (Distance(object->Center_Coord()) < 15 * CELL_LEPTON) { // RA2: the distance is measured to the center of the object
+				return(House->ToCapture);
+			}
 		}
 		threat = ThreatType(threat | THREAT_CAPTURE);
 	}
 
 	if (Class->IsVehicleThief) {
-		if (NavCom != NULL && NavCom->Is_Techno() && ((TechnoClass *)NavCom)->Considered_Vehicle() && !((TechnoClass *)NavCom)->TClass->IsTrain && Distance(NavCom) < 15 * CELL_LEPTON) {
+		AbstractClass * victim = NavCom; // RA2: the flag test goes through a local that is only set for a non-NULL target
+		bool active; // RA2: as above
+		if (victim != NULL) { // RA2: as above
+			active = (victim->AbstractFlags & 1); // RA2: as above
+		}
+		if (victim != NULL && active && ((TechnoClass *)NavCom)->Considered_Vehicle() && !((TechnoClass *)NavCom)->Techno_Type_Class()->IsTrain && Distance(NavCom) < 15 * CELL_LEPTON) { // RA2: the flags test instead of Is_Techno
 			return(NavCom);
 		}
 	}
@@ -2554,12 +2736,12 @@ AbstractClass * InfantryClass::Greatest_Threat(ThreatType threat, Coord const & 
 		}
 	}
 
-	if ((threat & (THREAT_INFANTRY|THREAT_VEHICLES|THREAT_BUILDINGS|THREAT_TIBERIUM|THREAT_CIVILIANS|THREAT_POWER|THREAT_FACTORIES|THREAT_BASE_DEFENSE)) == 0) {
-		if (PrimaryWeapon != NULL) {
-			threat = ThreatType(threat | PrimaryWeapon->Allowed_Threats());
+	if ((threat & (THREAT_INFANTRY|THREAT_VEHICLES|THREAT_BUILDINGS|THREAT_TIBERIUM|THREAT_CIVILIANS|THREAT_POWER|THREAT_FACTORIES|THREAT_BASE_DEFENSE|THREAT_OCCUPIABLE|THREAT_TECH_BUILDINGS)) == 0) { // RA2: the mask also holds the occupiable and tech building threats
+		if (Get_Class_Weapon_Data(0)->Weapon != NULL) { // RA2: through the virtual weapon lookup
+			threat = ThreatType(threat | Get_Class_Weapon_Data(0)->Weapon->Allowed_Threats()); // RA2: as above
 		}
-		if (SecondaryWeapon != NULL) {
-			threat = ThreatType(threat | SecondaryWeapon->Allowed_Threats());
+		if (Get_Class_Weapon_Data(1)->Weapon != NULL) { // RA2: as above
+			threat = ThreatType(threat | Get_Class_Weapon_Data(1)->Weapon->Allowed_Threats()); // RA2: as above
 		}
 	}
 
@@ -2567,15 +2749,8 @@ AbstractClass * InfantryClass::Greatest_Threat(ThreatType threat, Coord const & 
 	**	Organic weapon types don't consider anything but infantry to be a threat. Such
 	**	weapon types would be the dog jaw and the medic first aid kit.
 	*/
-	if (Is_Weapon_Equipped() && PrimaryWeapon->WarheadPtr->IsOrganic) {
+	if (Is_Weapon_Equipped() && Get_Class_Weapon_Data(0)->Weapon->WarheadPtr->IsOrganic) { // RA2: the executable's threat selection for engineers, vehicle thieves and thieves
 		threat = ThreatType(threat & ~(THREAT_BUILDINGS|THREAT_VEHICLES|THREAT_BOATS|THREAT_AIR));
-	}
-
-	/*
-	**	Human controlled infantry don't automatically fire upon buildings.
-	*/
-	if (Is_Weapon_Equipped() && House->Is_Human_Player()) {
-		threat = ThreatType(threat & ~THREAT_BUILDINGS);
 	}
 
 	/*
@@ -2614,26 +2789,59 @@ AbstractClass * InfantryClass::Greatest_Threat(ThreatType threat, Coord const & 
  *=============================================================================================*/
 ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_force) const
 {
-	assert(object != NULL);
+	bool shift = !disallow_force && (Keyboard->Down(Options.KeySelect1) || Keyboard->Down(Options.KeySelect2)); // RA2: the select (shift) keys, then the force-attack keys (opcheck: Options+156, +160, +148, +152)
+	bool force_fire = !disallow_force && (Keyboard->Down(Options.KeyForceAttack1) || Keyboard->Down(Options.KeyForceAttack2)); // RA2: as above
+	if (shift && force_fire) { // RA2: as above
+		force_fire = false; // RA2: as above
+	}
 
 	ActionType action = BASECLASS::What_Action(object, disallow_force);
 
+	if (action == ACTION_TOGGLE_SELECT) { // RA2: a selection toggle stays
+		return(action);
+	}
+
+	if (Class->IsEngineer && House->Is_Player_Control() && object->AttachedBomb != NULL && object->BombVisible) { // RA2: engineers defuse visible bombs
+		return(ACTION_DISARM_BOMB); // RA2: as above
+	}
+
 	/*
 	**	If this is an engineer/renovator, we have to make some adjustments.
-	**	If the cursor is over an enemy building, return action-none.  If it's
-	**	over a friendly building, we have to return action-capture so he can
-	**	renovate it.
-	**	However, abort the whole thing if the building is a barrel or mine.
 	*/
-	if (Class->IsEngineer && object->RTTI == RTTI_BUILDING && House->Is_Player_Control()) {
-		BuildingClass const * bldg = (BuildingClass *)object;
+	if (Class->IsEngineer && object->RTTI == RTTI_BUILDING && House->Is_Player_Control() && !object->Considered_Vehicle() && ((BuildingClass const *)object)->Class->IsRepairable) { // RA2: as above
+		BuildingClass const * bldg = (BuildingClass const *)object; // RA2: as above
+		if (bldg->Class->IsBridgeRepairHut) {
+			return(Map.Can_Repair_Bridge(object->Center_Coord()) ? ACTION_GREPAIR : ACTION_NO_GREPAIR); // RA2: as above
+		}
+		if (House->Is_Ally(object) || (bldg->House->Class->IsMultiplayPassive && bldg->Class->CanBeOccupied)) { // RA2: as above
+			if (bldg->Class->IsHospital && HealthRatio < Rule->ConditionGreen) { // RA2: as above
+				return(ACTION_ENTER); // RA2: as above
+			}
+			if (object->HealthRatio == Rule->ConditionGreen) { // RA2: as above
+				return(ACTION_NO_GREPAIR);
+			}
+			return(ACTION_GREPAIR);
+		}
+		if (bldg->Class->IsCaptureable) {
+			if (object->HealthRatio <= Rule->EngineerCaptureLevel) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+				goto capture; // RA2: shares the return of the garrison test below; the exe jumps there
+			}
+			return(ACTION_DAMAGE);
+		}
+	}
 
-	} // RA2: no IsMobileWar (not in RA2's layout)
+	if (object->RTTI == RTTI_BUILDING && House->Is_Player_Control() && ((BuildingClass const *)object)->CanBeOccupiedBy((InfantryClass *)this) && !force_fire) { // RA2: garrisoning
+capture: // RA2: structured forms do not match; the exe shares this return between the engineer capture-level test and the garrison test, and the goto form matches
+		return(ACTION_CAPTURE);
+	}
+
+	if (Class->IsEngineer && action == ACTION_ATTACK) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		return(ACTION_NOMOVE); // RA2: as above
+	}
 
 	/*
 	**	If this is a medic, and the cursor's over a friendly infantryman,
-	**	execute an action-attack.  In CSII, if this is a mechanic and the
-	**	cursor's over a friendly vehicle, execute an action-attack.
+	**	execute an action-attack.
 	*/
 	if (Combat_Damage() < 0 && House->Is_Player_Control()) {
 		if (House->Is_Ally(object)) {
@@ -2654,7 +2862,6 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 				return(ACTION_SELECT);
 			}
 		} else {
-			//return(ACTION_NOMOVE);
 			return(ACTION_ATTACK_SUPPORT);
 		}
 	}
@@ -2662,7 +2869,7 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 	/*
 	**	See if it's a thief attacking an enemy vehicle, let him CAPTURE it.
 	*/
-	if (House->Is_Player_Control() && Class->IsVehicleThief && object->RTTI != RTTI_BUILDING && object->Considered_Vehicle()) {
+	if (House->Is_Player_Control() && Class->IsVehicleThief && object->Considered_Vehicle()) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
 		if (object->TClass->IsTrain) {
 			return(ACTION_SELECT);
 		}
@@ -2674,10 +2881,9 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 		}
 	}
 
-	if (object->RTTI == RTTI_BUILDING && House->Is_Ally(object) && House->Is_Player_Control()) {
-		BuildingClass const * bldg = (BuildingClass *)object;
-		if (bldg->Class->IsHospital) {
-			if (Strength < Class->MaxStrength) {
+	if (object->RTTI == RTTI_BUILDING && House->Is_Ally(object) && House->Is_Player_Control() && ((BuildingClass const *)object)->Class->IsHospital && !force_fire) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		if (Strength < Class->MaxStrength) {
+			if (!Class->Deployer || (Doing != 27 && Doing != 28 && Doing != 29 && Doing != 30)) { // RA2: as above
 				switch (((InfantryClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (RadioClass *)object)) {
 					case RADIO_ROGER:
 						action = ACTION_ENTER;
@@ -2687,75 +2893,16 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 						action = ACTION_NO_ENTER;
 						break;
 				}
-			} else {
-				action = ACTION_NO_ENTER;
 			}
-		}
-	}
-
-	if (object->RTTI == RTTI_BUILDING && House->Is_Ally(object) && House->Is_Player_Control()) {
-		BuildingClass const * bldg = (BuildingClass *)object;
-		if (bldg->Class->IsArmory) {
-			if (!Veterancy.Is_Elite()) {
-				switch (((InfantryClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (RadioClass *)object)) {
-					case RADIO_ROGER:
-						action = ACTION_ENTER;
-						break;
-
-					case RADIO_NEGATIVE:
-						action = ACTION_NO_ENTER;
-						break;
-				}
-			} else {
-				action = ACTION_NO_ENTER;
-			}
-		}
-	}
-
-	/*
-	**	See if it's a commando, and if he's attacking a building,
-	**	have him return ACTION_SABOTAGE instead
-	*/
-	if (House->Is_Player_Control() && (Class->IsBomber || Has_Ability(ABILITY_C4)) && action == ACTION_ATTACK && object->RTTI == RTTI_BUILDING && !object->Considered_Vehicle()) {
-		BuildingClass const * obj = (BuildingClass *)object;
-		/*
-		**	Hack: Tanya should shoot barrels, bomb other structures.
-		*/
-		if (obj->Class->IsRepairable) {
-			return(ACTION_SABOTAGE);
 		} else {
-			return(ACTION_ATTACK);
+			action = ACTION_NO_ENTER;
 		}
 	}
 
-	/*
-	**	There is no self-select action available for infantry types.
-	*/
-	if (action == ACTION_SELF) {
-		action = ACTION_NONE;
-	}
-
-	/*
-	**	Check to see if it can enter a transporter.
-	*/
-	if (action != ACTION_NO_ENTER &&
-		House->Is_Ally(object) &&
-		House->Is_Player_Control() && ::Dynamic_Cast<TechnoClass const *>(object) != NULL &&
-		action != ACTION_ATTACK) {
-
-		TechnoTypeClass const * tclass = object->TClass;
-		if (tclass != NULL && tclass->Max_Passengers() > 0) {
-			bool try_enter = true;
-			if (object->Is_Foot()) {
-				FootClass * foot = (FootClass *)object;
-				if ((foot->Team != NULL && !foot->Team->Class->IsLoadable) || foot->Locomotion->Is_Moving()) {
-					action = ACTION_NO_ENTER;
-					try_enter = false;
-				}
-			}
-
-			if (try_enter) {
-				switch (((InfantryClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (TechnoClass*)object)) {
+	if (object->RTTI == RTTI_BUILDING && House->Is_Ally(object) && House->Is_Player_Control() && ((BuildingClass const *)object)->Class->IsArmory) { // RA2: armories train veterans
+		if (!Veterancy.Is_Elite()) {
+			if (!Class->Deployer || (Doing != 27 && Doing != 28 && Doing != 29 && Doing != 30)) { // RA2: as above
+				switch (((InfantryClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (RadioClass *)object)) {
 					case RADIO_ROGER:
 						action = ACTION_ENTER;
 						break;
@@ -2763,56 +2910,126 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 					case RADIO_NEGATIVE:
 						action = ACTION_NO_ENTER;
 						break;
+				}
+			}
+		} else {
+			action = ACTION_NO_ENTER;
+		}
+	}
 
-					default:
-						break;
+	if (House->Is_Player_Control() && (Class->IsBomber || Has_Ability(ABILITY_C4)) && action == ACTION_ATTACK && object->RTTI == RTTI_BUILDING && !object->Considered_Vehicle()) {
+		if (((BuildingClass const *)object)->Class->CanC4 && !((BuildingClass const *)object)->Class->IsInvisibleInGame) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+			return(ACTION_SABOTAGE);
+		}
+		return(ACTION_ATTACK);
+	}
+
+	WeaponTypeClass const * weapon = Get_Class_Weapon_Data(What_Weapon_Should_I_Use((AbstractClass *)object))->Weapon; // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+	if (action == ACTION_ATTACK && weapon != NULL && weapon->SabotageCursor) { // RA2: a sabotage weapon has its own cursor
+		return((ActionType)64); // RA2: as above
+	}
+
+	if (House->Is_Player_Control() && action == ACTION_ATTACK && Class->Ivan) { // RA2: Ivan's bombs
+		if (object->Class_Of()->IsBombable && object->AttachedBomb == NULL) { // RA2: as above
+			return(ACTION_IVAN_BOMB); // RA2: as above
+		}
+		return(ACTION_NO_IVAN_BOMB); // RA2: as above
+	}
+
+	if (House->Is_Player_Control() && Class->Deployer && (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30)) { // RA2: as above
+		if (action == ACTION_MOVE) { // RA2: as above
+			return(ACTION_NOMOVE); // RA2: as above
+		}
+		if (action == ACTION_ATTACK) {
+			bool in_range = false; // RA2: as above
+			if (Class->DeployFire) { // RA2: as above
+				int widx = What_Weapon_Should_I_Use(NULL); // RA2: as above
+				in_range = In_Range((AbstractClass *)object, widx); // RA2: as above
+			}
+			if (!in_range) { // RA2: as above
+				return(ACTION_NOMOVE); // RA2: as above
+			}
+		} else if (action == ACTION_SELF) { // RA2: as above
+			if (!Planning_Allows_Event_Type(4)) { // RA2: as above
+				return(ACTION_NO_DEPLOY); // RA2: as above
+			}
+			if (Class->UndeployDelay > -1) { // RA2: as above
+				return(ACTION_NO_DEPLOY); // RA2: as above
+			}
+		}
+	}
+
+	if (House->Is_Player_Control() && action == ACTION_SELF && Class->Deployer && Class->UndeployDelay > -1 && Doing == 31) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		return(ACTION_NO_DEPLOY); // RA2: as above
+	}
+
+	if (action == ACTION_SELF) {
+		if (Planning_Allows_Event_Type(4)) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+			if (!House->Is_Player_Control()) {
+				action = ACTION_NONE;
+			} else if (GetDeployWeapon()->Weapon != NULL && GetDeployWeapon()->Weapon->AreaFire) { // RA2: as above
+				action = ACTION_AREA_ATTACK; // RA2: as above
+			} else if (!Class->Deployer) { // RA2: as above
+				action = ACTION_NONE;
+			}
+		} else {
+			action = ACTION_NO_DEPLOY; // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		}
+	}
+
+	if (action != ACTION_NO_ENTER && House->Is_Ally(object) && House->Is_Player_Control() && ::Dynamic_Cast<TechnoClass const *>(object) != NULL && action != ACTION_ATTACK && action != ACTION_GUARD_AREA) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		TechnoTypeClass const * tclass = object->Techno_Type_Class(); // RA2: as above
+		if (tclass != NULL && tclass->MaxPassengers > 0) { // RA2: as above
+			if (Class->BalloonHover) { // RA2: as above
+				action = ACTION_NO_ENTER;
+			} else {
+				FootClass const * foot = (FootClass const *)object; // RA2: as above
+				bool transport_ready; // RA2: the foot flag is read through a local that is only set for a non-NULL object
+				if (object != NULL) { // RA2: as above
+					transport_ready = (object->AbstractFlags & 4) != 0; // RA2: as above
+				}
+				if (object != NULL && transport_ready && ((foot->Team == NULL || foot->Team->Class->IsLoadable) ? foot->Locomotion->Is_Moving() : true)) { // RA2: as above
+					action = ACTION_NO_ENTER;
+				} else {
+					switch (((InfantryClass *)this)->Transmit_Message(RADIO_CAN_LOAD, (RadioClass *)object)) {
+						case RADIO_ROGER:
+							action = ACTION_ENTER;
+							break;
+
+						case RADIO_NEGATIVE:
+							action = ACTION_NO_ENTER;
+							break;
+					}
 				}
 			}
 		}
 	}
 
-	if (House->Is_Player_Control() && Class->IsCapture) {
-		if (action == ACTION_ATTACK) {
-			if (!House->Is_Ally(object) && (
-				(object->RTTI == RTTI_BUILDING && ((BuildingClass *)object)->Class->IsCaptureable) )
-				) {
-
-					if (Class->IsBomber && object->Considered_Vehicle() == true) {
-						return(ACTION_SABOTAGE);
-					}
-
-					/*
-					**	If we're trying to capture a building, make sure we can get
-					**	to it.  Find an adjacent cell that's the same zone as us.
-					**	The target circumstance is a naval yard that doesn't touch
-					**	the shore - a total island.  In that case, we can't capture
-					**	it, so we shouldn't show the action-capture cursor.
-					*/
-					action = ACTION_CAPTURE;
-					if (object->RTTI == RTTI_BUILDING) {
-						Cell cell = object->Center_Coord().As_Cell();
-						int targzone = Map.Get_Cell_Zone(Get_Target_Cell(), Class->MZone, IsOnBridge);
-						Cell const *list = ((BuildingClass *)object)->Class->Occupy_List(false);
-						bool found = false;
-						while (*list != REFRESH_EOL && !found) {
-							Cell newcell = cell + *list++;
-							for (FacingType i=FACING_N; i < FACING_COUNT; i++) {
-								Cell adjcell = Adjacent_Cell(newcell, i);
-								if (Map.Get_Cell_Zone(adjcell, Class->MZone, false) == targzone) {
-									found = true;
-									break;
-								}
-							}
-						}
-						if (!found) {
-							action = ACTION_NONE;
+	if (House->Is_Player_Control() && Class->IsCapture && action == ACTION_ATTACK) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		if ((!Class->IsAgent && !House->Is_Ally(object) && object->RTTI == RTTI_BUILDING && ((BuildingClass const *)object)->Class->IsCaptureable) || // RA2: as above
+			(Class->IsAgent && !House->Is_Ally(object) && object->RTTI == RTTI_BUILDING && ((BuildingClass const *)object)->Class->Spyable)) { // RA2: as above
+			action = ACTION_CAPTURE;
+			if (object->RTTI == RTTI_BUILDING) {
+				Cell cell = object->Center_Coord().As_Cell();
+				int targzone = Map.Get_Cell_Zone(Get_Target_Cell(), Class->MZone, IsOnBridge);
+				Cell const * list = ((BuildingClass const *)object)->Class->Occupy_List(false); // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+				bool found = false;
+				while (*list != REFRESH_EOL && !found) {
+					Cell newcell = *list++ + cell; // RA2: as above
+					for (int i = 0; i < 8; i++) { // RA2: as above
+						Cell adjcell = AdjacentCell[i & 7] + newcell; // RA2: as above
+						if (Map.Get_Cell_Zone(adjcell, Class->MZone, false) == targzone) {
+							found = true;
+							break;
 						}
 					}
-			} else {
-				if (!Is_Weapon_Equipped()) {
-					//action = ACTION_NONE;
 				}
 			}
+			goto finish; // RA2: the exe skips the tests below here; the gotos at "finish" match, nested ifs do not
+		}
+		if (!Is_Weapon_Equipped()) {
+			action = ACTION_NONE;
+			goto finish; // RA2: as above
 		}
 	}
 
@@ -2820,13 +3037,27 @@ ActionType InfantryClass::What_Action(ObjectClass const * object, bool disallow_
 		if (!Is_Weapon_Equipped()) {
 			action = ACTION_ATTACK_SUPPORT;
 		}
+	} else if (action == ACTION_SELECT && object->RTTI == RTTI_BUILDING && House->Is_Player_Control() && !object->Considered_Vehicle() && ((BuildingClass const *)object)->Class->Cloning) { // RA2: cloning vats
+		return(object->Owner_HouseClass() != PlayerPtr ? ACTION_NO_ENTER : ACTION_EATEN); // RA2: as above
 	}
-	/*
-	**	If it doesn't know what to do with the object, then just
-	**	say it can't move there.
-	*/
-	if (House->Is_Player_Control() && action == ACTION_NONE) action = ACTION_NOMOVE;
 
+finish: // RA2: structured forms do not match; the exe skips the tests above for the capture cases, and the goto form matches
+	if (House->Is_Player_Control() && action == ACTION_NONE) { // RA2: as above
+		if (IsBeingWarpedOut() || IsWarpingIn()) { // RA2: as above
+			goto done; // RA2: the exe returns through the shared tail with the action in its register; a plain return of the constant does not match
+		}
+		action = ACTION_NOMOVE;
+	}
+
+	if (action == ACTION_NOMOVE) { // RA2: the executable's object action (engineer, medic, thief, deploy, capture, cloning)
+		if (object->IsDisguised() && !object->GetDisguiseHouse(true) && object->GetDisguise(true)->RTTI == RTTI_OVERLAYTYPE) { // RA2: a disguised soldier standing for an overlay is moved over
+			action = ACTION_MOVE; // RA2: as above
+		}
+	} else if (action == ACTION_ATTACK && object->Class_Of()->IsImmune) { // RA2: as above
+		action = ACTION_NOMOVE;
+	}
+
+done: // RA2: structured forms do not match; the exe returns the action register through this shared tail, and the goto form matches
 	return(action);
 }
 
@@ -2854,13 +3085,14 @@ bool InfantryClass::Active_Click_With(ActionType action, ObjectClass * object, b
 	action = What_Action(object, is_waypoint);
 
 	switch (action) {
+		case ACTION_DAMAGE: // RA2: DAMAGE and GREPAIR (and CAPTURE) all become CAPTURE
 		case ACTION_GREPAIR:
-		case ACTION_DAMAGE:
 		case ACTION_CAPTURE:
 			action = ACTION_CAPTURE;
 			break;
 
-		case ACTION_HEAL:
+		case ACTION_HEAL: // RA2: HEAL and DISARM_BOMB become ATTACK
+		case ACTION_DISARM_BOMB: // RA2: the executable cancels a click on itself
 			action = ACTION_ATTACK;
 			break;
 
@@ -2875,6 +3107,9 @@ bool InfantryClass::Active_Click_With(ActionType action, ObjectClass * object, b
 			break;
 	}
 
+	if (object == this && action == ACTION_ATTACK) { // RA2: an infantryman cannot attack itself
+		return(false);
+	}
 	return(BASECLASS::Active_Click_With(action, object, is_waypoint));
 }
 
@@ -2887,6 +3122,9 @@ bool InfantryClass::Active_Click_With(ActionType action, ObjectClass * object, b
 /// <returns>bool; Was the click acted upon?</returns>
 bool InfantryClass::Active_Click_With(ActionType action, Cell const & cell, Cell const & cell2, bool is_waypoint) // RA2: a second cell
 {
+	if (Is_Deploying() && What_Action(cell, false, is_waypoint) == ACTION_NOMOVE) { // RA2: a deploying soldier ignores a click that cannot be moved to
+		return(false);
+	}
 	return(BASECLASS::Active_Click_With(action, cell, cell2, is_waypoint)); // RA2: as above
 }
 
@@ -2951,7 +3189,6 @@ void InfantryClass::Reacquire_Target(void)
 
 
 
-
 /***********************************************************************************************
  * InfantryClass::Mission_Attack -- Intercept attack mission for special handling.             *
  *                                                                                             *
@@ -2997,7 +3234,6 @@ deploy_fire: // RA2: as above
 
 	return(BASECLASS::Do_MISSION_ATTACK());
 }
-
 
 
 
@@ -3077,18 +3313,18 @@ int InfantryClass::Do_MISSION_UNLOAD(void)
 {
 	if (Class->Deployer) {
 		int delay = -1;
-		if (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) {
+		if (Is_Deploying()) {
 			if (Class->UndeployDelay <= -1) {
 				Do_Action((DoType)31, true, false);
 			}
 		} else {
 			Do_Action((DoType)27, true, false);
-			WeaponDataStruct const * weapon = GetDeployWeapon();
+			WeaponDataStruct const *weapon = GetDeployWeapon();
 			if (Is_Weapon_Valid(weapon) && weapon->Weapon->AreaFire) {
 				if (Is_Type_Named("DESO")) {
 					delay = Class->DoControls[27].Count + 1;
 				} else {
-					Assign_Target(&Map[Get_Cell()]);
+					Assign_Target((AbstractClass *)&Map[Get_Cell()]);
 				}
 			}
 			if (Class->UndeployDelay > -1) {
@@ -3096,12 +3332,12 @@ int InfantryClass::Do_MISSION_UNLOAD(void)
 			}
 		}
 		Set_Mission(MISSION_GUARD);
-		Assign_Destination(NULL, true);
+		Assign_Destination(0, true);
 		if (delay > -1) {
-			return(delay);
+			return delay;
 		}
 	}
-	return(BASECLASS::Do_MISSION_UNLOAD());
+	return BASECLASS::Do_MISSION_UNLOAD();
 }
 
 
@@ -3146,12 +3382,35 @@ ActionType InfantryClass::What_Action(Cell const & cell, bool check_fog, bool di
 	**	If this is a medic, and the cursor's over a friendly infantryman,
 	**	execute an action-attack.
 	*/
-	if (Combat_Damage() < 0 && House->Is_Player_Control()) {
-		if (action == ACTION_ATTACK) {
-			action = ACTION_GUARD_AREA;
+	if (Combat_Damage() < 0 && House->Is_Player_Control() && action == ACTION_ATTACK) { // RA2: the executable's cell action (tunnels, deployed soldiers, fogged buildings)
+		action = ACTION_GUARD_AREA;
+	}
+
+	if (Class->JumpJet && (action == ACTION_MOVE || action == ACTION_NOMOVE)) { // RA2: jumpjets cannot enter the tunnel mouths
+		if (Map[cell].Is_Near_Tunnel_NW()) { // RA2: as above
+			action = ACTION_NONE;
+		} else if (Map[cell].Is_Near_Tunnel_ES()) { // RA2: as above
+			action = ACTION_NONE;
 		}
 	}
 
+	if (House->Is_Player_Control() && Class->Deployer && (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) && (action == ACTION_MOVE || action == ACTION_ATTACK)) { // RA2: a deployed soldier cannot move, and attacks only what it can reach
+		if (action == ACTION_MOVE) { // RA2: as above
+			action = ACTION_NOMOVE;
+		} else {
+			bool inrange = false; // RA2: as above
+			if (Class->DeployFire) { // RA2: as above
+				int weapon = What_Weapon_Should_I_Use(NULL); // RA2: as above
+				Coord coord = cell; // RA2: as above
+				inrange = In_Range(coord, weapon); // RA2: as above
+			}
+			if (!inrange) { // RA2: as above
+				action = ACTION_NOMOVE;
+			}
+		}
+	} else if (action == ACTION_MOVE && Map[cell].Has_Tunnel()) { // RA2: tunnel entrances
+		return(Map[cell].Can_Enter_Tunnel(this) ? ACTION_ENTER_TUNNEL : ACTION_NO_ENTER_TUNNEL);
+	}
 
 	CellClass * cellptr = &Map[cell]; // RA2: no IsJumpJet (not in RA2's layout)
 	BuildingTypeClass * fogged_building = NULL;
@@ -3177,20 +3436,24 @@ ActionType InfantryClass::What_Action(Cell const & cell, bool check_fog, bool di
 		**	Engineers may repair a destroyed bridge.
 		*/
 		if (fogged_building->IsBridgeRepairHut) {
-			return(Map.Can_Repair_Bridge(fogged_object->Center_Coord()) ? ACTION_GREPAIR : ACTION_NO_GREPAIR);
+			action = Map.Can_Repair_Bridge(fogged_object->Center_Coord()) ? ACTION_GREPAIR : ACTION_NO_GREPAIR; // RA2: the executable's cell action (tunnels, deployed soldiers, fogged buildings)
+			goto done; // RA2: as above
 		}
-
 		if (fogged_building->IsRepairable) {
-			return(ACTION_CAPTURE);
+			action = ACTION_CAPTURE;
+			goto done; // RA2: the executable's cell action (tunnels, deployed soldiers, fogged buildings)
 		}
 	}
 
 	if (action == ACTION_ATTACK && !Is_Weapon_Equipped()) {
 		action = ACTION_ATTACK_SUPPORT;
 	}
+done: // RA2: the structured if/else forms do not match; the exe shares this tail between the engineer cases and the fall-through
+	if (House->Is_Player_Control() && action == ACTION_NONE && !Class->JumpJet && !IsBeingWarpedOut() && !IsWarpingIn()) { // RA2: a soldier that is not warping may move
+		action = ACTION_NOMOVE;
+	}
 
-
-	return(action); // RA2: no IsJumpJet (not in RA2's layout)
+	return(action);
 }
 
 
@@ -3239,7 +3502,6 @@ ObjectTypeClass const * InfantryClass::Class_Of(void) const
 void InfantryClass::Read_INI(CCINIClass const & ini)
 {
 	InfantryClass	* infantry;			// Working infantry pointer.
-	HousesType		inhouse;			// Infantry house.
 	InfantryType	classid;			// Infantry class.
 	char			buf[128];
 	char			* validation;
@@ -3258,16 +3520,10 @@ void InfantryClass::Read_INI(CCINIClass const & ini)
 		/*
 		**	1st token: house name.
 		*/
-		inhouse = HouseTypeClass::From_Name(strtok(buf, ","));
-		if (inhouse != HOUSE_NONE) {
+		int house_index = House_Index_From_Name(strtok(buf, ",")); // RA2: the house is found by index in Houses
+		if (house_index != -1) { // RA2: as above
 
-			HouseClass * inhousep = NULL;
-			for (int h = 0; h < Houses.Count(); h++) {
-				if (Houses[h]->Class->House == inhouse) {
-					inhousep = Houses[h];
-					break;
-				}
-			}
+			HouseClass * inhousep = Houses[house_index]; // RA2: as above
 
 			/*
 			**	2nd token: infantry type name.
@@ -3291,7 +3547,7 @@ void InfantryClass::Read_INI(CCINIClass const & ini)
 					if (NewINIFormat >= 4) {
 						x = atoi(strtok(NULL, ","));
 						y = atoi(strtok(NULL, ","));
-						x = (short)x;
+						x = (short)x; // RA2: x is narrowed to a short
 					} else {
 						int cellnum = atoi(strtok(NULL, ","));
 						x = cellnum % 128;
@@ -3362,8 +3618,9 @@ void InfantryClass::Read_INI(CCINIClass const & ini)
 						infantry->Strength = infantry->Class->MaxStrength * (strength / 256.0);
 						if (infantry->Strength > infantry->Class->MaxStrength-3) infantry->Strength = infantry->Class->MaxStrength;
 						if (infantry->Strength < 1) infantry->Strength = 1;
+						infantry->EstimatedHealth = infantry->Strength; // RA2: the health the owner last saw
 						if (Session.Type == GAME_NORMAL || infantry->House->Is_Human_Player()) {
-							infantry->Assign_Mission(mission);
+							infantry->QueueMission(mission, false); // RA2: the mission is queued
 							infantry->Commence();
 						} else {
 							infantry->Enter_Idle_Mode();
@@ -3462,28 +3719,6 @@ void InfantryClass::Fear_AI(void)
 	**	After a time, the infantry will gain courage.
 	*/
 	if (Fear > 0) {
-
-		if (Class->IsDoggie) {
-			if (Fear >= FEAR_PANIC) {
-				if (!Locomotion->Is_Moving() && NavCom == NULL) {
-					if (Map[(Coord const &)PositionCoord].Land_Type() == LAND_TIBERIUM) {
-						Do_Action(DO_LIE_DOWN);
-					} else {
-						Goto_Tiberium(16, false);
-						if (NavCom != NULL) {
-							Assign_Target(NULL);
-							Assign_Mission(MISSION_MOVE);
-							Commence();
-						}
-					}
-				}
-			}
-			if (!Class->IsFearless) {
-				Fear--;
-			}
-			return;
-		}
-
 		if (!Class->IsFearless) {
 			Fear--;
 		}
@@ -3500,27 +3735,20 @@ void InfantryClass::Fear_AI(void)
 		**	Stand up if brave and lie down if afraid.
 		*/
 		if (IsProne) {
-			if (Fear < FEAR_ANXIOUS) {
-				Do_Action(DO_GET_UP);
+			if (Fear < 50 && !Is_Deploying()) {
+				Do_Action(DO_GET_UP, false, false);
 			}
-		} else  {
-
-			/*
-			**	Drop to the ground if anxious. Don't drop to the ground while moving
-			**	and the special elite flag is active.
-			*/
-			if (Fear >= FEAR_ANXIOUS && (!House->Is_Human_Player() || ((NavCom == NULL && !Locomotion->Is_Moving())))) {
-				Do_Action(DO_LIE_DOWN);
+		} else if (Fear >= 50 && !Is_Deploying()) {
+			if (!(House->Is_Human_Player() && (NavCom != 0 || Locomotion->Is_Moving()))
+				&& !Class->IsFraidyCat) {
+				Do_Action(DO_LIE_DOWN, false, false);
 			}
 		}
 	}
-
-	/*
-	**	When in darkness or in doubt,
-	**	run in circles, scream, and shout.
-	*/
-	if (Class->IsFraidyCat && Fear > FEAR_ANXIOUS && !IsFalling && !Locomotion->Is_Moving() && NavCom == NULL) {
-		Scatter(COORD_NONE, true);
+	if (Class->IsFraidyCat && Fear > 50 && !Is_Deploying() && !IsFalling) {
+		if (!Locomotion->Is_Moving() && NavCom == 0) {
+			Scatter(COORD_NONE, true, false);
+		}
 	}
 }
 
@@ -3636,12 +3864,12 @@ void InfantryClass::Firing_AI(void)
 		int primary = What_Weapon_Should_I_Use(TarCom);
 
 		if (!IsFiring) {
-			switch (Can_Fire(TarCom, primary)) {
+			switch (Can_Fire(TarCom, primary, true)) { // RA2: ignoreRange
 				case FIRE_ILLEGAL:
 					if (Combat_Damage(primary) < 0) {
-						ObjectClass * targ = dynamic_cast<ObjectClass *>(TarCom);
-						if (Is_Target_Infantry(targ)) {
-							if (targ->HealthRatio >= Rule->ConditionGreen) {
+						AbstractClass * targ = TarCom; // RA2: the target is tested for infantry by its flags and type
+						if (targ != NULL && (targ->AbstractFlags & 2) && targ->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+							if (!(((ObjectClass *)targ)->Get_Health_Ratio() < Rule->ConditionGreen)) { // RA2: as above
 								Assign_Target(NULL);
 							}
 						} else {
@@ -3659,9 +3887,11 @@ void InfantryClass::Firing_AI(void)
 					**	Start firing animation.
 					*/
 					if (Is_JumpJet()) {
-						Do_Action(DO_FIREFLY);
+						Do_Action((DoType)26); // RA2: FireFly
 					} else {
-						if (IsProne) {
+						if (Is_Deploying()) { // RA2: a deployed soldier fires in its deployed sequence
+							Do_Action((DoType)29); // RA2: as above
+						} else if (IsProne) { // RA2: as above
 							Do_Action(DO_FIRE_PRONE);
 						} else {
 							Do_Action(DO_FIRE_WEAPON);
@@ -3676,8 +3906,8 @@ void InfantryClass::Firing_AI(void)
 					**	stop and keep firing.
 					*/
 					if (TarCom == NavCom) {
-						NavCom = NULL;
-						Path[0] = FACING_NONE;
+						Abort_Motion(); // RA2: Abort_Motion and Stop_Driver instead of clearing the NavCom and path
+						Stop_Driver();
 					}
 					break;
 			}
@@ -3696,20 +3926,24 @@ void InfantryClass::Firing_AI(void)
 		if (IsFiring && Fetch_Stage() == firestage) {
 
 			primary = What_Weapon_Should_I_Use(TarCom);
-			if (Can_Fire(TarCom, primary) == FIRE_OK) {
+			if (Can_Fire(TarCom, primary, true) == FIRE_OK) { // RA2: the executable's firing AI (jumpjet, deploy, abort motion)
 				Fire_At(TarCom, primary);
 			} else {
 				IsFiring = false;
 				if (IsProne) {
 					Do_Action(DO_PRONE);
+				} else if (Is_Deploying()) { // RA2: back to the deployed sequence
+					Do_Action((DoType)28); // RA2: as above
 				} else {
 					Do_Action(DO_STAND_READY);
 				}
 			}
 
-			const WeaponDataStruct * wdata = Get_Class_Weapon_Data(0);
-			if (wdata->Weapon->MaxSpeed < Rule->Incoming) {
-				Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
+			if (TarCom != NULL) { // RA2: the target may have gone
+				const WeaponDataStruct * wdata = Get_Class_Weapon_Data(0);
+				if (wdata->Weapon->MaxSpeed < Rule->Incoming) {
+					Map[TarCom->Center_Coord()].Incoming(PositionCoord, true);
+				}
 			}
 		}
 	} else {
@@ -3739,11 +3973,42 @@ void InfantryClass::Doing_AI(void)
 {
 	if (Doing == DO_NOTHING || Fetch_Stage() >= Class->DoControls[Doing].Count) {
 		switch (Doing) {
-			default:
-				break; // RA2: no ProneStruggleTimer (TibSun's use does not compile against RA2's declaration)
+			case 27: // RA2: the end of the deploy sequence starts the deployed one
+				Do_Action((DoType)28, true, false); // RA2: as above
+				Shorten_Targeting_Timer(); // RA2: as above
+				break;
 
-			case DO_STRUGGLE:
-				break; // RA2: no ProneStruggleTimer (TibSun's use does not compile against RA2's declaration)
+			case 31: // RA2: stand ready again
+				Do_Action(DO_STAND_READY, true, false); // RA2: as above
+				break;
+
+			default:
+				if (Doing != DO_NOTHING) { // RA2: face the sequence's facing
+					int facing = Class->DoControls[Doing].Facing; // RA2: as above
+					if (facing != -1) { // RA2: as above
+						PrimaryFacing.Set(DirType(facing << 13)); // RA2: as above
+					}
+				}
+				if (Locomotion->Is_Moving() && Speed > 0.1) { // RA2: still moving
+					if (IsProne) {
+						Do_Action(DO_CRAWL, true, false); // RA2: the executable's sequence end handling
+					} else {
+						Do_Action(DO_WALK, true, false); // RA2: as above
+					}
+				} else {
+					if (Is_Deploying()) { // RA2: as above
+						Do_Action((DoType)28, true, false); // RA2: as above
+					} else if (IsProne) { // RA2: as above
+						Do_Action(DO_PRONE, true, false); // RA2: as above
+					} else {
+						Do_Action(DO_STAND_READY, true, false); // RA2: as above
+					}
+				}
+				break;
+
+			case 34: // RA2: a sequence that leads on into the next one
+				Do_Action((DoType)35, true, false); // RA2: as above
+				break;
 
 			case DO_GUN_DEATH:
 			case DO_EXPLOSION_DEATH:
@@ -3751,13 +4016,26 @@ void InfantryClass::Doing_AI(void)
 			case DO_GRENADE_DEATH:
 			case DO_FIRE_DEATH:
 				if (Fetch_Stage() >= Class->DoControls[Doing].Count) {
-					if (!Class->IsDoggie) {
-						new AnimClass(Rule->DeadBodies.Pick(Scen->RandomNumber), Center_Coord());
+					if (Class->DeadBodies.Count() > 0) { // RA2: the type's own dead bodies first
+						new AnimClass(Class->DeadBodies.Pick(Scen->RandomNumber()), Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+					} else if (!Class->NotHuman) { // RA2: else the rules' for humans
+						new AnimClass(Rule->DeadBodies.Pick(Scen->RandomNumber()), Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
 					}
 					Delete_Me();
-					return;
 				}
+				break;
+
+			case 20: // RA2: the executable's sequence end handling
+			case 21: // RA2: as above
+			case 36: // RA2: as above
+				if (Fetch_Stage() >= Class->DoControls[Doing].Count) {
+					Delete_Me();
+				}
+				break;
 		}
+	}
+	if (Doing == 33 && !IsFalling) { // RA2: the paradrop sequence ends when landed
+		Do_Action(DO_STAND_READY, true, false); // RA2: as above
 	}
 }
 
@@ -3780,112 +4058,115 @@ void InfantryClass::Doing_AI(void)
  *=============================================================================================*/
 void InfantryClass::Movement_AI(void)
 {
-	/*
-	**	Special hack check to ensure that infantry will never get stuck in a movement order if
-	**	there is no place to go.
-	*/
-	if (Mission == MISSION_MOVE && NavCom == NULL && !Locomotion->Is_Moving()) {
-		Enter_Idle_Mode();
-	}
-
-	if (Mission == MISSION_MOVE && NavCom != NULL && !Locomotion->Is_Moving()) {
-		Assign_Destination(NavCom);
-		Set_Speed(1.0);
+	if (Get_Mission() == MISSION_MOVE && !Locomotion->Is_Moving()) {
+		if (NavCom == NULL) {
+			Enter_Idle_Mode(false, true);
+		} else {
+			Assign_Destination(NavCom, true);
+			Set_Speed(1.0);
+		}
 	}
 
 	if (NavCom != NULL) {
-		Cell cell = NavCom->Destination_Coord().As_Cell();
-
+		Cell target_cell = NavCom->Destination_Coord(this).As_Cell();
 		/*
 		**	Double check to make sure it doesn't have a movement destination into a zone
 		**	that it can't travel to. In such a case, abort the movement process by clearing
 		**	the navigation computer.
 		*/
-		if ((!IsZoneCheat || Can_Enter_Cell(Get_Target_Cell_Ptr()) != MOVE_NO) && !Locomotion->Is_Moving() && !IsTethered && NavCom != NULL && IsLocked && !Map.Is_Same_Cell_Zone(Destination_Coord().As_Cell(), cell, Class->MZone, Is_Moving_Onto_Bridge(), Map[cell].IsUnderBridge, Is_Allowed_To_Leave_Map())) {
-// hack: if it's tanya, spy, or engineer, let 'em move there anyway.
-			if (!Class->IsCapture && Mission != MISSION_ENTER) {
-				Assign_Destination(NULL);
+		if (!IsZoneCheat || Can_Enter_Cell(Get_Target_Cell_Ptr(), FACING_NONE, -1, 0, 1) != 7) {
+			if (!Locomotion->Is_Moving() && !IsTethered && NavCom != NULL && IsLocked) {
+				Cell current_cell = Destination_Coord(0).As_Cell();
+				if (!Map.Is_Same_Cell_Zone(current_cell, target_cell, Class->MZone,
+				Is_Moving_Onto_Bridge(0), Map[target_cell].IsUnderBridge, Is_Allowed_To_Leave_Map())
+				&& !Class->IsCapture && Get_Mission() != MISSION_ENTER) {
+					Assign_Destination(NULL, true);
+				}
 			}
 		}
 	}
 
 	if (Locomotion->Is_Really_Moving_Now()) {
 		if (Is_JumpJet()) {
-			if (!IsFiring) {
-				if (Speed > 0.8) {
-					Do_Action(DO_FLY);
-				} else {
-					Do_Action(DO_HOVER);
-				}
+			if (IsFiring) {
+				return;
 			}
-		} else {
-			if (IsProne) {
-				Do_Action(DO_CRAWL);
+			if (Speed > 0.8) {
+				Do_Action((DoType)24, false, false);
 			} else {
-				Do_Action(DO_WALK);
+				Do_Action((DoType)23, false, false);
 			}
+			return;
+		}
+		if (IsProne) {
+			Do_Action(DO_CRAWL, false, false);
+		} else {
+			Do_Action(DO_WALK, false, false);
 		}
 	} else {
-		if (Doing == DO_WALK || Doing == DO_FLY || Doing == DO_HOVER) {
-			Do_Action(DO_STAND_READY);
+		if (Doing == 3 || Doing == 24 || Doing == 23) {
+			Do_Action(DO_STAND_READY, false, false);
+		} else if (Doing == 6) {
+			Do_Action(DO_PRONE, false, false);
+		} else if (Doing == 17) {
+			Do_Action(DO_HOVER, false, false);
 		}
-		if (Doing == DO_CRAWL) {
-			Do_Action(DO_PRONE);
-		}
+		return;
 	}
 }
+
 
 /// <summary>
 /// RA2: a guarding deployer's turn. Deployed, it undeploys (UndeployDelay), fires its deploy weapon at its own cell
 /// while the radiation there is low (radiation-immune types) or rocks; undeployed, a computer-owned DeployFire type
 /// deploys once the difficulty's AIAutoDeployFrameDelay has passed. Returns -1 when there is nothing to do.
 /// </summary>
-int InfantryClass::Update_Deployed_Attack(void)
+int InfantryClass::Update_Deployed_Attack(void) // RA2: the executable's deployed attack update
 {
-	if (Doing == 27 || Doing == 28 || Doing == 29 || Doing == 30) {
-		if (Class->UndeployDelay > -1) {
-			Do_Action((DoType)31, false, false);
-			return(Class->DoControls[31].Count);
+	if (Is_Deploying()) { // RA2: as above
+		if (Class->UndeployDelay > -1) { // RA2: as above
+			Do_Action((DoType)31, false, false); // RA2: as above
+			return(Class->DoControls[31].Count); // RA2: as above
 		}
-		if (Class->DeployFire) {
-			if (Class->ImmuneToRadiation) {
-				RadSiteClass * site = Map[Get_Cell()].Get_Rad_Site();
-				int level = Get_Class_Weapon_Data(1)->Weapon->RadLevel / 3;
-				if (site == NULL || site->GetRadLevel() < level) {
-					Assign_Target(&Map[Get_Cell()]);
-					if (Can_Fire(TarCom, 1, true) == FIRE_OK) {
-						Fire_At(TarCom, 1);
+		if (Class->DeployFire) { // RA2: as above
+			if (Class->ImmuneToRadiation) { // RA2: as above
+				RadSiteClass * site = Map[Get_Cell()].Get_Rad_Site(); // RA2: as above
+				WeaponTypeClass const * weapon = Get_Class_Weapon_Data(1)->Weapon; // RA2: as above
+				int level = weapon->RadLevel / 3; // RA2: as above
+				if (site == NULL || site->GetRadLevel() < level) { // RA2: as above
+					Assign_Target(&Map[Get_Cell()]); // RA2: as above
+					if (Can_Fire(TarCom, 1, true) == FIRE_OK) { // RA2: as above
+						Fire_At(TarCom, 1); // RA2: as above
 						Assign_Target(NULL);
-						Do_Action((DoType)29, false, false);
-						return(Class->DoControls[29].Count);
+						Do_Action((DoType)29, false, false); // RA2: as above
+						return(Class->DoControls[29].Count); // RA2: as above
 					}
 					Assign_Target(NULL);
 				}
-				return(Current_Mission_Control().Normal_Delay() + Random_Pick(10, 20));
+				return(Current_Mission_Control().Normal_Delay() + Random_Pick(10, 20)); // RA2: the executable's deployed attack update
 			}
-			Reacquire_Target(); // RA2
-			return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
+			Reacquire_Target(); // RA2 // RA2: as above
+			return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2)); // RA2: as above
 		}
-		return(-1);
+	} else {
+		if (!Owner_HouseClass()->Is_Human_Player() && Class->Deployer && Class->DeployFire && Class->UndeployDelay <= -1 && NavCom == NULL && CurrentMissionStartTime + Rule->AIAutoDeployFrameDelay[House->Difficulty] < Frame) { // RA2: as above
+			if (ArchiveTarget != NULL) { // RA2: as above
+				if (ArchiveTarget->Center_Coord().As_Cell() != Center_Coord().As_Cell()) { // RA2: as above
+					return(-1); // RA2: as above
+				}
+			}
+			if (!Class->ImmuneToRadiation) { // RA2: as above
+				if (!Locomotion->Is_Moving()) { // RA2: as above
+					Do_Action((DoType)27, false, false); // RA2: as above
+					return(Class->DoControls[27].Count); // RA2: as above
+				}
+				Locomotion->Stop_Moving(); // RA2: as above
+				ShouldDeploy = true; // RA2: as above
+				return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2)); // RA2: as above
+			}
+		}
 	}
-
-	if (!Owner_HouseClass()->Is_Human_Player() && Class->Deployer && Class->DeployFire && Class->UndeployDelay <= -1 && NavCom == NULL && CurrentMissionStartTime + Rule->AIAutoDeployFrameDelay[House->Difficulty] < Frame) {
-		if (ArchiveTarget != NULL) {
-			if (ArchiveTarget->Center_Coord().As_Cell() != Center_Coord().As_Cell()) {
-				return(-1);
-			}
-		}
-		if (!Class->ImmuneToRadiation) {
-			if (!Locomotion->Is_Moving()) {
-				Do_Action((DoType)27, false, false);
-				return(Class->DoControls[27].Count);
-			}
-			Locomotion->Stop_Moving();
-			ShouldDeploy = true;
-			return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
-		}
-	}
-	return(-1);
+	return(-1); // RA2: the executable's deployed attack update
 }
 
 
@@ -3976,12 +4257,13 @@ not_ready: // RA2: as above
  *=============================================================================================*/
 bool InfantryClass::Paradrop(Coord const & coord)
 {
-	if (BASECLASS::Paradrop(coord)) {
+	if (ObjectClass::Paradrop(coord)) {
 		if (House->Is_Human_Player()) {
-			Assign_Mission(MISSION_GUARD);
+			QueueMission(MISSION_GUARD, false);
 		} else {
-			Assign_Mission(MISSION_HUNT);
+			QueueMission(MISSION_HUNT, false);
 		}
+		Do_Action((DoType)33, 1, 0);
 		return(true);
 	}
 	return(false);
@@ -4055,7 +4337,6 @@ int InfantryClass::What_Weapon_Should_I_Use(AbstractClass * target) const
 	}
 	return(BASECLASS::What_Weapon_Should_I_Use(target));
 }
-
 
 
 
@@ -4146,7 +4427,6 @@ bool InfantryClass::Ready_To_Commence(void)
 	}
 	return(false);
 }
-
 
 
 
@@ -4402,14 +4682,40 @@ bool InfantryClass::Should_JumpJet_Fly(Cell const & from, Cell const & to)
 /// </summary>
 void InfantryClass::Approach_Target(void)
 {
-	if (TarCom) {
-		if (!Class->IsEngineer || NavCom == TarCom)	{
-			BASECLASS::Approach_Target();
-		}
-		else {
-			Assign_Destination(TarCom, true);
-		}
+	if (TarCom == NULL) { // RA2: the engineer branch is gone; a deployer fires from where it stands
+		return;
 	}
+	if (!Is_Deploying()) { // RA2: as above
+		BASECLASS::Approach_Target();
+	}
+	if (Owner_HouseClass()->Is_Human_Player()) { // RA2: AI deployers only
+		return;
+	}
+	if (!Class->Deployer || !Class->DeployFire) { // RA2: as above
+		return;
+	}
+	int weapon = Class->DeployFireWeapon; // RA2: as above
+	bool in_range = In_Range(TarCom, weapon); // RA2: as above
+	WeaponTypeClass * weapon_type = Get_Class_Weapon_Data(weapon)->Weapon; // RA2: as above
+	if (weapon_type == NULL || weapon_type->AreaFire) { // RA2: as above
+		return;
+	}
+	if (Is_Deploying()) { // RA2: undeploy again when the target is out of range
+		if (!in_range) { // RA2: as above
+			Do_Action((DoType)31, false, false); // RA2: as above
+		}
+		return;
+	}
+	if (!in_range) { // RA2: as above
+		return;
+	}
+	if (!Locomotion->Is_Moving()) { // RA2: standing still: start deploying
+		Do_Action((DoType)27, false, false); // RA2: as above
+		return;
+	}
+	Locomotion->Stop_Moving(); // RA2: moving: stop and deploy later
+	ShouldDeploy = true; // RA2: as above
+	(void)(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2)); // RA2: the exe evaluates both and drops the sum
 }
 
 
@@ -4697,7 +5003,6 @@ bool InfantryClass::Is_Dying(void) const
 {
 	return(Doing == 11 || Doing == 12 || Doing == 13 || Doing == 14 || Doing == 15 || Doing == 34 || Doing == 35 || Doing == 36 || Doing == 20 || Doing == 21);
 }
-
 
 
 

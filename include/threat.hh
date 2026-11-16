@@ -34,6 +34,8 @@ enum ThreatType {
 	THREAT_FACTORIES=0x1000,    // Consider factories a greater target?
 	THREAT_BASE_DEFENSE=0x2000, // Consider base defense buildings a greater target?
 	THREAT_ALLIES=0x4000,       /// Scan for allies?
+	THREAT_OCCUPIABLE=0x8000,   // RA2: occupiable buildings (the exe's infantry threat mask 0x1B978 includes it)
+	THREAT_TECH_BUILDINGS=0x10000, // RA2: tech buildings
 };
 
 #define THREAT_GROUND	(THREAT_VEHICLES|THREAT_BUILDINGS|THREAT_INFANTRY)
