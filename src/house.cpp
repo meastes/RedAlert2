@@ -5669,6 +5669,13 @@ int HouseClass::Build_Category(RTTIType type, int id) // RA2: 0x4EB550; not in T
 /// <param name="naval">Whether the object is a naval one.</param>
 /// <param name="category">The build category of the object (5 is the defense category).</param>
 /// <returns>Returns with the factory, or NULL if there is none.</returns>
+/// <summary>
+/// Fetches the factory that makes an object of the given kind.
+/// </summary>
+/// <param name="rtti">The kind of object.</param>
+/// <param name="naval">Whether the object is a naval one.</param>
+/// <param name="category">The build category of the object (5 is the defense category).</param>
+/// <returns>Returns with the factory, or NULL if there is none.</returns>
 FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti, bool naval, int category) const // RA2: 0x4EB580; the naval and defense factories apart
 {
 	FactoryClass * factory; // RA2: as above
@@ -5708,6 +5715,7 @@ FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti, bool naval, int category
 	}
 	return(factory); // RA2: as above
 }
+
 
 
 
@@ -6996,13 +7004,16 @@ void HouseClass::Compute_CRC(CRCEngine & crc) const
 	crc(AircraftFactories);
 	crc(InfantryFactories);
 	crc(UnitFactories);
+	crc(NumShipyards); // RA2: crc'd
 	crc(BuildingFactories);
+	crc(NumOrePurifiers); // RA2: as above
 	crc(Power);
 	crc(Drain);
 	crc(WhoLastHurtMe);
 	crc(Enemy);
 	Base.Compute_CRC(crc);
 }
+
 
 
 /// <summary>
@@ -7644,7 +7655,7 @@ void HouseClass::Ensure_Base_Nodes(void) // RA2: RA2's form
 /// <param name="vector">The candidate structures, in order of preference.</param>
 /// <returns>Returns with the first structure this house may own, or NULL if it may own
 /// none.</returns>
-BuildingTypeClass const * HouseClass::Get_First_Ownable(DynamicVectorClass<BuildingTypeClass const *> const & owned) const // RA2: as above
+BuildingTypeClass const * HouseClass::Get_First_Ownable(DynamicVectorClass<BuildingTypeClass const *> const & owned) const // RA2: RA2's form
 {
 	int owner_bit = 1 << HouseTypeClass::From_Name(Class->ParentCountry.Buffer); // RA2: as above
 	for (int index = 0; index < owned.Count(); index++) { // RA2: as above
@@ -7660,6 +7671,7 @@ BuildingTypeClass const * HouseClass::Get_First_Ownable(DynamicVectorClass<Build
 	}
 	return(NULL);
 }
+
 
 
 
@@ -9186,7 +9198,8 @@ void HouseClass::Update_Production_Mode(RTTIType type)
 /// </summary>
 void HouseClass::AI_Super_Weapons(void)
 {
-	Cell target; // RA2: RA2's form
+	Cell target_0; // RA2: RA2's form
+	Cell target_2; // RA2: as above
 	if (!Is_Human_Player()) {
 		for (int index = 0; index < SuperWeapon.Count(); index++) { // RA2: as above
 			SuperClass * super = SuperWeapon[index]; // RA2: as above
@@ -9195,14 +9208,14 @@ void HouseClass::AI_Super_Weapons(void)
 					case SUPER_MULTI_MISSILE: { // RA2: as above
 						SuperClass * pending = super; // RA2: as above
 						if (Enemy != -1) { // RA2: as above
-							target = CELL_NONE; // RA2: as above
+							target_0 = CELL_NONE; // RA2: as above
 							if (PreferredTarget == 1) { // RA2: as above
-								target = Best_Super_Weapon_Target(); // RA2: as above
+								target_0 = Best_Super_Weapon_Target(); // RA2: as above
 							} else {
-								target = Threat_Target_Cell(PreferredTarget); // RA2: as above
+								target_0 = Threat_Target_Cell(PreferredTarget); // RA2: as above
 							}
-							if (target != CELL_NONE) { // RA2: as above
-								Place_Special_Blast((SuperWeaponType)SuperWeapon.ID(pending), target); // RA2: as above
+							if (target_0 != CELL_NONE) { // RA2: as above
+								Place_Special_Blast((SuperWeaponType)SuperWeapon.ID(pending), target_0); // RA2: as above
 							}
 						}
 						break;
@@ -9210,14 +9223,14 @@ void HouseClass::AI_Super_Weapons(void)
 					case SUPER_LIGHTNING_STORM: { // RA2: as above
 						SuperClass * pending = super; // RA2: as above
 						if (!IonStormClass::Is_Ion_Storm_Active() && Enemy != -1) { // RA2: as above
-							target = CELL_NONE; // RA2: as above
+							target_2 = CELL_NONE; // RA2: as above
 							if (PreferredTarget == 1) { // RA2: as above
-								target = Best_Super_Weapon_Target(); // RA2: as above
+								target_2 = Best_Super_Weapon_Target(); // RA2: as above
 							} else {
-								target = Threat_Target_Cell(PreferredTarget); // RA2: as above
+								target_2 = Threat_Target_Cell(PreferredTarget); // RA2: as above
 							}
-							if (target != CELL_NONE) { // RA2: as above
-								Place_Special_Blast((SuperWeaponType)SuperWeapon.ID(pending), target); // RA2: as above
+							if (target_2 != CELL_NONE) { // RA2: as above
+								Place_Special_Blast((SuperWeaponType)SuperWeapon.ID(pending), target_2); // RA2: as above
 							}
 						}
 						break;
@@ -9231,6 +9244,7 @@ void HouseClass::AI_Super_Weapons(void)
 		}
 	}
 }
+
 
 
 
@@ -9367,8 +9381,8 @@ void HouseClass::AI_Strike_Best_Building(SuperClass * super) // RA2: RA2's form
 		BuildingClass * best = NULL; // RA2: as above
 		int value = -1; // RA2: as above
 		HouseClass * house = Houses[Enemy]; // RA2: as above
-		for (int index = Buildings.Count() - 1; index >= 0; index--) {
-			BuildingClass * building = Buildings[index];
+		for (int index = ::Buildings.Count() - 1; index >= 0; index--) { // RA2: the global list
+			BuildingClass * building = ::Buildings[index]; // RA2: as above
 			if (building->House == house) { // RA2: as above
 				int rating = Map.Cell_Threat(building->Center_Coord().As_Cell(), *this); // RA2: as above
 				if (building->TranslucencyLevel == 15) { // RA2: as above
@@ -9385,6 +9399,7 @@ void HouseClass::AI_Strike_Best_Building(SuperClass * super) // RA2: RA2's form
 		}
 	}
 }
+
 
 
 
