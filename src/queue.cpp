@@ -167,13 +167,36 @@
 #include "weapon.h"
 #include "windlg.h"
 #include "winstub.h"
-#include "wolapi/wolapi.h"
 #include "wonline.h"
+
+// RA2: the one wolapi interface queue.cpp calls (INetUtil's ping request), declared here instead of including wolapi/;
+// the slots before RequestPing are wolapi's IUnknown and the three request calls.
+struct INetUtil { // RA2: as above
+	virtual long __stdcall QueryInterface(void const * iid, void ** object) = 0; // RA2: as above
+	virtual unsigned long __stdcall AddRef(void) = 0; // RA2: as above
+	virtual unsigned long __stdcall Release(void) = 0; // RA2: as above
+	virtual long __stdcall RequestGameresSend(char const * host, int port, unsigned char * data, int length) = 0; // RA2: as above
+	virtual long __stdcall RequestLadderSearch(char const * host, int port, char const * key, unsigned long sku, int team, int cond, int sort, int number, int leading) = 0; // RA2: as above
+	virtual long __stdcall RequestLadderList(char const * host, int port, char const * keys, unsigned long sku, int team, int cond, int sort) = 0; // RA2: as above
+	virtual long __stdcall RequestPing(char const * host, int timeout, int * handle) = 0; // RA2: as above
+};
+#include "stringtable.h" // RA2: the includes this file needs
 #include "wsproto.h"
 
 #include "special.hh"
 
 #include <ctime>
+
+namespace FPSCounter { extern unsigned TotalFramesElapsed; extern unsigned TotalTimeElapsed; } // RA2: as above
+namespace FPSCounter { extern unsigned CurrentFrameRate; } // RA2: as above
+namespace UI { void __fastcall RegisterWindow(HWND window, int id); } // RA2: as above
+
+
+
+
+
+
+
 
 
 /********************************** Defines *********************************/
@@ -187,6 +210,23 @@
 // ColorNames is for debug output in Print_CRCs
 //---------------------------------------------------------------------------
 static unsigned int GameCRC;
+
+// RA2: file-level state of the reconnect dialog and the stop test (addresses from meastes' Queue.CPP)
+int ReconnectResult; // RA2: 0x00AB5ED0; the dialog's answer (-1 while open, 2 = cancel)
+bool ReconnectMouseCaptured; // RA2: 0x00AB5ED8; the mouse was captured when the dialog opened
+bool ReconnectSavedTactical; // RA2: 0x00AB62FC; TacticalActive before the dialog
+HWND ReconnectDialog; // RA2: 0x00A780D4; the open reconnect dialog
+int ReconnectSeconds; // RA2: 0x00AB6300; time left shown in the dialog
+long ReconnectElapsed; // RA2: 0x00AABE90; timer value when the dialog was last drawn
+extern wchar_t const BlankText[]; // RA2: 0x00839D4C; an empty line for the message list
+extern wchar_t const CrLfText[]; // RA2: 0x007D64F4; a line break
+bool ConnectionLost; // RA2: 0x00ABD500; set when the connection is given up on
+
+bool ExtraSyncInfo; // RA2: 0x00AB62E8; -MPDEBUG: a mismatch writes the sync log files instead of printing the CRCs
+void __fastcall Write_Sync_File(int slot, EventClass * event); // RA2: 0x0062DBA0, the sync log written when ExtraSyncInfo is set
+char * __fastcall Wide_To_Narrow(wchar_t const * wide); // RA2: 0x006FA120, a static buffer
+wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, a static buffer
+#define WAIT_TEXT(label, line) StringTable::LoadString(label, NULL, "D:\\Ra2\\Queue.CPP", line) // RA2: the string table lookup carries the source path and line
 static unsigned int CRC[256] =
 	{0,0,0,0,0,0,0,0,0,0,
 	 0,0,0,0,0,0,0,0,0,0,
@@ -247,7 +287,9 @@ struct FrameSyncStruct {
 	int frame;				/// other players' frame #
 	unsigned int sent;		// # cmds other player claims to have sent
 	unsigned int recv;		// # cmds actually received from others
-	unsigned int timing;
+	unsigned int timing;		// RA2: +0x0C, the timer value when this player's frame sync arrived
+	unsigned int response;		// RA2: +0x10, this player's response time (YR's unknown2)
+	unsigned int heard;		// RA2: +0x14, timeGetTime() when this player was last heard from (the constructor clears it)
 
 	FrameSyncStruct(void);
 };
@@ -258,13 +300,15 @@ struct FrameSyncStruct {
 /// The counters start at zero and the frame number starts out invalid, so that a player
 /// who has not reported in yet cannot be mistaken for one sitting on frame zero.
 /// </summary>
-FrameSyncStruct::FrameSyncStruct(void)
-{
-	frame = -1;
-	sent = 0;
-	recv = 0;
-	timing = 0;
-}
+
+
+
+
+
+
+
+
+
 
 
 //........................................................................
@@ -272,6 +316,7 @@ FrameSyncStruct::FrameSyncStruct(void)
 //........................................................................
 FrameSyncStruct SyncBarFrameSync[MAX_PLAYERS - 1];
 BasicTimerClass<SystemTimerClass> SentFrameSyncTimer;
+CDTimerClass<FrameTimerClass> skip_crc;	// to delay the CRC check (a static local of Queue_AI_Multiplayer in RA2) // RA2: as above
 FrameSyncStruct TheirFrameSync[MAX_PLAYERS - 1];
 unsigned short SentCommandCount;								// # cmds I've sent out
 
@@ -298,7 +343,7 @@ static RetcodeType Process_Receive_Packet(ConnManClass *net,
 static RetcodeType Process_Serial_Packet(char *multi_packet_buf,
 	int first_time);
 static int Can_Advance(ConnManClass *net, int max_ahead, FrameSyncStruct *their, int *frame_stall, int *count_stall);
-static int Process_Reconnect_Dialog(CDTimerClass<SystemTimerClass> *timeout_timer,
+static int Process_Reconnect_Dialog(ConnManClass *net, CDTimerClass<SystemTimerClass> *timeout_timer, // RA2: takes the connection manager first
 	FrameSyncStruct *their, int num_conn, int reconn, int fresh,
 	BasicTimerClass<SystemTimerClass> *timer);
 static int Handle_Timeout(ConnManClass *net, FrameSyncStruct *their);
@@ -372,7 +417,7 @@ void Check_Mirror(void);
  *=========================================================================*/
 bool Queue_Mission(TargetClass whom, MissionType mission, TargetClass & target, TargetClass & destination)
 {
-	if (! OutList.Add(EventClass(PlayerPtr->HeapID, whom, mission, target, destination))) {
+	if (! OutList.Add(EventClass(PlayerPtr->HeapID, whom, mission, target, destination, TargetClass()))) { // RA2: as above
 		return(false);
 	} else {
 		return(true);
@@ -485,14 +530,89 @@ bool Queue_PageUser(void)
  *=========================================================================*/
 bool Queue_Exit(void)
 {
-	if (! OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::EXIT))) {
+	unsigned char type = EventClass::EXIT; // RA2: as above
+	if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter && Session.Players.Count() > 2 && Session.Am_I_Master()) { // RA2: as above
+		type = EventClass::ABOUT_TO_EXIT; // RA2: as above
+	}
+	if (! OutList.Add(EventClass(PlayerPtr->HeapID, type))) { // RA2: as above
 		return(false);
 	}
 	else {
 		return(true);
 	}
+}
 
-}		/* end of Queue_Exit */
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList1(ConnManClass *net) // RA2: as above
+{
+	Clean_DoList(net);
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList2(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList1(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList3(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList2(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList4(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList3(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList5(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList4(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList6(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList5(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList7(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList6(net); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline void _Clean_DoList8(ConnManClass *net) // RA2: as above
+{
+	_Clean_DoList7(net); // RA2: as above
+}
 
 
 /***************************************************************************
@@ -533,7 +653,1376 @@ void Queue_AI(void)
 				break;
 		}
 	}
-}	/* end of Queue_AI */
+}
+
+
+/***************************************************************************
+ * Check_Mirror -- Checks mirror memory                                    *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      none.                                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   10/14/1996 BRR : Created.                                             *
+ *=========================================================================*/
+void Check_Mirror(void)
+{
+}
+
+
+/// <summary>
+/// Waits for the other players to reach the end of the game.
+/// This routine is called once the game is decided but the other systems may still be a
+/// few frames behind. It keeps the connections serviced, the frame syncs flowing and the
+/// map rendering until everybody has caught up, then signs off with a flurry of frame
+/// syncs so nobody is left waiting on us. A player who never answers is given up on rather
+/// than waited for forever.
+/// </summary>
+void Wait_For_End_Of_Queue(void)
+{
+	DebugString("Waiting to exit game\n");
+
+	//........................................................................
+	// Enums:
+	//........................................................................
+	enum {
+		MIXFILE_RESEND_DELTA = 2 * TIMER_SECOND,     // ticks b/w resends
+		MIXFILE_TIMEOUT = 2 * TIMER_MINUTE,          // timeout waiting for mixfiles.
+		FRAMESYNC_DLG_TIME = (3*TIMER_SECOND),       // time until displaying reconnect dialog
+		FRAMESYNC_TIMEOUT = (15*TIMER_SECOND),       // timeout waiting for frame sync packet
+	};
+
+	int timeout_factor = (Session.Type == GAME_INTERNET) ? 6 : 1;
+
+	//........................................................................
+	// Variables for sending, receiving & parsing packets:
+	//........................................................................
+	ConnManClass *net;					// ptr to access all multiplayer functions
+	EventClass packet;					// for sending single frame-sync's
+	char *multi_packet_buf;				// buffer for sending/receiving
+	int multi_packet_max;				// max length of multi_packet_buf
+	int their_oldest_frame;			// other players' oldest frame #
+	int their_oldest_index;
+	int i;
+
+
+	//........................................................................
+	// Variables for sending, receiving & parsing packets:
+	//........................................................................
+	EventClass *event;      // event ptr for parsing incoming packets
+	int packetlen;          // size of meta-packet sent, & received
+	int id;                 // id of other player
+	int messages_this_loop; // to limit # messages processed each loop
+	int message_limit;      // max # messages we'll read each frame
+	RetcodeType rc;
+	int num_ready;							// # players signalling ready
+	num_ready = 0;
+
+	int x,y;
+
+
+	//------------------------------------------------------------------------
+	// Initialize the packet buffer pointer & its max size
+	//------------------------------------------------------------------------
+	if (Session.Type >= GAME_IPX && Session.Type <= GAME_INTERNET) {
+		multi_packet_buf = Session.MetaPacket;
+		multi_packet_max = Session.MetaSize;
+		net = &Ipx;
+	} else {
+		multi_packet_buf = NullModem.BuildBuf;
+		multi_packet_max = NullModem.MaxLen - sizeof (CommHeaderType);
+		net = &NullModem;
+	}
+
+	//------------------------------------------------------------------------
+	// Send our data packet(s); update my command-sent counter
+	//------------------------------------------------------------------------
+	SentCommandCount += Send_Packets(net, multi_packet_buf, multi_packet_max,
+		Session.MaxAhead, SentCommandCount);
+
+	CDTimerClass<SystemTimerClass> timer1 = TIMER_SECOND / 4;
+	CDTimerClass<SystemTimerClass> timer2 = 10 * TIMER_SECOND;
+	BasicTimerClass<SystemTimerClass> timer3;
+
+	DebugString("Entering wait loop\n");
+
+	while (true) {
+
+		Keyboard->Check();
+
+		Update_Queue_Mono (net, 2);
+
+		//---------------------------------------------------------------------
+		// Resend a frame-sync packet if longer than one propagation delay goes
+		// by; this prevents a "deadlock".  If he's waiting for me to advance,
+		// but has missed my last few FRAMEINFO packets, I may be waiting for
+		// him to advance.  Resending a FRAMESYNC ensures he knows what frame
+		// number I'm on.
+		//---------------------------------------------------------------------
+		if (!timer1) {
+			timer1 = TIMER_SECOND / 4;		// time to retry
+			Update_Queue_Mono (net, 3);
+			DebugString("Resending framesync\n");
+			Send_FrameSync(net, SentCommandCount);
+		}
+
+		//---------------------------------------------------------------------
+		// Service the connections
+		//---------------------------------------------------------------------
+		net->Service();
+
+		if (!timer2) {
+			DebugString("Timed out waiting for end game!\n");
+			return;
+		}
+
+
+		//---------------------------------------------------------------------
+		// Check for an incoming message.  We must still process commands
+		// even if 'first_time' is set, in case the other system got my 1st
+		// FRAMESYNC, but I didn't get his; he'll be at the next frame, and
+		// may be sending commands.
+		// We have to limit the number of incoming messages we handle; it's
+		// possible to go into an infinite loop processing modem messages.
+		// (This feature is disabled for Ten; we need to keep the TCP buffers
+		// clear, so we read all the packets we can every time.)
+		//---------------------------------------------------------------------
+		messages_this_loop = 0;
+		message_limit = MAX_EVENTS;
+
+		while ( (messages_this_loop++ < message_limit) &&
+			net->Get_Private_Message (multi_packet_buf, &packetlen, &id) ) {
+
+			Keyboard->Check();
+
+			Update_Queue_Mono (net, 5);
+
+			/*..................................................................
+			Get an event ptr to the incoming message
+			..................................................................*/
+			event = (EventClass *)multi_packet_buf;
+
+			//------------------------------------------------------------------
+			// Special processing for a modem game: process SERIAL packets
+			//------------------------------------------------------------------
+			if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
+				rc = Process_Serial_Packet(multi_packet_buf, false);
+				switch (rc) {
+					case RC_NORMAL:
+						break;
+					//...............................................................
+					// SERIAL packet received & processed
+					//...............................................................
+					case RC_SERIAL_PROCESSED:
+						net->Service();
+						timer1 = TIMER_SECOND / 4;
+						timer2 = 10 * TIMER_SECOND;
+						break;
+
+					case RC_PLAYER_READY:
+					case RC_SCENARIO_MISMATCH:
+					case RC_DOLIST_FULL:
+					case RC_PLAYER_LEFT:
+					case RC_HUNG_UP:
+						return;
+
+					//...............................................................
+					// If it was any other type of serial packet, break
+					//...............................................................
+					default:
+						return;
+				}
+			} else {
+
+				//------------------------------------------------------------------
+				// Process the incoming packet
+				//------------------------------------------------------------------
+				rc = Process_Receive_Packet(net, multi_packet_buf, id, packetlen, TheirFrameSync, &timer3);
+				//..................................................................
+				// DoList was full
+				//..................................................................
+				if (rc == RC_DOLIST_FULL) {
+					DebugString("Dolist is full!\n");
+					return;
+				}
+			}
+
+			//..................................................................
+			// Service the connection, to clean out the receive queues
+			//..................................................................
+			net->Service();
+		}
+
+		Call_Back();
+
+		if (SpecialDialog == SDLG_NONE) {
+			KeyNumType key;
+			Map.Input(key, x, y);
+			if (key) {
+				Keyboard_Process(key);
+			}
+			TacticalMap->AI();
+			Map.Render();
+		}
+
+		//------------------------------------------------------------------------
+		//	Find the oldest frame # in 'their_frame'
+		//------------------------------------------------------------------------
+		their_oldest_index = -1;
+		their_oldest_frame = Frame + 1000;
+		for (i = 0; i < net->Num_Connections(); i++) {
+			if (TheirFrameSync[i].frame < their_oldest_frame) {
+				their_oldest_frame = TheirFrameSync[i].frame;
+				their_oldest_index = i;
+			}
+		}
+
+		if (int(their_oldest_frame + Session.FrameSendRate) < Frame) {
+			DebugString("Waiting for player %d on frame %d\n", their_oldest_index, TheirFrameSync[their_oldest_index].frame);
+			continue;
+		}
+		break;
+
+	}
+
+	DebugString("their_oldest_frame = %d\n", their_oldest_frame);
+	DebugString("All players have finished - ready to proceed to score screen\n");
+
+	Send_FrameSync(net, SentCommandCount);
+	Send_FrameSync(net, SentCommandCount);
+	Send_FrameSync(net, SentCommandCount);
+	Send_FrameSync(net, SentCommandCount);
+}
+
+
+/***************************************************************************
+ * Add_Uncompressed_Events -- adds uncompressed events to a packet         *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      buf            buffer to store packet in                           *
+ *      bufsize         max size of buffer                                 *
+ *      frame_delay      desired frame delay to attach to all outgoing packets*
+ *      size            current packet size                                *
+ *      cap            max # events to process                             *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      new size value                                                     *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      This routine MUST check to be sure it doesn't overflow the buffer. *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 DRD : Created.                                             *
+ *=========================================================================*/
+static int Add_Uncompressed_Events(void *buf, int bufsize, int frame_delay, int size, int cap) // RA2: as above
+{
+	int num = 0;
+	int ev_size; // RA2: as above
+
+	while (OutList.Count && (num < cap)) {
+		if (OutList.First().Type == EventClass::ADDPLAYER) { // RA2: as above
+			ev_size = sizeof(EventClass) + OutList.First().Data.Variable.Size;
+		}
+		else {
+			ev_size = sizeof(EventClass);
+		}
+		if ((size + ev_size) > bufsize) { // RA2: as above
+			return(size);
+		}
+
+		OutList.First().Frame = Frame + frame_delay;
+		OutList.First().ID = PlayerPtr->HeapID;
+		OutList.First().IsExecuted = 0;
+		if (!DoList.Add(OutList.First())) {
+			return(size);
+		}
+
+		if (OutList.First().Type == EventClass::ADDPLAYER) { // RA2: as above
+			memcpy(((char *)buf) + size, &OutList.First(), sizeof(EventClass)); // RA2: as above
+			size += sizeof(EventClass);
+			memcpy(((char *)buf) + size, // RA2: as above
+				OutList.First().Data.Variable.Pointer,
+				OutList.First().Data.Variable.Size);
+			size += OutList.First().Data.Variable.Size;
+		}
+		else {
+			memcpy(((char *)buf) + size, &OutList.First(), sizeof(EventClass)); // RA2: as above
+			size += sizeof(EventClass);
+		}
+
+		num++;
+		OutList.Next();
+	}
+
+	return(size);
+}
+
+
+/***************************************************************************
+ * Build_Send_Packet -- Builds a big packet from a bunch of little ones.   *
+ *                                                                         *
+ * This routine takes events from the OutList, and puts them into a        *
+ * "meta-packet", which is transmitted to all systems we're connected to.  *
+ * Also, these events are added to our own DoList.                         *
+ *                                                                         *
+ * Every Meta-Packet we send uses a FRAMEINFO packet as a header; this     *
+ * tells the other systems what frame we're on, as well as serving as a    *
+ * standard packet header.                                                 *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      buf            buffer to store packet in                           *
+ *      bufsize         max size of buffer                                 *
+ *      frame_delay      desired frame delay to attach to all outgoing packets*
+ *      num_cmds         value to use for the CommandCount field           *
+ *      cap            max # events to send                                *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      new size of packet                                                 *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ * 'num_cmds' should be the total of of commands, including all those sent *
+ * this frame!                                                             *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static int Build_Send_Packet(void *buf, int bufsize, int frame_delay, int num_cmds, int cap, int & processed) // RA2: as above
+{
+	int size = 0;
+	EventClass *finfo;
+
+	finfo = (EventClass *)buf;
+	finfo->Type = EventClass::FRAMEINFO;
+	processed = 0;
+	if (Session.CommProtocol == COMM_PROTOCOL_MULTI_E_COMP) {
+		finfo->Frame = ((Frame + frame_delay + (Session.FrameSendRate - 1)) /
+			Session.FrameSendRate) * Session.FrameSendRate;
+	}
+	else {
+		finfo->Frame = Frame + frame_delay;
+	}
+	finfo->ID = PlayerPtr->HeapID;
+	finfo->Data.FrameInfo.CRC = GameCRC;
+	finfo->Data.FrameInfo.CommandCount = num_cmds;
+	finfo->Data.FrameInfo.Delay = frame_delay;
+
+	if (Session.CommProtocol == COMM_PROTOCOL_SINGLE_NO_COMP) { // RA2: as above
+		size += sizeof(EventClass);
+	}
+	else {
+		size += (offsetof(EventClass, Data) + sizeof(finfo->Data.FrameInfo)); // RA2: as above
+	}
+
+	switch (Session.CommProtocol) {
+		case (COMM_PROTOCOL_SINGLE_NO_COMP):
+			size = Add_Uncompressed_Events(buf, bufsize, frame_delay, size, cap);
+			break;
+
+		case (COMM_PROTOCOL_SINGLE_E_COMP):
+		case (COMM_PROTOCOL_MULTI_E_COMP):
+			size = Add_Compressed_Events(buf, bufsize, frame_delay, size, cap, processed);
+			break;
+
+		default:
+			size = 0;
+			break;
+	}
+
+	return(size);
+}
+
+
+/***************************************************************************
+ * Send_Packets -- sends out events from the OutList                       *
+ *                                                                         *
+ * This routine computes how many events can be sent this frame, and then  *
+ * builds the "meta-packet" & sends it.                                    *
+ *                                                                         *
+ * The 'cap' value is the max # of events we can send.  Ideally, it should *
+ * be based upon the bandwidth of our connection.  Currently, it's just    *
+ * hardcoded to prevent the modem from having to resend "too much" data,   *
+ * which is about 200 bytes per frame.                                     *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net                  ptr to connection manager                     *
+ *      multi_packet_buf      buffer to store packets in                   *
+ *      multi_packet_max      max size of multi_packet_buf                 *
+ *      max_ahead            current game MaxAhead value                   *
+ *      my_sent               # commands I've sent this game               *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      # events sent, NOT including the FRAMEINFO event                   *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+/***************************************************************************
+ * Send_FrameSync -- Sends a FRAMESYNC packet                              *
+ *                                                                         *
+ * This routine is used to periodically remind the other systems that      *
+ * we're still here, and to tell them what frame # we're on, in case       *
+ * they've missed my FRAMEINFO packets.                                    *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net            ptr to connection manager                           *
+ *      cmd_count      # commands I've sent so far                         *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+/***************************************************************************
+ * Process_Serial_Packet -- Handles an incoming serial packet              *
+ *                                                                         *
+ * This routine is needed because the modem classes don't support a        *
+ * "global channel" like the network classes do, but that functionality is *
+ * still needed for modem communications.  Specifically, the modem dialogs *
+ * transmit their own special packets back & forth, and messages are sent  *
+ * using a special packet type.  Thus, we have to call this routine when   *
+ * we receive a modem packet, to allow it to process messages & dialog     *
+ * packets.                                                                *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      multi_packet_buf      packet buffer to process                     *
+ *      first_time            1 = this is the 1st game frame               *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      RC_NORMAL:            this wasn't a SERIAL-type packet             *
+ *      RC_SERIAL_PROCESSED:   this was a SERIAL-type packet, and was      *
+ *                         processed; the other player is still connected, *
+ *                         even if he's not in the game.                   *
+ *      RC_PLAYER_LEFT:      other player has left the game                *
+ *      RC_HUNG_UP:            we're getting our own packets back; thus, the*
+ *                         modem is mirroring our packets, which means the *
+ *                         modem hung up!                                  *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+void Cast_Kick_Vote(int kicker, int kickee);
+
+/// <summary>
+/// Trims the message list box and scrolls it to the end.
+/// Use this routine after adding a line to the reconnect dialog's message list, so that
+/// the list stays a manageable length and the newest message stays in view.
+/// </summary>
+/// <param name="listbox">The list box to trim.</param>
+void ListBox_Trim(HWND listbox)
+{
+	int string_count = ListBox_GetCount(listbox);
+	if (string_count > 50) {
+		ListBox_DeleteString(listbox, 0);
+		string_count--;
+	}
+	ListBox_SetTopIndex(listbox, string_count - 1);
+}
+
+
+/// <summary>
+/// Proposes that a player be kicked out of the game.
+/// This routine is called when one of the kick buttons on the reconnect dialog is pressed.
+/// The proposal is sent to every other player and the local vote is cast right away.
+/// Proposing to kick yourself, or to kick anybody at all during a tournament game, earns
+/// nothing but a message in the dialog.
+/// </summary>
+/// <param name="window">The reconnect dialog to report the outcome in.</param>
+/// <param name="id">Index into the session player list of the one to be kicked.</param>
+void Propose_Kick_Player(HWND window, int id)
+{
+	DebugString("Propose_Kick_Player %d - %s. Local id is %d\n", id, Session.Players[id]->Name, Session.Players[0]->Player.ID);
+	HWND listbox = GetDlgItem(window, IDC_DISCONNECT_MESSAGES);
+
+	if (id == 0) {
+		_DrawMessage(-1, WAIT_TEXT("TXT_RECONNECT_KICK_SELF", 3378), listbox); // RA2: wide text from the string table
+		ListBox_Trim(listbox);
+		return;
+	}
+
+	if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) {
+		_DrawMessage(-1, WAIT_TEXT("TXT_CANT_KICK", 3388), listbox); // RA2: as above
+		ListBox_Trim(listbox);
+		return;
+	}
+
+	GlobalPacketType gpacket;
+	gpacket.Command = NET_PROPOSE_KICK;
+	strncpy(gpacket.Name, Wide_To_Narrow(Session.Players[0]->Name), ARRAY_SIZE(gpacket.Name)); // RA2: as above
+	gpacket.Kick.KickerID = Session.Players[0]->Player.ID;
+	gpacket.Kick.KickeeID = Session.Players[id]->Player.ID;
+
+	for (int i = 1; i < Session.Players.Count(); i++) {
+		DebugString("Sending kick proposal to %s\n", Session.Players[i]->Name);
+		Ipx.Send_Global_Message(&gpacket, sizeof(gpacket), 1, &Session.Players[i]->Address);
+	}
+
+	Cast_Kick_Vote(Session.Players[0]->Player.ID, Session.Players[id]->Player.ID);
+}
+
+
+/// <summary>
+/// Handles a kick proposal arriving from another player.
+/// The packet is copied and queued up on the session, so that the wait-for-players loop
+/// can act on the proposal when it next gets the chance.
+/// </summary>
+/// <param name="packet">The global packet that carries the kick proposal.</param>
+void Kick_Packet_Received(GlobalPacketType & packet, IPXAddressClass & address)
+{
+	GlobalPacketType *newpacket = new GlobalPacketType;
+	memcpy(newpacket, &packet, sizeof(*newpacket));
+	Session.KickProposals.Add(newpacket);
+}
+
+
+/// <summary>
+/// Records a vote to kick a player out of the game.
+/// A player gets only the one vote against any given victim, so a repeat vote is quietly
+/// discarded. In a network game the vote is announced in the reconnect dialog's message
+/// list, so everyone can see who wants whom gone.
+/// </summary>
+/// <param name="kicker">Player ID of the one casting the vote.</param>
+/// <param name="kickee">Player ID of the one being voted against.</param>
+void Cast_Kick_Vote(int kicker, int kickee)
+{
+	wchar_t buffer[256]; // RA2: wide
+
+	int votes = Session.KickVoteCount[kickee];
+	for (int i = 0; i < votes; i++) {
+		if (Session.KickVoteWho[kickee][i] == kicker) {
+			return;
+		}
+	}
+
+	Session.KickVoteWho[kickee][votes] = kicker;
+	Session.KickVoteCount[kickee]++;
+
+	if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
+		wchar_t const * kicker_name = Ipx.Connection_Name(kicker); // RA2: connection names are wide
+		if (kicker_name == NULL) {
+			kicker_name = Session.Players[0]->Name;
+		}
+
+		DebugString("Player %s votes to kick player %s from the game\n", kicker_name, Ipx.Connection_Name(kickee));
+		swprintf(buffer, WAIT_TEXT("TXT_RECONNECT_KICK_RECEIVED", 3488), kicker_name, Ipx.Connection_Name(kickee)); // RA2: wide text from the string table
+
+		HWND topwindow = WS_Top_Window();
+		HWND listbox = GetDlgItem(topwindow, IDC_DISCONNECT_MESSAGES);
+		_DrawMessage(-1, buffer, listbox); // RA2: the message list is filled by _DrawMessage
+		ListBox_Trim(listbox);
+	}
+}
+
+
+
+
+
+/// <summary>
+/// Handles the messages for the reconnect dialog.
+/// This is the dialog that appears when the game stalls waiting on somebody. It paints the
+/// per-player sync bars, offers a kick button for each player in the game, and keeps
+/// pinging the game server for the duration of an internet game stall.
+/// </summary>
+#define PING_TIMER 1
+#define PING_TIMEOUT 1000
+BOOL CALLBACK Reconnect_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	int * rc = (int *)GetWindowLong(window, DWL_USER);
+
+	switch (message) {
+		case IDCANCEL:
+			Remove_Modeless_Dialog(window);
+			break;
+
+		case WM_DRAWITEM:
+			OwnerDraw::Draw_Item((DRAWITEMSTRUCT *)lparam);
+			return(TRUE);
+
+		case WM_PAINT:
+			OwnerDraw::Draw_Dialog_Back(window);
+			ValidateRect(window, NULL);
+			break;
+
+		case WM_INITDIALOG: {
+			OwnerDraw::Subclass_Dialog(window, 0);
+			Center_Window_Within_Window(window);
+			Add_Modeless_Dialog(window);
+
+			int i;
+			for (i = 0; i < MAX_PLAYERS; i++) {
+			}
+
+			for (i = 0; i < MAX_PLAYERS; i++) {
+				if (i < Session.Players.Count()) {
+				} else {
+				}
+			}
+
+			if (Session.Type == GAME_INTERNET) {
+				g_PingsSent = 0;
+				g_PingsReceived = 0;
+				SetTimer(window, PING_TIMER, PING_TIMEOUT, NULL);
+			}
+			break;
+		}
+
+		case WM_MOVING:
+			return(On_WM_MOVING(window, wparam, lparam));
+
+		case WM_CTLCOLORMSGBOX:
+		case WM_CTLCOLOREDIT:
+		case WM_CTLCOLORLISTBOX:
+		case WM_CTLCOLORBTN:
+		case WM_CTLCOLORDLG:
+		case WM_CTLCOLORSCROLLBAR:
+		case WM_CTLCOLORSTATIC:
+			return((BOOL)GetStockObject(BLACK_BRUSH));
+
+		case WM_TIMER:
+			if (Session.Type == GAME_INTERNET && wparam == PING_TIMER && g_PingsSent < 5) {
+				int handle;
+				g_pNetUtil->RequestPing(g_GameServerHost, PING_TIMEOUT, &handle);
+				g_PingsSent++;
+				if (g_PingsSent < 5) {
+					SetTimer(window, PING_TIMER, PING_TIMEOUT, NULL);
+				}
+			}
+			break;
+
+		case WM_ERASEBKGND:
+			return(TRUE);
+
+		case WM_COMMAND:
+			switch (LOWORD(wparam)) {
+				case IDC_DISCONNECT_PLAYER1:
+					Propose_Kick_Player(window, 0);
+					break;
+
+				case IDC_DISCONNECT_PLAYER2:
+					Propose_Kick_Player(window, 1);
+					break;
+
+				case IDC_DISCONNECT_PLAYER3:
+					Propose_Kick_Player(window, 2);
+					break;
+
+				case IDC_DISCONNECT_PLAYER4:
+					Propose_Kick_Player(window, 3);
+					break;
+
+				case IDC_DISCONNECT_PLAYER5:
+					Propose_Kick_Player(window, 4);
+					break;
+
+				case IDC_DISCONNECT_PLAYER6:
+					Propose_Kick_Player(window, 5);
+					break;
+
+				case IDC_DISCONNECT_PLAYER7:
+					Propose_Kick_Player(window, 6);
+					break;
+
+				case IDC_DISCONNECT_PLAYER8:
+					Propose_Kick_Player(window, 7);
+					break;
+
+				case IDCANCEL:
+					*rc = IDCANCEL;
+					break;
+			}
+			break;
+	}
+
+	return(FALSE);
+}
+
+
+/// <summary>
+/// Removes a player from the running multiplayer game.
+/// This routine is called once the other players have voted someone out, or a player has
+/// stopped answering altogether. The offending house is flagged as having lost its
+/// connection, the game statistics are shipped off if the game is effectively decided, and
+/// the connection itself is destroyed.
+/// </summary>
+/// <param name="kickee">Connection index of the player to be removed.</param>
+/// <param name="their">The frame sync records, compacted as the connection goes away.</param>
+/// <param name="error">Should the disconnection be reported as an error?</param>
+void Kick_Player_Now(ConnManClass *net, int kickee, FrameSyncStruct * their, bool error)
+{
+	/*
+	 * Kicking several players inside a minute is treated as spam rather than as a series of
+	 * resignations, so those kicks leave the victims' resigner flags alone.
+	 */
+	static int last_kick_time;
+	bool spamkick = false;
+	if (time(NULL) - last_kick_time >= 60) {
+		last_kick_time = time(NULL);
+	} else {
+		spamkick = true;
+		last_kick_time = time(NULL);
+	}
+
+	int id = net->Connection_ID(kickee);
+	DebugString("Kicking player %d from the game - Frame is %d\n", id, Frame);
+
+	if (id == -1) {
+		DebugString("Kick_Player_Now bailing - bad house ID\n");
+		return;
+	}
+
+	Houses[id]->LostConnection = true;
+
+	if (CountAliveTeams(Houses[id]) == 1 && Session.Type == GAME_INTERNET && !GameStatisticsPacketSent) {
+		if (!spamkick) {
+			Session.SawGameCompletion = true;
+		}
+		for (int i = 0; i < Houses.Count(); i++) {
+			HouseClass * house = Houses[i];
+			if (house != NULL && !house->IsDefeated && house->IsHuman) {
+				house->LostConnection = true;
+			}
+		}
+	}
+
+	if (CountAliveTeams(Houses[id]) > 1 && !spamkick) {
+		Houses[id]->IsResigner = true;
+	}
+
+	for (int i = kickee; i < net->Num_Connections() - 1; i++) {
+		their[i] = their[i+1];
+		Session.KickVoteCount[i] = Session.KickVoteCount[i+1];
+		memcpy(Session.KickVoteWho[i], Session.KickVoteWho[i+1], sizeof(Session.KickVoteWho[i]));
+	}
+
+	Destroy_Connection(id, error);
+}
+
+
+/***************************************************************************
+ * Handle_Timeout -- handles a timeout in the wait-for-players loop        *
+ *                                                                         *
+ * This routine "gracefully" handles a timeout in the frame-sync loop.     *
+ * The timeout must be handled differently by a modem game or network      *
+ * game.                                                                   *
+ *                                                                         *
+ * The modem game must detect if the other player is still connected       *
+ * physically, even if he's not playing the game any more; if so, this     *
+ * routine returns an OK status.  If the other player isn't even           *
+ * physically connected, an error is returned.                             *
+ *                                                                         *
+ * The network game must find the connection that's causing the timeout,   *
+ * and destroy it.  The game continues, even if there are no more human    *
+ * players left.                                                           *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net               ptr to connection manager                        *
+ *      their_frame         array containing frame #'s of other players    *
+ *      their_sent         array containing command count of other players *
+ *      their_recv         array containing # recv'd cmds from other players*
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      1 = it's OK; reset timeout timers & keep processing                *
+ *      0 = game over, man                                                 *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+
+
+
+
+
+
+
+
+
+/***************************************************************************
+ * Clean_DoList -- Cleans out old events from the DoList                   *
+ *                                                                         *
+ * Currently, an event can only be removed from the DoList if it's at the  *
+ * head of the list; and event can't be removed from the middle.  So,      *
+ * this routine loops as long as the next event in the DoList has been     *
+ * executed, it's removed.                                                 *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net      ptr to connection manager; ignored if NULL                *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+/***************************************************************************
+ * Queue_Record -- Records the DoList to disk                              *
+ *                                                                         *
+ * This routine just saves any events in the DoList to disk; we can later  *
+ * "play back" the recording just be pulling events from disk rather than  *
+ * from the network!                                                       *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      none.                                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   08/14/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+/***************************************************************************
+ * Compute_Game_CRC -- Computes a CRC value of the entire game.            *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      none.                                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   05/09/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+/***************************************************************************
+ * Add_CRC -- Adds a value to a CRC                                        *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      crc      ptr to crc                                                *
+ *      val      value to add                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none                                                               *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none                                                               *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   05/09/1995 BRR : Created.                                             *
+ *=========================================================================*/
+void Add_CRC(unsigned int *crc, unsigned int val)
+{
+	int hibit;
+
+	if ( (*crc) & 0x80000000) {
+		hibit = 1;
+	}
+	else {
+		hibit = 0;
+	}
+
+	(*crc) <<= 1;
+	(*crc) += val;
+	(*crc) += hibit;
+}
+
+
+/***************************************************************************
+ * Print_CRCs -- Prints a data file for finding Sync Bugs                  *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      ev -- event to display                                             *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none                                                               *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none                                                               *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   05/09/1995 BRR : Created.                                             *
+ *=========================================================================*/
+
+
+
+
+
+
+/***************************************************************************
+ * Dump_Packet_Too_Late_Stuff -- Dumps a debug file to disk                *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      event      ptr to event to print                                   *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   06/28/1996 BRR : Created.                                             *
+ *=========================================================================*/
+void __fastcall Dump_Packet_Too_Late_Stuff(EventClass *event) // RA2: as above
+{
+	DebugString("Packet received too late!\n");
+	DebugString("--------- Event data: -------------------\n");
+	DebugString("Type:       %s\n", EventClass::EventNames[event->Type]); // RA2: as above
+	DebugString("Frame:      %d\n", event->Frame); // RA2: as above
+	DebugString("ID:         %d\n", event->ID); // RA2: as above
+	DebugString("MaxAhead=%d\n", Session.MaxAhead); // RA2: as above
+	DebugString("Frame=%d\n", Frame); // RA2: as above
+	DebugString("FrameSendRate=%d\n", Session.FrameSendRate);
+}
+
+
+
+
+
+
+
+
+
+
+
+/***************************************************************************
+ * Stop_Game -- stops the game                                             *
+ *                                                                         *
+ * This routine clears any global flags that need it, in preparation for   *
+ * halting the game prematurely.                                           *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      none.                                                              *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/22/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static inline void Stop_Game(bool is_cancelled) // RA2: as above
+{
+	Session.LoadGame = 0; // RA2: as above
+	Session.EmergencySave = 0; // RA2: as above
+	GameActive = false; // RA2: as above
+	if (IsMono) {
+		MonoClass::Disable();
+	}
+	if (Session.Type == GAME_INTERNET) {
+		ConnectionLost = true;
+		if (!is_cancelled) Session.SawGameCompletion = true;
+		Session.OutOfSync = true;
+		Register_Game_End_Time();
+		Send_Statistics_Packet(false); // RA2: as above
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+/***************************************************************************
+ * Breakup_Receive_Packet -- Splits a big packet into little ones.         *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      buf         buffer to break up                                     *
+ *      bufsize      length of buffer                                      *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      # events added to queue, -1 if fatal error (queue is full)         *
+ *    (return value includes any FRAMEINFO packets encountered;            *
+ *      FRAMESYNC's are ignored)                                           *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static int Breakup_Receive_Packet(void * buf, int bufsize) // RA2: as above
+{
+	int count = 0;
+	switch (Session.CommProtocol) {
+	case COMM_PROTOCOL_SINGLE_NO_COMP: // RA2: as above
+		count = Extract_Uncompressed_Events(buf, bufsize);
+		break;
+	default:
+		count = Extract_Compressed_Events(buf, bufsize);
+		break;
+	}
+	return count; // RA2: as above
+}
+
+
+/***************************************************************************
+ * Extract_Uncompressed_Events -- extracts events from a packet            *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      buf         buffer containing events to extract                    *
+ *      bufsize      length of 'buf'                                       *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      # events extracted                                                 *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 DRD : Created.                                             *
+ *=========================================================================*/
+static int Extract_Uncompressed_Events(void * buf, int bufsize) // RA2: as above
+{
+	int count = 0;
+	int pos = 0;
+	int leftover = bufsize;
+	EventClass * event; // RA2: as above
+	while (leftover >= sizeof(EventClass)) { // RA2: as above
+		event = (EventClass *)(((char *)buf) + pos);
+		if (event->Type != EventClass::FRAMESYNC) {
+			event->IsExecuted = 0;
+			if (event->Type == EventClass::ADDPLAYER) {
+				event->Data.Variable.Pointer = new char[event->Data.Variable.Size];
+				memcpy(event->Data.Variable.Pointer, ((char *)buf) + sizeof(EventClass), // RA2: as above
+					   event->Data.Variable.Size);
+				pos += event->Data.Variable.Size;
+				leftover -= event->Data.Variable.Size;
+			}
+			if (!DoList.Add(*event)) { // RA2: as above
+				if (event->Type == EventClass::ADDPLAYER) {
+					delete[] event->Data.Variable.Pointer; // RA2: as above
+				}
+				return -1; // RA2: as above
+			}
+			count++;
+		}
+		pos += sizeof(EventClass);
+		leftover -= sizeof(EventClass);
+	}
+	return count; // RA2: as above
+}
+
+
+
+
+
+/// The name comes from the TS demo build, which ships this routine with symbols.
+
+/// <summary>
+/// Closes the reconnect dialog if it is showing.
+/// This routine is called once the stalled players have caught up. The tactical map is
+/// switched back on and forced to redraw, since the dialog was sitting on top of it.
+/// </summary>
+static inline void Close_Reconnect_Dialog() // RA2: as above
+{
+	HWND dialog = WS_Find_Dialog(0xEA); // RA2: as above
+	if (dialog) {
+		if (ReconnectMouseCaptured) { // RA2: as above
+			MouseCursor->Capture_Mouse(); // RA2: as above
+		}
+		WS_Destroy_Dialog(dialog, 0); // RA2: as above
+		TacticalActive = ReconnectSavedTactical; // RA2: as above
+		Map.Flag_To_Redraw(GS_REDRAW_ALL);
+		if (TacticalActive) { // RA2: as above
+			Map.Render();
+		}
+	}
+}
+
+
+/***************************************************************************
+ * Process_Reconnect_Dialog -- processes the reconnection dialog           *
+ *                                                                         *
+ * This routine [re]draws the reconnection dialog; if 'reconn' is set,     *
+ * it tells the user who we're trying to reconnect to; otherwise, is just  *
+ * says something generic like "Waiting for connections".                  *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      timeout_timer   ptr to count down timer, showing time remaining    *
+ *      their_frame      array of other players' frame #'s                 *
+ *      num_conn         # connections in 'their_frame'                    *
+ *      reconn         1 = reconnect, 0 = waiting for first-time connection*
+ *      fresh            1 = draw from scratch, 0 = only update time counter*
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      1 = user wants to cancel, 0 = not                                  *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static inline int Process_Reconnect_Dialog(ConnManClass *net, CDTimerClass<SystemTimerClass> *timeout_timer, FrameSyncStruct *their, // RA2: as above
+	int num_conn, int reconn, int fresh, BasicTimerClass<SystemTimerClass> *timer) // RA2: as above
+{
+	int new_time;
+	int oldest_index; // RA2: as above
+	int i;
+	wchar_t buf[512]; // RA2: as above
+
+	ReconnectElapsed = timer->Value(); // RA2: as above
+	for (i = 0; i < num_conn; i++) {
+		SyncBarFrameSync[i] = their[i];
+	}
+	if (fresh) {
+		ReconnectSavedTactical = TacticalActive; // RA2: as above
+		TacticalActive = false;
+		ReconnectResult = -1; // RA2: as above
+		ReconnectDialog = (HWND)WS_Create_Dialog(ProgramInstance, 0xEA, MainWindow, // RA2: as above
+			Reconnect_Dialog_Proc, 0); // RA2: as above
+		if (ReconnectDialog) { // RA2: as above
+			SetWindowLongA(ReconnectDialog, 8, (long)&ReconnectResult); // RA2: as above
+			UI::RegisterWindow(ReconnectDialog, 0xEA); // RA2: as above
+			ShowWindow(ReconnectDialog, SW_SHOWNORMAL); // RA2: as above
+			SendMessageA(ReconnectDialog, 0x4A9, 0, 1); // RA2: as above
+			ReconnectMouseCaptured = MouseCursor->Is_Captured(); // RA2: as above
+			if (ReconnectMouseCaptured) { // RA2: as above
+				MouseCursor->Release_Mouse(); // RA2: as above
+			}
+			MouseCursor->Show_Mouse();
+		}
+	}
+	if (ReconnectResult == 2) { // RA2: as above
+		return 1; // RA2: as above
+	}
+	new_time = timeout_timer->Value() / 60; // RA2: as above
+	if (fresh || new_time != ReconnectSeconds) { // RA2: as above
+		ReconnectSeconds = new_time; // RA2: as above
+		HWND item = GetDlgItem(ReconnectDialog, 0x650); // RA2: as above
+		if (item) {
+			swprintf(buf, WAIT_TEXT("TXT_TIME_ALLOWED", 3853), ReconnectSeconds); // RA2: as above
+			SendMessageA(item, 0x4B2, 0, (LPARAM)buf); // RA2: as above
+		}
+		if (!(ReconnectSeconds & 1)) { // RA2: as above
+			PostMessageA(ReconnectDialog, WM_PAINT, 0, 0); // RA2: as above
+		}
+		if (fresh) {
+			while (Session.KickProposals.Count()) {
+				delete Session.KickProposals[0];
+				Session.KickProposals.Delete_Index(0);
+			}
+			memset(Session.KickVoteCount, 0, sizeof(Session.KickVoteCount));
+			memset(Session.KickVoteWho, 0xFF, sizeof(Session.KickVoteWho));
+			HWND list = GetDlgItem(ReconnectDialog, 0x651); // RA2: as above
+			if (list) { // RA2: as above
+				if (reconn) {
+					int oldest = 0x7FFFFFFF; // RA2: as above
+					oldest_index = 0;
+					for (i = 0; i < num_conn; i++) {
+						if (their[i].frame < oldest) { // RA2: as above
+							oldest = their[i].frame; // RA2: as above
+							oldest_index = i;
+						}
+					}
+					if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
+						swprintf(buf, WAIT_TEXT("TXT_RECONNECTING_TO", 3908), // RA2: as above
+							Ipx.Connection_Name(Ipx.Connection_ID(oldest_index))); // RA2: as above
+					} else {
+						swprintf(buf, WAIT_TEXT("TXT_RECONNECTING_TO", 3914), Session.Players[1]->Name); // RA2: as above
+					}
+					_DrawMessage(-1, buf, list); // RA2: as above
+					_DrawMessage(-1, BlankText, list); // RA2: as above
+					if (Session.Type == GAME_INTERNET) {
+						wcscpy(buf, WAIT_TEXT("TXT_RECONNECT_HELP3", 3928)); // RA2: as above
+						wcscat(buf, CrLfText); // RA2: as above
+						wcscat(buf, WAIT_TEXT("TXT_RECONNECT_HELP3B", 3930)); // RA2: as above
+						wcscat(buf, CrLfText); // RA2: as above
+						wcscat(buf, WAIT_TEXT("TXT_RECONNECT_HELP3C", 3932)); // RA2: as above
+						_DrawMessage(-1, buf, list); // RA2: as above
+						_DrawMessage(-1, BlankText, list); // RA2: as above
+					}
+					if (Session.Type == GAME_INTERNET || Session.Type == GAME_IPX) { // RA2: as above
+						wcscpy(buf, WAIT_TEXT("TXT_RECONNECT_HELP2", 3939)); // RA2: as above
+						wcscat(buf, CrLfText); // RA2: as above
+						if (Session.Type == GAME_INTERNET) {
+							wcscat(buf, WAIT_TEXT("TXT_RECONNECT_HELP2B", 3943)); // RA2: as above
+						} else if (Session.Type == GAME_IPX) {
+							wcscat(buf, WAIT_TEXT("TXT_RECONNECT_HELP4", 3945)); // RA2: as above
+						}
+						_DrawMessage(-1, buf, list); // RA2: as above
+						_DrawMessage(-1, BlankText, list); // RA2: as above
+					}
+					_DrawMessage(-1, BlankText, list); // RA2: as above
+					_DrawMessage(-1, WAIT_TEXT("TXT_RECONNECT_HELP5", 3955), list); // RA2: as above
+					_DrawMessage(-1, WAIT_TEXT("TXT_RECONNECT_HELP1", 3960), list); // RA2: as above
+					_DrawMessage(-1, BlankText, list); // RA2: as above
+				} else {
+					swprintf(buf, WAIT_TEXT("TXT_WAITING_FOR_CONNECTIONS", 3963)); // RA2: as above
+					_DrawMessage(-1, buf, list); // RA2: as above
+				}
+			}
+		}
+	}
+	if (Session.KickProposals.Count() > 0) {
+		Cast_Kick_Vote(Session.KickProposals[0]->Kick.KickerID, Session.KickProposals[0]->Kick.KickeeID);
+		delete Session.KickProposals[0];
+		Session.KickProposals.Delete_Index(0);
+	}
+	for (i = 0; i < Session.Players.Count(); i++) {
+		int votes = Session.KickVoteCount[Session.Players[i]->Player.ID];
+		if (votes >= Session.Players.Count() - 1) {
+			DebugString("Kicking player %s from the game due to %d votes\n", Session.Players[i]->Name, votes);
+			if (i == 0) {
+				DebugString("Outvoted player is me!\n");
+				for (i = 1; i < Session.Players.Count(); i++) { // RA2: as above
+					Kick_Player_Now(net, net->Connection_Index(Session.Players[i]->Player.ID), their, 0); // RA2: as above
+				}
+				break;
+			}
+			Kick_Player_Now(net, net->Connection_Index(Session.Players[i]->Player.ID), their, 1); // RA2: as above
+		}
+	}
+	return 0; // RA2: as above
+}
+
+
+/***************************************************************************
+ * Can_Advance -- determines if it's OK to advance to the next frame       *
+ *                                                                         *
+ * This routine uses the current values stored in their_frame[],           *
+ * their_send[], and their_recv[] to see if it's OK to advance to the next *
+ * game frame.  We must not advance if:                                    *
+ * - If our frame # would be too far ahead of the slowest player (the      *
+ *   lowest their_frame[] value).  "Too far" means                         *
+ *   (Frame >= their_frame + MaxAhead).                                    *
+ * - our current command count doesn't match the sent command count of one *
+ *   other player (meaning that we've missed a command packet from that    *
+ *   player, and thus the frame # we're receiving from him may be due to a *
+ *   FRAMEINFO packet sent later than the command, so we shouldn't use     *
+ *   this frame # to see if we should advance; we should wait until we     *
+ *   have all the commands before we advance.                              *
+ *                                                                         *
+ * Of course, this routine assumes the values in their_frame[] etc are     *
+ * kept current by the caller.                                             *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net            ptr to connection manager                           *
+ *      max_ahead      max frames ahead                                    *
+ *      their_frame      array of their frame #'s                          *
+ *      their_sent      array of their sent command count                  *
+ *      their_recv      array of their # received commands                 *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      1 = OK to advance; 0 = not OK                                      *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static inline int Can_Advance(ConnManClass *net, int max_ahead, FrameSyncStruct *their, int *frame_stall, int *count_stall) // RA2: as above
+{
+	int their_oldest_frame; // RA2: as above
+	int count_ok; // RA2: as above
+	int i;
+
+	*frame_stall = -1;
+	if (Session.NumPlayers == 1) {
+		return 1; // RA2: as above
+	}
+	their_oldest_frame = Frame + 1000;
+	for (i = 0; i < net->Num_Connections(); i++) {
+		if (their[i].frame < their_oldest_frame) {
+			their_oldest_frame = their[i].frame;
+			*frame_stall = i;
+		}
+	}
+	count_ok = 1;
+	for (i = 0; i < net->Num_Connections(); i++) {
+		if (their[i].recv < their[i].sent) {
+			count_ok = 0;
+			break;
+		}
+	}
+	if (count_ok) {
+		if (Frame < their_oldest_frame + max_ahead) { // RA2: as above
+			return 1; // RA2: as above
+		}
+		i = -1;
+	}
+	if (Frame < their_oldest_frame + max_ahead) { // RA2: as above
+		*frame_stall = -1;
+	}
+	*count_stall = i;
+	return 0; // RA2: as above
+}
+
+
+/***************************************************************************
+ * Wait_For_Players -- Waits for other systems to come on-line             *
+ *                                                                         *
+ * This routine performs the most critical logic in multiplayer; that of   *
+ * synchronizing my frame number with those of the other systems.          *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      first_time            1 = 1st time this routine is called          *
+ *      net                  ptr to connection manager                     *
+ *      resend_delta         time (ticks) between FRAMESYNC resends        *
+ *      dialog_time            time (ticks) until pop up a reconnect dialog*
+ *      timeout               time (ticks) until we give up the ghost      *
+ *      multi_packet_buf      buffer to store packets in                   *
+ *      my_sent               # commands I've sent so far                  *
+ *      their_frame            array of their frame #'s                    *
+ *      their_sent            array of their CommandCount values           *
+ *      their_recv            array of # cmds I've received from them      *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      RC_NORMAL            OK to advance to the next frame               *
+ *      RC_CANCEL            user hit 'Cancel' at the timeout countdown dlg*
+ *      RC_NOT_RESPONDING      other player(s) not responding              *
+ *      RC_SCENARIO_MISMATCH   scenario's don't match (first_time only)    *
+ *      RC_DOLIST_FULL         DoList was full                             *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static int SyncWaitElapsed;		/// how long Wait_For_Players has been waiting
+
 
 
 /***************************************************************************
@@ -740,7 +2229,6 @@ static void Queue_AI_Multiplayer(void)
 	//........................................................................
 	// Timing variables
 	//........................................................................
-	static CDTimerClass<FrameTimerClass> skip_crc;	// to delay the CRC check
 
 	//........................................................................
 	// Other misc variables
@@ -998,648 +2486,6 @@ static void Queue_AI_Multiplayer(void)
 	}
 
 }	// end of Queue_AI_Multiplayer
-
-
-/// <summary>
-/// Waits for the other players to reach the end of the game.
-/// This routine is called once the game is decided but the other systems may still be a
-/// few frames behind. It keeps the connections serviced, the frame syncs flowing and the
-/// map rendering until everybody has caught up, then signs off with a flurry of frame
-/// syncs so nobody is left waiting on us. A player who never answers is given up on rather
-/// than waited for forever.
-/// </summary>
-void Wait_For_End_Of_Queue(void)
-{
-	DebugString("Waiting to exit game\n");
-
-	//........................................................................
-	// Enums:
-	//........................................................................
-	enum {
-		MIXFILE_RESEND_DELTA = 2 * TIMER_SECOND,     // ticks b/w resends
-		MIXFILE_TIMEOUT = 2 * TIMER_MINUTE,          // timeout waiting for mixfiles.
-		FRAMESYNC_DLG_TIME = (3*TIMER_SECOND),       // time until displaying reconnect dialog
-		FRAMESYNC_TIMEOUT = (15*TIMER_SECOND),       // timeout waiting for frame sync packet
-	};
-
-	int timeout_factor = (Session.Type == GAME_INTERNET) ? 6 : 1;
-
-	//........................................................................
-	// Variables for sending, receiving & parsing packets:
-	//........................................................................
-	ConnManClass *net;					// ptr to access all multiplayer functions
-	EventClass packet;					// for sending single frame-sync's
-	char *multi_packet_buf;				// buffer for sending/receiving
-	int multi_packet_max;				// max length of multi_packet_buf
-	int their_oldest_frame;			// other players' oldest frame #
-	int their_oldest_index;
-	int i;
-
-
-	//........................................................................
-	// Variables for sending, receiving & parsing packets:
-	//........................................................................
-	EventClass *event;      // event ptr for parsing incoming packets
-	int packetlen;          // size of meta-packet sent, & received
-	int id;                 // id of other player
-	int messages_this_loop; // to limit # messages processed each loop
-	int message_limit;      // max # messages we'll read each frame
-	RetcodeType rc;
-	int num_ready;							// # players signalling ready
-	num_ready = 0;
-
-	int x,y;
-
-
-	//------------------------------------------------------------------------
-	// Initialize the packet buffer pointer & its max size
-	//------------------------------------------------------------------------
-	if (Session.Type >= GAME_IPX && Session.Type <= GAME_INTERNET) {
-		multi_packet_buf = Session.MetaPacket;
-		multi_packet_max = Session.MetaSize;
-		net = &Ipx;
-	} else {
-		multi_packet_buf = NullModem.BuildBuf;
-		multi_packet_max = NullModem.MaxLen - sizeof (CommHeaderType);
-		net = &NullModem;
-	}
-
-	//------------------------------------------------------------------------
-	// Send our data packet(s); update my command-sent counter
-	//------------------------------------------------------------------------
-	SentCommandCount += Send_Packets(net, multi_packet_buf, multi_packet_max,
-		Session.MaxAhead, SentCommandCount);
-
-	CDTimerClass<SystemTimerClass> timer1 = TIMER_SECOND / 4;
-	CDTimerClass<SystemTimerClass> timer2 = 10 * TIMER_SECOND;
-	BasicTimerClass<SystemTimerClass> timer3;
-
-	DebugString("Entering wait loop\n");
-
-	while (true) {
-
-		Keyboard->Check();
-
-		Update_Queue_Mono (net, 2);
-
-		//---------------------------------------------------------------------
-		// Resend a frame-sync packet if longer than one propagation delay goes
-		// by; this prevents a "deadlock".  If he's waiting for me to advance,
-		// but has missed my last few FRAMEINFO packets, I may be waiting for
-		// him to advance.  Resending a FRAMESYNC ensures he knows what frame
-		// number I'm on.
-		//---------------------------------------------------------------------
-		if (!timer1) {
-			timer1 = TIMER_SECOND / 4;		// time to retry
-			Update_Queue_Mono (net, 3);
-			DebugString("Resending framesync\n");
-			Send_FrameSync(net, SentCommandCount);
-		}
-
-		//---------------------------------------------------------------------
-		// Service the connections
-		//---------------------------------------------------------------------
-		net->Service();
-
-		if (!timer2) {
-			DebugString("Timed out waiting for end game!\n");
-			return;
-		}
-
-
-		//---------------------------------------------------------------------
-		// Check for an incoming message.  We must still process commands
-		// even if 'first_time' is set, in case the other system got my 1st
-		// FRAMESYNC, but I didn't get his; he'll be at the next frame, and
-		// may be sending commands.
-		// We have to limit the number of incoming messages we handle; it's
-		// possible to go into an infinite loop processing modem messages.
-		// (This feature is disabled for Ten; we need to keep the TCP buffers
-		// clear, so we read all the packets we can every time.)
-		//---------------------------------------------------------------------
-		messages_this_loop = 0;
-		message_limit = MAX_EVENTS;
-
-		while ( (messages_this_loop++ < message_limit) &&
-			net->Get_Private_Message (multi_packet_buf, &packetlen, &id) ) {
-
-			Keyboard->Check();
-
-			Update_Queue_Mono (net, 5);
-
-			/*..................................................................
-			Get an event ptr to the incoming message
-			..................................................................*/
-			event = (EventClass *)multi_packet_buf;
-
-			//------------------------------------------------------------------
-			// Special processing for a modem game: process SERIAL packets
-			//------------------------------------------------------------------
-			if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
-				rc = Process_Serial_Packet(multi_packet_buf, false);
-				switch (rc) {
-					case RC_NORMAL:
-						break;
-					//...............................................................
-					// SERIAL packet received & processed
-					//...............................................................
-					case RC_SERIAL_PROCESSED:
-						net->Service();
-						timer1 = TIMER_SECOND / 4;
-						timer2 = 10 * TIMER_SECOND;
-						break;
-
-					case RC_PLAYER_READY:
-					case RC_SCENARIO_MISMATCH:
-					case RC_DOLIST_FULL:
-					case RC_PLAYER_LEFT:
-					case RC_HUNG_UP:
-						return;
-
-					//...............................................................
-					// If it was any other type of serial packet, break
-					//...............................................................
-					default:
-						return;
-				}
-			} else {
-
-				//------------------------------------------------------------------
-				// Process the incoming packet
-				//------------------------------------------------------------------
-				rc = Process_Receive_Packet(net, multi_packet_buf, id, packetlen, TheirFrameSync, &timer3);
-				//..................................................................
-				// DoList was full
-				//..................................................................
-				if (rc == RC_DOLIST_FULL) {
-					DebugString("Dolist is full!\n");
-					return;
-				}
-			}
-
-			//..................................................................
-			// Service the connection, to clean out the receive queues
-			//..................................................................
-			net->Service();
-		}
-
-		Call_Back();
-
-		if (SpecialDialog == SDLG_NONE) {
-			KeyNumType key;
-			Map.Input(key, x, y);
-			if (key) {
-				Keyboard_Process(key);
-			}
-			TacticalMap->AI();
-			Map.Render();
-		}
-
-		//------------------------------------------------------------------------
-		//	Find the oldest frame # in 'their_frame'
-		//------------------------------------------------------------------------
-		their_oldest_index = -1;
-		their_oldest_frame = Frame + 1000;
-		for (i = 0; i < net->Num_Connections(); i++) {
-			if (TheirFrameSync[i].frame < their_oldest_frame) {
-				their_oldest_frame = TheirFrameSync[i].frame;
-				their_oldest_index = i;
-			}
-		}
-
-		if (int(their_oldest_frame + Session.FrameSendRate) < Frame) {
-			DebugString("Waiting for player %d on frame %d\n", their_oldest_index, TheirFrameSync[their_oldest_index].frame);
-			continue;
-		}
-		break;
-
-	}
-
-	DebugString("their_oldest_frame = %d\n", their_oldest_frame);
-	DebugString("All players have finished - ready to proceed to score screen\n");
-
-	Send_FrameSync(net, SentCommandCount);
-	Send_FrameSync(net, SentCommandCount);
-	Send_FrameSync(net, SentCommandCount);
-	Send_FrameSync(net, SentCommandCount);
-}
-
-/***************************************************************************
- * Wait_For_Players -- Waits for other systems to come on-line             *
- *                                                                         *
- * This routine performs the most critical logic in multiplayer; that of   *
- * synchronizing my frame number with those of the other systems.          *
- *                                                                         *
- * INPUT:                                                                  *
- *      first_time            1 = 1st time this routine is called          *
- *      net                  ptr to connection manager                     *
- *      resend_delta         time (ticks) between FRAMESYNC resends        *
- *      dialog_time            time (ticks) until pop up a reconnect dialog*
- *      timeout               time (ticks) until we give up the ghost      *
- *      multi_packet_buf      buffer to store packets in                   *
- *      my_sent               # commands I've sent so far                  *
- *      their_frame            array of their frame #'s                    *
- *      their_sent            array of their CommandCount values           *
- *      their_recv            array of # cmds I've received from them      *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      RC_NORMAL            OK to advance to the next frame               *
- *      RC_CANCEL            user hit 'Cancel' at the timeout countdown dlg*
- *      RC_NOT_RESPONDING      other player(s) not responding              *
- *      RC_SCENARIO_MISMATCH   scenario's don't match (first_time only)    *
- *      RC_DOLIST_FULL         DoList was full                             *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int SyncWaitElapsed;		/// how long Wait_For_Players has been waiting
-static RetcodeType Wait_For_Players(int first_time, ConnManClass *net,
-	int resend_delta, int dialog_time, int timeout, char *multi_packet_buf,
-	int my_sent, FrameSyncStruct *their)
-{
-	//........................................................................
-	// Variables for sending, receiving & parsing packets:
-	//........................................................................
-	EventClass *event;      // event ptr for parsing incoming packets
-	int packetlen;          // size of meta-packet sent, & received
-	int id;                 // id of other player
-	int messages_this_loop; // to limit # messages processed each loop
-	int message_limit;      // max # messages we'll read each frame
-
-	//........................................................................
-	// Variables used only if 'first_time':
-	//........................................................................
-	int num_ready;							// # players signalling ready
-
-	/*
-	 * ........................................................................
-	 * Variables for the frame-sync stall display
-	 * ........................................................................
-	 */
-	bool stall_drawn = false;			/// true = the current stall has been recorded
-	int loop_count;						/// # of times through the wait loop
-
-	//........................................................................
-	// Timing variables
-	//........................................................................
-	CDTimerClass<SystemTimerClass> retry_timer;		// time between FRAMESYNC packet resends
-	CDTimerClass<SystemTimerClass> dialog_timer;	// time to pop up a dialog
-	CDTimerClass<SystemTimerClass> timeout_timer;	// general-purpose timeout
-	BasicTimerClass<SystemTimerClass> timer;
-	CDTimerClass<SystemTimerClass> progress_timer;	/// time between load progress updates
-
-	//........................................................................
-	// Dialog variables
-	//........................................................................
-	int reconnect_dlg = 0;				// 1 = the reconnect dialog is displayed
-
-	//........................................................................
-	// Other misc variables
-	//........................................................................
-	KeyNumType input;   // for user input
-	int x,y;            // for map input
-	RetcodeType rc;
-
-	//------------------------------------------------------------------------
-	// Wait to hear from all other players
-	//------------------------------------------------------------------------
-	num_ready = 0;
-	retry_timer = resend_delta; // time to retry
-	dialog_timer = dialog_time; // time to show dlg
-	timeout_timer = timeout;    // time to bail out
-	timer = 0;
-	progress_timer = TIMER_SECOND;
-	loop_count = 0;
-
-	while (1) {
-		Keyboard->Check();
-
-		Update_Queue_Mono (net, 2);
-
-		//---------------------------------------------------------------------
-		// Resend a frame-sync packet if longer than one propagation delay goes
-		// by; this prevents a "deadlock".  If he's waiting for me to advance,
-		// but has missed my last few FRAMEINFO packets, I may be waiting for
-		// him to advance.  Resending a FRAMESYNC ensures he knows what frame
-		// number I'm on.
-		//---------------------------------------------------------------------
-		if (!retry_timer) {
-			retry_timer = resend_delta;		// time to retry
-			Update_Queue_Mono (net, 3);
-			Send_FrameSync(net, my_sent);
-		}
-
-		//---------------------------------------------------------------------
-		/*
-		 * For a modem game, pulse the loading progress bar periodically while
-		 * we wait for the other system to finish loading the scenario.
-		 */
-		//---------------------------------------------------------------------
-		if (first_time) {
-			if (progress_timer <= 0) {
-				if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
-					progress_timer = TIMER_SECOND;
-					Session.Update_Progress(Scen->IsRandom ? 200 : 100);
-				}
-			}
-		}
-
-		//---------------------------------------------------------------------
-		// Service the connections
-		//---------------------------------------------------------------------
-		net->Service();
-
-		//---------------------------------------------------------------------
-		// Pop up a reconnect dialog if enough time goes by
-		//---------------------------------------------------------------------
-		if (!dialog_timer && SpecialDialog==SDLG_NONE) {
-			int fresh = (reconnect_dlg==0);
-			int reconn = (first_time==0);
-
-			if (Process_Reconnect_Dialog(&timeout_timer, their,				//	(Returns immediately.)
-				net->Num_Connections(), reconn, fresh, &timer)) {
-				if (reconnect_dlg) {
-					Close_Reconnect_Dialog();
-				}
-				return(RC_CANCEL);
-			}
-
-			/*
-			 * ..................................................................
-			 * Tally one pending kick proposal per pass.
-			 * ..................................................................
-			 */
-			if (Session.KickProposals.Count() > 0) {
-				Cast_Kick_Vote(Session.KickProposals[0]->Kick.KickerID, Session.KickProposals[0]->Kick.KickeeID);
-				delete Session.KickProposals[0];
-				Session.KickProposals.Delete_Index(0);
-			}
-
-			/*
-			 * ..................................................................
-			 * Kick anyone who has been voted out by all the other players.
-			 * ..................................................................
-			 */
-			for (int i = 0; i < Session.Players.Count(); i++) {
-				int votes = Session.KickVoteCount[Session.Players[i]->Player.ID];
-				if (votes >= Session.Players.Count() - 1) {
-					DebugString("Kicking player %s from the game due to %d votes\n", Session.Players[i]->Name, votes);
-					if (i == 0) {
-						DebugString("Outvoted player is me!\n");
-						if (reconnect_dlg) {
-							Close_Reconnect_Dialog();
-						}
-						return(RC_CANCEL);
-					}
-					Kick_Player_Now(net, net->Connection_Index(Session.Players[i]->Player.ID), their, true);
-				}
-			}
-
-			reconnect_dlg = 1;
-		}
-
-		//---------------------------------------------------------------------
-		// Exit if too much time goes by (the other system has crashed or
-		// bailed)
-		//---------------------------------------------------------------------
-		if (!timeout_timer) {
-			//..................................................................
-			// For the first-time run, just give up; something's wrong.
-			//..................................................................
-			if (first_time) {
-				if (reconnect_dlg) {
-					Close_Reconnect_Dialog();
-				}
-				return(RC_NOT_RESPONDING);
-			}
-			//..................................................................
-			// Otherwise, we're in the middle of a game; so, the modem &
-			// network must deal with a timeout differently.
-			//..................................................................
-			else {
-				Update_Queue_Mono (net, 4);
-
-				if (Handle_Timeout(net, their)) {
-					Map.Flag_To_Redraw(GS_REDRAW_ALL);	// erase modem reconnect dialog
-					Map.Render();
-					retry_timer = resend_delta;
-					dialog_timer = dialog_time;
-					timeout_timer = timeout;
-				} else {
-					if (reconnect_dlg) {
-						Close_Reconnect_Dialog();
-					}
-					return(RC_NOT_RESPONDING);
-				}
-			}
-		}
-
-		//---------------------------------------------------------------------
-		// Check for an incoming message.  We must still process commands
-		// even if 'first_time' is set, in case the other system got my 1st
-		// FRAMESYNC, but I didn't get his; he'll be at the next frame, and
-		// may be sending commands.
-		// We have to limit the number of incoming messages we handle; it's
-		// possible to go into an infinite loop processing modem messages.
-		//---------------------------------------------------------------------
-		messages_this_loop = 0;
-		message_limit = MAX_EVENTS;
-
-		while ( (messages_this_loop++ < message_limit) &&
-			net->Get_Private_Message (multi_packet_buf, &packetlen, &id) ) {
-
-			Keyboard->Check();
-
-			Update_Queue_Mono (net, 5);
-
-			/*..................................................................
-			Get an event ptr to the incoming message
-			..................................................................*/
-			event = (EventClass *)multi_packet_buf;
-
-			//------------------------------------------------------------------
-			// Special processing for a modem game: process SERIAL packets
-			//------------------------------------------------------------------
-			if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
-				rc = Process_Serial_Packet(multi_packet_buf, first_time);
-				//...............................................................
-				// SERIAL packet received & processed
-				//...............................................................
-				if (rc == RC_SERIAL_PROCESSED) {
-					net->Service();
-					retry_timer = resend_delta;
-					dialog_timer = dialog_time;
-					timeout_timer = timeout;
-					continue;
-				}
-				//...............................................................
-				// other player has left the game
-				//...............................................................
-				else if (rc == RC_PLAYER_LEFT) {
-					if (first_time) {
-						num_ready++;
-					}
-					break;
-				}
-				//...............................................................
-				// Connection was lost
-				//...............................................................
-				/// Try to reconnect before giving up.
-				else if (rc == RC_HUNG_UP) {
-					if (Handle_Timeout(net, their)) {
-						Map.Flag_To_Redraw(GS_REDRAW_ALL);
-						Map.Render();
-						retry_timer = resend_delta;
-						dialog_timer = dialog_time;
-						timeout_timer = timeout;
-					} else {
-						if (reconnect_dlg) {
-							Close_Reconnect_Dialog();
-						}
-						return(RC_NOT_RESPONDING);
-					}
-				}
-				//...............................................................
-				// If it was any other type of serial packet, break
-				//...............................................................
-				else if (rc != RC_NORMAL) {
-					break;
-				}
-			}
-
-			//------------------------------------------------------------------
-			// Process the incoming packet
-			//------------------------------------------------------------------
-			rc = Process_Receive_Packet(net, multi_packet_buf, id, packetlen, their, &timer);
-			//..................................................................
-			// New player heard from
-			//..................................................................
-			if (rc == RC_PLAYER_READY) {
-				num_ready++;
-			}
-			//..................................................................
-			// Scenario's don't match
-			//..................................................................
-			else if (rc == RC_SCENARIO_MISMATCH) {
-				if (reconnect_dlg) {
-					Close_Reconnect_Dialog();
-				}
-				return(RC_SCENARIO_MISMATCH);
-			}
-			//..................................................................
-			// DoList was full
-			//..................................................................
-			else if (rc == RC_DOLIST_FULL) {
-				if (reconnect_dlg) {
-					Close_Reconnect_Dialog();
-				}
-				return(RC_DOLIST_FULL);
-			}
-
-			//..................................................................
-			// Service the connection, to clean out the receive queues
-			//..................................................................
-			net->Service();
-		}
-
-		//---------------------------------------------------------------------
-		// Debug output
-		//---------------------------------------------------------------------
-		if (reconnect_dlg) {
-			Print_Framesync_Values(Frame, Session.MaxAhead, net->Num_Connections(),
-				their, my_sent);
-		}
-
-		//---------------------------------------------------------------------
-		// Attempt to advance to the next frame.
-		//---------------------------------------------------------------------
-		//.....................................................................
-		// For the first-time run, just check to see if we've heard from
-		// everyone.
-		//.....................................................................
-		if (first_time) {
-			if (num_ready >= net->Num_Connections()) {
-				break;
-			}
-		}
-		//.....................................................................
-		// For in-game processing, we have to check their_sent, their_recv,
-		// their_frame, etc.
-		//.....................................................................
-		else {
-			int frame_stall;					/// who's holding up the frame count
-			int count_stall;					/// who's holding up the command count
-
-			if (Can_Advance(net, Session.MaxAhead, their, &frame_stall, &count_stall)) {
-				break;
-			}
-
-			/*
-			 * ..................................................................
-			 * Record (and optionally display) who's stalling the game.
-			 * ..................................................................
-			 */
-			int show_stall = 1;
-			if (Session.ShowInternetDebug && loop_count > 0 && (!stall_drawn || frame_stall != -1 || count_stall != -1)) {
-				Multiplayer_Debug_Print(true);
-			} else if (stall_drawn) {
-				show_stall = 0;
-			}
-			if (show_stall) {
-				if (frame_stall != -1) {
-					if (Session.ShowInternetDebug) {
-						VisibleSurface->Fill_Rect(Rect(frame_stall + 100, 475, 35, 3), DSurface::Build_Hicolor_Pixel(255, 255, 40));
-					}
-					Session.ConnectionStats[frame_stall].FrameSyncStalls++;
-				}
-				if (count_stall != -1) {
-					if (Session.ShowInternetDebug) {
-						VisibleSurface->Fill_Rect(Rect(count_stall + 140, 475, 40, 3), DSurface::Build_Hicolor_Pixel(255, 40, 40));
-					}
-					Session.ConnectionStats[frame_stall].CommandCountStalls++;
-				}
-				stall_drawn = true;
-			}
-		}
-
-		//---------------------------------------------------------------------
-		// Service game stuff.  Servicing the map's input, and rendering the
-		// map, allows the map to scroll even though we're hung up waiting for
-		// packets.  Don't do this if 'first_time' is set, since users could be
-		// waiting a very long time for all systems to load the scenario, and
-		// it gets frustrating being able to scroll around without doing
-		// anything.
-		//---------------------------------------------------------------------
-		Call_Back();
-		if (!first_time && SpecialDialog == SDLG_NONE && reconnect_dlg==0) {
-			Map.Input(input, x, y);
-			if (input)
-				Keyboard_Process(input);
-			TacticalMap->AI();
-			Map.Render();
-		}
-
-		loop_count++;
-
-	}	/* end of while */
-
-	if (reconnect_dlg) {
-		Close_Reconnect_Dialog();
-		if (net->Num_Connections() > 0) {
-			g_PingsSent = 0;
-			g_PingsReceived = 0;
-		}
-	}
-	if (stall_drawn && Session.ShowInternetDebug) {
-		Rect rect(100, 475, 540, 4);
-		VisibleSurface->Fill_Rect(rect, 0);
-	}
-	return(RC_NORMAL);
-
-}	// end of Wait_For_Players
 
 
 /***************************************************************************
@@ -2006,166 +2852,6 @@ static int Process_Send_Period(ConnManClass *net)	//, int init)
 
 
 /***************************************************************************
- * Send_Packets -- sends out events from the OutList                       *
- *                                                                         *
- * This routine computes how many events can be sent this frame, and then  *
- * builds the "meta-packet" & sends it.                                    *
- *                                                                         *
- * The 'cap' value is the max # of events we can send.  Ideally, it should *
- * be based upon the bandwidth of our connection.  Currently, it's just    *
- * hardcoded to prevent the modem from having to resend "too much" data,   *
- * which is about 200 bytes per frame.                                     *
- *                                                                         *
- * INPUT:                                                                  *
- *      net                  ptr to connection manager                     *
- *      multi_packet_buf      buffer to store packets in                   *
- *      multi_packet_max      max size of multi_packet_buf                 *
- *      max_ahead            current game MaxAhead value                   *
- *      my_sent               # commands I've sent this game               *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      # events sent, NOT including the FRAMEINFO event                   *
- *                                                                         *
- * WARNINGS:                                                               *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Send_Packets(ConnManClass *net, char *multi_packet_buf,
-	int multi_packet_max, int max_ahead, int my_sent)
-{
-	int cnt;
-	int cap;        // max # events to send, NOT including FRAMEINFO event
-	int ack_req;    // 0 = no ack required on outgoing packet
-	int packetlen;  // size of meta-packet sent
-	int processed;
-	int num = 0;
-
-	cap = OutList.Count;
-
-	//........................................................................
-	// Make sure we don't send so many events that our DoList fills up
-	//........................................................................
-	if (cap > (MAX_EVENTS * 64) - DoList.Count) {
-		cap = (MAX_EVENTS * 64) - DoList.Count;
-	}
-	cnt = OutList.Count;
-
-	//------------------------------------------------------------------------
-	// Build our meta-packet & transmit it.
-	//------------------------------------------------------------------------
-	while (1) {
-		//Keyboard->Check();
-
-		Update_Queue_Mono (net, 1);
-
-		//.....................................................................
-		// If there are no commands this frame, we'll just be sending a FRAMEINFO
-		//	packet; no ack is required.  For the modem's sake, check
-		// Session.NumPlayers; no ACK is needed if we're just sending to someone
-		// who's left the game.
-		//.....................................................................
-		if (cap == 0 || OutList.Count == 0 || Session.NumPlayers == 1) {
-			ack_req = 0;
-		}
-		else {
-			ack_req = 1;
-		}
-
-		//.....................................................................
-		// Build & send out our message
-		//.....................................................................
-		packetlen = Build_Send_Packet (multi_packet_buf, multi_packet_max,
-			max_ahead, my_sent, cap, processed);
-
-		cap -= processed;
-		num += processed;
-		if (processed) {
-			ack_req = 1;
-		}
-
-		net->Send_Private_Message (multi_packet_buf, packetlen, ack_req);
-		SentFrameSyncCount++;
-
-		//.....................................................................
-		// Call Service() to actually send the packet
-		//.....................................................................
-		net->Service();
-
-		//.....................................................................
-		// Stop if there's no more data to send, or if our send queue is
-		// filling up.
-		//.....................................................................
-		if (OutList.Count == 0 || OutList.Count > cnt) {
-			break;
-		}
-		if (cap == 0) {
-			break;
-		}
-	}
-
-	return(num);
-
-}	// end of Send_Packets
-
-
-/***************************************************************************
- * Send_FrameSync -- Sends a FRAMESYNC packet                              *
- *                                                                         *
- * This routine is used to periodically remind the other systems that      *
- * we're still here, and to tell them what frame # we're on, in case       *
- * they've missed my FRAMEINFO packets.                                    *
- *                                                                         *
- * INPUT:                                                                  *
- *      net            ptr to connection manager                           *
- *      cmd_count      # commands I've sent so far                         *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static void Send_FrameSync(ConnManClass *net, int cmd_count)
-{
-	EventClass packet;
-
-	//------------------------------------------------------------------------
-	// Build a frame-sync event to send.  FRAMESYNC packets contain a
-	// scenario-based CRC rather than a game-state-based CRC, to let the
-	// games compare scenario CRC's on startup.
-	//------------------------------------------------------------------------
-	memset (&packet, 0, sizeof(EventClass));
-	packet.Type = EventClass::FRAMESYNC;
-	if (Session.CommProtocol == COMM_PROTOCOL_MULTI_E_COMP) {
-		packet.Frame = ((Frame + Session.MaxAhead + (Session.FrameSendRate - 1)) /
-			 Session.FrameSendRate) * Session.FrameSendRate;
-	}
-	else {
-		packet.Frame = Frame + Session.MaxAhead;
-	}
-	packet.ID = PlayerPtr->HeapID;
-	packet.Data.FrameInfo.CRC = ScenarioCRC;
-	packet.Data.FrameInfo.CommandCount = cmd_count;
-	packet.Data.FrameInfo.Delay = Session.MaxAhead;
-
-	//------------------------------------------------------------------------
-	// Send the event.  For modem, this just sends to the other player;
-	// for network, it sends to everyone we're connected to.
-	//------------------------------------------------------------------------
-
-	net->Send_Private_Message (&packet, (offsetof(EventClass, Data) +
-		size_of(EventClass, Data.FrameInfo)), 0 );
-	SentFrameSyncCount++;
-	return;
-
-}	// end of Send_FrameSync
-
-
-/***************************************************************************
  * Process_Receive_Packet -- processes an incoming packet                  *
  *                                                                         *
  * This routine receives a packet from another system, adds it to our      *
@@ -2314,380 +3000,6 @@ static RetcodeType Process_Receive_Packet(ConnManClass *net,
 }	// end of Process_Receive_Packet
 
 
-/***************************************************************************
- * Process_Serial_Packet -- Handles an incoming serial packet              *
- *                                                                         *
- * This routine is needed because the modem classes don't support a        *
- * "global channel" like the network classes do, but that functionality is *
- * still needed for modem communications.  Specifically, the modem dialogs *
- * transmit their own special packets back & forth, and messages are sent  *
- * using a special packet type.  Thus, we have to call this routine when   *
- * we receive a modem packet, to allow it to process messages & dialog     *
- * packets.                                                                *
- *                                                                         *
- * INPUT:                                                                  *
- *      multi_packet_buf      packet buffer to process                     *
- *      first_time            1 = this is the 1st game frame               *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      RC_NORMAL:            this wasn't a SERIAL-type packet             *
- *      RC_SERIAL_PROCESSED:   this was a SERIAL-type packet, and was      *
- *                         processed; the other player is still connected, *
- *                         even if he's not in the game.                   *
- *      RC_PLAYER_LEFT:      other player has left the game                *
- *      RC_HUNG_UP:            we're getting our own packets back; thus, the*
- *                         modem is mirroring our packets, which means the *
- *                         modem hung up!                                  *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static RetcodeType Process_Serial_Packet(char *multi_packet_buf,
-	int first_time)
-{
-	SerialPacketType *serial_packet;		// for parsing serial packets
-	int player_gone;
-	EventClass *event;
-
-	//------------------------------------------------------------------------
-	// Determine if this packet means that the other player has left the game
-	//------------------------------------------------------------------------
-	serial_packet = (SerialPacketType *)multi_packet_buf;
-	player_gone = 0;
-	//........................................................................
-	// On Frame 0, only a SIGN_OFF means the other player left; the other
-	// packet types may be left over from a previous session.
-	//........................................................................
-	if (first_time) {
-		if (serial_packet->Command == SERIAL_SIGN_OFF) {
-			player_gone = 1;
-		}
-	}
-	//........................................................................
-	// On subsequent frames, any of SIGN_OFF, TIMING, or SCORE_SCREEN means
-	// the other player is gone.
-	//........................................................................
-	else {
-		if (serial_packet->Command == SERIAL_SIGN_OFF ||
-			serial_packet->Command == SERIAL_TIMING ||
-			serial_packet->Command == SERIAL_SCORE_SCREEN ) {
-			player_gone = 1;
-		}
-	}
-	if (player_gone) {
-		Destroy_Null_Connection(serial_packet->ScenarioInfo.Color, 0);
-		return(RC_PLAYER_LEFT);
-	}
-
-	//------------------------------------------------------------------------
-	// Process an incoming message
-	//------------------------------------------------------------------------
-	if (serial_packet->Command == SERIAL_MESSAGE) {
-		if (!Session.Messages.Concat_Message(serial_packet->Name,
-			serial_packet->ID, serial_packet->Message.Message, Rule->MessageDelay * TICKS_PER_MINUTE)) {
-			Session.Messages.Add_Message (serial_packet->Name,
-				serial_packet->ID, serial_packet->Message.Message,
-				serial_packet->ID,
-				TextPrintType(TPF_6PT_GRAD | TPF_USE_GRAD_PAL | TPF_FULLSHADOW), Rule->MessageDelay * TICKS_PER_MINUTE);
-
-			Sound_Effect(Rule->IncomingMessage);
-		}
-
-		//.....................................................................
-		// Save this message in our last-message buffer
-		//.....................................................................
-		if (strlen (serial_packet->Message.Message)) {
-			strcpy (Session.LastMessage, serial_packet->Message.Message);
-		}
-
-		//.....................................................................
-		// Tell the map to do a partial update (just to force the
-		// messages to redraw).
-		//.....................................................................
-		//Map.Flag_To_Redraw(false);
-		Map.Flag_To_Redraw(GS_REDRAW_ALL);
-		return(RC_SERIAL_PROCESSED);
-	}
-
-	//------------------------------------------------------------------------
-	// Any other SERIAL-type packet means the other player is still there;
-	// throw them away, but let the caller know the connection is OK.
-	//------------------------------------------------------------------------
-	if ( (serial_packet->Command >= SERIAL_CONNECT &&
-		serial_packet->Command < SERIAL_LAST_COMMAND) ||
-		(serial_packet->Command >= SERIAL_REQ_SCENARIO &&
-		 serial_packet->Command <= SERIAL_ACCEPT_OPTIONS) ||
-		Session.NumPlayers == 1) {
-		return(RC_SERIAL_PROCESSED);
-	}
-
-	//........................................................................
-	// are we getting our own packets back??
-	//........................................................................
-	event = (EventClass *)multi_packet_buf;
-
-	if (event->Type <= EventClass::EMPTY || event->Type >= EventClass::LAST_EVENT) return(RC_SERIAL_PROCESSED);
-
-	if (event->ID == PlayerPtr->HeapID) {
-		return(RC_HUNG_UP);
-	}
-
-	return(RC_NORMAL);
-}	// end of Process_Serial_Packet
-
-
-/***************************************************************************
- * Can_Advance -- determines if it's OK to advance to the next frame       *
- *                                                                         *
- * This routine uses the current values stored in their_frame[],           *
- * their_send[], and their_recv[] to see if it's OK to advance to the next *
- * game frame.  We must not advance if:                                    *
- * - If our frame # would be too far ahead of the slowest player (the      *
- *   lowest their_frame[] value).  "Too far" means                         *
- *   (Frame >= their_frame + MaxAhead).                                    *
- * - our current command count doesn't match the sent command count of one *
- *   other player (meaning that we've missed a command packet from that    *
- *   player, and thus the frame # we're receiving from him may be due to a *
- *   FRAMEINFO packet sent later than the command, so we shouldn't use     *
- *   this frame # to see if we should advance; we should wait until we     *
- *   have all the commands before we advance.                              *
- *                                                                         *
- * Of course, this routine assumes the values in their_frame[] etc are     *
- * kept current by the caller.                                             *
- *                                                                         *
- * INPUT:                                                                  *
- *      net            ptr to connection manager                           *
- *      max_ahead      max frames ahead                                    *
- *      their_frame      array of their frame #'s                          *
- *      their_sent      array of their sent command count                  *
- *      their_recv      array of their # received commands                 *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      1 = OK to advance; 0 = not OK                                      *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Can_Advance(ConnManClass *net, int max_ahead, FrameSyncStruct *their, int *frame_stall, int *count_stall)
-{
-	int their_oldest_frame;    // other players' oldest frame #
-	int count_ok;               // true = my cmd count matches theirs
-	int i;
-
-	*frame_stall = -1;
-
-	//------------------------------------------------------------------------
-	// Special case for modem: if the other player has left, go ahead and
-	// advance to the next frame; don't wait on him.
-	//------------------------------------------------------------------------
-	if (Session.NumPlayers == 1) {
-		return(1);
-	}
-
-	//------------------------------------------------------------------------
-	//	Find the oldest frame # in 'their_frame'
-	//------------------------------------------------------------------------
-	their_oldest_frame = Frame + 1000;
-	for (i = 0; i < net->Num_Connections(); i++) {
-		if (their[i].frame < their_oldest_frame) {
-			their_oldest_frame = their[i].frame;
-			*frame_stall = i;
-		}
-	}
-
-	//------------------------------------------------------------------------
-	// I can advance to the next frame IF:
-	// 1) I'm less than a one-way propagation delay ahead of the other
-	//    players' frame numbers, AND
-	//	2) their_recv[i] >= their_sent[i] (ie I've received all the commands
-	//    the other players have sent so far).
-	//------------------------------------------------------------------------
-	count_ok = 1;
-	for (i = 0; i < net->Num_Connections(); i++) {
-		if (their[i].recv < their[i].sent) {
-			count_ok = 0;
-			break;
-		}
-	}
-	if (count_ok) {
-		if (Frame < (their_oldest_frame + max_ahead)) {
-			return(1);
-		}
-		i = -1;
-	}
-
-	//------------------------------------------------------------------------
-	/// If the frame # isn't the bottleneck, don't blame anyone for it.
-	//------------------------------------------------------------------------
-	if (Frame < (their_oldest_frame + max_ahead)) {
-		*frame_stall = -1;
-	}
-	*count_stall = i;
-
-	return(0);
-
-}	// end of Can_Advance
-
-
-/***************************************************************************
- * Process_Reconnect_Dialog -- processes the reconnection dialog           *
- *                                                                         *
- * This routine [re]draws the reconnection dialog; if 'reconn' is set,     *
- * it tells the user who we're trying to reconnect to; otherwise, is just  *
- * says something generic like "Waiting for connections".                  *
- *                                                                         *
- * INPUT:                                                                  *
- *      timeout_timer   ptr to count down timer, showing time remaining    *
- *      their_frame      array of other players' frame #'s                 *
- *      num_conn         # connections in 'their_frame'                    *
- *      reconn         1 = reconnect, 0 = waiting for first-time connection*
- *      fresh            1 = draw from scratch, 0 = only update time counter*
- *                                                                         *
- * OUTPUT:                                                                 *
- *      1 = user wants to cancel, 0 = not                                  *
- *                                                                         *
- * WARNINGS:                                                               *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Process_Reconnect_Dialog(CDTimerClass<SystemTimerClass> *timeout_timer,
-	FrameSyncStruct *their, int num_conn, int reconn, int fresh,
-	BasicTimerClass<SystemTimerClass> *timer)
-{
-	static int displayed_time = 0;	// time value currently displayed
-
-	static HWND disconnect_dialog;  /// the disconnect/kick dialog
-	static int disconnect_return;   /// set to IDCANCEL by Reconnect_Dialog_Proc
-
-	int new_time;
-	int oldest_index;						// index of person requiring a reconnect
-	int i,j;
-	char buf[256];							// for dialog text
-
-	//------------------------------------------------------------------------
-	/// Update the frame-sync progress info for Draw_Sync_Bars.
-	//------------------------------------------------------------------------
-	SyncWaitElapsed = *timer;
-	for (i = 0; i < num_conn; i++) {
-		SyncBarFrameSync[i] = their[i];
-	}
-
-	//------------------------------------------------------------------------
-	/// The first time through, create the disconnect/kick dialog.
-	//------------------------------------------------------------------------
-	if (fresh) {
-		TacticalActive = false;
-		disconnect_return = -1;
-		disconnect_dialog = WS_Create_Dialog(ProgramInstance, IDD_MPLAYER_DISCONNECT, MainWindow, Reconnect_Dialog_Proc, true);
-		Center_Window_Within_Window(disconnect_dialog);
-		if (disconnect_dialog) {
-			SetWindowLong(disconnect_dialog, DWL_USER, (LONG)&disconnect_return);
-			MouseCursor->Hide_Mouse();
-			ShowWindow(disconnect_dialog, SW_SHOWNORMAL);
-			UpdateWindow(disconnect_dialog);
-			MouseCursor->Show_Mouse();
-		}
-	}
-
-	//------------------------------------------------------------------------
-	/// If the user hit Cancel, bail out of the game.
-	//------------------------------------------------------------------------
-	if (disconnect_return == IDCANCEL) {
-		WS_Destroy_Dialog(disconnect_dialog, false);
-		TacticalActive = true;
-		Map.Flag_To_Redraw(GS_REDRAW_ALL);
-		return(1);
-	}
-
-	//------------------------------------------------------------------------
-	// Convert the timer to seconds
-	//------------------------------------------------------------------------
-	new_time = *timeout_timer / TIMER_SECOND;
-
-	//------------------------------------------------------------------------
-	// If the timer has changed, or 'fresh' is set, redraw the dialog
-	//------------------------------------------------------------------------
-	if (fresh || new_time != displayed_time) {
-		displayed_time = new_time;
-
-		HWND item = GetDlgItem(disconnect_dialog, IDC_DISCONNECT_TIME_REMAINING);
-		if (item) {
-			sprintf(buf, Fetch_String(TXT_TIME_ALLOWED), displayed_time);
-			SendMessage(item, WM_SETTEXT, 0, (LPARAM)buf);
-		}
-		if (!(displayed_time & 1)) {
-			PostMessage(disconnect_dialog, WM_PAINT, 0, 0);
-		}
-
-		/*
-		 * On creation, discard any stale kick proposals, clear the vote
-		 * tallies, and fill the message list box.
-		 */
-		if (fresh) {
-			while (Session.KickProposals.Count()) {
-				delete Session.KickProposals[0];
-				Session.KickProposals.Delete_Index(0);
-			}
-			memset(Session.KickVoteCount, 0, sizeof(Session.KickVoteCount));
-			memset(Session.KickVoteWho, 0xFF, sizeof(Session.KickVoteWho));
-
-			HWND listbox = GetDlgItem(disconnect_dialog, IDC_DISCONNECT_MESSAGES);
-			if (listbox) {
-				if (reconn) {
-					//...............................................................
-					// Find the index of the person we're trying to reconnect to
-					//...............................................................
-					j = 0x7fffffff;
-					oldest_index = 0;
-					for (i = 0; i < num_conn; i++) {
-						if (their[i].frame < j) {
-							j = their[i].frame;
-							oldest_index = i;
-						}
-					}
-					if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
-						sprintf(buf, Fetch_String(TXT_RECONNECTING_TO), Ipx.Connection_Name(Ipx.Connection_ID(oldest_index)));
-					} else {
-						sprintf(buf, Fetch_String(TXT_RECONNECTING_TO), Session.Players[1]->Name);
-					}
-					ListBox_AddString(listbox, buf);
-					ListBox_AddString(listbox, "");
-					if (Session.Type == GAME_INTERNET) {
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP3));
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP3B));
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP3C));
-					}
-					if (Session.Type != GAME_MODEM && Session.Type != GAME_NULL_MODEM) {
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP2));
-					}
-					if (Session.Type == GAME_INTERNET) {
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP2B));
-					} else if (Session.Type == GAME_IPX) {
-						ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP4));
-					}
-					ListBox_AddString(listbox, "");
-					ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP5));
-					ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_HELP1));
-					ListBox_AddString(listbox, "");
-				} else {
-					sprintf(buf, Fetch_String(TXT_WAITING_FOR_CONNECTIONS));
-					ListBox_AddString(listbox, buf);
-				}
-			}
-		}
-	}
-
-	return(0);
-
-}	// end of Process_Reconnect_Dialog
-
 static int SyncNameButtonControlsIDs[MAX_PLAYERS] = {
 	IDC_DISCONNECT_PLAYER1,
 	IDC_DISCONNECT_PLAYER2,
@@ -2767,678 +3079,6 @@ void Draw_Sync_Bars(HWND window)
 		AlternateSurface->Fill_Rect(AlternateSurface->Get_Rect(), bar_rect, color);
 	}
 }
-
-void Cast_Kick_Vote(int kicker, int kickee);
-
-/// <summary>
-/// Trims the message list box and scrolls it to the end.
-/// Use this routine after adding a line to the reconnect dialog's message list, so that
-/// the list stays a manageable length and the newest message stays in view.
-/// </summary>
-/// <param name="listbox">The list box to trim.</param>
-void ListBox_Trim(HWND listbox)
-{
-	int string_count = ListBox_GetCount(listbox);
-	if (string_count > 50) {
-		ListBox_DeleteString(listbox, 0);
-		string_count--;
-	}
-	ListBox_SetTopIndex(listbox, string_count - 1);
-}
-
-
-/// <summary>
-/// Proposes that a player be kicked out of the game.
-/// This routine is called when one of the kick buttons on the reconnect dialog is pressed.
-/// The proposal is sent to every other player and the local vote is cast right away.
-/// Proposing to kick yourself, or to kick anybody at all during a tournament game, earns
-/// nothing but a message in the dialog.
-/// </summary>
-/// <param name="window">The reconnect dialog to report the outcome in.</param>
-/// <param name="id">Index into the session player list of the one to be kicked.</param>
-void Propose_Kick_Player(HWND window, int id)
-{
-	DebugString("Propose_Kick_Player %d - %s. Local id is %d\n", id, Session.Players[id]->Name, Session.Players[0]->Player.ID);
-	HWND listbox = GetDlgItem(window, IDC_DISCONNECT_MESSAGES);
-
-	if (id == 0) {
-		ListBox_AddString(listbox, Fetch_String(TXT_RECONNECT_KICK_SELF));
-		ListBox_Trim(listbox);
-		return;
-	}
-
-	if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) {
-		ListBox_AddString(listbox, Fetch_String(TXT_CANT_KICK));
-		ListBox_Trim(listbox);
-		return;
-	}
-
-	GlobalPacketType gpacket;
-	gpacket.Command = NET_PROPOSE_KICK;
-	strncpy(gpacket.Name, Session.Players[0]->Name, ARRAY_SIZE(gpacket.Name));
-	gpacket.Kick.KickerID = Session.Players[0]->Player.ID;
-	gpacket.Kick.KickeeID = Session.Players[id]->Player.ID;
-
-	for (int i = 1; i < Session.Players.Count(); i++) {
-		DebugString("Sending kick proposal to %s\n", Session.Players[i]->Name);
-		Ipx.Send_Global_Message(&gpacket, sizeof(gpacket), 1, &Session.Players[i]->Address);
-	}
-
-	Cast_Kick_Vote(Session.Players[0]->Player.ID, Session.Players[id]->Player.ID);
-}
-
-
-/// <summary>
-/// Handles a kick proposal arriving from another player.
-/// The packet is copied and queued up on the session, so that the wait-for-players loop
-/// can act on the proposal when it next gets the chance.
-/// </summary>
-/// <param name="packet">The global packet that carries the kick proposal.</param>
-void Kick_Packet_Received(GlobalPacketType & packet, IPXAddressClass & address)
-{
-	GlobalPacketType *newpacket = new GlobalPacketType;
-	memcpy(newpacket, &packet, sizeof(*newpacket));
-	Session.KickProposals.Add(newpacket);
-}
-
-
-/// <summary>
-/// Records a vote to kick a player out of the game.
-/// A player gets only the one vote against any given victim, so a repeat vote is quietly
-/// discarded. In a network game the vote is announced in the reconnect dialog's message
-/// list, so everyone can see who wants whom gone.
-/// </summary>
-/// <param name="kicker">Player ID of the one casting the vote.</param>
-/// <param name="kickee">Player ID of the one being voted against.</param>
-void Cast_Kick_Vote(int kicker, int kickee)
-{
-	char buffer[256];
-
-	int votes = Session.KickVoteCount[kickee];
-	for (int i = 0; i < votes; i++) {
-		if (Session.KickVoteWho[kickee][i] == kicker) {
-			return;
-		}
-	}
-
-	Session.KickVoteWho[kickee][votes] = kicker;
-	Session.KickVoteCount[kickee]++;
-
-	if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
-		char const * kicker_name = Ipx.Connection_Name(kicker);
-		if (kicker_name == NULL) {
-			kicker_name = Session.Players[0]->Name;
-		}
-
-		DebugString("Player %s votes to kick player %s from the game\n", kicker_name, Ipx.Connection_Name(kickee));
-		sprintf(buffer, Fetch_String(TXT_RECONNECT_KICK_RECEIVED), kicker_name, Ipx.Connection_Name(kickee));
-
-		HWND topwindow = WS_Top_Window();
-		HWND listbox = GetDlgItem(topwindow, IDC_DISCONNECT_MESSAGES);
-		ListBox_AddString(listbox, buffer);
-		ListBox_Trim(listbox);
-	}
-}
-
-
-/// <summary>
-/// Handles the messages for the reconnect dialog.
-/// This is the dialog that appears when the game stalls waiting on somebody. It paints the
-/// per-player sync bars, offers a kick button for each player in the game, and keeps
-/// pinging the game server for the duration of an internet game stall.
-/// </summary>
-#define PING_TIMER 1
-#define PING_TIMEOUT 1000
-BOOL CALLBACK Reconnect_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
-{
-	int * rc = (int *)GetWindowLong(window, DWL_USER);
-
-	switch (message) {
-		case IDCANCEL:
-			Remove_Modeless_Dialog(window);
-			break;
-
-		case WM_DRAWITEM:
-			OwnerDraw::Draw_Item((DRAWITEMSTRUCT *)lparam);
-			return(TRUE);
-
-		case WM_PAINT:
-			OwnerDraw::Draw_Dialog_Back(window);
-			Draw_Sync_Bars(window);
-			ValidateRect(window, NULL);
-			break;
-
-		case WM_INITDIALOG: {
-			OwnerDraw::Subclass_Dialog(window, 0);
-			Center_Window_Within_Window(window);
-			Add_Modeless_Dialog(window);
-
-			int i;
-			for (i = 0; i < MAX_PLAYERS; i++) {
-				HWND button = GetDlgItem(window, SyncNameButtonControlsIDs[i]);
-				EnableWindow(button, FALSE);
-				HWND bar = GetDlgItem(window, SyncBarControlIDs[i]);
-				EnableWindow(bar, FALSE);
-			}
-
-			for (i = 0; i < MAX_PLAYERS; i++) {
-				HWND button = GetDlgItem(window, SyncNameButtonControlsIDs[i]);
-				HWND bar = GetDlgItem(window, SyncBarControlIDs[i]);
-				if (i < Session.Players.Count()) {
-					SendMessage(button, WM_SETTEXT, 0, (LPARAM)Session.Players[i]->Name);
-					EnableWindow(button, TRUE);
-					EnableWindow(bar, TRUE);
-				} else {
-					DestroyWindow(button);
-					DestroyWindow(bar);
-				}
-			}
-
-			if (Session.Type == GAME_INTERNET) {
-				g_PingsSent = 0;
-				g_PingsReceived = 0;
-				SetTimer(window, PING_TIMER, PING_TIMEOUT, NULL);
-			}
-			break;
-		}
-
-		case WM_MOVING:
-			return(On_WM_MOVING(window, wparam, lparam));
-
-		case WM_CTLCOLORMSGBOX:
-		case WM_CTLCOLOREDIT:
-		case WM_CTLCOLORLISTBOX:
-		case WM_CTLCOLORBTN:
-		case WM_CTLCOLORDLG:
-		case WM_CTLCOLORSCROLLBAR:
-		case WM_CTLCOLORSTATIC:
-			return((BOOL)GetStockObject(BLACK_BRUSH));
-
-		case WM_TIMER:
-			if (Session.Type == GAME_INTERNET && wparam == PING_TIMER && g_PingsSent < 5) {
-				int handle;
-				g_pNetUtil->RequestPing(g_GameServerHost, PING_TIMEOUT, &handle);
-				g_PingsSent++;
-				if (g_PingsSent < 5) {
-					SetTimer(window, PING_TIMER, PING_TIMEOUT, NULL);
-				}
-			}
-			break;
-
-		case WM_ERASEBKGND:
-			return(TRUE);
-
-		case WM_COMMAND:
-			switch (LOWORD(wparam)) {
-				case IDC_DISCONNECT_PLAYER1:
-					Propose_Kick_Player(window, 0);
-					break;
-
-				case IDC_DISCONNECT_PLAYER2:
-					Propose_Kick_Player(window, 1);
-					break;
-
-				case IDC_DISCONNECT_PLAYER3:
-					Propose_Kick_Player(window, 2);
-					break;
-
-				case IDC_DISCONNECT_PLAYER4:
-					Propose_Kick_Player(window, 3);
-					break;
-
-				case IDC_DISCONNECT_PLAYER5:
-					Propose_Kick_Player(window, 4);
-					break;
-
-				case IDC_DISCONNECT_PLAYER6:
-					Propose_Kick_Player(window, 5);
-					break;
-
-				case IDC_DISCONNECT_PLAYER7:
-					Propose_Kick_Player(window, 6);
-					break;
-
-				case IDC_DISCONNECT_PLAYER8:
-					Propose_Kick_Player(window, 7);
-					break;
-
-				case IDCANCEL:
-					*rc = IDCANCEL;
-					break;
-			}
-			break;
-	}
-
-	return(FALSE);
-}
-
-
-/// The name comes from the TS demo build, which ships this routine with symbols.
-
-/// <summary>
-/// Closes the reconnect dialog if it is showing.
-/// This routine is called once the stalled players have caught up. The tactical map is
-/// switched back on and forced to redraw, since the dialog was sitting on top of it.
-/// </summary>
-static void Close_Reconnect_Dialog(void)
-{
-	//------------------------------------------------------------------------
-	// If the reconnect dialog was shown, force the map to redraw.
-	//------------------------------------------------------------------------
-	HWND dialog = WS_Find_Dialog(IDD_MPLAYER_DISCONNECT);
-	if (dialog) {
-		WS_Destroy_Dialog(dialog, false);
-		TacticalActive = true;
-		Map.Flag_To_Redraw(GS_REDRAW_ALL);
-		Map.Render();
-	}
-}
-
-
-/// <summary>
-/// Removes a player from the running multiplayer game.
-/// This routine is called once the other players have voted someone out, or a player has
-/// stopped answering altogether. The offending house is flagged as having lost its
-/// connection, the game statistics are shipped off if the game is effectively decided, and
-/// the connection itself is destroyed.
-/// </summary>
-/// <param name="kickee">Connection index of the player to be removed.</param>
-/// <param name="their">The frame sync records, compacted as the connection goes away.</param>
-/// <param name="error">Should the disconnection be reported as an error?</param>
-void Kick_Player_Now(ConnManClass *net, int kickee, FrameSyncStruct * their, bool error)
-{
-	/*
-	 * Kicking several players inside a minute is treated as spam rather than as a series of
-	 * resignations, so those kicks leave the victims' resigner flags alone.
-	 */
-	static int last_kick_time;
-	bool spamkick = false;
-	if (time(NULL) - last_kick_time >= 60) {
-		last_kick_time = time(NULL);
-	} else {
-		spamkick = true;
-		last_kick_time = time(NULL);
-	}
-
-	int id = net->Connection_ID(kickee);
-	DebugString("Kicking player %d from the game - Frame is %d\n", id, Frame);
-
-	if (id == -1) {
-		DebugString("Kick_Player_Now bailing - bad house ID\n");
-		return;
-	}
-
-	Houses[id]->LostConnection = true;
-
-	if (CountAliveTeams(Houses[id]) == 1 && Session.Type == GAME_INTERNET && !GameStatisticsPacketSent) {
-		Register_Game_End_Time();
-		ConnectionLost = true;
-		if (!spamkick) {
-			Session.SawGameCompletion = true;
-		}
-		for (int i = 0; i < Houses.Count(); i++) {
-			HouseClass * house = Houses[i];
-			if (house != NULL && !house->IsDefeated && house->IsHuman) {
-				house->LostConnection = true;
-			}
-		}
-		Send_Statistics_Packet();
-	}
-
-	if (CountAliveTeams(Houses[id]) > 1 && !spamkick) {
-		Houses[id]->IsResigner = true;
-	}
-
-	for (int i = kickee; i < net->Num_Connections() - 1; i++) {
-		their[i] = their[i+1];
-		Session.KickVoteCount[i] = Session.KickVoteCount[i+1];
-		memcpy(Session.KickVoteWho[i], Session.KickVoteWho[i+1], sizeof(Session.KickVoteWho[i]));
-	}
-
-	Destroy_Connection(id, error);
-}
-
-
-/***************************************************************************
- * Handle_Timeout -- handles a timeout in the wait-for-players loop        *
- *                                                                         *
- * This routine "gracefully" handles a timeout in the frame-sync loop.     *
- * The timeout must be handled differently by a modem game or network      *
- * game.                                                                   *
- *                                                                         *
- * The modem game must detect if the other player is still connected       *
- * physically, even if he's not playing the game any more; if so, this     *
- * routine returns an OK status.  If the other player isn't even           *
- * physically connected, an error is returned.                             *
- *                                                                         *
- * The network game must find the connection that's causing the timeout,   *
- * and destroy it.  The game continues, even if there are no more human    *
- * players left.                                                           *
- *                                                                         *
- * INPUT:                                                                  *
- *      net               ptr to connection manager                        *
- *      their_frame         array containing frame #'s of other players    *
- *      their_sent         array containing command count of other players *
- *      their_recv         array containing # recv'd cmds from other players*
- *                                                                         *
- * OUTPUT:                                                                 *
- *      1 = it's OK; reset timeout timers & keep processing                *
- *      0 = game over, man                                                 *
- *                                                                         *
- * WARNINGS:                                                               *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Handle_Timeout(ConnManClass *net, FrameSyncStruct *their)
-{
-	int oldest_index;						// index of person requiring a reconnect
-	int i,j;
-	//int id;
-
-	//------------------------------------------------------------------------
-	// For modem, attempt to reconnect; if that fails, save the game & bail.
-	//------------------------------------------------------------------------
-	if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
-		if ( net->Num_Connections() ) {
-			Session.Suspended++;
-			if (!Reconnect_Modem()) {
-				Session.Suspended--;
-				return(0);
-			} else {
-				Session.Suspended--;
-				return(1);
-			}
-		}
-	}
-
-	//------------------------------------------------------------------------
-	// For network, destroy the oldest connection
-	//------------------------------------------------------------------------
-	else if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
-		j = 0x7fffffff;
-		oldest_index = 0;
-		for (i = 0; i < net->Num_Connections(); i++) {
-			if (their[i].frame < j) {
-				j = their[i].frame;
-				oldest_index = i;
-			}
-		}
-		Kick_Player_Now(net, oldest_index, their, true);
-
-#if 0
-		id = net->Connection_ID(oldest_index);
-		/*
-		**	Send the game statistics packet now if the game is effectivly over
-		*/
-		if (Session.Players.Count() == 2 &&
-				Session.Type == GAME_INTERNET &&
-				!GameStatisticsPacketSent) {
-			Register_Game_End_Time();
-			ConnectionLost = true;
-			Send_Statistics_Packet();		//	Disconnect, and I'll be the only one left.
-		}
-
-		if (id != ConnManClass::CONNECTION_NONE) {
-			for (i = oldest_index; i < net->Num_Connections() - 1; i++) {
-				their[i].frame = their[i+1].frame;
-				their[i].sent = their[i+1].sent;
-				their[i].recv = their[i+1].recv;
-			}
-			if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
-				Destroy_Connection(id,1);
-			}
-		}
-#endif
-	}
-
-	return(1);
-
-}	// end of Handle_Timeout
-
-
-/***************************************************************************
- * Stop_Game -- stops the game                                             *
- *                                                                         *
- * This routine clears any global flags that need it, in preparation for   *
- * halting the game prematurely.                                           *
- *                                                                         *
- * INPUT:                                                                  *
- *      none.                                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/22/1995 BRR : Created.                                             *
- *=========================================================================*/
-static void Stop_Game(bool is_cancelled)
-{
-	Session.LoadGame = false;
-	Session.EmergencySave = false;
-	GameActive = 0;
-	if (IsMono) {
-		MonoClass::Disable();
-	}
-
-	if (Session.Type == GAME_INTERNET){
-		ConnectionLost = true;
-		if (!is_cancelled) Session.SawGameCompletion = true;
-		Session.OutOfSync = true;
-		Register_Game_End_Time();
-		Send_Statistics_Packet();
-	}
-}	// end of Stop_Game
-
-
-/***************************************************************************
- * Build_Send_Packet -- Builds a big packet from a bunch of little ones.   *
- *                                                                         *
- * This routine takes events from the OutList, and puts them into a        *
- * "meta-packet", which is transmitted to all systems we're connected to.  *
- * Also, these events are added to our own DoList.                         *
- *                                                                         *
- * Every Meta-Packet we send uses a FRAMEINFO packet as a header; this     *
- * tells the other systems what frame we're on, as well as serving as a    *
- * standard packet header.                                                 *
- *                                                                         *
- * INPUT:                                                                  *
- *      buf            buffer to store packet in                           *
- *      bufsize         max size of buffer                                 *
- *      frame_delay      desired frame delay to attach to all outgoing packets*
- *      num_cmds         value to use for the CommandCount field           *
- *      cap            max # events to send                                *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      new size of packet                                                 *
- *                                                                         *
- * WARNINGS:                                                               *
- * 'num_cmds' should be the total of of commands, including all those sent *
- * this frame!                                                             *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Build_Send_Packet(void *buf, int bufsize, int frame_delay,
-	int num_cmds, int cap, int & processed)
-{
-	int size = 0;
-	EventClass *finfo;
-
-	//------------------------------------------------------------------------
-	// All events start with a FRAMEINFO event; fill this part in.
-	//------------------------------------------------------------------------
-	//........................................................................
-	// Set the event type
-	//........................................................................
-	finfo = (EventClass *)buf;
-	finfo->Type = EventClass::FRAMEINFO;
-	processed = 0;
-	//........................................................................
-	// Set the frame to execute this event on; this is protocol-specific
-	//........................................................................
-	if (Session.CommProtocol == COMM_PROTOCOL_MULTI_E_COMP) {
-		finfo->Frame = ((Frame + frame_delay + (Session.FrameSendRate - 1)) /
-			 Session.FrameSendRate) * Session.FrameSendRate;
-	}
-	else {
-		finfo->Frame = Frame + frame_delay;
-	}
-	//........................................................................
-	// Fill in the rest of the event
-	//........................................................................
-	finfo->ID = PlayerPtr->HeapID;
-	finfo->Data.FrameInfo.CRC = GameCRC;
-	finfo->Data.FrameInfo.CommandCount = num_cmds;
-	finfo->Data.FrameInfo.Delay = frame_delay;
-
-	//------------------------------------------------------------------------
-	// Initialize the # of bytes processed; this is protocol-specific
-	//------------------------------------------------------------------------
-	if (Session.CommProtocol==COMM_PROTOCOL_SINGLE_NO_COMP) {
-		size += sizeof(EventClass);
-	}
-	else {
-		size += (offsetof(EventClass, Data) +
-			size_of(EventClass, Data.FrameInfo));
-	}
-
-	//------------------------------------------------------------------------
-	// Transfer all events from the OutList into the DoList, building our
-	// packet while we go.
-	//------------------------------------------------------------------------
-	switch (Session.CommProtocol) {
-		//.....................................................................
-		// COMM_PROTOCOL_SINGLE_NO_COMP:
-		// We'll send at least a FRAMEINFO every single frame, no compression
-		//.....................................................................
-		case (COMM_PROTOCOL_SINGLE_NO_COMP):
-			size = Add_Uncompressed_Events(buf, bufsize, frame_delay, size, cap);
-			break;
-
-		//.....................................................................
-		// COMM_PROTOCOL_SINGLE_E_COMP:
-		//   Compress a group of packets into our send buffer; send out
-		//   compressed packets every frame.
-		// COMM_PROTOCOL_MULTI_E_COMP:
-		//   Compress a group of packets into our send buffer; send out
-		//   compressed packets every 'n' frames.
-		//.....................................................................
-		case (COMM_PROTOCOL_SINGLE_E_COMP):
-		case (COMM_PROTOCOL_MULTI_E_COMP):
-			size = Add_Compressed_Events(buf, bufsize, frame_delay, size, cap, processed);
-			break;
-
-		//.....................................................................
-		// Default: We have no idea what to do, so do nothing.
-		//.....................................................................
-		default:
-			size = 0;
-			break;
-	}
-
-	return( size );
-
-}	/* end of Build_Send_Packet */
-
-
-/***************************************************************************
- * Add_Uncompressed_Events -- adds uncompressed events to a packet         *
- *                                                                         *
- * INPUT:                                                                  *
- *      buf            buffer to store packet in                           *
- *      bufsize         max size of buffer                                 *
- *      frame_delay      desired frame delay to attach to all outgoing packets*
- *      size            current packet size                                *
- *      cap            max # events to process                             *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      new size value                                                     *
- *                                                                         *
- * WARNINGS:                                                               *
- *      This routine MUST check to be sure it doesn't overflow the buffer. *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 DRD : Created.                                             *
- *=========================================================================*/
-static int Add_Uncompressed_Events(void *buf, int bufsize, int frame_delay,
-	int size, int cap)
-{
-	int num = 0;			// # of events processed
-	int ev_size;			// size of event we're adding
-
-	//------------------------------------------------------------------------
-	// Loop until there are no more events, or we've processed our max # of
-	// events, or the buffer is full.
-	//------------------------------------------------------------------------
-	while (OutList.Count && (num < cap)) {
-
-		//Keyboard->Check();
-
-		if (OutList.First().Type==EventClass::ADDPLAYER) {
-			ev_size = sizeof(EventClass) + OutList.First().Data.Variable.Size;
-		}
-		else {
-			ev_size = sizeof(EventClass);
-		}
-		//.....................................................................
-		// Will the next event exceed the size of the buffer?  If so, break.
-		//.....................................................................
-		if ( (size + ev_size) > bufsize ) {
-			return(size);
-		}
-
-		//.....................................................................
-		// Set the event's frame delay
-		//.....................................................................
-		OutList.First().Frame = Frame + frame_delay;
-
-		//.....................................................................
-		// Set the event's ID
-		//.....................................................................
-		OutList.First().ID = PlayerPtr->HeapID;
-
-		//.....................................................................
-		// Transfer the event in OutList to DoList, un-queue the OutList
-		// event.  If the DoList is full, stop transferring immediately.
-		//.....................................................................
-		OutList.First().IsExecuted = 0;
-		if (!DoList.Add(OutList.First())) {
-			return(size);
-		}
-		#ifdef MIRROR_QUEUE
-		MirrorList.Add(OutList.First());
-		#endif
-
-		//.....................................................................
-		// Add event to the send packet
-		//.....................................................................
-		if (OutList.First().Type==EventClass::ADDPLAYER) {
-			memcpy ( ((char *)buf) + size, &OutList.First(), sizeof(EventClass) );
-			size += sizeof(EventClass);
-			memcpy ( ((char *)buf) + size,
-				OutList.First().Data.Variable.Pointer,
-				OutList.First().Data.Variable.Size);
-			size += OutList.First().Data.Variable.Size;
-		}
-		else {
-			memcpy ( ((char *)buf) + size, &OutList.First(), sizeof(EventClass) );
-			size += sizeof(EventClass);
-		}
-
-		//.....................................................................
-		// Increment our event counter; delete the last event from the queue
-		//.....................................................................
-		num++;
-		OutList.Next();
-	}
-
-	return(size);
-
-}	// end of Add_Uncompressed_Events
 
 
 /***************************************************************************
@@ -3539,7 +3179,7 @@ static int Add_Compressed_Events(void *buf, int bufsize, int frame_delay,
 					if (Debug_Print_Events) {
 						DebugString("      adding Whom:%x Mission:%s Target:%x Dest:%x\n",
 						OutList.First().Data.MegaMission.Whom.Encode(),
-						MissionClass::Mission_Name(OutList.First().Data.MegaMission.Mission),
+						MissionClass::Mission_Name((MissionType)OutList.First().Data.MegaMission.Mission), // RA2: as above
 						OutList.First().Data.MegaMission.Target.Encode(),
 						OutList.First().Data.MegaMission.Destination.Encode());
 					}
@@ -3752,124 +3392,6 @@ static int Add_Compressed_Events(void *buf, int bufsize, int frame_delay,
 	return(size);
 
 }	// end of Add_Compressed_Events
-
-
-/***************************************************************************
- * Breakup_Receive_Packet -- Splits a big packet into little ones.         *
- *                                                                         *
- * INPUT:                                                                  *
- *      buf         buffer to break up                                     *
- *      bufsize      length of buffer                                      *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      # events added to queue, -1 if fatal error (queue is full)         *
- *    (return value includes any FRAMEINFO packets encountered;            *
- *      FRAMESYNC's are ignored)                                           *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static int Breakup_Receive_Packet(void *buf, int bufsize )
-{
-	int count = 0;
-
-	/*
-	**	is there enough leftover for another record
-	*/
-	switch (Session.CommProtocol) {
-		case (COMM_PROTOCOL_SINGLE_NO_COMP):
-			count = Extract_Uncompressed_Events(buf, bufsize);
-			break;
-
-		default:
-			count = Extract_Compressed_Events(buf, bufsize);
-			break;
-	}
-
-	return(count);
-
-}	/* end of Breakup_Receive_Packet */
-
-
-/***************************************************************************
- * Extract_Uncompressed_Events -- extracts events from a packet            *
- *                                                                         *
- * INPUT:                                                                  *
- *      buf         buffer containing events to extract                    *
- *      bufsize      length of 'buf'                                       *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      # events extracted                                                 *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 DRD : Created.                                             *
- *=========================================================================*/
-static int Extract_Uncompressed_Events(void *buf, int bufsize)
-{
-	int count = 0;
-	int pos = 0;
-	int leftover = bufsize;
-	EventClass *event;
-
-	//------------------------------------------------------------------------
-	// Loop until there are no more events in the packet
-	//------------------------------------------------------------------------
-	while (leftover >= sizeof(EventClass) ) {
-
-		event = (EventClass *)(((char *)buf) + pos);
-
-		//.....................................................................
-		// add event to the DoList, only if it's not a FRAMESYNC
-		// (but FRAMEINFO's do get added.)
-		//.....................................................................
-		if (event->Type != EventClass::FRAMESYNC) {
-			event->IsExecuted = 0;
-
-			//..................................................................
-			// Special processing for variable-sized events
-			//..................................................................
-			if (event->Type == EventClass::ADDPLAYER) {
-				event->Data.Variable.Pointer = new char[event->Data.Variable.Size];
-				memcpy (event->Data.Variable.Pointer,
-					((char *)buf) + sizeof(EventClass),
-					event->Data.Variable.Size);
-
-				pos += event->Data.Variable.Size;
-				leftover -= event->Data.Variable.Size;
-			}
-
-			if (!DoList.Add( *event )) {
-				if (event->Type == EventClass::ADDPLAYER) {
-					delete [] event->Data.Variable.Pointer;
-				}
-				return(-1);
-			}
-			#ifdef MIRROR_QUEUE
-			MirrorList.Add(*event);
-			#endif
-
-			//..................................................................
-			// Keep count of how many events we add to the queue
-			//..................................................................
-			count++;
-		}
-
-		//.....................................................................
-		// Point to the next position in the buffer; decrement our 'leftover'
-		//.....................................................................
-		pos += sizeof(EventClass);
-		leftover -= sizeof(EventClass);
-	}
-
-	return(count);
-
-}	// end of Extract_Uncompressed_Events
 
 
 /***************************************************************************
@@ -4234,11 +3756,11 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 								!GameStatisticsPacketSent) {
 							Session.SawGameCompletion = true;
 							Register_Game_End_Time();
-							Send_Statistics_Packet();		// Event - player aborted, and there were only 2 left.
+							Send_Statistics_Packet(false);		// Event - player aborted, and there were only 2 left. // RA2: as above
 						}
 						if (Session.Type == GAME_INTERNET && !GameStatisticsPacketSent && PlayerPtr != NULL && PlayerPtr == quithptr) {
 							DebugString("Sending game results because I quit, but didn't see completion");
-							Send_Statistics_Packet();
+							Send_Statistics_Packet(false); // RA2: as above
 						}
 					}
 
@@ -4361,101 +3883,6 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 
 
 /***************************************************************************
- * Clean_DoList -- Cleans out old events from the DoList                   *
- *                                                                         *
- * Currently, an event can only be removed from the DoList if it's at the  *
- * head of the list; and event can't be removed from the middle.  So,      *
- * this routine loops as long as the next event in the DoList has been     *
- * executed, it's removed.                                                 *
- *                                                                         *
- * INPUT:                                                                  *
- *      net      ptr to connection manager; ignored if NULL                *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   11/21/1995 BRR : Created.                                             *
- *=========================================================================*/
-static void Clean_DoList(ConnManClass *net)
-{
-	while (DoList.Count) {
-		if (net)
-			Update_Queue_Mono (net, 7);
-
-		//.....................................................................
-		// Discard events that have been executed, OR it's too late to execute.
-		//	(This happens if another player exits the game; he'll leave FRAMEINFO
-		// events lying around in my queue.  They won't have been "executed",
-		//	because his IPX connection was destroyed.)
-		//.....................................................................
-		if ( (DoList.First().IsExecuted) || (Frame > DoList.First().Frame) ) {
-			DoList.Next();
-			#ifdef MIRROR_QUEUE
-			MirrorList.Next();
-			#endif
-		}
-		else {
-			break;
-		}
-	}
-
-}	// end of Clean_DoList
-
-
-/***************************************************************************
- * Queue_Record -- Records the DoList to disk                              *
- *                                                                         *
- * This routine just saves any events in the DoList to disk; we can later  *
- * "play back" the recording just be pulling events from disk rather than  *
- * from the network!                                                       *
- *                                                                         *
- * INPUT:                                                                  *
- *      none.                                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   08/14/1995 BRR : Created.                                             *
- *=========================================================================*/
-static void Queue_Record(void)
-{
-	if (Frame == 0 && Session.Type != GAME_NORMAL) return;
-
-	int i,j;
-
-	//------------------------------------------------------------------------
-	//	Compute # of events to save this frame
-	//------------------------------------------------------------------------
-	j = 0;
-	for (i = 0; i < DoList.Count; i++) {
-		if (Frame == DoList[i].Frame && !DoList[i].IsExecuted) {
-			j++;
-		}
-	}
-
-	//------------------------------------------------------------------------
-	//	Save the # of events, then all events.
-	//------------------------------------------------------------------------
-	Session.RecordFile.Write (&j,sizeof(j));
-	for (i = 0; i < DoList.Count; i++) {
-		if (Frame == DoList[i].Frame && !DoList[i].IsExecuted) {
-			Session.RecordFile.Write (&DoList[i],sizeof (EventClass));
-			j--;
-		}
-	}
-
-}	/* end of Queue_Record */
-
-
-/***************************************************************************
  * Queue_Playback -- plays back queue entries from a record file           *
  *                                                                         *
  * This routine reads events from disk, putting them into the DoList;      *
@@ -4522,9 +3949,13 @@ static void Queue_Playback(void)
 	// If we've reached the CRC print frame, do so & exit
 	//------------------------------------------------------------------------
 	if (Frame >= Session.TrapPrintCRC) {
-		Print_CRCs(NULL);
+		if (ExtraSyncInfo) { // RA2: the sync log replaces the CRC print
+			Write_Sync_File(Frame % 256, NULL); // RA2: as above
+		} else {
+			Print_CRCs(NULL);
+		}
 		Emergency_Exit();
-		exit(0);
+		Exit_Process(0); // RA2: exits through Exit_Process
 	}
 
 	//------------------------------------------------------------------------
@@ -4605,9 +4036,16 @@ static void Queue_Playback(void)
 
 /***************************************************************************
  * Compute_Game_CRC -- Computes a CRC value of the entire game.            *
+ * Init_Queue_Mono -- inits mono display                                   *
+ *                                                                         *
+ * This routine steals control of the mono screen away from the rest of    *
+ * the engine, by setting the global IsMono; if IsMono is set, the other   *
+ * routines in this module turn off the Mono display when they're done     *
+ * with it, so the rest of the engine won't over-write what we're writing. *
  *                                                                         *
  * INPUT:                                                                  *
  *      none.                                                              *
+ *      net      ptr to connection manager                                 *
  *                                                                         *
  * OUTPUT:                                                                 *
  *      none.                                                              *
@@ -4617,7 +4055,879 @@ static void Queue_Playback(void)
  *                                                                         *
  * HISTORY:                                                                *
  *   05/09/1995 BRR : Created.                                             *
+ *   11/21/1995 BRR : Created.                                             *
  *=========================================================================*/
+static void Init_Queue_Mono(ConnManClass *net)
+{
+#ifdef _DEBUG
+	//------------------------------------------------------------------------
+	// Set 'IsMono' so we can steal the mono screen from the engine
+	//------------------------------------------------------------------------
+	if ((Frame==0 || Session.LoadGame) && MonoClass::Is_Enabled()) {
+		IsMono = true;
+	}
+
+	//------------------------------------------------------------------------
+	// Enable mono output for our stuff; we must Disable it before we return
+	// control to the engine.
+	//------------------------------------------------------------------------
+	if (IsMono)
+		MonoClass::Enable();
+
+	if (net->Num_Connections() > 0) {
+		//.....................................................................
+		// Network mono debugging screen
+		//.....................................................................
+		if (NetMonoMode==0) {
+			if (Frame==0 || Session.LoadGame || NewMonoMode) {
+				net->Configure_Debug (0, sizeof (CommHeaderType),
+					size_of(EventClass, Type), (char **)EventClass::EventNames, 0, 27);
+				net->Mono_Debug_Print (0,1);
+				NewMonoMode = 0;
+			}
+			else {
+				net->Mono_Debug_Print (0,0);
+			}
+		}
+		//.....................................................................
+		// Flow control debugging output
+		//.....................................................................
+		else {
+			if (NewMonoMode) {
+				Mono_Clear_Screen();
+				Mono_Printf("                         Queue AI:\n");	// flowcount[0]
+				Mono_Printf("                Build Packet Loop:\n");	// flowcount[1]
+				Mono_Printf("                       Frame Sync:\n");	// flowcount[2]
+				Mono_Printf("                Frame Sync Resend:\n");	// flowcount[3]
+				Mono_Printf("               Frame Sync Timeout:\n");	// flowcount[4]
+				Mono_Printf("           Frame Sync New Message:\n");	// flowcount[5]
+				Mono_Printf("                 DoList Execution:\n");	// flowcount[6]
+				Mono_Printf("                  DoList Cleaning:\n");	// flowcount[7]
+				Mono_Printf("\n");
+				Mono_Printf("                            Frame:\n");
+				Mono_Printf("                 Session.MaxAhead:\n");
+				Mono_Printf("                       their_recv:\n");
+				Mono_Printf("                       their_sent:\n");
+				Mono_Printf("                          my_sent:\n");
+				NewMonoMode = 0;
+			}
+		}
+	}
+#else
+	net = net;
+#endif
+}	// end of Init_Queue_Mono
+
+
+/***************************************************************************
+ * Update_Queue_Mono -- updates mono display                               *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      net            ptr to connection manager                           *
+ *      flow_index      index # for flow-count updates                     *
+ *                     -1: display                                         *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static void Update_Queue_Mono(ConnManClass *net, int flow_index)
+{
+#ifdef _DEBUG
+	static int flowcount[20] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+	//------------------------------------------------------------------------
+	// If 'NetMonoMode' is 1, display flowcount info
+	//------------------------------------------------------------------------
+	if (NetMonoMode==1) {
+		if (flow_index >= 0 && flow_index < 20) {
+			Mono_Set_Cursor(35,flow_index);
+			flowcount[flow_index]++;
+			Mono_Printf("%d",flowcount[flow_index]);
+		}
+	}
+	//------------------------------------------------------------------------
+	// Otherwise, display the connection debug screen
+	//------------------------------------------------------------------------
+	else {
+		net->Mono_Debug_Print (0,0);
+	}
+
+#else
+	flow_index = flow_index;
+	net = net;
+#endif
+
+}	// end of Update_Queue_Mono
+
+
+/***************************************************************************
+ * Print_Framesync_Values -- displays frame-sync variables                 *
+ *                                                                         *
+ * INPUT:                                                                  *
+ *      curframe               current game Frame #                        *
+ *      max_ahead            max-ahead value                               *
+ *      num_connections      # connections                                 *
+ *      their_recv            # commands I've received from my connections *
+ *      their_sent            # commands each connection claims to have sent*
+ *      my_sent               # commands I've sent                         *
+ *                                                                         *
+ * OUTPUT:                                                                 *
+ *      none.                                                              *
+ *                                                                         *
+ * WARNINGS:                                                               *
+ *      none.                                                              *
+ *                                                                         *
+ * HISTORY:                                                                *
+ *   11/21/1995 BRR : Created.                                             *
+ *=========================================================================*/
+static void Print_Framesync_Values(int curframe, unsigned int max_ahead,
+	int num_connections, FrameSyncStruct *their, unsigned short my_sent)
+{
+#ifdef _DEBUG
+	int i;
+
+	if (NetMonoMode==1) {
+		Mono_Set_Cursor(35,9);
+		Mono_Printf("%d",curframe);
+
+		Mono_Set_Cursor(35,10);
+		Mono_Printf("%d",max_ahead);
+
+		for (i = 0; i < num_connections; i++) {
+			Mono_Set_Cursor(35 + i*5,11);
+//			Mono_Printf("%4d",(int)their_recv[i]);
+		}
+
+		for (i = 0; i < num_connections; i++) {
+			Mono_Set_Cursor(35 + i*5,12);
+//			Mono_Printf("%4d",(int)their_sent[i]);
+		}
+
+		Mono_Set_Cursor(35,13);
+		Mono_Printf("%4d",(int)my_sent);
+	}
+#else
+	curframe = curframe;
+	max_ahead = max_ahead;
+	num_connections = num_connections;
+	their = their;
+	my_sent = my_sent;
+#endif
+}	// end of Print_Framesync_Values
+
+
+
+/*************************** end of queue.cpp ******************************/
+
+
+static RetcodeType Wait_For_Players(int first_time, ConnManClass *net,
+	int resend_delta, int dialog_time, int timeout, char *multi_packet_buf,
+	int my_sent, FrameSyncStruct *their)
+{
+	//........................................................................
+	// Variables for sending, receiving & parsing packets:
+	//........................................................................
+	EventClass *event;      // event ptr for parsing incoming packets
+	int packetlen;          // size of meta-packet sent, & received
+	int id;                 // id of other player
+	int messages_this_loop; // to limit # messages processed each loop
+	int message_limit;      // max # messages we'll read each frame
+
+	//........................................................................
+	// Variables used only if 'first_time':
+	//........................................................................
+	int num_ready;							// # players signalling ready
+
+	/*
+	 * ........................................................................
+	 * Variables for the frame-sync stall display
+	 * ........................................................................
+	 */
+	bool stall_drawn = false;			/// true = the current stall has been recorded
+	int loop_count;						/// # of times through the wait loop
+
+	//........................................................................
+	// Timing variables
+	//........................................................................
+	CDTimerClass<SystemTimerClass> retry_timer;		// time between FRAMESYNC packet resends
+	CDTimerClass<SystemTimerClass> dialog_timer;	// time to pop up a dialog
+	CDTimerClass<SystemTimerClass> timeout_timer;	// general-purpose timeout
+	BasicTimerClass<SystemTimerClass> timer;
+	CDTimerClass<SystemTimerClass> progress_timer;	/// time between load progress updates
+
+	//........................................................................
+	// Dialog variables
+	//........................................................................
+	int reconnect_dlg = 0;				// 1 = the reconnect dialog is displayed
+
+	//........................................................................
+	// Other misc variables
+	//........................................................................
+	KeyNumType input;   // for user input
+	int x,y;            // for map input
+	RetcodeType rc;
+
+	//------------------------------------------------------------------------
+	// Wait to hear from all other players
+	//------------------------------------------------------------------------
+	num_ready = 0;
+	retry_timer = resend_delta; // time to retry
+	dialog_timer = dialog_time; // time to show dlg
+	timeout_timer = timeout;    // time to bail out
+	timer = 0;
+	progress_timer = TIMER_SECOND;
+	loop_count = 0;
+
+	while (1) {
+		Keyboard->Check();
+
+		Update_Queue_Mono (net, 2);
+
+		//---------------------------------------------------------------------
+		// Resend a frame-sync packet if longer than one propagation delay goes
+		// by; this prevents a "deadlock".  If he's waiting for me to advance,
+		// but has missed my last few FRAMEINFO packets, I may be waiting for
+		// him to advance.  Resending a FRAMESYNC ensures he knows what frame
+		// number I'm on.
+		//---------------------------------------------------------------------
+		if (!retry_timer) {
+			retry_timer = resend_delta;		// time to retry
+			Update_Queue_Mono (net, 3);
+			Send_FrameSync(net, my_sent);
+		}
+
+		//---------------------------------------------------------------------
+		/*
+		 * For a modem game, pulse the loading progress bar periodically while
+		 * we wait for the other system to finish loading the scenario.
+		 */
+		//---------------------------------------------------------------------
+		if (first_time) {
+			if (progress_timer <= 0) {
+				if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
+					progress_timer = TIMER_SECOND;
+					Session.Update_Progress(Scen->IsRandom ? 200 : 100);
+				}
+			}
+		}
+
+		//---------------------------------------------------------------------
+		// Service the connections
+		//---------------------------------------------------------------------
+		net->Service();
+
+		//---------------------------------------------------------------------
+		// Pop up a reconnect dialog if enough time goes by
+		//---------------------------------------------------------------------
+		if (!dialog_timer && SpecialDialog==SDLG_NONE) {
+			int fresh = (reconnect_dlg==0);
+			int reconn = (first_time==0);
+
+			if (Process_Reconnect_Dialog(net, &timeout_timer, their, // RA2: the connection manager is passed
+				net->Num_Connections(), reconn, fresh, &timer)) {
+				if (reconnect_dlg) {
+					Close_Reconnect_Dialog();
+				}
+				return(RC_CANCEL);
+			}
+
+			/*
+			 * ..................................................................
+			 * Tally one pending kick proposal per pass.
+			 * ..................................................................
+			 */
+			if (Session.KickProposals.Count() > 0) {
+				Cast_Kick_Vote(Session.KickProposals[0]->Kick.KickerID, Session.KickProposals[0]->Kick.KickeeID);
+				delete Session.KickProposals[0];
+				Session.KickProposals.Delete_Index(0);
+			}
+
+			/*
+			 * ..................................................................
+			 * Kick anyone who has been voted out by all the other players.
+			 * ..................................................................
+			 */
+			for (int i = 0; i < Session.Players.Count(); i++) {
+				int votes = Session.KickVoteCount[Session.Players[i]->Player.ID];
+				if (votes >= Session.Players.Count() - 1) {
+					DebugString("Kicking player %s from the game due to %d votes\n", Session.Players[i]->Name, votes);
+					if (i == 0) {
+						DebugString("Outvoted player is me!\n");
+						if (reconnect_dlg) {
+							Close_Reconnect_Dialog();
+						}
+						return(RC_CANCEL);
+					}
+					Kick_Player_Now(net, net->Connection_Index(Session.Players[i]->Player.ID), their, true);
+				}
+			}
+
+			reconnect_dlg = 1;
+		}
+
+		//---------------------------------------------------------------------
+		// Exit if too much time goes by (the other system has crashed or
+		// bailed)
+		//---------------------------------------------------------------------
+		if (!timeout_timer) {
+			//..................................................................
+			// For the first-time run, just give up; something's wrong.
+			//..................................................................
+			if (first_time) {
+				if (reconnect_dlg) {
+					Close_Reconnect_Dialog();
+				}
+				return(RC_NOT_RESPONDING);
+			}
+			//..................................................................
+			// Otherwise, we're in the middle of a game; so, the modem &
+			// network must deal with a timeout differently.
+			//..................................................................
+			else {
+				Update_Queue_Mono (net, 4);
+
+				if (Handle_Timeout(net, their)) {
+					Map.Flag_To_Redraw(GS_REDRAW_ALL);	// erase modem reconnect dialog
+					Map.Render();
+					retry_timer = resend_delta;
+					dialog_timer = dialog_time;
+					timeout_timer = timeout;
+				} else {
+					if (reconnect_dlg) {
+						Close_Reconnect_Dialog();
+					}
+					return(RC_NOT_RESPONDING);
+				}
+			}
+		}
+
+		//---------------------------------------------------------------------
+		// Check for an incoming message.  We must still process commands
+		// even if 'first_time' is set, in case the other system got my 1st
+		// FRAMESYNC, but I didn't get his; he'll be at the next frame, and
+		// may be sending commands.
+		// We have to limit the number of incoming messages we handle; it's
+		// possible to go into an infinite loop processing modem messages.
+		//---------------------------------------------------------------------
+		messages_this_loop = 0;
+		message_limit = MAX_EVENTS;
+
+		while ( (messages_this_loop++ < message_limit) &&
+			net->Get_Private_Message (multi_packet_buf, &packetlen, &id) ) {
+
+			Keyboard->Check();
+
+			Update_Queue_Mono (net, 5);
+
+			/*..................................................................
+			Get an event ptr to the incoming message
+			..................................................................*/
+			event = (EventClass *)multi_packet_buf;
+
+			//------------------------------------------------------------------
+			// Special processing for a modem game: process SERIAL packets
+			//------------------------------------------------------------------
+			if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
+				rc = Process_Serial_Packet(multi_packet_buf, first_time);
+				//...............................................................
+				// SERIAL packet received & processed
+				//...............................................................
+				if (rc == RC_SERIAL_PROCESSED) {
+					net->Service();
+					retry_timer = resend_delta;
+					dialog_timer = dialog_time;
+					timeout_timer = timeout;
+					continue;
+				}
+				//...............................................................
+				// other player has left the game
+				//...............................................................
+				else if (rc == RC_PLAYER_LEFT) {
+					if (first_time) {
+						num_ready++;
+					}
+					break;
+				}
+				//...............................................................
+				// Connection was lost
+				//...............................................................
+				/// Try to reconnect before giving up.
+				else if (rc == RC_HUNG_UP) {
+					if (Handle_Timeout(net, their)) {
+						Map.Flag_To_Redraw(GS_REDRAW_ALL);
+						Map.Render();
+						retry_timer = resend_delta;
+						dialog_timer = dialog_time;
+						timeout_timer = timeout;
+					} else {
+						if (reconnect_dlg) {
+							Close_Reconnect_Dialog();
+						}
+						return(RC_NOT_RESPONDING);
+					}
+				}
+				//...............................................................
+				// If it was any other type of serial packet, break
+				//...............................................................
+				else if (rc != RC_NORMAL) {
+					break;
+				}
+			}
+
+			//------------------------------------------------------------------
+			// Process the incoming packet
+			//------------------------------------------------------------------
+			rc = Process_Receive_Packet(net, multi_packet_buf, id, packetlen, their, &timer);
+			//..................................................................
+			// New player heard from
+			//..................................................................
+			if (rc == RC_PLAYER_READY) {
+				num_ready++;
+			}
+			//..................................................................
+			// Scenario's don't match
+			//..................................................................
+			else if (rc == RC_SCENARIO_MISMATCH) {
+				if (reconnect_dlg) {
+					Close_Reconnect_Dialog();
+				}
+				return(RC_SCENARIO_MISMATCH);
+			}
+			//..................................................................
+			// DoList was full
+			//..................................................................
+			else if (rc == RC_DOLIST_FULL) {
+				if (reconnect_dlg) {
+					Close_Reconnect_Dialog();
+				}
+				return(RC_DOLIST_FULL);
+			}
+
+			//..................................................................
+			// Service the connection, to clean out the receive queues
+			//..................................................................
+			net->Service();
+		}
+
+		//---------------------------------------------------------------------
+		// Debug output
+		//---------------------------------------------------------------------
+		if (reconnect_dlg) {
+			Print_Framesync_Values(Frame, Session.MaxAhead, net->Num_Connections(),
+				their, my_sent);
+		}
+
+		//---------------------------------------------------------------------
+		// Attempt to advance to the next frame.
+		//---------------------------------------------------------------------
+		//.....................................................................
+		// For the first-time run, just check to see if we've heard from
+		// everyone.
+		//.....................................................................
+		if (first_time) {
+			if (num_ready >= net->Num_Connections()) {
+				break;
+			}
+		}
+		//.....................................................................
+		// For in-game processing, we have to check their_sent, their_recv,
+		// their_frame, etc.
+		//.....................................................................
+		else {
+			int frame_stall;					/// who's holding up the frame count
+			int count_stall;					/// who's holding up the command count
+
+			if (Can_Advance(net, Session.MaxAhead, their, &frame_stall, &count_stall)) {
+				break;
+			}
+
+			/*
+			 * ..................................................................
+			 * Record (and optionally display) who's stalling the game.
+			 * ..................................................................
+			 */
+			int show_stall = 1;
+			if (show_stall) {
+				if (frame_stall != -1) {
+					Session.ConnectionStats[frame_stall].FrameSyncStalls++;
+				}
+				if (count_stall != -1) {
+					Session.ConnectionStats[frame_stall].CommandCountStalls++;
+				}
+				stall_drawn = true;
+			}
+		}
+
+		//---------------------------------------------------------------------
+		// Service game stuff.  Servicing the map's input, and rendering the
+		// map, allows the map to scroll even though we're hung up waiting for
+		// packets.  Don't do this if 'first_time' is set, since users could be
+		// waiting a very long time for all systems to load the scenario, and
+		// it gets frustrating being able to scroll around without doing
+		// anything.
+		//---------------------------------------------------------------------
+		Call_Back();
+		if (!first_time && SpecialDialog == SDLG_NONE && reconnect_dlg==0) {
+			Map.Input(input, x, y);
+			if (input)
+				Keyboard_Process(input);
+			TacticalMap->AI();
+			Map.Render();
+		}
+
+		loop_count++;
+
+	}	/* end of while */
+
+	if (reconnect_dlg) {
+		Close_Reconnect_Dialog();
+		if (net->Num_Connections() > 0) {
+			g_PingsSent = 0;
+			g_PingsReceived = 0;
+		}
+	}
+	return(RC_NORMAL);
+
+}
+
+
+static int Send_Packets(ConnManClass *net, char *multi_packet_buf,
+	int multi_packet_max, int max_ahead, int my_sent)
+{
+	int cnt;
+	int cap;        // max # events to send, NOT including FRAMEINFO event
+	int ack_req;    // 0 = no ack required on outgoing packet
+	int packetlen;  // size of meta-packet sent
+	int processed;
+	int num = 0;
+
+	cap = OutList.Count;
+
+	//........................................................................
+	// Make sure we don't send so many events that our DoList fills up
+	//........................................................................
+	if (cap > (MAX_EVENTS * 64) - DoList.Count) {
+		cap = (MAX_EVENTS * 64) - DoList.Count;
+	}
+	cnt = OutList.Count;
+
+	//------------------------------------------------------------------------
+	// Build our meta-packet & transmit it.
+	//------------------------------------------------------------------------
+	while (1) {
+		//Keyboard->Check();
+
+		Update_Queue_Mono (net, 1);
+
+		//.....................................................................
+		// If there are no commands this frame, we'll just be sending a FRAMEINFO
+		//	packet; no ack is required.  For the modem's sake, check
+		// Session.NumPlayers; no ACK is needed if we're just sending to someone
+		// who's left the game.
+		//.....................................................................
+		if (cap == 0 || OutList.Count == 0 || Session.NumPlayers == 1) {
+			ack_req = 0;
+		}
+		else {
+			ack_req = 1;
+		}
+
+		//.....................................................................
+		// Build & send out our message
+		//.....................................................................
+		packetlen = Build_Send_Packet (multi_packet_buf, multi_packet_max,
+			max_ahead, my_sent, cap, processed);
+
+		cap -= processed;
+		num += processed;
+		if (processed) {
+			ack_req = 1;
+		}
+
+		net->Send_Private_Message (multi_packet_buf, packetlen, ack_req);
+		SentFrameSyncCount++;
+
+		//.....................................................................
+		// Call Service() to actually send the packet
+		//.....................................................................
+		net->Service();
+
+		//.....................................................................
+		// Stop if there's no more data to send, or if our send queue is
+		// filling up.
+		//.....................................................................
+		if (OutList.Count == 0 || OutList.Count > cnt) {
+			break;
+		}
+		if (cap == 0) {
+			break;
+		}
+	}
+
+	return(num);
+
+}
+
+
+static void Send_FrameSync(ConnManClass *net, int cmd_count)
+{
+	EventClass packet;
+
+	//------------------------------------------------------------------------
+	// Build a frame-sync event to send.  FRAMESYNC packets contain a
+	// scenario-based CRC rather than a game-state-based CRC, to let the
+	// games compare scenario CRC's on startup.
+	//------------------------------------------------------------------------
+	memset (&packet, 0, sizeof(EventClass));
+	packet.Type = EventClass::FRAMESYNC;
+	if (Session.CommProtocol == COMM_PROTOCOL_MULTI_E_COMP) {
+		packet.Frame = ((Frame + Session.MaxAhead + (Session.FrameSendRate - 1)) /
+			 Session.FrameSendRate) * Session.FrameSendRate;
+	}
+	else {
+		packet.Frame = Frame + Session.MaxAhead;
+	}
+	packet.ID = PlayerPtr->HeapID;
+	packet.Data.FrameInfo.CRC = ScenarioCRC;
+	packet.Data.FrameInfo.CommandCount = cmd_count;
+	packet.Data.FrameInfo.Delay = Session.MaxAhead;
+
+	//------------------------------------------------------------------------
+	// Send the event.  For modem, this just sends to the other player;
+	// for network, it sends to everyone we're connected to.
+	//------------------------------------------------------------------------
+
+	net->Send_Private_Message (&packet, (offsetof(EventClass, Data) +
+		size_of(EventClass, Data.FrameInfo)), 0 );
+	SentFrameSyncCount++;
+	return;
+
+}
+
+
+static RetcodeType Process_Serial_Packet(char *multi_packet_buf,
+	int first_time)
+{
+	SerialPacketType *serial_packet;		// for parsing serial packets
+	int player_gone;
+	EventClass *event;
+
+	//------------------------------------------------------------------------
+	// Determine if this packet means that the other player has left the game
+	//------------------------------------------------------------------------
+	serial_packet = (SerialPacketType *)multi_packet_buf;
+	player_gone = 0;
+	//........................................................................
+	// On Frame 0, only a SIGN_OFF means the other player left; the other
+	// packet types may be left over from a previous session.
+	//........................................................................
+	if (first_time) {
+		if (serial_packet->Command == SERIAL_SIGN_OFF) {
+			player_gone = 1;
+		}
+	}
+	//........................................................................
+	// On subsequent frames, any of SIGN_OFF, TIMING, or SCORE_SCREEN means
+	// the other player is gone.
+	//........................................................................
+	else {
+		if (serial_packet->Command == SERIAL_SIGN_OFF ||
+			serial_packet->Command == SERIAL_TIMING ||
+			serial_packet->Command == SERIAL_SCORE_SCREEN ) {
+			player_gone = 1;
+		}
+	}
+	if (player_gone) {
+		Destroy_Null_Connection(serial_packet->ScenarioInfo.Color, 0);
+		return(RC_PLAYER_LEFT);
+	}
+
+	//------------------------------------------------------------------------
+	// Process an incoming message
+	//------------------------------------------------------------------------
+	if (serial_packet->Command == SERIAL_MESSAGE) {
+		if (!Session.Messages.Concat_Message(Narrow_To_Wide(serial_packet->Name), // RA2: the name is widened
+			serial_packet->ID, serial_packet->Message.Message, Rule->MessageDelay * TICKS_PER_MINUTE)) {
+			Session.Messages.Add_Message (Narrow_To_Wide(serial_packet->Name), // RA2: as above
+				serial_packet->ID, serial_packet->Message.Message,
+				serial_packet->ID,
+				TextPrintType(TPF_6PT_GRAD | TPF_USE_GRAD_PAL | TPF_FULLSHADOW), Rule->MessageDelay * TICKS_PER_MINUTE, false); // RA2: Add_Message takes a final flag
+
+			Sound_Effect(Rule->IncomingMessage);
+		}
+
+		//.....................................................................
+		// Save this message in our last-message buffer
+		//.....................................................................
+		if (wcslen (serial_packet->Message.Message)) { // RA2: wide message
+			wcscpy (Session.LastMessage, serial_packet->Message.Message); // RA2: as above
+		}
+
+		//.....................................................................
+		// Tell the map to do a partial update (just to force the
+		// messages to redraw).
+		//.....................................................................
+		//Map.Flag_To_Redraw(false);
+		Map.Flag_To_Redraw(GS_REDRAW_ALL);
+		return(RC_SERIAL_PROCESSED);
+	}
+
+	//------------------------------------------------------------------------
+	// Any other SERIAL-type packet means the other player is still there;
+	// throw them away, but let the caller know the connection is OK.
+	//------------------------------------------------------------------------
+	if ( (serial_packet->Command >= SERIAL_CONNECT &&
+		serial_packet->Command < SERIAL_LAST_COMMAND) ||
+		(serial_packet->Command >= SERIAL_REQ_SCENARIO &&
+		 serial_packet->Command <= SERIAL_ACCEPT_OPTIONS) ||
+		Session.NumPlayers == 1) {
+		return(RC_SERIAL_PROCESSED);
+	}
+
+	//........................................................................
+	// are we getting our own packets back??
+	//........................................................................
+	event = (EventClass *)multi_packet_buf;
+
+	if (event->Type <= EventClass::EMPTY || event->Type >= EventClass::LAST_EVENT) return(RC_SERIAL_PROCESSED);
+
+	if (event->ID == PlayerPtr->HeapID) {
+		return(RC_HUNG_UP);
+	}
+
+	return(RC_NORMAL);
+}
+
+
+static int Handle_Timeout(ConnManClass *net, FrameSyncStruct *their)
+{
+	int oldest_index;						// index of person requiring a reconnect
+	int i,j;
+	//int id;
+
+	//------------------------------------------------------------------------
+	// For modem, attempt to reconnect; if that fails, save the game & bail.
+	//------------------------------------------------------------------------
+	if (Session.Type == GAME_MODEM || Session.Type == GAME_NULL_MODEM) {
+		if ( net->Num_Connections() ) {
+			Session.Suspended++;
+			if (!Reconnect_Modem()) {
+				Session.Suspended--;
+				return(0);
+			} else {
+				Session.Suspended--;
+				return(1);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------
+	// For network, destroy the oldest connection
+	//------------------------------------------------------------------------
+	else if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
+		j = 0x7fffffff;
+		oldest_index = 0;
+		for (i = 0; i < net->Num_Connections(); i++) {
+			if (their[i].frame < j) {
+				j = their[i].frame;
+				oldest_index = i;
+			}
+		}
+		Kick_Player_Now(net, oldest_index, their, true);
+
+#if 0
+		id = net->Connection_ID(oldest_index);
+		/*
+		**	Send the game statistics packet now if the game is effectivly over
+		*/
+		if (Session.Players.Count() == 2 &&
+				Session.Type == GAME_INTERNET &&
+				!GameStatisticsPacketSent) {
+			Register_Game_End_Time();
+			ConnectionLost = true;
+			Send_Statistics_Packet();		//	Disconnect, and I'll be the only one left.
+		}
+
+		if (id != ConnManClass::CONNECTION_NONE) {
+			for (i = oldest_index; i < net->Num_Connections() - 1; i++) {
+				their[i].frame = their[i+1].frame;
+				their[i].sent = their[i+1].sent;
+				their[i].recv = their[i+1].recv;
+			}
+			if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) {
+				Destroy_Connection(id,1);
+			}
+		}
+#endif
+	}
+
+	return(1);
+
+}
+
+
+static void Clean_DoList(ConnManClass *net)
+{
+	while (DoList.Count) {
+		if (net)
+			Update_Queue_Mono (net, 7);
+
+		//.....................................................................
+		// Discard events that have been executed, OR it's too late to execute.
+		//	(This happens if another player exits the game; he'll leave FRAMEINFO
+		// events lying around in my queue.  They won't have been "executed",
+		//	because his IPX connection was destroyed.)
+		//.....................................................................
+		if ( (DoList.First().IsExecuted) || (Frame > DoList.First().Frame) ) {
+			DoList.Next();
+			#ifdef MIRROR_QUEUE
+			MirrorList.Next();
+			#endif
+		}
+		else {
+			break;
+		}
+	}
+
+}
+
+
+static void Queue_Record(void)
+{
+	if (Frame == 0 && Session.Type != GAME_NORMAL) return;
+
+	int i,j;
+
+	//------------------------------------------------------------------------
+	//	Compute # of events to save this frame
+	//------------------------------------------------------------------------
+	j = 0;
+	for (i = 0; i < DoList.Count; i++) {
+		if (Frame == DoList[i].Frame && !DoList[i].IsExecuted) {
+			j++;
+		}
+	}
+
+	//------------------------------------------------------------------------
+	//	Save the # of events, then all events.
+	//------------------------------------------------------------------------
+	Session.RecordFile.Write (&j,sizeof(j));
+	for (i = 0; i < DoList.Count; i++) {
+		if (Frame == DoList[i].Frame && !DoList[i].IsExecuted) {
+			Session.RecordFile.Write (&DoList[i],sizeof (EventClass));
+			j--;
+		}
+	}
+
+}
+
+
 static void Compute_Game_CRC(void)
 {
 	int i,j;
@@ -4684,54 +4994,6 @@ static void Compute_Game_CRC(void)
 }	/* end of Compute_Game_CRC */
 
 
-/***************************************************************************
- * Add_CRC -- Adds a value to a CRC                                        *
- *                                                                         *
- * INPUT:                                                                  *
- *      crc      ptr to crc                                                *
- *      val      value to add                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none                                                               *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none                                                               *
- *                                                                         *
- * HISTORY:                                                                *
- *   05/09/1995 BRR : Created.                                             *
- *=========================================================================*/
-void Add_CRC(unsigned int *crc, unsigned int val)
-{
-	int hibit;
-
-	if ( (*crc) & 0x80000000) {
-		hibit = 1;
-	}
-	else {
-		hibit = 0;
-	}
-
-	(*crc) <<= 1;
-	(*crc) += val;
-	(*crc) += hibit;
-
-}	/* end of Add_CRC */
-
-/***************************************************************************
- * Print_CRCs -- Prints a data file for finding Sync Bugs                  *
- *                                                                         *
- * INPUT:                                                                  *
- *      ev -- event to display                                             *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none                                                               *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none                                                               *
- *                                                                         *
- * HISTORY:                                                                *
- *   05/09/1995 BRR : Created.                                             *
- *=========================================================================*/
 static void Print_CRCs(EventClass *ev)
 {
 	static char _NO_NAME [] = "None";
@@ -5441,65 +5703,19 @@ static void Print_CRCs(EventClass *ev)
  * HISTORY:                                                                *
  *   11/21/1995 BRR : Created.                                             *
  *=========================================================================*/
-static void Init_Queue_Mono(ConnManClass *net)
+/// <summary>
+/// Constructs an empty frame sync record.
+/// The counters start at zero and the frame number starts out invalid, so that a player
+/// who has not reported in yet cannot be mistaken for one sitting on frame zero.
+/// </summary>
+FrameSyncStruct::FrameSyncStruct(void)
 {
-#ifdef _DEBUG
-	//------------------------------------------------------------------------
-	// Set 'IsMono' so we can steal the mono screen from the engine
-	//------------------------------------------------------------------------
-	if ((Frame==0 || Session.LoadGame) && MonoClass::Is_Enabled()) {
-		IsMono = true;
-	}
-
-	//------------------------------------------------------------------------
-	// Enable mono output for our stuff; we must Disable it before we return
-	// control to the engine.
-	//------------------------------------------------------------------------
-	if (IsMono)
-		MonoClass::Enable();
-
-	if (net->Num_Connections() > 0) {
-		//.....................................................................
-		// Network mono debugging screen
-		//.....................................................................
-		if (NetMonoMode==0) {
-			if (Frame==0 || Session.LoadGame || NewMonoMode) {
-				net->Configure_Debug (0, sizeof (CommHeaderType),
-					size_of(EventClass, Type), (char **)EventClass::EventNames, 0, 27);
-				net->Mono_Debug_Print (0,1);
-				NewMonoMode = 0;
-			}
-			else {
-				net->Mono_Debug_Print (0,0);
-			}
-		}
-		//.....................................................................
-		// Flow control debugging output
-		//.....................................................................
-		else {
-			if (NewMonoMode) {
-				Mono_Clear_Screen();
-				Mono_Printf("                         Queue AI:\n");	// flowcount[0]
-				Mono_Printf("                Build Packet Loop:\n");	// flowcount[1]
-				Mono_Printf("                       Frame Sync:\n");	// flowcount[2]
-				Mono_Printf("                Frame Sync Resend:\n");	// flowcount[3]
-				Mono_Printf("               Frame Sync Timeout:\n");	// flowcount[4]
-				Mono_Printf("           Frame Sync New Message:\n");	// flowcount[5]
-				Mono_Printf("                 DoList Execution:\n");	// flowcount[6]
-				Mono_Printf("                  DoList Cleaning:\n");	// flowcount[7]
-				Mono_Printf("\n");
-				Mono_Printf("                            Frame:\n");
-				Mono_Printf("                 Session.MaxAhead:\n");
-				Mono_Printf("                       their_recv:\n");
-				Mono_Printf("                       their_sent:\n");
-				Mono_Printf("                          my_sent:\n");
-				NewMonoMode = 0;
-			}
-		}
-	}
-#else
-	net = net;
-#endif
+	frame = -1;
+	sent = 0;
+	recv = 0;
+	timing = 0;
+	response = 0; // RA2: the two further members are cleared too
+	heard = 0; // RA2: as above
 }	// end of Init_Queue_Mono
 
 
@@ -5520,33 +5736,17 @@ static void Init_Queue_Mono(ConnManClass *net)
  * HISTORY:                                                                *
  *   11/21/1995 BRR : Created.                                             *
  *=========================================================================*/
-static void Update_Queue_Mono(ConnManClass *net, int flow_index)
+/// <summary>
+/// Marks the global channel of an internet game as routed.
+/// </summary>
+void Queue_Ipx_Set(void) // RA2: 0x00623260
 {
-#ifdef _DEBUG
-	static int flowcount[20] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
-	//------------------------------------------------------------------------
-	// If 'NetMonoMode' is 1, display flowcount info
-	//------------------------------------------------------------------------
-	if (NetMonoMode==1) {
-		if (flow_index >= 0 && flow_index < 20) {
-			Mono_Set_Cursor(35,flow_index);
-			flowcount[flow_index]++;
-			Mono_Printf("%d",flowcount[flow_index]);
-		}
+	if (Session.Type == GAME_INTERNET) {
+		Ipx.Set_Global_Routed(); // RA2: as above
 	}
 	//------------------------------------------------------------------------
 	// Otherwise, display the connection debug screen
 	//------------------------------------------------------------------------
-	else {
-		net->Mono_Debug_Print (0,0);
-	}
-
-#else
-	flow_index = flow_index;
-	net = net;
-#endif
-
 }	// end of Update_Queue_Mono
 
 
@@ -5570,152 +5770,12 @@ static void Update_Queue_Mono(ConnManClass *net, int flow_index)
  * HISTORY:                                                                *
  *   11/21/1995 BRR : Created.                                             *
  *=========================================================================*/
-static void Print_Framesync_Values(int curframe, unsigned int max_ahead,
-	int num_connections, FrameSyncStruct *their, unsigned short my_sent)
+/// <summary>
+/// Clears the routed mark of the global channel in an internet game.
+/// </summary>
+void Queue_Ipx_Clear(void) // RA2: 0x00623280
 {
-#ifdef _DEBUG
-	int i;
-
-	if (NetMonoMode==1) {
-		Mono_Set_Cursor(35,9);
-		Mono_Printf("%d",curframe);
-
-		Mono_Set_Cursor(35,10);
-		Mono_Printf("%d",max_ahead);
-
-		for (i = 0; i < num_connections; i++) {
-			Mono_Set_Cursor(35 + i*5,11);
-//			Mono_Printf("%4d",(int)their_recv[i]);
-		}
-
-		for (i = 0; i < num_connections; i++) {
-			Mono_Set_Cursor(35 + i*5,12);
-//			Mono_Printf("%4d",(int)their_sent[i]);
-		}
-
-		Mono_Set_Cursor(35,13);
-		Mono_Printf("%4d",(int)my_sent);
+	if (Session.Type == GAME_INTERNET) {
+		Ipx.Clear_Global_Routed(); // RA2: as above
 	}
-#else
-	curframe = curframe;
-	max_ahead = max_ahead;
-	num_connections = num_connections;
-	their = their;
-	my_sent = my_sent;
-#endif
 }	// end of Print_Framesync_Values
-
-
-/***************************************************************************
- * Dump_Packet_Too_Late_Stuff -- Dumps a debug file to disk                *
- *                                                                         *
- * INPUT:                                                                  *
- *      event      ptr to event to print                                   *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   06/28/1996 BRR : Created.                                             *
- *=========================================================================*/
-void Dump_Packet_Too_Late_Stuff(EventClass *event)
-{
-	DebugString("Packet received too late!\n");
-	DebugString("--------- Event data: -------------------\n");
-	DebugString("Type:       %s\n",EventClass::EventNames[event->Type]);
-	DebugString("Frame:      %d\n",event->Frame);
-	DebugString("ID:         %d\n",event->ID);
-	DebugString("MaxAhead=%d\n",Session.MaxAhead);
-	DebugString("Frame=%d\n",Frame);
-	DebugString("FrameSendRate=%d\n", Session.FrameSendRate);
-}
-
-/***************************************************************************
- * Check_Mirror -- Checks mirror memory                                    *
- *                                                                         *
- * INPUT:                                                                  *
- *      none.                                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   10/14/1996 BRR : Created.                                             *
- *=========================================================================*/
-void Check_Mirror(void)
-{
-#ifdef MIRROR_QUEUE
-	int i;
-	char txt[80];
-	unsigned int *ptr;
-	int found_5s = 0;
-
-	ptr = (unsigned int *)(DoList.Get_Array());
-	for (i = 0; i < (MAX_EVENTS * 64 * sizeof(EventClass)) /
-		sizeof(unsigned int); i++) {
-		if (ptr[i] == 0x55555555) {
-			sprintf(txt,"55555555 found in DoList! Addr:%p", &(ptr[i]));
-			WWMessageBox().Process (txt);
-			found_5s = 1;
-		}
-	}
-
-	ptr = (unsigned int *)(MirrorList.Get_Array());
-	for (i = 0; i < (MAX_EVENTS * 64 * sizeof(EventClass)) /
-		sizeof(unsigned int); i++) {
-		if (ptr[i] == 0x55555555) {
-			sprintf(txt,"55555555 found in MirrorList! Addr:%p", &(ptr[i]));
-			WWMessageBox().Process (txt);
-			found_5s = 1;
-		}
-	}
-
-	ptr = (unsigned int *)(DoList.Get_Array());
-	for (i = 0; i < (MAX_EVENTS * 64 * sizeof(EventClass)) /
-		sizeof(unsigned int); i++) {
-		if (ptr[i] == 0xAAAAAAAA) {
-			sprintf(txt,"AAAAAAAA found in DoList! Addr:%p", &(ptr[i]));
-			WWMessageBox().Process (txt);
-			found_5s = 1;
-		}
-	}
-
-	ptr = (unsigned int *)(MirrorList.Get_Array());
-	for (i = 0; i < (MAX_EVENTS * 64 * sizeof(EventClass)) /
-		sizeof(unsigned int); i++) {
-		if (ptr[i] == 0xAAAAAAAA) {
-			sprintf(txt,"AAAAAAAA found in MirrorList! Addr:%p", &(ptr[i]));
-			WWMessageBox().Process (txt);
-			found_5s = 1;
-		}
-	}
-
-	for (i = 0; i < DoList.Count; i++) {
-		if (memcmp(&DoList[i], &MirrorList[i], sizeof(EventClass)) != 0) {
-			sprintf(txt,"Queue Memory Trashed!  Head:%d Tail:%d, Addr:%p or %p",
-				DoList.Get_Head(),
-				DoList.Get_Tail(),
-				DoList.Get_Array() + i,
-				MirrorList.Get_Array() + i);
-			WWMessageBox().Process (txt);
-			Prog_End("Check_Mirror", true);
-			Emergency_Exit(0);
-		}
-	}
-
-	if (found_5s) {
-		//Prog_End();
-		Emergency_Exit(0);
-	}
-
-#endif
-}	// end of Check_Mirror
-
-
-/*************************** end of queue.cpp ******************************/
