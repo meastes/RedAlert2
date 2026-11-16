@@ -47,6 +47,7 @@ class TemporalClass : public AbstractClass
 
 		int GetWarpPerStep(int helpercount = 0);
 		void Detach(void);
+		void Detach_Techno(AbstractClass const * target); // RA2: 0x6E24C0, forgets the target (or lets go of it) when it is the one detached
 		void LetGo(void);
 		void JustLetGo(void);
 		void FUN_0071AB60(AbstractClass * ptr);

@@ -1577,7 +1577,7 @@ bool BulletClass::Is_Homing(void) const
 /// <param name="bright">Should the impact throw off a lighting flash?</param>
 /// <returns>Returns with a pointer to the projectile created, or NULL if one could not be
 /// made.</returns>
-BulletClass * BulletTypeClass::Create_Bullet(AbstractClass * target, TechnoClass * payback, int strength, WarheadTypeClass const * warhead, int speed, bool bright) const // RA2: a member, no range, at 0x463990
+BulletClass * __fastcall BulletTypeClass::Create_Bullet(AbstractClass * target, TechnoClass * payback, int strength, WarheadTypeClass const * warhead, int speed, bool bright) const // RA2: a member, no range, at 0x463990
 {
 	LPVOID unk = NULL;
 	if (FAILED(CoCreateInstance(CLSID_BulletClass, NULL, CLSCTX_INPROC_SERVER|CLSCTX_INPROC_HANDLER|CLSCTX_LOCAL_SERVER, IID_IUnknown, &unk))) {

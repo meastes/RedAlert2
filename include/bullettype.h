@@ -255,7 +255,7 @@ class BulletTypeClass : public ObjectTypeClass
 		static BulletTypeClass *Find_Or_Make(const char * name);
 
 		static BulletType From_Name(char const * name);
-		BulletClass * Create_Bullet(AbstractClass * target, TechnoClass * payback, int strength, WarheadTypeClass const * warhead, int speed, bool bright) const; // RA2: a member, at 0x00463990
+		BulletClass * __fastcall Create_Bullet(AbstractClass * target, TechnoClass * payback, int strength, WarheadTypeClass const * warhead, int speed, bool bright) const; // RA2: a member, at 0x00463990 // RA2: __fastcall (the exe passes this in ecx and the target in edx at all 7 call sites)
 		static const char * Name_From(BulletType bullet);
 
 		static void Init(TheaterType ) {};

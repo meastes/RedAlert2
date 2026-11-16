@@ -216,6 +216,15 @@
 #include "trajhelp.h" // RA2
 #include "ebolt.h" // RA2: Electric_Zap
 #include "radbeam.h" // RA2: Rad_Zap, Rad_Eruption
+#include "bomblist.h" // RA2: Limbo: BombList.Remove_Detector
+#include "stringtable.h" // RA2: Draw_Text_Overlay: StringTable::LoadString
+#include "dialog.h" // RA2: Draw_Text_Overlay: Simple_Text_Print
+#include "dsurface.h" // RA2: Draw_Text_Overlay: Build_Hicolor_Pixel
+enum {RA2_RADIO_ALT_TETHER = 26, RA2_RADIO_ALT_UNTETHER = 27, RA2_RADIO_REPAIR = 28, RA2_RADIO_ATTACK_THIS = 30, RA2_RADIO_RELOAD = 31, RA2_RADIO_CANT = 32, RA2_RADIO_ALL_DONE = 33}; // RA2: the radio message numbers of the executable (main's RadioMessageType lacks the two alternative tether messages at 26 and 27), Receive_Message
+bool __fastcall Can_Force_Order(void); // RA2: 0x6F6670 (uicmnds.cpp), Player_Assign_Mission
+void __fastcall Planning_Cancel_Token(TechnoClass * techno); // RA2: 0x6155E0 (planmgr.cpp), Captured
+Rect * Drawing_GetTextDimensions(Rect * out, wchar_t const * text, Point2D loc, unsigned short flags, int marginX, int marginY); // RA2: 0x497360 (dialog.cpp), Draw_Text_Overlay
+static inline Rect Text_Rect(wchar_t const * text, Point2D loc, unsigned short flags, int marginx, int marginy) {Rect rect; return(*Drawing_GetTextDimensions(&rect, text, loc, flags, marginx, marginy));} // RA2: the box a text needs (Draw_Text_Overlay)
 
 namespace FileSystem { extern ConvertClass * PALETTE_PAL; }
 namespace Unsorted { extern bool ArmageddonMode; }
@@ -442,87 +451,71 @@ bool TechnoClass::Is_Players_Army(void) const
  *=============================================================================================*/
 int TechnoClass::What_Weapon_Should_I_Use(AbstractClass * target) const
 {
-	if (target == NULL) return(0);
-
-	bool webby1 = false;
-	bool webby2 = false;
-
-	/*
-	**	Fetch the armor of the candidate target object. Presume that if the target
-	**	is not an object, then its armor is equivalent to wood. Who knows why?
-	*/
-	ArmorType armor = ARMOR_NONE;
-	ObjectClass const * object = target->As_ObjectClass();
-	if (object != NULL) {
-		armor = object->Class_Of()->Armor;
+	if (Techno_Type_Class()->Has_Turret_Weapons()) { // RA2: a turret object uses the weapon of its current turret
+		return(CurrentWeaponNumber != -1 ? CurrentWeaponNumber : 0); // RA2: as above
 	}
 
 	/*
-	**	Get the value of the primary weapon verses the candidate target. Increase the
-	**	value of the weapon if it happens to be in range.
+	**	Without a secondary or a primary weapon there is no choice to make.
 	*/
-	int w1 = 0;
-	FireErrorType ok = Can_Fire(target, 0);
-	if (ok == FIRE_CANT || ok == FIRE_ILLEGAL || ok == FIRE_REARM) {
-		w1 = 0;
-	} else {
-		WeaponTypeClass const * wptr = PrimaryWeapon;
-		if (wptr != NULL) {
-			if (wptr->WarheadPtr != NULL) {
-				w1 = wptr->WarheadPtr->Modifier[armor] * 1000; // RA2: no IsWebby (not in RA2's layout)
-			}
-			if (In_Range(target, 0)) w1 *= 2;
-		}
-	}
-
-
-	/*
-	**	Calculate a similar value for the secondary weapon.
-	*/
-	int w2 = 0;
-	ok = Can_Fire(target, 1);
-	if (ok == FIRE_CANT || ok == FIRE_ILLEGAL || ok == FIRE_REARM) {
-		w2 = 0;
-	} else {
-		WeaponTypeClass const * wptr = SecondaryWeapon;
-		if (wptr != NULL) {
-			if (wptr->WarheadPtr != NULL) {
-				w2 = wptr->WarheadPtr->Modifier[armor] * 1000; // RA2: no IsWebby (not in RA2's layout)
-			}
-		}
-		if (In_Range(target, 1)) w2 *= 2;
-	}
-
-	/*
-	**	Return with the weapon identifier that should be used to fire upon the
-	**	candidate target.
-	*/
-	if (!webby1 && !webby2) {
-		if (w2 > w1) return(1);
+	WeaponTypeClass const * secondary = Get_Class_Weapon_Data(1)->Weapon; // RA2: RA2's rules, not the weighted warhead comparison
+	if (secondary == NULL) { // RA2: as above
 		return(0);
 	}
-
-	bool is_web_target = false;
-	if (object == NULL) {
-		CellClass * cellptr = target->As_CellClass();
-		if (cellptr != NULL) {
-			is_web_target = true;
-			if (cellptr->ITType == IsometricTileTypeClass::DestroyableCliffs || cellptr->ITType == IsometricTileTypeClass::DestroyableCliffs + DESTROYABLE_CLIFFS_COUNT - 1
-				|| cellptr->IsUnderBridge || cellptr->Overlay >= OVERLAY_LOWBRIDGE_01 && cellptr->Overlay <= OVERLAY_LOWBRIDGE_26) {
-				is_web_target = false;
-			}
-		}
-	} else {
-		if (object->Is_Foot()) {
-			InfantryClass const * inf = dynamic_cast<InfantryClass const *>(object);
-		} else { // RA2: no IsWebImmune (not in RA2's layout)
-			//is_web_target = object->As_IsometricTileClass() != NULL;
-			is_web_target = dynamic_cast<IsometricTileClass const *>(object) != NULL;
-		}
+	WeaponTypeClass const * primary = Get_Class_Weapon_Data(0)->Weapon; // RA2: as above
+	if (primary == NULL) { // RA2: as above
+		return(0);
 	}
-
-	return(is_web_target == webby2);
+	if (secondary->NeverUse) { // RA2: as above
+		return(0);
+	}
+	if (secondary->AreaFire && Get_Mission() == MISSION_UNLOAD) { // RA2: as above
+		return(1);
+	}
+	if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)this)->IsOverpowered) { // RA2: as above
+		return(1);
+	}
+	if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)this)->GetOccupantCount() > 0) { // RA2: a garrison fires the secondary only for Soviet occupants
+		return(((BuildingClass const *)this)->Occupants[0]->House->ActLike == 1); // RA2: as above
+	}
+	if (target == NULL) { // RA2: as above
+		return(0);
+	}
+	if (target->Fetch_RTTI() == RTTI_BUILDING && House->Is_Ally(target) // RA2: an allied building that can be overpowered
+		&& secondary->WarheadPtr->ElectricAssault && ((BuildingClass const *)target)->Class->Overpowerable) { // RA2: as above
+		return(1);
+	}
+	if (Fetch_RTTI() == RTTI_AIRCRAFT && ((AircraftClass const *)this)->IsKamikaze) { // RA2: as above
+		return(1);
+	}
+	if (!(target->AbstractFlags & 1)) { // RA2: only technos are weighed against the armor
+		return(0);
+	}
+	ObjectClass const * object = (ObjectClass const *)target; // RA2: as above
+	ArmorType armor = object->Techno_Type_Class()->Armor; // RA2: as above
+	if (secondary->WarheadPtr->Modifier[armor] == 0.0) { // RA2: as above
+		return(0);
+	}
+	armor = object->Techno_Type_Class()->Armor; // RA2: as above
+	if (primary->WarheadPtr->Modifier[armor] == 0.0) { // RA2: as above
+		return(1);
+	}
+	bool ground = object->Get_Cell_Ptr()->Land_Type() == LAND_WATER || object->Get_Cell_Ptr()->Land_Type() == LAND_BEACH; // RA2: a target on water or beach
+	if (object->In_Air()) { // RA2: as above
+		ground = false; // RA2: as above
+	}
+	if (!object->IsOnBridge && ground) { // RA2: as above
+		int which = SelectNavalTargeting((AbstractClass *)object); // RA2: as above
+		if (which == -1) { // RA2: as above
+			which = 0; // RA2: as above
+		}
+		return(which); // RA2: the naval targeting answer, -1 becomes 0
+	} else if (secondary->Bullet->IsAntiAircraft && object->In_Air()) { // RA2: as above
+		return(1);
+	}
+	return(0);
 }
+
 
 /// <summary>
 /// Which weapon this object's naval targeting picks against the target: 0 the primary, 1 the secondary,
@@ -679,18 +672,28 @@ Coord TechnoClass::Fire_Coord(int which) const
 	int flhy = weapon->FireFLH.Y;
 	int flhz = weapon->FireFLH.Z;
 
-	Matrix3D matrix;
-	matrix.Make_Identity();
-	matrix.Rotate_Z(Turret_Facing().As_Radian32());
-	matrix.Translate(flhx + tclass->TurretOffset, flhy * (BurstIndex % 2 != 0 ? -1 : 1), flhz + weapon->BarrelThickness);
-	matrix.Rotate_Y(-BarrelPitch.Current().As_Radian32());
-	matrix.Translate(weapon->BarrelLength, 0, 0);
+	Matrix3D matrix; // RA2: the weapon coordinate is taken from the locomotor's matrix, as in Turret_Coord
+	double angle; // RA2: as above
+	FootClass const * foot = static_cast<FootClass const *>(this); // RA2: as above
+
+	if (foot != NULL && (AbstractFlags & 4) && foot->Locomotion != NULL) { // RA2: as above
+		matrix = foot->Locomotion->Draw_Matrix(NULL); // RA2: as above
+		angle = Turret_Facing().As_Radian32() - PrimaryFacing.Current().As_Radian32(); // RA2: as above
+	} else {
+		matrix.Make_Identity();
+		angle = Turret_Facing().As_Radian32(); // RA2: no foot, no locomotor matrix
+	}
+
+	matrix.Translate(tclass->TurretOffset, 0, 0); // RA2: the turret offset first, then the turret turn
+	matrix.Rotate_Z(angle); // RA2: as above
+	matrix.Translate(flhx, flhy * (BurstIndex % 2 != 0 ? -1 : 1), flhz); // RA2: no barrel pitch or barrel length
 
 	Vector3 firevec = matrix * Vector3(0, 0, 0);
 	Coord coord(firevec.X, -firevec.Y, firevec.Z);
 
 	return(coord + Render_Coord());
 }
+
 
 
 /// <summary>
@@ -831,10 +834,35 @@ TechnoClass::TechnoClass(NoInitClass const & x) :
 /// </summary>
 TechnoClass::~TechnoClass(void)
 {
-	House=0;
+	if (PlanningToken != NULL) { // RA2: the planning token, the managers and the temporal object are given up with the techno
+		PlanningToken->Destroy(); // RA2: as above
+		PlanningToken = NULL; // RA2: as above
+	}
+	if (CaptureManager != NULL) { // RA2: as above
+		delete CaptureManager; // RA2: as above
+		CaptureManager = NULL; // RA2: as above
+	}
+	if (SpawnManager != NULL) { // RA2: as above
+		delete SpawnManager; // RA2: as above
+		SpawnManager = NULL; // RA2: as above
+	}
+	if (TemporalImUsing != NULL) { // RA2: as above
+		delete TemporalImUsing; // RA2: as above
+		TemporalImUsing = NULL; // RA2: as above
+	}
+	TurretRotateSoundController.End(); // RA2: the turret sound stops and is released
+	TurretRotateSoundController.Release(); // RA2: as above
+	House = NULL;
+	IsOwnedByPlayer = false; // RA2: as above
 	Technos.Delete(this);
 	HousePtrTracker.Delete(this);
+	if (BehindAnim != NULL) { // RA2: the anim behind the object is removed
+		BehindAnim->Delete_Me(); // RA2: as above
+		BehindAnim = NULL; // RA2: as above
+	}
+	AnimPtrTracker.Delete(this); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -859,27 +887,44 @@ int TechnoClass::Time_To_Build(void) const
 {
 	int val = Class_Of()->Time_To_Build();
 
-	val *= House->BuildSpeedBias;
+	val = House->Buildtime_Multiplier(Techno_Type_Class()) * val; // RA2: the house type's build time factor, not BuildSpeedBias
 
 	/*
 	**	Adjust the time to build based on the power output of the owning house.
 	*/
-	double power = House->Power_Fraction();
-	if (power > 1.0) power = 1.0;
-	if (power < 1.0 && power > 0.75) power = 0.75;
-	if (power < 0.5) power = 0.5;
-	power = MAX(power, Rule->MinLowPowerProductionSpeed);
-	val /= power;
-
-	int divisor = House->Factory_Count(RTTI);
-	if (divisor > 1 && Rule->MultipleFactory > 0) {
-		val *= 1.0 / ((divisor - 1) * Rule->MultipleFactory);
+	float power = House->Power_Fraction(); // RA2: a float, bounded by the rules' low power speeds
+	float speed = 1.0f - (1.0f - power) * Rule->LowPowerPenaltyModifier; // RA2: as above
+	if ((double)Rule->MinLowPowerProductionSpeed >= speed) { // RA2: as above
+		speed = Rule->MinLowPowerProductionSpeed; // RA2: as above
 	}
-	if (RTTI == RTTI_BUILDING && ((BuildingClass *)this)->Class->IsWall) {
-		val *= Rule->WallBuildSpeedCoefficient;
+	if (power < 1.0f && (double)Rule->MaxLowPowerProductionSpeed <= speed) { // RA2: as above
+		speed = Rule->MaxLowPowerProductionSpeed; // RA2: as above
+	}
+	if (speed == 0.0f) { // RA2: as above
+		speed = 0.01f; // RA2: as above
+	}
+	val = val / speed; // RA2: as above
+
+	bool naval = false; // RA2: ships are counted by their own factories
+	if (Fetch_RTTI() == RTTI_UNIT) { // RA2: as above
+		TechnoTypeClass const * type = Techno_Type_Class(); // RA2: as above
+		if (type != NULL) { // RA2: as above
+			naval = type->Naval; // RA2: as above
+		}
+	}
+	int divisor = House->Factory_Count(Fetch_RTTI(), naval); // RA2: as above
+	float multiple = Rule->MultipleFactory; // RA2: each factory beyond the first scales the time again
+	if (multiple > 0.0f) { // RA2: as above
+		for (int count = divisor - 1; count > 0; count--) { // RA2: as above
+			val = val * multiple; // RA2: as above
+		}
+	}
+	if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)this)->Class->IsWall) { // RA2: a wall type is told by the virtual RTTI
+		return(val * Rule->WallBuildSpeedCoefficient); // RA2: the wall speed coefficient applies last
 	}
 	return(val);
 }
+
 
 
 /***********************************************************************************************
@@ -1033,35 +1078,63 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	Just received instructions to attack the specified target.
 		*/
-		case RADIO_ATTACK_THIS:
-			if (PrimaryWeapon != NULL) {
+		case RA2_RADIO_ATTACK_THIS: // RA2: the message numbers are RA2's (two alternative tether messages sit at 26 and 27)
+			{
+				WeaponDataStruct const * weapon = GetTurretWeapon(); // RA2: needs a weapon on the turret in use
+				if (weapon == NULL || weapon->Weapon == NULL) { // RA2: as above
+					break;
+				}
 				Assign_Target((AbstractClass *)param);
-				Assign_Mission(MISSION_ATTACK);
+				QueueMission(MISSION_ATTACK, false); // RA2: queued, not assigned
 				return(RADIO_ROGER);
 			}
-			break;
 
 		/*
 		**	Establish a tethered connection to the object in radio contact.
 		*/
 		case RADIO_TETHER:
-			if (!IsTethered) {
-				IsTethered = true;
-				Transmit_Message(RADIO_TETHER, from);
-				return(RADIO_ROGER);
+			if (Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: an airport-bound aircraft takes no tether
+				AircraftClass * aircraft = (this == NULL) ? NULL : ((Fetch_RTTI() == RTTI_AIRCRAFT) ? (AircraftClass *)this : NULL); // RA2: as above
+				if (aircraft->Class->IsAirportBound) { // RA2: as above
+					break;
+				}
 			}
-			break;
+			if (IsTethered) { // RA2: as above
+				break;
+			}
+			IsTethered = true;
+			Transmit_Message(RADIO_TETHER, from);
+			return(RADIO_ROGER);
 
 		/*
 		**	Break the tethered connection to the object in radio contact.
 		*/
 		case RADIO_UNTETHER:
-			if (IsTethered) {
-				IsTethered = false;
-				Transmit_Message(RADIO_UNTETHER, from);
-				return(RADIO_ROGER);
+			if (!IsTethered) {
+				break;
 			}
-			break;
+			IsTethered = false;
+			Transmit_Message(RADIO_UNTETHER, from);
+			return(RADIO_ROGER);
+
+		/*
+		**	The alternative tether, used by RA2's docking, works the same way on its own flag.
+		*/
+		case RA2_RADIO_ALT_TETHER: // RA2: as above
+			if (IsAlternativeTether) { // RA2: as above
+				break;
+			}
+			IsAlternativeTether = true; // RA2: as above
+			Transmit_Message((RadioMessageType)RA2_RADIO_ALT_TETHER, from); // RA2: as above
+			return(RADIO_ROGER);
+
+		case RA2_RADIO_ALT_UNTETHER: // RA2: as above
+			if (!IsAlternativeTether) { // RA2: as above
+				break;
+			}
+			IsAlternativeTether = false; // RA2: as above
+			Transmit_Message((RadioMessageType)RA2_RADIO_ALT_UNTETHER, from); // RA2: as above
+			return(RADIO_ROGER);
 
 		/*
 		**	A tethered unit has reached it's destination. All is
@@ -1076,7 +1149,9 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		**	has already turned its radio off. Turn this radio off as well.
 		*/
 		case RADIO_OVER_OUT:
-			Transmit_Message(RADIO_UNTETHER, from);
+			if (IsTethered && ((TechnoClass *)from)->IsTethered) { // RA2: only an object tethered to a tethered sender lets go
+				Transmit_Message(RADIO_UNTETHER, from); // RA2: as above
+			}
 			BASECLASS::Receive_Message(from, message, param);
 			return(RADIO_ROGER);
 
@@ -1095,36 +1170,26 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 		/*
 		**	Handle reloading one ammo point for this unit.
 		*/
-		case RADIO_RELOAD:
-			if (Ammo == TClass->MaxAmmo) return(RADIO_NEGATIVE);
+		case RA2_RADIO_RELOAD: // RA2: RA2's number
+			if (Ammo == Techno_Type_Class()->MaxAmmo) return(RADIO_NEGATIVE); // RA2: as above
 			Ammo++;
 			return(RADIO_ROGER);
 
 		/*
 		**	Handle repair of this unit.
 		*/
-		case RADIO_REPAIR:
-
-			PrimaryFacing.Set_ROT(TClass->ROT); // RA2: no LimpetSpeedFactor, LimpetType (not in RA2's layout)
-			SecondaryFacing.Set_ROT(TClass->ROT);
-
-			/*
-			**	If it's a mine layer, re-arm him if he's empty. This always takes precedence
-			**	over repair, since this operation is free.
-			*/
-			if (TClass->IsManualReload && ((UnitClass *)this)->Ammo < ((UnitClass *)this)->Class->MaxAmmo) {
-				((UnitClass *)this)->Ammo = ((UnitClass *)this)->Class->MaxAmmo;
-				return(RADIO_NEGATIVE);
-			}
+		case RA2_RADIO_REPAIR: // RA2: RA2's number
 
 			/*
 			**	Determine if this unit can be repaired becaause it is under strength. If so, then
 			**	proceed with the repair process.
 			*/
 			if (HealthRatio < Rule->ConditionGreen) {
-				int cost = TClass->Repair_Cost();
-				int step = TClass->Repair_Step();
-				step = MAX(step, 1);
+				int cost = Techno_Type_Class()->Repair_Cost(); // RA2: as above
+				int step = Techno_Type_Class()->Repair_Step(); // RA2: as above
+				if (step <= 1) { // RA2: the step is at least one
+					step = 1; // RA2: as above
+				}
 
 				/*
 				**	If there is sufficient money to repair the unit one step, then do so.
@@ -1135,6 +1200,15 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 						House->Spend_Money(cost);
 					}
 					Strength += step;
+					EstimatedHealth += step; // RA2: the estimate follows
+					bool foot; // RA2: a parasite that is eating this object is made to let go
+					if (this != NULL) { // RA2: as above
+						foot = (AbstractFlags & 4); // RA2: as above
+					}
+					if (this != NULL && foot && ((FootClass *)this)->ParasiteEatingMe != NULL) { // RA2: as above
+						((FootClass *)this)->ParasiteEatingMe->ParasiteImUsing->SuppressionTimer = 50; // RA2: as above
+						((FootClass *)this)->ParasiteEatingMe->ParasiteImUsing->ExitUnit(); // RA2: as above
+					}
 
 					if (HealthRatio > Rule->ConditionYellow || HeightAGL < -10) {
 						if (ParticleSystems[ATTACHED_PARTICLE_DAMAGE]) {
@@ -1150,11 +1224,13 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 					if (HealthRatio < Rule->ConditionGreen) {
 						return(RADIO_ROGER);
 					} else {
-						Strength = TClass->MaxStrength;
-						return(RADIO_ALL_DONE);
+						int strength = Techno_Type_Class()->MaxStrength; // RA2: the estimate is set with the strength
+						Strength = strength; // RA2: as above
+						EstimatedHealth = strength; // RA2: as above
+						return((RadioMessageType)RA2_RADIO_ALL_DONE); // RA2: RA2's number
 					}
 				} else {
-					return(RADIO_CANT);
+					return((RadioMessageType)RA2_RADIO_CANT); // RA2: RA2's number
 				}
 			}
 			return(RADIO_NEGATIVE);
@@ -1164,6 +1240,7 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass * from, RadioMessageTyp
 	}
 	return(BASECLASS::Receive_Message(from, message, param));
 }
+
 
 
 
@@ -1718,24 +1795,46 @@ void TechnoClass::Draw_Health_Bar(Point2D const & xpoint, Rect const & cliprect,
 /// <returns>bool; Was the object limboed?</returns>
 bool TechnoClass::Limbo(void)
 {
-	if (!IsInLimbo) {
+	if (!IsInLimbo && Techno_Type_Class() != NULL) { // RA2: also needs a type
+		if (Techno_Type_Class()->RevealToAll) { // RA2: the sight taken back from every house or from the owner's
+			RemoveSight(false, false, true, PlayerPtr); // RA2: as above
+		} else {
+			RemoveSight(false, false, false, NULL); // RA2: as above
+		}
+		Map.RevealArea3(PositionCoord, LastSightRange - 3, LastSightRange + 3, 0); // RA2: the revealed area is covered again
+		if (Techno_Type_Class()->GapGenerator) { // RA2: the gap goes with it
+			DestroyGap(); // RA2: as above
+		}
+		if (Techno_Type_Class()->BombSight != 0) { // RA2: a bomb detector is taken off the list
+			BombList.Remove_Detector(this); // RA2: as above
+		}
 		House->Tracking_Active_Remove(this, false);
-		int risk = Risk();
-		HousesType owner = Owner();
-		if (risk > 0) {
-			FootClass * foot = dynamic_cast<FootClass *>(this);
-			if (foot) {
-				Map[foot->LastAdjacencyCell].Adjust_Threat(owner, -risk);
+		if (Risk() > 0) { // RA2: the risk is read once; the threat lent is taken back
+			CellClass * cell; // RA2: the threat this object lent is taken back (ThreatPosed, not the risk)
+			if (this != NULL && (AbstractFlags & 4)) { // RA2: a foot, by its flag
+				cell = &Map[((FootClass *)this)->LastAdjacencyCell]; // RA2: as above
+				if (cell != NULL) { // RA2: as above
+					cell->Adjust_Threat(Owner(), -(int)ThreatPosed); // RA2: as above
+					ThreatPosed = 0; // RA2: as above
+				}
 			} else {
-				Get_Cell_Ptr()->Adjust_Threat(owner, -risk);
+				cell = Get_Cell_Ptr(); // RA2: as above
+				if (cell != NULL) { // RA2: as above
+					cell->Adjust_Threat(Owner(), -(int)ThreatPosed); // RA2: as above
+					ThreatPosed = 0; // RA2: as above
+				}
 			}
 		}
 		if (IsRadarTracked) {
 			Radar_Untrack();
 		}
+		TurretRotateSoundController.EndLooping(); // RA2: the turret sound stops
+		IsTurretRotateSoundPlaying = 1; // RA2: as above
+		TurretIsRotating = 0; // RA2: as above
 	}
 	return(BASECLASS::Limbo());
 }
+
 
 
 /// <summary>
@@ -3700,16 +3799,16 @@ void TechnoClass::Cloaking_AI(bool)
 	**	is a good time do so, then begin cloaking.
 	*/
 	if (Cloak == UNCLOAKED) {
-		if ((Is_Allowed_To_Recloak() && !Is_Immobilized()) || Has_Ability(ABILITY_CLOAK)) {
-			RadioClass * radio = Contact_With_Whom();
-			if (radio == NULL || !(radio->RTTI == RTTI_BUILDING && ((BuildingClass *)radio)->Class->IsWeaponsFactory)) {
+		if ((Is_Allowed_To_Recloak() && !IsUnderEMP() && !IsParalyzed() && !IsBeingWarpedOut() && !IsWarpingIn()) || Has_Ability(ABILITY_CLOAK)) { // RA2: the immobilizing states are tested one by one
+			TechnoClass * radio = Radio_Link(0); // RA2: the link is asked for by index
+			if (radio == NULL || !(radio->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)radio)->Class->IsWeaponsFactory)) { // RA2: as above
 				CloakingDevice.Graphic_Logic();
 				if (Is_Ready_To_Cloak()) {
 					if (HealthRatio > Rule->ConditionRed) {
-						Do_Cloak();
+						Do_Cloak(false); // RA2: as above
 					} else {
 						if (Percent_Chance(4)) {
-							Do_Cloak();
+							Do_Cloak(false); // RA2: as above
 						}
 					}
 				}
@@ -3808,12 +3907,13 @@ void TechnoClass::Cloaking_AI(bool)
 			*/
 			case CLOAKED:
 				if (Should_Uncloak()) {
-					Do_Uncloak();
+					Do_Uncloak(false); // RA2: as above
 				}
 				break;
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -3825,13 +3925,23 @@ void TechnoClass::Cloaking_AI(bool)
 /// <returns>bool; Should the object uncloak now?</returns>
 bool TechnoClass::Should_Uncloak(void) const
 {
-	bool cloaked = Map[Center_Coord().As_Cell()].Is_Cloaked(House->HeapID);
-	if (!(Is_Allowed_To_Recloak() || IsCloakable) || Is_Immobilized()) {
-		if (Has_Ability(ABILITY_CLOAK)) return(false);
-		if (!cloaked) return(true);
+	if (!(Is_Allowed_To_Recloak() || IsCloakable) || IsUnderEMP() || IsParalyzed() || IsBeingWarpedOut() || IsWarpingIn()) { // RA2: also a paralyzed, warping object uncloaks
+		bool allowed = true; // RA2: the cloak ability, as in Is_Ready_To_Cloak
+		if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) { // RA2: as above
+			const TechnoTypeClass *type = Techno_Type_Class(); // RA2: as above
+			if (Veterancy.Is_Veteran() && ((const bool *)&type->VeteranAbilities)[6]) { // RA2: as above
+				allowed = false; // RA2: as above
+			} else if (Veterancy.Is_Elite() && (((const bool *)&type->VeteranAbilities)[6] || ((const bool *)&type->EliteAbilities)[6])) { // RA2: as above
+				allowed = false; // RA2: as above
+			}
+		}
+		if (allowed && !((CellClass *)&Map[Center_Coord().As_Cell()])->Is_Cloaked(House->HeapID)) { // RA2: as above
+			return(true);
+		}
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -4173,12 +4283,17 @@ FireErrorType TechnoClass::Can_Fire(AbstractClass * target, int weaponIndex, boo
  *=============================================================================================*/
 void TechnoClass::Stun(void)
 {
-	Assign_Target(NULL);
-	Assign_Destination(NULL);
-	Transmit_Message(RADIO_OVER_OUT);
-	Detach_All();
-	Unselect();
+	Assign_Target(NULL); // RA2: clears target, then destination (TibSun's order differs)
+	Assign_Destination(NULL, true); // RA2: as above
+	SendToEachLink(RADIO_OVER_OUT); // RA2: out message to every link
+	if (SpawnManager) { // RA2: spawner nodes are killed and the target abandoned
+		SpawnManager->KillNodes(); // RA2: as above
+		SpawnManager->ResetTarget(); // RA2: as above
+	}
+	Detach_All(true); // RA2: as above
+	Unselect(); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -4198,6 +4313,8 @@ void TechnoClass::Stun(void)
  *=============================================================================================*/
 void TechnoClass::Assign_Target(AbstractClass * target)
 {
+	ShouldLoseTargetNow = false; // RA2: cleared on every assignment
+
 	if (target == TarCom) return;
 
 	if (target == NULL) {
@@ -4209,14 +4326,23 @@ void TechnoClass::Assign_Target(AbstractClass * target)
 		*/
 		if (target == this) {
 			target = &Map[(Coord const &)PositionCoord];
-		} else {
+		} else if (target->AbstractFlags & 2) { // RA2: only objects are tested; the flag byte says object, not As_Object()
 
 			/*
 			**	Make sure that the target is not already dead.
 			*/
-			ObjectClass * object = As_Object(target);
-			if (object != NULL && (object->IsActive == false || object->Strength == 0)) {
+			ObjectClass * object = (ObjectClass *)target; // RA2: as above
+			if (object->IsActive == false || object->Strength == 0) { // RA2: the object flag byte, not As_Object(), says it is an object
 				target = NULL;
+			} else {
+				bool is_foot = (target->AbstractFlags >> 2) & 1; // RA2: a sinking foot or a dying infantry is no target
+				TechnoClass * techno; // RA2: assigned inside the condition below, as the executable does
+				if (is_foot && (techno = (TechnoClass *)target)->IsSinking) { // RA2: as above
+					target = NULL; // RA2: as above
+				}
+				if (is_foot && techno->Fetch_RTTI() == RTTI_INFANTRY && ((InfantryClass *)techno)->Is_Dying()) { // RA2: as above
+					target = NULL; // RA2: as above
+				}
 			}
 		}
 	}
@@ -4226,17 +4352,22 @@ void TechnoClass::Assign_Target(AbstractClass * target)
 	*/
 	TarCom = target;
 
-	if (target == NULL) {
+	if (SpawnManager != NULL && target == NULL) { // RA2: a spawner forgets its target when the techno has none
+		SpawnManager->SetTarget(target); // RA2: as above
+	}
+
+	if (TarCom == NULL) { // RA2: reads the field again
 		BurstIndex = 0;
 	}
 
 	if (ParticleSystems[ATTACHED_PARTICLE_FIRE]) {
-		if (!In_Range(target)) {
+		if (!IsCloseEnoughToAttack(target)) { // RA2: virtual slot 213, not In_Range
 			ParticleSystems[ATTACHED_PARTICLE_FIRE]->Delete_Me();
 			ParticleSystems[ATTACHED_PARTICLE_FIRE] = NULL;
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -4259,7 +4390,7 @@ void TechnoClass::Assign_Target(AbstractClass * target)
  *=============================================================================================*/
 int TechnoClass::Rearm_Delay(int which) const
 {
-	if (RTTI == RTTI_BUILDING && Ammo > 1) {
+	if (Fetch_RTTI() == RTTI_BUILDING && Ammo > 1) { // RA2: the type is asked by the virtual
 		return(1);
 	}
 
@@ -4276,24 +4407,36 @@ int TechnoClass::Rearm_Delay(int which) const
 		return(weapon->ROF);
 	}
 
+	UnitClass const * unit; // RA2: a unit's type has its own burst delays
+	if (this == NULL) { // RA2: as above
+		unit = NULL; // RA2: as above
+	} else {
+		unit = (Fetch_RTTI() == RTTI_UNIT) ? (UnitClass const *)this : NULL; // RA2: as above
+	}
 	if (BurstIndex < weapon->Burst) {
 		int delay = -1;
-		if (BurstIndex > 0 && BurstIndex <= 4) {
-		} // RA2: no BurstDelay (not in RA2's layout)
-		if (delay == -1) delay = Random_Pick(3, 5);
-		return(delay);
+		if (BurstIndex > 0 && BurstIndex <= 4 && unit) { // RA2: BurstDelay of the unit's type
+			delay = unit->Class->BurstDelay[BurstIndex - 1]; // RA2: as above
+		}
+		return(delay != -1 ? delay : Random_Pick(3, 5)); // RA2: as above
 
 	} else {
 		int delay = weapon->ROF * House->ROFBias + Random_Pick(0, 2);
 
-		if (Has_Ability(ABILITY_ROF)) {
-			delay = (1.0 / (Rule->VeteranROF + 1.0)) * delay;
+		if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) { // RA2: the ROF ability, as in Is_Ready_To_Cloak (index 4)
+			TechnoTypeClass const * type = Techno_Type_Class(); // RA2: as above
+			if ((Veterancy.Is_Veteran() && ((const bool *)&type->VeteranAbilities)[4]) // RA2: as above
+				|| (Veterancy.Is_Elite() && (((const bool *)&type->VeteranAbilities)[4] || ((const bool *)&type->EliteAbilities)[4]))) { // RA2: as above
+				delay = delay * Rule->VeteranROF; // RA2: as above
+			}
+		}
+		if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)this)->GetOccupantCount() > 0) { // RA2: a garrison fires faster
+			delay /= ((BuildingClass const *)this)->GetOccupantCount(); // RA2: as above
 		}
 		return(delay);
 	}
-
-	return(3);
 }
+
 
 
 /***********************************************************************************************
@@ -4984,18 +5127,56 @@ void TechnoClass::Draw_Target_Laser(void) const
  * HISTORY:                                                                                    *
  *   05/22/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-bool TechnoClass::Player_Assign_Mission(MissionType order, AbstractClass * target, AbstractClass * destination, AbstractClass * nearby)
+bool TechnoClass::Player_Assign_Mission(MissionType order, AbstractClass * target, AbstractClass * destination, AbstractClass * nearby) // RA2: fourth argument, returns bool
 {
+	bool special = Can_Force_Order() && CanAttackOnTheMove(); // RA2: a forced attack or move becomes an attack-move
+	if ((order == MISSION_MOVE || order == MISSION_ATTACK) && special) { // RA2: as above
+		order = MISSION_ATTACK_MOVE; // RA2: as above
+	}
 
+	/*
+	**	In planning mode the order is sent as a planned event and nothing else happens.
+	*/
+	if (Planning_Is_Active()) { // RA2: as above
+		EventClass event(PlayerPtr->HeapID, TargetClass(this), order, target, destination, nearby); // RA2: as above
+		Planning_Send_Event(event); // RA2: as above
+		return(false);
+	}
 
+	if (AllowVoice) { // RA2: the order is answered with the matching voice
+		if (order == MISSION_ATTACK) { // RA2: as above
+			Response_Attack(); // RA2: as above
+		} else if (order == MISSION_MOVE) { // RA2: as above
+			Response_Move(); // RA2: as above
+		} else if (order == MISSION_ENTER) { // RA2: as above
+			if (TClass->VoiceEnter != -1) { // RA2: as above
+				VocClass::PlayGlobal(TClass->VoiceEnter, 1.0f, 0x2000, 0); // RA2: as above
+			} else {
+				Response_Move(); // RA2: as above
+			}
+		} else if (order == MISSION_CAPTURE) { // RA2: as above
+			if (TClass->VoiceCapture != -1) { // RA2: as above
+				VocClass::PlayGlobal(TClass->VoiceCapture, 1.0f, 0x2000, 0); // RA2: as above
+			} else if (TClass->VoiceEnter != -1) { // RA2: as above
+				VocClass::PlayGlobal(TClass->VoiceEnter, 1.0f, 0x2000, 0); // RA2: as above
+			} else {
+				Response_Move(); // RA2: as above
+			}
+		} else if (TClass->VoiceSpecialAttack.Count() > 0) { // RA2: as above
+			TypeList<int> const & sounds = TClass->VoiceSpecialAttack; // RA2: as above
+			unsigned random = NonCriticalRandomNumber(); // RA2: as above
+			VocClass::PlayGlobal(sounds[random % sounds.Count()], 1.0f, 0x2000, 0); // RA2: as above
+		}
+	}
 
 	{
 		TargetClass dest(destination);
 		TargetClass targ(target);
-		Queue_Mission(TargetClass(this), order, targ, dest);
+		Queue_Mission(TargetClass(this), order, targ, dest); // RA2: the temporaries are built in this order
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -5643,77 +5824,76 @@ void TechnoClass::Renovate(void)
  *   05/08/1995 JLB : Created.                                                                 *
  *   09/29/1995 JLB : Keeps track of quantity records.                                         *
  *=============================================================================================*/
-bool TechnoClass::Captured(HouseClass * newowner, bool announce)
+bool TechnoClass::Captured(HouseClass * newowner, bool announce) // RA2: signature as in techno.h
 {
 	if (newowner != House) {
-		if (House == PlayerPtr && IsSelected) {
-			Unselect();
-		}
 		Assign_Target(NULL);
-		Assign_Destination(NULL, true);
-		if (CurrentMission != MISSION_DECONSTRUCTION) {
-		}
-		if (SpawnManager != NULL) {
-			SpawnManager->KillNodes();
-		}
-		if (!IsInLimbo) {
-		}
-		newowner->PointTotal += Techno_Type_Class()->Cost_Of(House);
+		Assign_Destination(NULL, true); // RA2: as above
+		Planning_Cancel_Token(this); // RA2: the object lets go of its planning token
+		House->Tracking_Active_Remove(this, false);
+		Record_The_Kill(NULL); // RA2: as above
+		newowner->PointTotal += Techno_Type_Class()->Cost_Of(House); // RA2: as above
 		House->Tracking_Remove(this);
 		newowner->Tracking_Add(this);
-		switch (Fetch_RTTI()) {
-			case 6:
+		switch (Fetch_RTTI()) { // RA2: as above
+			case RTTI_BUILDING:
+				newowner->BuildingsKilled[Owner()]++; // RA2: the new owner's counters are advanced
 				break;
-			case 1:
-			case 2:
-			case 15:
-				break;
-			default:
+			case RTTI_UNIT:
+			case RTTI_AIRCRAFT:
+			case RTTI_INFANTRY:
+				newowner->UnitsKilled[Owner()]++; // RA2: as above
 				break;
 		}
 		House->WhoLastHurtMe = newowner->Class->House;
 		if (!IsInLimbo) {
 			Mark(MARK_UP);
 		}
+		Remove_Target(this); // RA2: nobody keeps this object as a target
 		if (!IsInLimbo) {
 			Mark(MARK_DOWN_FORCED);
 		}
-		CellClass * cell = NULL;
+		CellClass * cell = NULL; // RA2: as above
 		if (!IsInLimbo) {
-			if (!Is_Foot()) {
-				cell = &Map[Coord(Position)];
+			bool foot; // RA2: as above
+			if (this != NULL) { // RA2: the foot test by flag, with its local
+				foot = (AbstractFlags & 4); // RA2: as above
+			}
+			bool moving = this != NULL && foot; // RA2: as above
+			if (!moving) { // RA2: as above
+				cell = &Map[Coord(PositionCoord)]; // RA2: as above
 			} else {
-				cell = &Map[((FootClass *)this)->LastAdjacencyCell];
+				cell = &Map[((FootClass *)this)->LastAdjacencyCell]; // RA2: as above
 			}
-			if (cell != NULL) {
-				cell->Adjust_Threat(Owner(), -ThreatPosed);
-				ThreatPosed = 0;
+			if (cell != NULL) { // RA2: the threat this object lent is taken back
+				cell->Adjust_Threat(Owner(), -(int)ThreatPosed); // RA2: as above
+				ThreatPosed = 0; // RA2: as above
 			}
 		}
-		House = newowner;
-		IsOwnedByPlayer = (House == PlayerPtr && PlayerPtr != NULL);
+		Set_Owner(newowner); // RA2: as above
 		if (!IsInLimbo) {
-			if (cell != NULL) {
-				cell->Adjust_Threat(Owner(), ThreatPosed = Risk());
+			if (cell != NULL) { // RA2: and lent again for the new owner
+				cell->Adjust_Threat(Owner(), ThreatPosed = Risk()); // RA2: as above
 			}
 		}
-		if (CurrentMission == MISSION_RESCUE || MissionQueue == MISSION_RESCUE) {
-			Set_Mission(MISSION_GUARD);
-		}
+		House->Tracking_Active_Add(this, true); // RA2: as above
 		if (!IsInLimbo) {
-			if (!(Fetch_RTTI() == RTTI_BUILDING && CurrentMission == MISSION_UNLOAD && ((BuildingClass *)this)->Class->IsWeaponsFactory)) {
-				TechnoClass * radio;
+			if (Fetch_RTTI() != RTTI_BUILDING || CurrentMission != MISSION_UNLOAD || !((BuildingClass *)this)->Class->IsWeaponsFactory) { // RA2: a weapons factory that is unloading keeps its order
+				TechnoClass * radio; // RA2: as above
+				if (Radio_Link(0) == NULL || (radio = Radio_Link(0))->Fetch_RTTI() != RTTI_BUILDING || !((BuildingClass *)radio)->Class->IsWeaponsFactory) { // RA2: as above
+					Assign_Destination(NULL, true); // RA2: as above
+					Assign_Target(NULL); // RA2: as above
+					Enter_Idle_Mode(false, true); // RA2: as above
+				}
 			}
-			if (IsRadarTracked) {
-				Radar_Untrack();
-				Radar_Track();
-			}
-			UpdateSight(false, false, false, NULL); // RA2: four arguments (techno.h)
+			Radar_Untrack();
+			Radar_Track();
 		}
 		return(true);
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -7450,7 +7630,18 @@ void TechnoClass::Detach(AbstractClass const * target, bool all)
 
 	bool clear_target = true;
 
-	if (!all && target->Is_Techno()) {
+	if (target == SpawnOwner) { // RA2: the spawner and the temporal warhead holder are forgotten
+		SpawnOwner = NULL; // RA2: as above
+	}
+	if (target == TemporalTargetingMe) { // RA2: as above
+		TemporalTargetingMe = NULL; // RA2: as above
+	}
+
+	bool techno; // RA2: the techno flag of the target is tested by byte, with a local
+	if (!all && target != NULL) { // RA2: as above
+		techno = (target->AbstractFlags & 1); // RA2: as above
+	}
+	if (!all && target != NULL && techno) { // RA2: as above
 		CellClass * cptr = &Map[target->Center_Coord()];
 		if (cptr->Is_Sensed(House->HeapID)) {
 			clear_target = false;
@@ -7462,10 +7653,13 @@ void TechnoClass::Detach(AbstractClass const * target, bool all)
 	**	computer must be cleared.
 	*/
 	if (TarCom == target && clear_target && (all || target->Owner_HouseClass() != House)) {
+		if (TargetingTimer.Value() > 10 && ScenarioInit == 0) { // RA2: the next scan comes soon
+			TargetingTimer = Random_Pick(4, 8); // RA2: as above
+		}
 		Assign_Target(NULL);
 		if (Has_Suspended_Mission()) {
 			Restore_Mission();
-			if (RTTI == RTTI_AIRCRAFT && CurrentMission == MISSION_PATROL) {
+			if (Fetch_RTTI() == RTTI_AIRCRAFT && CurrentMission == MISSION_PATROL) { // RA2: the type is asked by the virtual
 				Status = 0;
 				((AircraftClass *)this)->IsLockedStraight = false;
 			}
@@ -7478,11 +7672,16 @@ void TechnoClass::Detach(AbstractClass const * target, bool all)
 
 	if (House == target) {
 		House = NULL;
+		IsOwnedByPlayer = false; // RA2: as above
 	}
 
-	for (int i = 0; i < ATTACHED_PARTICLE_COUNT; i++) {
-		if (ParticleSystems[i] == target) {
-			ParticleSystems[i] = NULL;
+	if (IsDisguised() && GetDisguiseHouse(true) == target) { // RA2: a disguise as the detached house is dropped
+		ClearDisguise(); // RA2: as above
+	}
+
+	for (int slot = 0; slot < 8; slot++) { // RA2: eight particle slots
+		if (ParticleSystems[slot] == target) { // RA2: as above
+			ParticleSystems[slot] = NULL; // RA2: as above
 		}
 	}
 
@@ -7494,11 +7693,43 @@ void TechnoClass::Detach(AbstractClass const * target, bool all)
 		if (QueueUpToEnter == target) { // RA2: QueueUpToEnter, the object to enter once nearby
 			QueueUpToEnter = NULL; // RA2: QueueUpToEnter, the object to enter once nearby
 		}
-		if (ArchiveTarget == target) {
-			ArchiveTarget = NULL;
+		if (ArchivedTarget == target) { // RA2: as above
+			ArchivedTarget = NULL; // RA2: as above
+		}
+		if (CaptureManager != NULL) { // RA2: the manager lets go of it too
+			CaptureManager->Detach_Target(target); // RA2: as above
 		}
 	}
+	if (SpawnManager != NULL) { // RA2: as above
+		SpawnManager->UnlinkPointer((AbstractClass *)target); // RA2: as above
+	}
+	if (TemporalImUsing != NULL) { // RA2: as above
+		TemporalImUsing->Detach_Techno(target); // RA2: as above
+	}
+	if (target == OldTeam) { // RA2: as above
+		OldTeam = NULL; // RA2: as above
+	}
+	if (target == BehindAnim) { // RA2: as above
+		BehindAnim = NULL; // RA2: as above
+	}
+
+	/*
+	**	The removals take a temporary copy of the pointer, never the parameter's own slot.
+	*/
+	int index = -1; // RA2: the target is looked up in the current targets, its threat value goes with it
+	for (int i = 0; i < CurrentTargets.Count(); i++) { // RA2: as above
+		if (target == CurrentTargets[i]) { // RA2: as above
+			index = i; // RA2: as above
+			break; // RA2: as above
+		}
+	}
+	if (index != -1) { // RA2: as above
+		CurrentTargetThreatValues.Delete_Index(index); // RA2: as above
+		CurrentTargets.Delete((AbstractClass *)target); // RA2: as above
+	}
+	AttackedTargets.Delete((AbstractClass *)target); // RA2: as above
 }
+
 
 
 /***********************************************************************************************
@@ -7560,12 +7791,24 @@ InfantryTypeClass const * TechnoClass::Crew_Type(void) const
 	**	minigunner. Certain buildings, especially neutral ones, tend to have
 	**	civilians exit them instead.
 	*/
-	if (House->Class->Side != SIDE_NONE) { // RA2: no Crew, infantry (not in RA2's layout)
-		if (Is_Weapon_Equipped() && Percent_Chance(15)) {
-		} // RA2: no infantry (not in RA2's layout)
+	InfantryTypeClass const * crew; // RA2: the crew type depends on the house's ActLike
+	if (House->ActLike == 0) { // RA2: Allied crew
+		crew = Rule->AlliedCrew; // RA2: as above
+	} else if (House->ActLike == 1) { // RA2: Soviet crew
+		crew = Rule->SovietCrew; // RA2: as above
 	} else {
-	} // RA2: no infantry (not in RA2's layout)
-} // RA2: no infantry (not in RA2's layout)
+		crew = Rule->Technician; // RA2: everybody else
+	}
+	if (House->Class->Side != SIDE_NONE) {
+		if (Is_Weapon_Equipped() && Percent_Chance(15)) {
+			crew = Rule->Technician; // RA2: armed objects sometimes leave a technician
+		}
+	} else {
+		crew = Rule->Technician; // RA2: no side, technician
+	}
+	return(crew); // RA2: as above
+}
+ // RA2: no infantry (not in RA2's layout)
 
 
 /***********************************************************************************************
@@ -8010,17 +8253,16 @@ void TechnoClass::Base_Is_Attacked(TechnoClass const * enemy)
  *=============================================================================================*/
 bool TechnoClass::Is_Allowed_To_Retaliate(TechnoClass const * source, WarheadTypeClass const * warhead) const
 {
-	if (House->Is_Human_Player() && TarCom != NULL) return(false);
-
-	bool has_navqueue = Is_Foot() && ((FootClass const *)this)->NavCom != NULL;
-	if (warhead != NULL && warhead->IsVeinhole && (!has_navqueue || !House->Is_Human_Player())) {
-		return(true);
-	}
-
 	/*
 	**	If there is no source of the damage, then retaliation cannot occur.
 	*/
-	if (source == NULL) return(false);
+	if (source == NULL) return(false); // RA2: asked first, the veinhole case is gone (not in RA2's layout)
+
+	if (!Techno_Type_Class()->CanRetaliate) return(false); // RA2: the type may forbid it
+	if (CaptureManager != NULL && ((CaptureManagerClass *)CaptureManager)->Unit != NULL) return(false); // RA2: a mind controller never retaliates
+	if (SpawnManager != NULL) return(false); // RA2: nor does a spawner
+
+	if (House->Is_Human_Player() && TarCom != NULL) return(false);
 
 	/*
 	**	If the mission precludes retaliation, then don't retaliate.
@@ -8032,40 +8274,37 @@ bool TechnoClass::Is_Allowed_To_Retaliate(TechnoClass const * source, WarheadTyp
 	**	occur either.
 	*/
 	if (House->Is_Ally(source)) return(false);
+	if (source->IsDisguisedAs(House)) return(false); // RA2: a disguised source is not recognised
 
 	/*
 	**	Only objects that have a damaging weapon are allowed to retaliate.
 	*/
-	if (Combat_Damage() <= 0 || !Is_Weapon_Equipped()) return(false);
+	if (Combat_Damage(-1) <= 0 || !Is_Weapon_Equipped()) return(false); // RA2: the damage is asked for with -1
 
 	/*
 	**	If this is not equipped with a weapon that can attack the molester, then
 	**	don't allow retaliation.
 	*/
-	TechnoTypeClass const * ttype = TClass;
+	TechnoTypeClass const * ttype = Techno_Type_Class(); // RA2: as above
 	int which = What_Weapon_Should_I_Use((AbstractClass *)source);
-	WeaponDataStruct const * wdata = Get_Class_Weapon_Data(which);
-	if (wdata->Weapon->WarheadPtr != NULL &&
-		wdata->Weapon->WarheadPtr->Modifier[source->TClass->Armor] == 0) {
-			return(false);
-	}
-
-	/*
-	**	Don't allow retaliation if it isn't equipped with a weapon that can deal with the threat.
-	*/
-	if (source->RTTI == RTTI_AIRCRAFT && !wdata->Weapon->Bullet->IsAntiAircraft) return(false);
+	FireErrorType result = (FireErrorType)GetFireErrorWithoutRange((AbstractClass *)source, which); // RA2: the fire error says whether the weapon can attack it
+	if (result == FIRE_ILLEGAL || result == FIRE_CANT) return(false); // RA2: as above
 
 	/*
 	**	Tanya is not allowed to retaliate against buildings in the normal sense while in guard mode. That
 	**	is, unless it is owned by the computer. Normally, Tanya can't do anything substantial to a building
 	**	except to blow it up.
 	*/
-	if (House->Is_Human_Player() && source->RTTI == RTTI_BUILDING &&
-			(RTTI == RTTI_INFANTRY && ((InfantryTypeClass const *)ttype)->IsBomber || Has_Ability(ABILITY_C4))) {
-		return(false);
+	if (House->Is_Human_Player() && source->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+		if (Fetch_RTTI() == RTTI_INFANTRY && ((InfantryTypeClass const *)ttype)->IsBomber) { // RA2: as above
+			return(false);
+		}
+		if (Has_Ability(ABILITY_C4)) { // RA2: as above
+			return(false);
+		}
 	}
 
-	if (House->Is_Human_Player() && RTTI == RTTI_UNIT) {
+	if (House->Is_Human_Player() && Fetch_RTTI() == RTTI_UNIT) { // RA2: as above
 		BuildingTypeClass const * deploys_into = ((UnitClass const *)this)->Class->DeploysInto;
 		if (deploys_into != NULL && deploys_into->IsArtillary) {
 			return(false);
@@ -8075,16 +8314,19 @@ bool TechnoClass::Is_Allowed_To_Retaliate(TechnoClass const * source, WarheadTyp
 	/*
 	**	If a human house is not allowed to retaliate automatically, then don't
 	*/
-	if (House->Is_Human_Player() && !Rule->IsSmartDefense && RTTI != RTTI_BUILDING) {
-		if (CurrentMission != MISSION_GUARD_AREA && CurrentMission != MISSION_GUARD && CurrentMission != MISSION_PATROL) {
-			return(false);
-		}
+	if (House->Is_Human_Player() && !Rule->IsSmartDefense && Fetch_RTTI() != RTTI_BUILDING // RA2: as above
+		&& CurrentMission != MISSION_GUARD_AREA && CurrentMission != MISSION_GUARD && CurrentMission != MISSION_PATROL) { // RA2: as above
+		return(false);
 	}
 
 	/*
 	**	If this object is part of a team that prevents retaliation then don't allow retaliation.
 	*/
-	if (Is_Foot() && ((FootClass *)this)->Team != NULL && ((FootClass *)this)->Team->Class->IsSuicide) {
+	bool foot; // RA2: the foot flag is tested by byte, with a local
+	if (this != NULL) { // RA2: as above
+		foot = (AbstractFlags & 4); // RA2: as above
+	}
+	if (this != NULL && foot && ((FootClass const *)this)->Team != NULL && ((FootClass const *)this)->Team->Class->IsSuicide) { // RA2: as above
 		return(false);
 	}
 
@@ -8092,8 +8334,25 @@ bool TechnoClass::Is_Allowed_To_Retaliate(TechnoClass const * source, WarheadTyp
 	**	Compare potential threat of the current target and the potential new target. Don't retaliate
 	**	if it is currently attacking the greater threat.
 	*/
-	if (!House->Is_Human_Player() && TarCom != NULL && TarCom->As_ObjectClass() != NULL
-			&& Target_Threat((TechnoClass *)TarCom) > Target_Threat((TechnoClass *)source)) {
+	if (!House->Is_Human_Player()) { // RA2: as above
+		AbstractClass * target = TarCom; // RA2: as above
+		bool techno; // RA2: as above
+		if (target != NULL) { // RA2: as above
+			techno = (target->AbstractFlags & 2); // RA2: as above
+		}
+		if (target != NULL && techno && Target_Threat((TechnoClass *)target, COORD_NONE) > Target_Threat((TechnoClass *)source, COORD_NONE)) { // RA2: as above
+			return(false);
+		}
+	}
+
+	/*
+	**	A parasite that is eating this object is never fought.
+	*/
+	bool foot2; // RA2: as above
+	if (this != NULL) { // RA2: as above
+		foot2 = (AbstractFlags & 4); // RA2: as above
+	}
+	if (this != NULL && foot2 && source == ((FootClass const *)this)->ParasiteEatingMe) { // RA2: as above
 		return(false);
 	}
 
@@ -8102,6 +8361,7 @@ bool TechnoClass::Is_Allowed_To_Retaliate(TechnoClass const * source, WarheadTyp
 	*/
 	return(true);
 }
+
 
 
 
@@ -8646,18 +8906,27 @@ int TechnoClass::Is_Not_Guard_Or_Sticky(MissionType mission) // RA2: not in TibS
  *=============================================================================================*/
 bool TechnoClass::Target_Something_Nearby(Coord const & coord, ThreatType threat)
 {
+	LastTargetScanFrame = Frame; // RA2: the frame of this scan is noted
+	if (CurrentMission == MISSION_GUARD_AREA) { // RA2: the next scan is delayed by the rules, guarding being quicker
+		int random = Random_Pick(0, 2); // RA2: as above
+		TargetingTimer = Rule->GuardAreaTargetingDelay + random; // RA2: as above
+	} else {
+		int random = Random_Pick(0, 2); // RA2: as above
+		TargetingTimer = Rule->NormalTargetingDelay + random; // RA2: as above
+	}
 	threat = ThreatType(threat & (THREAT_RANGE|THREAT_AREA));
 
 	/*
 	**	Determine that if there is an existing target it is still legal
 	**	and within range.
 	*/
-	if (TarCom != NULL) {
-		if ((threat & THREAT_RANGE)) {
-			int primary = What_Weapon_Should_I_Use(TarCom);
-			if (!In_Range(TarCom, primary)) {
-				Assign_Target(NULL);
-			}
+	if (TarCom != NULL && ShouldLoseTargetNow) { // RA2: a target is dropped when the weapon cannot fire at it any more
+		int weapon = What_Weapon_Should_I_Use(TarCom); // RA2: as above
+		FireErrorType result = Can_Fire(TarCom, weapon, true); // RA2: as above
+		if (result == FIRE_CANT && SpawnManager != NULL) { // RA2: a spawner only forgets its target
+			SpawnManager->ResetTarget(); // RA2: as above
+		} else if (result == FIRE_CANT || result == FIRE_ILLEGAL || result == FIRE_RANGE) { // RA2: as above
+			Assign_Target(NULL);
 		}
 	}
 
@@ -8666,7 +8935,23 @@ bool TechnoClass::Target_Something_Nearby(Coord const & coord, ThreatType threat
 	**	the target for this unit.
 	*/
 	if (TarCom == NULL) {
-		Assign_Target(Greatest_Threat(threat, coord, false));
+		AbstractClass * target = Greatest_Threat(threat, coord, false); // RA2: the threat is found first, then assigned
+		if (Techno_Type_Class()->DistributedFire) { // RA2: spread over the current targets
+			Distribute_Fire(); // RA2: as above
+		} else {
+			if (target != NULL) { // RA2: as above
+				Assign_Target(target); // RA2: as above
+			}
+			int weapon = What_Weapon_Should_I_Use(TarCom); // RA2: the damage the shot is expected to do is booked on the target
+			TechnoClass * techno = (TechnoClass *)target; // RA2: as above
+			if (techno != NULL) { // RA2: as above
+				techno = (techno->AbstractFlags & 1) ? techno : NULL; // RA2: as above
+			}
+			WeaponTypeClass const * wtype = Get_Class_Weapon_Data(weapon)->Weapon; // RA2: as above
+			if (techno != NULL && wtype != NULL && !wtype->Bullet->IsInaccurate) { // RA2: as above
+				techno->EstimatedHealth -= Expected_Damage(techno, wtype); // RA2: as above
+			}
+		}
 	}
 
 	/*
@@ -8674,6 +8959,7 @@ bool TechnoClass::Target_Something_Nearby(Coord const & coord, ThreatType threat
 	*/
 	return(TarCom != NULL);
 }
+
 
 
 /***********************************************************************************************
@@ -8993,26 +9279,38 @@ void TechnoClass::DrawVeterancyPips(Point2D const & point, Rect const & rect) co
 /// <param name="point2">The point the text is centered on.</param>
 void TechnoClass::Draw_Text_Overlay(Point2D const & point1, Point2D const & point2, Rect const & cliprect) const
 {
-	if (RTTI == RTTI_BUILDING && ((BuildingClass*)this)->Class->Power > 0) {
-		char buffer[128];
-		sprintf(buffer, Fetch_String(TXT_POWER_DRAIN), House->Power_Output(), House->Power_Drain());
-		Plain_Text_Print(buffer, *LogicalSurface, cliprect, point2, WHITE, TBLACK, TextPrintType(TPF_CENTER|TPF_FULLSHADOW|TPF_EFNT), 0, 1);
+	if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)this)->Class->Power > 0) { // RA2: a power plant shows its output against the drain, in wide text
+		if (!IsLeader) { // RA2: the primary label takes its place on a leader
+			wchar_t text[128]; // RA2: as above
+			swprintf(text, StringTable::LoadString("TXT_POWER_DRAIN2", NULL, "D:\\Ra2\\Techno.CPP", 13591), House->Power_Output(), House->Power_Drain()); // RA2: as above
+			Rect background = Text_Rect(text, point2, 329, 4, 2); // RA2: the box the text needs
+			background = Intersect(background, cliprect); // RA2: cut to the window
+			RGBClass const & color = House->RemapColorRGB; // RA2: the box is drawn in the house color
+			int pixel = DSurface::Build_Hicolor_Pixel(color.Get_Red(), color.Get_Green(), color.Get_Blue()); // RA2: as above
+			LogicalSurface->Fill_Rect(background, 0); // RA2: as above
+			LogicalSurface->Draw_Rect(background, pixel); // RA2: as above
+			Simple_Text_Print(text, *LogicalSurface, cliprect, point2, pixel, 0, TextPrintType(329), 1); // RA2: as above
+		}
 	}
 
 	/*
 	**	Display whether this unit is a leader unit or not.
 	*/
 	if (IsLeader) {
-		int pritext = TXT_PRIMARY;
-
-		if (RTTI == RTTI_BUILDING) {
-			if (((BuildingClass *)this)->Class->Width() == 1) {
-				pritext = TXT_PRI;
-			}
+		wchar_t const * pritext = StringTable::LoadString("TXT_PRIMARY", NULL, "D:\\Ra2\\Techno.CPP", 13610); // RA2: wide text with a box
+		if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)this)->Class->Width() == 1) { // RA2: as above
+			pritext = StringTable::LoadString("TXT_PRI", NULL, "D:\\Ra2\\Techno.CPP", 13612); // RA2: as above
 		}
-		Plain_Text_Print(pritext, *LogicalSurface, cliprect, point2, WHITE, TBLACK, TextPrintType(TPF_CENTER|TPF_FULLSHADOW|TPF_EFNT), 0, 1);
+		Rect background = Text_Rect(pritext, point2, 329, 4, 2); // RA2: as above
+		background = Intersect(background, cliprect); // RA2: as above
+		RGBClass const & color = House->RemapColorRGB; // RA2: as above
+		int pixel = DSurface::Build_Hicolor_Pixel(color.Get_Red(), color.Get_Green(), color.Get_Blue()); // RA2: as above
+		LogicalSurface->Fill_Rect(background, 0); // RA2: as above
+		LogicalSurface->Draw_Rect(background, pixel); // RA2: as above
+		Simple_Text_Print(pritext, *LogicalSurface, cliprect, point2, pixel, 0, TextPrintType(329), 1); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -9198,26 +9496,35 @@ int TechnoClass::Anti_Infantry(void) const
  *=============================================================================================*/
 void TechnoClass::Look(bool incremental, bool dontmap)
 {
-	assert(!IsInLimbo);
+	if (!IsLocked) { // RA2: no assertion, a plain early return
+		return;
+	}
+	if (House->Class->IsMultiplayPassive && Session.Type != GAME_NORMAL) { // RA2: as above
+		return;
+	}
 
-	if (IsLocked && (!House->Class->IsMultiplayPassive || Session.Type == GAME_NORMAL)) {
-		int sight_increase = 10 * (Get_Coord().Z / Rule->LeptonsPerSightIncrease);
-		if (sight_increase > SightIncrease) {
-			incremental = false;
-		}
-		SightIncrease = sight_increase;
+	int sight_increase = Get_Coord().Z / Rule->LeptonsPerSightIncrease * 10; // RA2: as in UpdateSight
+	if (sight_increase > SightIncrease) {
+		incremental = false;
+	}
+	SightIncrease = sight_increase;
 
-		int sight_range = TClass->SightRange * (SightIncrease * 0.01 + 1.0);
-		if (Has_Ability(ABILITY_SIGHT) && Rule->VeteranSight != 0.0) {
-			sight_range *= Rule->VeteranSight + 1;
-		}
-
-		if (sight_range) {
-			HouseClass * house = House;
-			Map.Sight_From(PositionCoord, sight_range, house, incremental, dontmap); // RA2: no LimpetType (not in RA2's layout)
+	int sight_range = (int)(Techno_Type_Class()->SightRange * (SightIncrease * 0.01 + 1.0)); // RA2: as above
+	if (Veterancy.Is_Veteran() || Veterancy.Is_Elite()) { // RA2: as above
+		TechnoTypeClass const * type = Techno_Type_Class(); // RA2: as above
+		if ((Veterancy.Is_Veteran() && type->VeteranAbilities[ABILITY_SIGHT]) // RA2: the sight ability, as in UpdateSight
+			|| (Veterancy.Is_Elite() && (type->VeteranAbilities[ABILITY_SIGHT] || type->EliteAbilities[ABILITY_SIGHT]))) { // RA2: as above
+			if (Rule->VeteranSight != 0.0) { // RA2: as above
+				sight_range = (int)(sight_range * Rule->VeteranSight); // RA2: as above
+			}
 		}
 	}
+
+	if (sight_range != 0) { // RA2: as above
+		Map.RevealArea1(Get_Coord(), sight_range, House, incremental, dontmap, false, true, true); // RA2: the variant that also reveals fog and shroud (0x549C50)
+	}
 }
+
 
 
 /// <summary>
@@ -9347,8 +9654,14 @@ void TechnoClass::Rocking_AI(void)
 	bool sideways_was_negative = AngleRotatedSideways < -0.00002;
 
 	if (IsSinking) {
-		if (AngleRotatedForwards < (float)DEG_TO_RAD(45)) {
-			AngleRotatedForwards += 0.03;
+		float roll = AngleRotatedForwards < 0.0f ? -AngleRotatedForwards : AngleRotatedForwards; // RA2: the sinking object rolls on either side, towards its facing
+		if (roll < (float)DEG_TO_RAD(45)) { // RA2: as above
+			int facing = PrimaryFacing.Current().As_Dir8(); // RA2: as above
+			if (facing != 0 && (facing <= 5 || facing > 7)) { // RA2: as above
+				AngleRotatedForwards += 0.01; // RA2: as above
+			} else {
+				AngleRotatedForwards -= 0.01; // RA2: as above
+			}
 		}
 		return;
 	}
@@ -9401,19 +9714,21 @@ void TechnoClass::Rocking_AI(void)
 
 	if (RockingForwardsPerFrame != 0.0f) {
 
-		AngleRotatedForwards += RockingForwardsPerFrame;
+		float roll = RockingForwardsPerFrame + AngleRotatedForwards; // RA2: the new angle is kept in a local too
+		AngleRotatedForwards = roll; // RA2: as above
 
 		float angle = (float)DEG_TO_RAD(45);
 
-		FootClass *foot = dynamic_cast<FootClass *>(this);
-		if (foot != NULL && ((FootClass *)this)->IsCrushing) {
+		bool foot; // RA2: the foot flag is tested by byte, with a local
+		if (this != NULL) foot = (AbstractFlags & 4); // RA2: as above
+		if (this != NULL && foot && ((FootClass *)this)->IsCrushing) { // RA2: as above
 			angle = (float)DEG_TO_RAD(18);
 		}
 
-		if (AngleRotatedForwards > angle) {
+		if (roll > angle) { // RA2: the local is compared, not the field
 			AngleRotatedForwards = angle;
 			RockingForwardsPerFrame = 0.0f;
-		} else if (AngleRotatedForwards < -angle) {
+		} else if (roll < -angle) { // RA2: as above
 			AngleRotatedForwards = -angle;
 			RockingForwardsPerFrame = 0.0f;
 		}
@@ -9440,6 +9755,7 @@ void TechnoClass::Rocking_AI(void)
 		AngleRotatedForwards = 0.0f;
 	}
 }
+
 
 
 /// <summary>
@@ -9522,29 +9838,51 @@ bool TechnoClass::Should_Self_Heal_Now(void) const
 /// <returns>Returns with S_OK, or with the failure code from the base class.</returns>
 HRESULT STDMETHODCALLTYPE TechnoClass::Load(IStream * stream)
 {
-	int size = Fetch_Object_Size(); // RA2: no argument
-	HRESULT result = BASECLASS::Load(stream);
-	if (SUCCEEDED(result)) {
-		if (IsOldSaveGame) {
-		} // RA2: no LimpetSpeedFactor, LimpetType (not in RA2's layout)
-
-		Swizzle_Pointer(&House);
-
-		for (int i = 0; i < ATTACHED_PARTICLE_COUNT; i++) {
-			Swizzle_Pointer(&ParticleSystems[i]);
-		}
-
-		Swizzle_Pointer(&ArchivedTarget);
-		Swizzle_Pointer(&QueueUpToEnter); // RA2: QueueUpToEnter, the object to enter once nearby
-		Swizzle_Pointer(&TarCom);
-		Swizzle_Pointer(&SuspendedTarCom);
-		Swizzle_Pointer(&Cargo.CargoHold);
-		Swizzle_Pointer(&Wave);
-
-		result = S_OK;
+	HRESULT result = RadioClass::Load(stream); // RA2: RA2's form
+	if (FAILED(result)) { // RA2: as above
+		return result; // RA2: as above
 	}
-	return(result);
+	PlanningToken = 0; // RA2: as above
+	Swizzler.Swizzle((void **)&House); // RA2: as above
+	for (int index = 0; index < 8; index++) { // RA2: as above
+		Swizzler.Swizzle((void **)&ParticleSystems[index]); // RA2: as above
+	}
+	Swizzler.Swizzle((void **)&ArchivedTarget); // RA2: as above
+	Swizzler.Swizzle((void **)&QueueUpToEnter); // RA2: as above
+	Swizzler.Swizzle((void **)&TarCom); // RA2: as above
+	Swizzler.Swizzle((void **)&SuspendedTarCom); // RA2: as above
+	Swizzler.Swizzle((void **)&CaptureManager); // RA2: as above
+	Swizzler.Swizzle((void **)&OldTeam); // RA2: as above
+	Swizzler.Swizzle((void **)&SpawnManager); // RA2: as above
+	Swizzler.Swizzle((void **)&MindControlledBy); // RA2: as above
+	Swizzler.Swizzle((void **)&SpawnOwner); // RA2: as above
+	Swizzler.Swizzle((void **)&Disguise); // RA2: as above
+	Swizzler.Swizzle((void **)&DisguisedAsHouse); // RA2: as above
+	Swizzler.Swizzle((void **)&TemporalImUsing); // RA2: as above
+	Swizzler.Swizzle((void **)&TemporalTargetingMe); // RA2: as above
+	Swizzler.Swizzle((void **)&Cargo.CargoHold); // RA2: as above
+	Swizzler.Swizzle((void **)&Wave); // RA2: as above
+	if (BehindAnim) { // RA2: as above
+		AnimPtrTracker.Delete(this); // RA2: as above
+		AnimPtrTracker.Add(this); // RA2: as above
+	}
+	Swizzler.Swizzle((void **)&BehindAnim); // RA2: as above
+	TurretRotateSoundController.Init(); // RA2: as above
+	IsTurretRotateSoundPlaying = 1; // RA2: as above
+	TurretIsRotating = 0; // RA2: as above
+	return S_OK; // RA2: as above
 }
+
+
+/// <summary>
+/// RA2: TechnoClass's own Save, between RadioClass's and the derived classes'. It lets the base class write its part and reports success.
+/// </summary>
+HRESULT STDMETHODCALLTYPE TechnoClass::Save(IStream * stream, BOOL cleardirty) // RA2: not in TibSun, at 0x6D6A80
+{
+	RadioClass::Save(stream, cleardirty); // RA2: the result is dropped
+	return(S_OK); // RA2: as above
+}
+
 
 
 
