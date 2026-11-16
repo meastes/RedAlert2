@@ -16,6 +16,8 @@
 #include "rcptr.h" // RA2: the tour keeps its territories and states as counted pointers
 #include "rcptr.h"
 #include "refcount.h"
+#include "stringtable.h" // RA2: the option texts are loaded by label
+#include "widewstring.h"
 #include "wstring.h"
 
 class MSFont;
@@ -685,146 +687,82 @@ namespace WorldDominationTour
 		WDT_GAME_OPT_RANGE_MIDDLE,
 	};
 
-	class GameOption {
+	/*
+	 * RA2: the battle options are counted objects. Get_Display_Priority says how an option is shown for a
+	 * territory (WDT_GAME_OPT_PRIORITY first, WDT_GAME_OPT_USER_MOD never), Get_String appends its text to the
+	 * text so far. Their classes are WDTGameOptions.cpp's (0x00728480 on); Conflict::Init_Game_Options makes
+	 * the shared list of them.
+	 */
+	class GameOption : public ReferenceCounted {
 		public:
-			GameOption(unsigned int bitmask) :
+			GameOption(unsigned int bitmask) : // RA2: inline
 				Bitmask(bitmask)
 			{
 			}
 
-			virtual ~GameOption(void);
-			virtual int Get_Display_Priority(const WDTTerritory * territory) = 0;
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) = 0;
-			bool Is_User_Modifiable(const WDTTerritory * territory);
+			virtual ~GameOption(void); // RA2: 0x00728670
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const = 0; // RA2: vtable +0xC
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const = 0; // RA2: vtable +0x10
+			bool Is_User_Modifiable(rc_ptr<WDTTerritory> const & territory) const; // RA2: 0x00728680; false
 
 		public:
-			/*
-			 * This is the bit that stands for this option in a territory's Booleans and
-			 * UserModBooleans words. It is how the option finds its own setting, and how the
-			 * summary keeps from describing the same option twice.
-			 */
-			unsigned int Bitmask;
+			unsigned int Bitmask; // RA2: +0x08; this option's bit in the used mask of a description
 	};
 
-	class RangedGameOption : public GameOption {
-		public:
-			RangedGameOption(unsigned int bitmask, unsigned int offset, unsigned int string, unsigned int range0, unsigned int range1, unsigned int range2, unsigned int range3) :
-				GameOption(bitmask),
-				Offset(offset),
-				StringID(string),
-				Range0(range0),
-				Range1(range1),
-				Range2(range2),
-				Range3(range3)
-			{
-			}
-			virtual int Get_Display_Priority(const WDTTerritory * territory) override;
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) override;
-			virtual int Get_In_Range_Of(const WDTTerritory * territory) = 0;
-			int In_Range_Of(unsigned int number);
-
-		public:
-			/*
-			 * This is the offset of the setting within WDTTerritory, which is how the option
-			 * reaches a value it was never told the name of.
-			 */
-			unsigned int Offset;
-
-			/*
-			 * This is the first of the run of strings that word this option's bands, the band
-			 * number being added to it to pick the one that fits.
-			 */
-			unsigned int StringID;
-
-			/*
-			 * These are the thresholds that divide the setting's range into bands, from very
-			 * low up to very high. A setting falling between the middle pair is unremarkable
-			 * and is left out of the summary.
-			 */
-			unsigned int Range0;
-			unsigned int Range1;
-			unsigned int Range2;
-			unsigned int Range3;
-	};
-
-	template<typename T>
-	class RangedGameOptionT : public RangedGameOption {
-		public:
-			RangedGameOptionT(unsigned int bitmask, unsigned int offset, unsigned int string, unsigned int range0, unsigned int range1, unsigned int range2, unsigned int range3) :
-				RangedGameOption(bitmask, offset, string, range0, range1, range2, range3)
-			{
-			}
-			virtual int Get_In_Range_Of(const WDTTerritory * territory) override
-			{
-				T *ptr = (T *)((unsigned char *)territory + Offset);
-				return(RangedGameOption::In_Range_Of(*ptr));
-			}
-
-	};
-
+	/*
+	 * RA2: an on/off option, from the bit of its Bitmask in the territory's flags.
+	 */
 	class FlagGameOption : public GameOption {
 		public:
-			FlagGameOption(unsigned int bitmask, unsigned int off_string, unsigned int off_value, unsigned int on_string, unsigned int on_value) :
-				GameOption(bitmask),
-				OffValue(off_value),
-				OnValue(on_value),
-				OffString(off_string),
-				OnString(on_string)
-			{
-			}
-			virtual int Get_Display_Priority(const WDTTerritory * territory) override;
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) override;
+			FlagGameOption(unsigned int bitmask, Wstring off_string, int off_value, Wstring on_string, int on_value); // RA2: 0x00728B90
+			static rc_ptr<FlagGameOption> __fastcall Create(unsigned int bitmask, Wstring off_string, int off_value, Wstring on_string, int on_value); // RA2: 0x007287D0
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const override; // RA2: 0x00728850
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const override; // RA2: 0x00728870
 
 		public:
-			/*
-			 * These are the display priorities the option reports according to whether the
-			 * flag is set, so that a rule which is switched on may be called out more urgently
-			 * than one which is switched off.
-			 */
-			unsigned int OffValue;
-			unsigned int OnValue;
-
-			/*
-			 * These are the strings that word the flag's two states. A state worded TXT_NONE
-			 * keeps the option out of the summary altogether.
-			 */
-			unsigned int OffString;
-			unsigned int OnString;
+			int OffValue; // RA2: +0x0C
+			int OnValue; // RA2: +0x10
+			Wstring OnString; // RA2: +0x14
+			Wstring OffString; // RA2: +0x18
 	};
 
-	class NumberOfPlayersGameOption : public GameOption {
-		public:
-			NumberOfPlayersGameOption(unsigned int bitmask) :
-				GameOption(bitmask)
-			{
-			}
-			virtual int Get_Display_Priority(const WDTTerritory * territory) override;
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) override;
-
-	};
-
+	/*
+	 * RA2: the option that tells the size of the map.
+	 */
 	class MapSizeGameOption : public GameOption {
 		public:
 			MapSizeGameOption(unsigned int bitmask) :
 				GameOption(bitmask)
 			{
 			}
-			virtual int Get_Display_Priority(const WDTTerritory * territory) override;
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) override;
+			static rc_ptr<MapSizeGameOption> __fastcall Create(unsigned int bitmask); // RA2: 0x00728A60
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const override; // RA2: 0x00728B70
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const override; // RA2: 0x00728AB0
 	};
 
+	/*
+	 * RA2: an option whose value is a number read from the territory through Getter and printed through the
+	 * format text of its label. The members are expanded where they are used (WDTConflict.cpp).
+	 */
 	template<typename T>
 	class ValueGameOption : public GameOption {
 		public:
-			ValueGameOption(unsigned int bitmask, unsigned int fallback, unsigned int offset, unsigned int string) :
+			typedef int (__fastcall * GetterType)(WDTTerritory const * territory);
+
+			ValueGameOption(unsigned int bitmask, GetterType getter, Wstring name, int fallback) :
 				GameOption(bitmask),
 				Fallback(fallback),
-				Offset(offset),
-				StringID(string)
+				Getter(getter),
+				Name(name)
 			{
 			}
 
-			virtual int Get_Display_Priority(const WDTTerritory * territory) override
+			static rc_ptr<ValueGameOption<T> > __fastcall Create(unsigned int bitmask, GetterType getter, Wstring name, int fallback)
+			{
+				return(rc_ptr<ValueGameOption<T> >(new ValueGameOption<T>(bitmask, getter, name, fallback)));
+			}
+
+			virtual int Get_Display_Priority(rc_ptr<WDTTerritory> const & territory) const override
 			{
 				if (Is_User_Modifiable(territory)) {
 					return(WDT_GAME_OPT_USER_MOD);
@@ -832,34 +770,30 @@ namespace WorldDominationTour
 				return(Fallback);
 			}
 
-			virtual void Get_String(const WDTTerritory * territory, char * str, int len) override
+			virtual WideWstring Get_String(rc_ptr<WDTTerritory> const & territory, WideWstring const & prefix) const override
 			{
-				char buffer[256];
-
-				WDT_Game_Option_Append_Comma(str, len);
-				T *ptr = (T *)((unsigned char *)territory + Offset);
-				sprintf(buffer, Fetch_String(StringID), *ptr);
-				strncat(str, buffer, len);
+				wchar_t buffer[64];
+				Wstring number = Wstring_FromInt(Getter(territory.Get()));
+				WideWstring format(StringTable::LoadString(Name.text(), NULL, "D:\\Ra2\\wdtgameoptions.h", 161));
+				swprintf(buffer, format.get(), number.text());
+				if (prefix.length() != 0) {
+					WideWstring separator(L", ");
+					prefix + separator + buffer;
+				}
+				return(WideWstring(buffer));
 			}
 
 		public:
-			/*
-			 * This is the display priority the option reports for a setting the player is not
-			 * free to change.
-			 */
-			unsigned int Fallback;
-
-			/*
-			 * This is the offset of the setting within WDTTerritory, which is how the option
-			 * reaches a value it was never told the name of.
-			 */
-			unsigned int Offset;
-
-			/*
-			 * This is the format string the setting's value is printed through.
-			 */
-			unsigned int StringID;
+			int Fallback; // RA2: +0x0C; the priority of a setting the player cannot change
+			GetterType Getter; // RA2: +0x10
+			Wstring Name; // RA2: +0x14; the label of the format text
 	};
+
+	typedef DynamicVectorClass<rc_ptr<GameOption> > WDT_GAME_OPTION_LIST;
+	typedef VectorCursor<rc_ptr<GameOption>, WDT_GAME_OPTION_LIST> WDT_GAME_OPTION_ITER;
+	extern WDT_GAME_OPTION_LIST WDTGameOptionList; // RA2: 0x00B256C0; the shared list of battle options, filled by Conflict::Init_Game_Options
+	int __fastcall WDT_Get_Unit_Count(WDTTerritory const * territory); // RA2: 0x00727B70; the getter of the WDT:UnitCount option
+	int __fastcall WDT_Get_Tech_Level(WDTTerritory const * territory); // RA2: 0x00727B80; the getter of the WDT:TechLevel option
 
 	typedef DynamicVectorClass<unsigned int> VOICEINDEX_LIST;
 

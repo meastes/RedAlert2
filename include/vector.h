@@ -1151,7 +1151,8 @@ class VectorCursor
 		T Cur(void) const { return((*Vector)[Cursor]); }
 		T & Cur_Ref(void) const { return((*Vector)[Cursor]); }
 
-	private:
+		/// RA2: the position is open to the code that walks the vector twice (Conflict::Describe_Options starts its second pass with it.Cursor = 0)
+	public:
 		/*
 		 * Pointer to the vector being walked. The cursor never owns it, so the vector must
 		 * outlive every cursor made from it.
