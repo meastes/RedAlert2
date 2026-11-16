@@ -2361,6 +2361,52 @@ void Handle_User_Leave(User & user) // RA2: 0x00741750
 extern bool g_WOLInitialized; // RA2: 0x00B2AC81, set once the chat services are up, tested by Shutdown_Chat
 void __fastcall Free_Lobby_Entries(void); // RA2: 0x005C8950, defined in netshare.cpp
 
+static inline void Reset_Wait_Event_At(int index) { ResetEvent(g_WaitEventHandles[index]); } // RA2: a helper layer: with the loop written out Dictionary::shrink is expanded into Logout_WOnline's clear, where the executable calls 0x00767850; the extra inline levels use the budget up as RA2's source did (debt: the real helper is not known)
+static inline void Reset_All_Wait_Events(void) { for (int i = 0; i < EV_COUNT; i++) { Reset_Wait_Event_At(i); } } // RA2: as above
+/// <summary>
+/// Logs the local player out of the WOL chat session. Sends a logout request to the Chat
+/// interface and waits (with timeout retries) for it to complete or be aborted, then, for
+/// World Domination Tour sessions, also closes the event handles and fully shuts down chat.
+/// </summary>
+void Logout_WOnline(void) // RA2: 0x00741EA0, not in TibSun: asks the chat to log out and waits (five rounds of up to the answer or an abort) with the "logging out" text, then closes the wait dialog; the team table of the WDT is emptied first
+{
+	int i; // RA2: the rounds of the wait
+	DWORD wait_result; // RA2: the event that ended the wait
+
+	g_IgnoreNetStatus = TRUE; // RA2: the status events of the chat are ignored from now on (the byte at 0x00B2ABD8)
+
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: the team lookups of the WDT are dropped
+		g_WDTTeams.clear(); // RA2: as above
+	}
+
+	if (g_pChat != NULL) { // RA2: as above
+		Reset_All_Wait_Events(); // RA2: as above
+		WOL_Wait_Callback(); // RA2: as above
+		if (g_pChat->RequestLogout() == S_OK) { // RA2: as above
+			{
+				WideWstring title(StringTable::LoadString("TXT_WOL_LOGGING_OUT", NULL, "D:\\Ra2\\wonline.cpp", 8220)); // RA2: the wait dialog takes a wide text
+				Show_Wait_Window(0x20, title, false); // RA2: as above
+			}
+			for (i = 0; i < 5; i++) { // RA2: as above
+				while ((wait_result = WaitForMultipleObjects(EV_COUNT, g_WaitEventHandles, FALSE, 100)) == WAIT_TIMEOUT) { // RA2: as above
+					WOL_Wait_Callback(); // RA2: as above
+				}
+				ResetEvent(g_WaitEventHandles[wait_result]); // RA2: as above
+				if (wait_result == EV_ABORT) { // RA2: as above
+					break; // RA2: as above
+				}
+				if (wait_result == EV_NETIGNORE) { // RA2: as above
+					break; // RA2: as above
+				}
+			}
+		}
+
+		HWND profile = WS_Find_Dialog(0x11E); // RA2: the profile dialog is closed first
+		if (profile) WS_Destroy_Dialog(profile, 0); // RA2: as above
+		Close_Wait_Window(0x20); // RA2: expanded here
+	}
+}
+
 /// <summary>
 /// Tears down the WOL COM interfaces: unadvises each event sink, releases the Chat, NetUtil,
 /// and Download interfaces, clears the global pointers, and terminates the ATL module.
