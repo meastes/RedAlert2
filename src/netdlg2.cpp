@@ -65,7 +65,7 @@ void __fastcall Net2DisplayUsersFull(bool full); // RA2: 0x005BBDD0
 void __fastcall Refresh_Slot_Settings(HWND dialog, bool full); // RA2: 0x005CA000, the slot rows of the lobby dialogs
 Surface * __fastcall Country_Flag(int country); // RA2: the flag picture of a country
 int Dialog_ID_Of_Window(HWND window); // RA2: 0x005EAB00, the dialog number a window was created for
-namespace UI { bool __fastcall Is_Host_Player(int player); void RegisterComboDropAndNewEditClasses(void); } // RA2: 0x005C8680
+namespace UI { bool __fastcall Is_Host_Player(int player); } // RA2: 0x005C8680
 int Net2_g_Col_Name; // RA2: the columns of the users list
 int Net2_g_Col_House; // RA2: as above
 int Net2_g_Col_Accept; // RA2: as above
@@ -81,7 +81,7 @@ void __fastcall Dialog_On_WM_DRAWITEM(long item); // RA2: 0x005FE380
 WideWstring __fastcall Limit_Name_Text(HWND control); // RA2: 0x005CCF50, the text of a name edit, cut to what the lobby allows
 void __fastcall Save_Observer_Mode(void); // RA2: 0x005CD3A0, writes MultiPlayer ObserverMode to RA2.INI
 void __fastcall Update_Observer_Buttons(HWND dialog); // RA2: 0x005CD540, the observer radio buttons of the lobby dialogs
-char const * __fastcall Tooltip_Label(HWND dialog, HWND control); // RA2: 0x005E22B0, the label of the tool tip of a control, or NULL
+namespace OwnerDraw { char const * __fastcall Control_Tooltip_Label(unsigned int key, HWND window); void __fastcall Register_Window_Classes(void); bool __fastcall WS_Save_Dialog_Values(HWND dialog); } // RA2: ownrdraw.cpp's 0x005E22B0 (the label of a control's tool tip, or NULL), 0x005EAC30 and 0x005E5FC0
 bool __fastcall Focus_Next_Tab_Item(long lparam, bool flag); // RA2: 0x005DEF80, message 0x4DB
 void __fastcall Dialog_On_OD_4EC(HWND dialog); // RA2: 0x005E8710, message 0x4EC
 extern int ObserverMode; // RA2: 0x00A72C68, [MultiPlayer] ObserverMode of RA2.INI
@@ -124,7 +124,6 @@ extern wchar_t const * LobbyEntryTexts[7]; // RA2: 0x00A72D0C, the names of the 
 extern int LobbyObserverSlot; // RA2: 0x007E6D90, the slot of the observer, -1 at first
 Wstring __fastcall Wstring_FromWide(WideWstring const & text); // RA2: 0x00771450, keeps the 7 bit characters
 void __fastcall Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0, as msgbox.cpp
-bool WS_Save_Dialog_Values(HWND dialog); // RA2: 0x5E5FC0, as windlg.cpp
 LRESULT CALLBACK Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x005BF9B0
 bool __fastcall Is_All_Slots_Filled(void); // RA2: 0x005C9440
 bool __fastcall Is_Observer_Slot_Full(void); // RA2: 0x005C9490, no slot is left for an observer
@@ -783,7 +782,7 @@ bool Net_Join_Dialog(void) // RA2: as above
 	Session.GameName[0] = 0;
 	Session.NetOpen = true;
 	Net2OptionsLocked = false; // RA2: as above
-	UI::RegisterComboDropAndNewEditClasses(); // RA2: as above
+	OwnerDraw::Register_Window_Classes(); // RA2: as above
 	HWND dialog = (HWND)WS_Create_Dialog(ProgramInstance, 0xBB, MainWindow, (DLGPROC)MPlayer_Game_List_Dialog_Proc, 0); // RA2: as above
 	Show_Dialog(dialog, 0xBB); // RA2: as above
 	ShowWindow(dialog, 1); // RA2: as above
@@ -1466,7 +1465,7 @@ LRESULT CALLBACK MPlayer_Game_List_Dialog_Proc(HWND window, UINT message, WPARAM
 			wchar_t const * text = L""; // RA2: as above
 			HWND control = ChildWindowFromPointEx(window, point, 1); // RA2: as above
 			if (control != NULL) { // RA2: as above
-				char const * label = Tooltip_Label(window, control); // RA2: as above
+				char const * label = OwnerDraw::Control_Tooltip_Label((unsigned int)window, control); // RA2: as above
 				if (label != NULL) { // RA2: as above
 					text = StringTable::LoadString(label, NULL, "D:\\Ra2\\netdlg2.cpp", 2285); // RA2: as above
 				}
@@ -1597,7 +1596,7 @@ LRESULT CALLBACK MPlayer_Host_Dialog_Proc(HWND window, UINT message, WPARAM wpar
 			wchar_t const * text = L""; // RA2: as above
 			HWND control = ChildWindowFromPointEx(window, point, 1); // RA2: as above
 			if (control != NULL) { // RA2: as above
-				char const * label = Tooltip_Label(window, control); // RA2: as above
+				char const * label = OwnerDraw::Control_Tooltip_Label((unsigned int)window, control); // RA2: as above
 				if (label != NULL) { // RA2: as above
 					text = StringTable::LoadString(label, NULL, "D:\\Ra2\\netdlg2.cpp", 2704); // RA2: as above
 				}
@@ -1711,7 +1710,7 @@ LRESULT CALLBACK MPlayer_Host_Dialog_Proc(HWND window, UINT message, WPARAM wpar
 			}
 			bool was_skirmish = Session.MPGameMode == NULL || Session.MPGameMode->IsSkirmishAllowed(); // RA2: as above
 			bool was_observer = Session.MPGameMode == NULL || Session.MPGameMode->vt_entry_A0(); // RA2: as above
-			WS_Save_Dialog_Values(window); // RA2: as above
+			OwnerDraw::WS_Save_Dialog_Values(window); // RA2: as above
 			ShowWindow(window, SW_HIDE);
 			IsRandomMap = false;
 			if (Scenario_Dialog(MainWindow) == 2) {
@@ -2690,7 +2689,7 @@ LRESULT CALLBACK MPlayer_Guest_Dialog_Proc(HWND window, UINT message, WPARAM wpa
 			wchar_t const * text = L""; // RA2: as above
 			HWND control = ChildWindowFromPointEx(window, point, 1); // RA2: as above
 			if (control != NULL) { // RA2: as above
-				char const * label = Tooltip_Label(window, control); // RA2: as above
+				char const * label = OwnerDraw::Control_Tooltip_Label((unsigned int)window, control); // RA2: as above
 				if (label != NULL) { // RA2: as above
 					text = StringTable::LoadString(label, NULL, "D:\\Ra2\\netdlg2.cpp", 3143); // RA2: as above
 				}

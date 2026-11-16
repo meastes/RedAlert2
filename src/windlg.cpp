@@ -18,7 +18,7 @@
 BOOL CALLBACK Resize_Dialog(HWND window, LPARAM lParam);
 
 extern bool g_PlayingNetGame;
-bool WS_Save_Dialog_Values(HWND dialog); // RA2: 0x5E5FC0
+namespace OwnerDraw { bool __fastcall WS_Save_Dialog_Values(HWND dialog); } // RA2: 0x5E5FC0, ownrdraw.cpp's
 
 BOOL CALLBACK Resize_Dialog_Proc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -118,7 +118,7 @@ bool WS_Destroy_Dialog(HWND window, int id)
 		return(false);
 	}
 
-	WS_Save_Dialog_Values(window);
+	OwnerDraw::WS_Save_Dialog_Values(window); // RA2: in OwnerDraw
 
 	for (i = g_DialogCount - 1; i >= index; i--) {
 		Remove_Modeless_Dialog(g_Dialogs[i].handle);
