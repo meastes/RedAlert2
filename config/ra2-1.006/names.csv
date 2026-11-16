@@ -1156,7 +1156,7 @@ address,symbol,evidence
 0x00463910,?AddRef@BulletClass@@UAGKXZ,"compiled from src/bullet.cpp, matched"
 0x00463930,?Release@BulletClass@@UAGKXZ,"compiled from src/bullet.cpp, matched"
 0x00463970,?Is_Homing@BulletClass@@QBE_NXZ,"compiled from src/bullet.cpp, matched"
-0x00463990,?Create_Bullet@BulletTypeClass@@QBIPAVBulletClass@@PAVAbstractClass@@PAVTechnoClass@@HPBVWarheadTypeClass@@H_N@Z,"inferred: referenced by matched src/techno.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00463990,?Create_Bullet@BulletTypeClass@@QBIPAVBulletClass@@PAVAbstractClass@@PAVTechnoClass@@HPBVWarheadTypeClass@@H_N@Z,"compiled from src/bullet.cpp, matched"
 0x00463A00,?Draw_Voxel@BulletClass@@QBEXABUVoxelDataStruct@@ABVMatrix3D@@ABVPoint2D@@ABV?$TRect@H@@HW4ShapeFlags_Type@@H@Z,"inferred: referenced by matched src/bullet.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00463BA0,?Set_Weapon_Type@BulletClass@@QAEXPAVWeaponTypeClass@@@Z,"compiled from src/bullet.cpp, matched"
 0x00463BB0,?Get_Weapon_Type@BulletClass@@QBEPAVWeaponTypeClass@@XZ,"compiled from src/bullet.cpp, matched"
