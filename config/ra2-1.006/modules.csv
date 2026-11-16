@@ -717,7 +717,9 @@ unk_0073A900,0x0073A900,0x0073C040,unknown,code not assigned to a module
 wonline,0x0073C040,0x007424C0,tibsun,"functions compiled from src/wonline.cpp, without gaps; matched except ?Encode_Game_Options@@YIXPAD@Z and ?WOL_Wait_Callback@@YI_NXZ and ?Reset_WOL_Globals@@YIXXZ and ?Startup_Chat@@YIHPAUHINSTANCE__@@@Z and ?Handle_User_Leave@@YIXAAUUser@@@Z; one placed by the gap; ?Reset_WOL_Globals@@YIXXZ and ?WOL_Wait_Callback@@YI_NXZ placed where matched code calls them; ?Close_Wait_Window@@YIXI@Z not placed; ?Reset_Wait_Events@@YIXXZ not placed"
 unk_007424C0,0x007424C0,0x00752710,unknown,code not assigned to a module
 unk_00752710,0x00752710,0x00752730,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00752730,0x00752730,0x007698C0,unknown,code not assigned to a module
+unk_00752730,0x00752730,0x00768800,unknown,code not assigned to a module
+worlddom,0x00768800,0x00769740,tibsun,"functions compiled from src/worlddom.cpp, matched, without gaps; 11 placed by the gap; ?Faction_Name@@YIABVWstring@@H@Z not placed; _$E43 not placed; _$E42 not placed; _$E41 not placed; _$E40 not placed; ?Faction_Code@@YIABVWstring@@H@Z not placed; _$E48 not placed; _$E47 not placed; _$E46 not placed; _$E45 not placed"
+unk_00769740,0x00769740,0x007698C0,unknown,code not assigned to a module
 writepcx,0x007698C0,0x00769EA0,tibsun,"functions compiled from src/writepcx.cpp, matched, without gaps"
 unk_00769EA0,0x00769EA0,0x0076A070,unknown,code not assigned to a module
 wspipx,0x0076A070,0x0076AA00,tibsun,"functions compiled from src/wspipx.cpp, matched, without gaps"
