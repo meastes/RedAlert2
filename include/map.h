@@ -237,10 +237,14 @@ class MapClass: public GScreenClass
 		static int Get_Low_Bridge2_EW_Neighbor_Mask(Cell const & cell); // RA2: 0x55EB70, as Get_Low_Bridge_EW_Neighbor_Mask for the second low bridge kind
 		static int Get_Low_Bridge2_NS_Neighbor_Mask(Cell const & cell); // RA2: 0x55ECA0, as Get_Low_Bridge_NS_Neighbor_Mask for the second low bridge kind
 		bool Damage_Low_Bridge_EW(Cell const & cell);
+	public: // RA2: BombClass::Detonate (0x435D30) calls it
 		void Destroy_Bridge2_Near(Cell const & cell); // RA2: 0x556520, destroys the concrete bridge deck (BridgeSet tiles) near the cell
+	private:
 		void Destroy_Low_Bridge_Span(Cell const & cell); // RA2: 0x556BF0, the low bridge piece at the cell and its neighbours are destroyed
 		void Destroy_Low_Bridge2_Span(Cell const & cell); // RA2: 0x556E30, as Destroy_Low_Bridge_Span for the second low bridge kind
+	public: // RA2: BombClass::Detonate (0x435D30) calls it
 		void Destroy_Low_Bridge_Near(Cell const & cell); // RA2: 0x557090, destroys the low or train bridge near the cell
+	private:
 		void Destroy_Low_Bridge_EW(Cell const & cell); // RA2: 0x5576A0, the east-west low bridge around the cell is blown up piece by piece
 		void Destroy_Low_Bridge_NS(Cell const & cell); // RA2: 0x5579C0, the north-south low bridge around the cell is blown up piece by piece
 		void Destroy_Low_Bridge2_EW(Cell const & cell); // RA2: 0x557CE0, as Destroy_Low_Bridge_EW for the second low bridge kind
