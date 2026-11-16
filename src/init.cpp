@@ -130,6 +130,40 @@
 #include "obscure.h" // RA2: Obfuscate
 #include "wsproto.h" // RA2: Set_Packet_Loss_Percent, for -DROP=
 #include "firewall.h" // RA2: FirewallHelper.Port
+#include "command.h" // RA2: the keyboard commands Init_Commands creates
+#include "_command.h" // RA2: AllCommands, HotkeyCommands
+#include "tactical.h" // RA2: Tactical
+#include "_tactica.h" // RA2: TacticalMap
+#include "building.h" // RA2: the tab commands place the building they are given
+#include "unit.h" // RA2: Center_Base_View looks through Units
+#include "tracker.h" // RA2: Delete_All_Objects: ObjectsToDelete, TargetTracker, Process_Deferred_Deletion
+#include "bullet.h" // RA2: as above
+#include "trigger.h" // RA2: as above
+#include "tube.h" // RA2: as above
+#include "blight.h" // RA2: as above
+#include "overlay.h" // RA2: as above
+#include "partsys.h" // RA2: as above
+#include "wave.h" // RA2: as above
+#include "factory.h" // RA2: as above
+#include "side.h" // RA2: as above
+#include "_script.h" // RA2: as above
+#include "script.h" // RA2: as above
+#include "terrain.h" // RA2: as above
+#include "alphashp.h" // RA2: as above
+#include "fog.h" // RA2: as above
+#include "empulse.h" // RA2: as above
+#include "parasite.h" // RA2: as above
+#include "temporal.h" // RA2: as above
+#include "spawnmgr.h" // RA2: as above
+#include "radsite.h" // RA2: as above
+#include "capmgr.h" // RA2: as above
+#include "bomb.h" // RA2: as above
+#include "ebolt.h" // RA2: as above
+#include "laser.h" // RA2: as above
+#include "beacon.h" // RA2: as above
+#include "_theater.h" // RA2: Init_Theater: Theaters
+#include "scheme.h" // RA2: as above: ColorSchemes
+#include "mpu.h" // RA2: Get_Performance_Profile: Get_RDTSC_CPU_Speed
 
 
 #include <conio.h>
@@ -2310,11 +2344,11 @@ inline void Show_Dialog_With_Flag(HWND dialog) // RA2: 0x005115F0, not in TibSun
 	}
 }
 
-extern char ProfileText[128]; // RA2: 0x00A4127C, the summary text Get_Performance_Profile builds
-extern char ProfileCPUText[128]; // RA2: 0x00A411FC
-extern char ProfileRAMText[128]; // RA2: 0x00A41388
-extern char ProfileVRAMText[128]; // RA2: 0x00A41308
-extern char ProfileBlitText[128]; // RA2: 0x00A41408
+char ProfileText[128]; // RA2: 0x00A4127C, the summary text Get_Performance_Profile builds
+char ProfileCPUText[128]; // RA2: 0x00A411FC
+char ProfileRAMText[128]; // RA2: 0x00A41388
+char ProfileVRAMText[128]; // RA2: 0x00A41308
+char ProfileBlitText[128]; // RA2: 0x00A41408
 
 
 
@@ -2550,3 +2584,2620 @@ void Title_Screen_Restore(bool force)
 void Leave_Game_Hook(void) // RA2: 0x005173A0, not in TibSun: an empty function that Leave_Game calls first (session.cpp)
 {
 }
+
+
+/*
+**	RA2: the keyboard commands. TibSun's file has such classes too, but RA2's differ: their names, categories and descriptions are
+**	wide strings that come from the string table with this file's name and line, there are more of them (the team, taunt, sidebar,
+**	tab and selection commands), and Execute takes the key. The executable's copies of their methods lie after the last function of
+**	this file, in the order of the classes below.
+*/
+static char CommandNameBuffer[160]; // RA2: 0x00A4149C; the unique name of a team command
+static wchar_t CommandTextBuffer[128]; // RA2: 0x00A4153C; the display name and description of a team command
+bool CursorCheat; // RA2: 0x00A416BC; the cursor position command toggles it
+static int LastTauntTime = -1; // RA2: 0x007DB560; when the last taunt was sent
+
+extern int MuteSWLaunches; // RA2: 0x00A3D548
+extern char * __fastcall Wide_To_Narrow(wchar_t const * wide); // RA2: 0x006FA120
+extern unsigned int __fastcall Compute_Name_CRC(wchar_t const * name); // RA2: 0x005BBA50
+extern BuildingClass * Structure_Tab_Building(void); // RA2: 0x006F8A50
+extern BuildingClass * Defense_Tab_Building(void); // RA2: 0x006F8A60
+extern void Type_Select_Press(void); // RA2: 0x006F7650
+extern void Type_Select_Release(void); // RA2: 0x006F7670
+extern void __fastcall Apply_State_Command(bool shifted); // RA2: 0x006F7B80
+extern void __fastcall Apply_Rank_Command(bool shifted); // RA2: 0x006F7EC0
+extern void Jump_To_Radar_Event(void); // RA2: 0x006F88F0
+extern void Group_Select_Members(int group); // RA2: 0x006F61F0; uicmnds.cpp defines it, tab.h does not declare it
+extern void Select_All_Combatants(bool clear); // RA2: 0x006F6D00; as above
+extern void __cdecl Command_Scatter(void); // RA2: 0x006F5D10; as above
+extern void __cdecl Command_Ally(void); // RA2: 0x006F6380; as above
+extern void __cdecl Command_Delete_Plan_Or_Beacon(void); // RA2: 0x006F6490; as above
+
+class CreateTeamCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051AEA0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		CreateTeamCommandClass(int team) : Team(team) {} // RA2: as above
+
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			sprintf(CommandNameBuffer, "TeamCreate_%d", Team); // RA2: as above
+			return CommandNameBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_CREATE_TEAM", NULL, "D:\\Ra2\\Init.CPP", 5910), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 5912); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_CREATE_TEAM_DESC", NULL, "D:\\Ra2\\Init.CPP", 5914), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Group_Assign(Team); // RA2: as above
+		} // RA2: as above
+
+	private: // RA2: as above
+		int Team; // RA2: as above
+}; // RA2: as above
+
+class SetStructureTabCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051AFC0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "StructureTab"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_STRUCTURE_TAB", NULL, "D:\\Ra2\\Init.CPP", 5931); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 5933); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_STRUCTURE_TAB_DESC", NULL, "D:\\Ra2\\Init.CPP", 5935); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Map.Column[0].Has_Buildables()) { // RA2: as above
+				Map.Select_Tab(0); // RA2: as above
+				BuildingClass * building = Structure_Tab_Building(); // RA2: as above
+				if (building != NULL) { // RA2: as above
+					PlayerPtr->Manual_Place(building->Who_Can_Build_Me(false, false), building); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetDefenseTabCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B080; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "DefenseTab"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_DEFENSE_TAB", NULL, "D:\\Ra2\\Init.CPP", 5957); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 5959); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_DEFENSE_TAB_DESC", NULL, "D:\\Ra2\\Init.CPP", 5961); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Map.Column[1].Has_Buildables()) { // RA2: as above
+				Map.Select_Tab(1); // RA2: as above
+				BuildingClass * building = Defense_Tab_Building(); // RA2: as above
+				if (building != NULL) { // RA2: as above
+					PlayerPtr->Manual_Place(building->Who_Can_Build_Me(false, false), building); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetInfantryTabCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B140; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "InfantryTab"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INFANTRY_TAB", NULL, "D:\\Ra2\\Init.CPP", 5983); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 5985); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INFANTRY_TAB_DESC", NULL, "D:\\Ra2\\Init.CPP", 5987); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Map.Column[2].Has_Buildables()) { // RA2: as above
+				Map.Select_Tab(2); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetUnitTabCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B1D0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "UnitTab"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_UNIT_TAB", NULL, "D:\\Ra2\\Init.CPP", 6004); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 6006); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_UNIT_TAB_DESC", NULL, "D:\\Ra2\\Init.CPP", 6008); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Map.Column[3].Has_Buildables()) { // RA2: as above
+				Map.Select_Tab(3); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SelectTeamCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B260; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		SelectTeamCommandClass(int team) : Team(team) {} // RA2: as above
+
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			sprintf(CommandNameBuffer, "TeamSelect_%d", Team); // RA2: as above
+			return CommandNameBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_SELECT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6037), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6039); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_SELECT_TEAM_DESC", NULL, "D:\\Ra2\\Init.CPP", 6041), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Group_Select(Team); // RA2: as above
+		} // RA2: as above
+
+	private: // RA2: as above
+		int Team; // RA2: as above
+}; // RA2: as above
+
+class AddTeamCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B350; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		AddTeamCommandClass(int team) : Team(team) {} // RA2: as above
+
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			sprintf(CommandNameBuffer, "TeamAddSelect_%d", Team); // RA2: as above
+			return CommandNameBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_ADD_SELECT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6071), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6073); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_ADD_SELECT_TEAM_DESC", NULL, "D:\\Ra2\\Init.CPP", 6075), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Group_Select_Members(Team); // RA2: as above
+		} // RA2: as above
+
+	private: // RA2: as above
+		int Team; // RA2: as above
+}; // RA2: as above
+
+class CenterTeamCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B440; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		CenterTeamCommandClass(int team) : Team(team) {} // RA2: as above
+
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			sprintf(CommandNameBuffer, "TeamCenter_%d", Team); // RA2: as above
+			return CommandNameBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_CENTER_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6106), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_TEAM", NULL, "D:\\Ra2\\Init.CPP", 6108); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_CENTER_TEAM_DESC", NULL, "D:\\Ra2\\Init.CPP", 6110), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Group_Reselect(Team); // RA2: as above
+		} // RA2: as above
+
+	private: // RA2: as above
+		int Team; // RA2: as above
+}; // RA2: as above
+
+class TauntCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B530; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		TauntCommandClass(int team) : Team(team) {} // RA2: as above
+
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			sprintf(CommandNameBuffer, "Taunt_%d", Team); // RA2: as above
+			return CommandNameBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_TAUNT_NUMBER", NULL, "D:\\Ra2\\Init.CPP", 6145), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_TAUNT", NULL, "D:\\Ra2\\Init.CPP", 6150); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			swprintf(CommandTextBuffer, StringTable::LoadString("TXT_TAUNT_DESC", NULL, "D:\\Ra2\\Init.CPP", 6154), Team); // RA2: as above
+			return CommandTextBuffer; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) { // RA2: as above
+				if (!MuteSWLaunches) { // RA2: as above
+					unsigned long now = timeGetTime(); // RA2: as above
+					if (LastTauntTime == -1 || (int)(now - LastTauntTime) > 5000) { // RA2: as above
+						if ((Session.LANTaunts && Session.Type == GAME_IPX) || (Session.WOLTaunts && Session.Type == GAME_INTERNET)) { // RA2: as above
+							LastTauntTime = now; // RA2: as above
+							GlobalPacketType packet; // RA2: as above
+							packet.Command = NetCommandType(29); // RA2: as above
+							strcpy(packet.Name, Wide_To_Narrow(Session.Players[0]->Name)); // RA2: as above
+							packet.Taunt.Color = Session.PrefColor; // RA2: as above
+							packet.Taunt.NameCRC = Compute_Name_CRC(Session.GameName); // RA2: as above
+							unsigned char house = Session.Players[0]->Player.House << 4; // RA2: as above
+							packet.Taunt.ID = (unsigned char)(house ^ ((house ^ Team) & 0x0F)); // RA2: as above
+							Play_Taunt(packet.Taunt.ID); // RA2: as above
+							packet.Taunt.Recipients = 0; // RA2: as above
+							int house_count = Houses.Count(); // RA2: as above
+							for (int i = 0; i < house_count; i++) { // RA2: as above
+								HouseClass * house = Houses[i]; // RA2: as above
+								if (house != NULL && house->Class->IsMultiplay && Session.PlayerChatEnabled[i]) { // RA2: as above
+									int count = Ipx.Num_Connections(); // RA2: as above
+									for (int j = 0; j < count; j++) { // RA2: as above
+										int id = Ipx.Connection_ID(j); // RA2: as above
+										if (wcscmp(house->UIName, Ipx.Connection_Name(id)) == 0) { // RA2: as above
+											IPXAddressClass * address = Ipx.Connection_Address(id); // RA2: as above
+											if (Session.ViaPacketRouter) { // RA2: as above
+												packet.Taunt.Recipients |= OwnerTalk.Mask_From_ID(id); // RA2: as above
+											} else { // RA2: as above
+												Ipx.Send_Global_Message(&packet, 455, 1, address); // RA2: as above
+												Ipx.Service(); // RA2: as above
+											} // RA2: as above
+										} // RA2: as above
+									} // RA2: as above
+								} // RA2: as above
+							} // RA2: as above
+							if (Session.ViaPacketRouter && packet.Taunt.Recipients) { // RA2: as above
+								Ipx.Send_Global_Message(&packet, 455, 1, &Session.Players[0]->Address); // RA2: as above
+								Ipx.Service(); // RA2: as above
+							} // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+
+	private: // RA2: as above
+		int Team; // RA2: as above
+}; // RA2: as above
+
+class NextObjectCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B840; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "NextObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_NEXT_OBJECT", NULL, "D:\\Ra2\\Init.CPP", 6271); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6273); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_NEXT_OBJECT_DESC", NULL, "D:\\Ra2\\Init.CPP", 6275); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Power_Mode_Control(0); // RA2: as above
+			Map.Waypoint_Mode_Control(0, false); // RA2: as above
+			Map.Repair_Mode_Control(0); // RA2: as above
+			Map.Sell_Mode_Control(0); // RA2: as above
+			ObjectClass * object = Map.Next_Object(CurrentObject.Count() ? CurrentObject[0] : NULL); // RA2: as above
+			if (object != NULL) { // RA2: as above
+				Unselect_All(); // RA2: as above
+				object->Select(); // RA2: as above
+				Map.Center_Map(); // RA2: as above
+				Map.Flag_To_Redraw(GS_REDRAW_TACTICAL); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class PlanningModeCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051B940; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "PlanningMode"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:PlanningMode", NULL, "D:\\Ra2\\Init.CPP", 6325); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6327); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:PlanningModeDesc", NULL, "D:\\Ra2\\Init.CPP", 6329); // RA2: as above
+		} // RA2: as above
+		virtual bool PreventCombinationOverride(int key) const // RA2: as above
+		{ // RA2: as above
+			return (key & KN_SHIFT_BIT) || (key & KN_CTRL_BIT) || (key & KN_ALT_BIT); // RA2: as above
+		} // RA2: as above
+		virtual bool ExtraTriggerCondition(int key) const // RA2: as above
+		{ // RA2: as above
+			return true; // RA2: as above
+		} // RA2: as above
+		virtual bool Unknown1C(int key) const // RA2: as above
+		{ // RA2: as above
+			return !(key & KN_RLSE_BIT); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (key & KN_RLSE_BIT) { // RA2: as above
+				Command_Planning_Mode_Off(false); // RA2: as above
+			} else { // RA2: as above
+				Command_Planning_Mode_On(false); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class CombatantSelectCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BA10; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "CombatantSelect"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:CombatantSelect", NULL, "D:\\Ra2\\Init.CPP", 6409); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6411); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:CombatantSelectDesc", NULL, "D:\\Ra2\\Init.CPP", 6413); // RA2: as above
+		} // RA2: as above
+		virtual bool PreventCombinationOverride(int key) const // RA2: as above
+		{ // RA2: as above
+			return (key & KN_SHIFT_BIT) != 0; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Select_All_Combatants((key & KN_SHIFT_BIT) == 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class TypeSelectCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BAB0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "TypeSelect"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:TypeSelect", NULL, "D:\\Ra2\\Init.CPP", 6435); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6437); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:TypeSelectDesc", NULL, "D:\\Ra2\\Init.CPP", 6439); // RA2: as above
+		} // RA2: as above
+		virtual bool PreventCombinationOverride(int key) const // RA2: as above
+		{ // RA2: as above
+			return (key & KN_SHIFT_BIT) != 0; // RA2: as above
+		} // RA2: as above
+		virtual bool ExtraTriggerCondition(int key) const // RA2: as above
+		{ // RA2: as above
+			return true; // RA2: as above
+		} // RA2: as above
+		virtual bool Unknown1C(int key) const // RA2: as above
+		{ // RA2: as above
+			return !(key & KN_RLSE_BIT); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (key & KN_RLSE_BIT) { // RA2: as above
+				Type_Select_Release(); // RA2: as above
+			} else { // RA2: as above
+				Type_Select_Press(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class HealthNavCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BB70; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "HealthNav"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:HealthNavigation", NULL, "D:\\Ra2\\Init.CPP", 6473); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6475); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:HealthNavigationDesc", NULL, "D:\\Ra2\\Init.CPP", 6477); // RA2: as above
+		} // RA2: as above
+		virtual bool PreventCombinationOverride(int key) const // RA2: as above
+		{ // RA2: as above
+			return (key & KN_SHIFT_BIT) != 0; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Apply_State_Command((key & KN_SHIFT_BIT) == 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class VeterancyNavCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BC10; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "VeterancyNav"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:VetNavigation", NULL, "D:\\Ra2\\Init.CPP", 6499); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6501); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:VetNavigationDesc", NULL, "D:\\Ra2\\Init.CPP", 6503); // RA2: as above
+		} // RA2: as above
+		virtual bool PreventCombinationOverride(int key) const // RA2: as above
+		{ // RA2: as above
+			return (key & KN_SHIFT_BIT) != 0; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Apply_Rank_Command((key & KN_SHIFT_BIT) == 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class PrevObjectCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BCB0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "PreviousObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PREV_OBJECT", NULL, "D:\\Ra2\\Init.CPP", 6562); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6564); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PREV_OBJECT_DESC", NULL, "D:\\Ra2\\Init.CPP", 6566); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Power_Mode_Control(0); // RA2: as above
+			Map.Waypoint_Mode_Control(0, false); // RA2: as above
+			Map.Repair_Mode_Control(0); // RA2: as above
+			Map.Sell_Mode_Control(0); // RA2: as above
+			ObjectClass * object = Map.Prev_Object(CurrentObject.Count() ? CurrentObject[0] : NULL); // RA2: as above
+			if (object != NULL) { // RA2: as above
+				Unselect_All(); // RA2: as above
+				object->Select(); // RA2: as above
+				Map.Center_Map(); // RA2: as above
+				Map.Flag_To_Redraw(GS_REDRAW_TACTICAL); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class StopCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BDB0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "StopObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_STOP_OBJECT", NULL, "D:\\Ra2\\Init.CPP", 6603); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6605); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_STOP_OBJECT_DESC", NULL, "D:\\Ra2\\Init.CPP", 6607); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Stop(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class AllToCheerCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BE30; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "AllToCheer"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:AllCheer", NULL, "D:\\Ra2\\Init.CPP", 6621); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6623); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:AllCheerDesc", NULL, "D:\\Ra2\\Init.CPP", 6625); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Cheer(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class DeployCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BEB0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "DeployObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_DEPLOY_OBJECT", NULL, "D:\\Ra2\\Init.CPP", 6648); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6650); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_DEPLOY_OBJECT_DESC", NULL, "D:\\Ra2\\Init.CPP", 6652); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Deploy(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class GuardCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BF30; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "GuardObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_GUARD", NULL, "D:\\Ra2\\Init.CPP", 6676); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6678); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_GUARD_DESC", NULL, "D:\\Ra2\\Init.CPP", 6680); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Guard(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class ScatterCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051BFB0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ScatterObject"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SCATTER", NULL, "D:\\Ra2\\Init.CPP", 6705); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6707); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SCATTER_DESC", NULL, "D:\\Ra2\\Init.CPP", 6709); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Scatter(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class CenterViewCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C030; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "CenterView"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CENTER_VIEW", NULL, "D:\\Ra2\\Init.CPP", 6732); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6734); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CENTER_VIEW_DESC", NULL, "D:\\Ra2\\Init.CPP", 6736); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (CurrentObject.Count() > 0) { // RA2: as above
+				Map.Center_Map(); // RA2: as above
+				Map.Flag_To_Redraw(GS_REDRAW_TACTICAL); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class CenterBaseCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C0D0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "CenterBase"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CENTER_BASE", NULL, "D:\\Ra2\\Init.CPP", 6763); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELECTION", NULL, "D:\\Ra2\\Init.CPP", 6765); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CENTER_BASE_DESC", NULL, "D:\\Ra2\\Init.CPP", 6767); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Coord conyard_coord = COORD_NONE; // RA2: as above
+			Coord any_building_coord = COORD_NONE; // RA2: as above
+			int index = 0; // RA2: as above
+			bool none = true; // RA2: as above
+
+			if (PlayerPtr->CurBuildings) { // RA2: as above
+				for (index = 0; index < Buildings.Count(); index++) { // RA2: as above
+					none = false; // RA2: as above
+					BuildingClass * building = Buildings[index]; // RA2: as above
+
+					if (building != NULL && !building->IsInLimbo && building->House->Is_Player_Control()) { // RA2: as above
+						if (building->Class->IsConstructionYard) { // RA2: as above
+							conyard_coord = building->Center_Coord(); // RA2: as above
+							if (building->IsLeader) { // RA2: as above
+								break; // RA2: as above
+							} // RA2: as above
+						} else if (any_building_coord == COORD_NONE) { // RA2: as above
+							any_building_coord = building->Center_Coord(); // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+
+			if (!none) { // RA2: as above
+				if (any_building_coord == COORD_NONE && conyard_coord == COORD_NONE) { // RA2: as above
+					none = true; // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+
+			if (none) { // RA2: as above
+				if (PlayerPtr->CurUnits) { // RA2: as above
+					for (index = 0; index < Units.Count(); index++) { // RA2: as above
+						UnitClass * unit = Units[index]; // RA2: as above
+						if (unit != NULL && !unit->IsInLimbo && unit->House->Is_Player_Control() && unit->Class == PlayerPtr->Get_First_Ownable(Rule->BaseUnit)) { // RA2: as above
+							conyard_coord = unit->Center_Coord(); // RA2: as above
+							break; // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+
+			if (conyard_coord != COORD_NONE) { // RA2: as above
+				TacticalMap->Set_Tactical_Position(conyard_coord); // RA2: as above
+			} else if (any_building_coord != COORD_NONE) { // RA2: as above
+				TacticalMap->Set_Tactical_Position(any_building_coord); // RA2: as above
+			} // RA2: as above
+
+			if (Map.PendingObject) { // RA2: as above
+				Map.Set_Cursor_Pos(); // RA2: as above
+			} // RA2: as above
+
+			Map.Break_Follow_Mode(); // RA2: as above
+			Map.Flag_To_Redraw(GS_REDRAW_TACTICAL); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class AllianceCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C3C0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ToggleAlliance"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_ALLIANCE", NULL, "D:\\Ra2\\Init.CPP", 6848); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_CONTROL", NULL, "D:\\Ra2\\Init.CPP", 6850); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_ALLIANCE_DESC", NULL, "D:\\Ra2\\Init.CPP", 6852); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Ally(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class ToggleRepairCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C440; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ToggleRepair"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_REPAIR_MODE", NULL, "D:\\Ra2\\Init.CPP", 6906); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 6908); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_REPAIR_MODE_DESC", NULL, "D:\\Ra2\\Init.CPP", 6910); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Repair_Mode_Control(-1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class ToggleSellCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C4C0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ToggleSell"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELL_MODE", NULL, "D:\\Ra2\\Init.CPP", 6932); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 6934); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SELL_MODE_DESC", NULL, "D:\\Ra2\\Init.CPP", 6936); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Sell_Mode_Control(-1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class BeaconPlacementCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C540; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "PlaceBeacon"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PLACE_BEACON", NULL, "D:\\Ra2\\Init.CPP", 6975); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 6977); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PLACE_BEACON_DESC", NULL, "D:\\Ra2\\Init.CPP", 6979); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH) { // RA2: as above
+				Command_Beacon(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class CenterREventCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C5D0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "CenterOnRadarEvent"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RADAR_EVENT", NULL, "D:\\Ra2\\Init.CPP", 6998); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7000); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RADAR_EVENT_DESC", NULL, "D:\\Ra2\\Init.CPP", 7002); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Jump_To_Radar_Event(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SidebarUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C650; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SidebarUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_UP", NULL, "D:\\Ra2\\Init.CPP", 7052); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7054); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_UP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7056); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(true, -1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class LSidebarUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C6E0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "LeftSidebarUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_UP", NULL, "D:\\Ra2\\Init.CPP", 7078); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7080); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_UP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7082); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(true, 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class RSidebarUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C770; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "RightSidebarUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_UP", NULL, "D:\\Ra2\\Init.CPP", 7105); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7107); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_UP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7109); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(true, 1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SidebarPageUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C800; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SidebarPageUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_PGUP", NULL, "D:\\Ra2\\Init.CPP", 7131); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7133); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_PGUP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7135); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(true, -1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class LSidebarPageUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C890; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "LeftSidebarPageUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_PGUP", NULL, "D:\\Ra2\\Init.CPP", 7149); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7151); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_PGUP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7153); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(true, 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class RSidebarPageUpCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C920; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "RightSidebarPageUp"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_PGUP", NULL, "D:\\Ra2\\Init.CPP", 7167); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7169); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_PGUP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7171); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(true, 1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SidebarDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051C9B0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SidebarDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_DOWN", NULL, "D:\\Ra2\\Init.CPP", 7193); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7195); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_DOWN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7197); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(false, -1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class LSidebarDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CA40; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "LeftSidebarDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_DOWN", NULL, "D:\\Ra2\\Init.CPP", 7219); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7221); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_DOWN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7223); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(false, 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class RSidebarDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CAD0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "RightSidebarDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_DOWN", NULL, "D:\\Ra2\\Init.CPP", 7246); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7248); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_DOWN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7250); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Scroll(false, 1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SidebarPageDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CB60; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SidebarPageDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_PGDN", NULL, "D:\\Ra2\\Init.CPP", 7272); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7274); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SIDEBAR_PGDN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7276); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(false, -1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class LSidebarPageDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CBF0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "LeftSidebarPageDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_PGDN", NULL, "D:\\Ra2\\Init.CPP", 7290); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7292); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_LSIDEBAR_PGDN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7294); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(false, 0); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class RSidebarPageDownCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CC80; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "RightSidebarPageDown"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_PGDN", NULL, "D:\\Ra2\\Init.CPP", 7308); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7310); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_RSIDEBAR_PGDN_DESC", NULL, "D:\\Ra2\\Init.CPP", 7312); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Map.Page(false, 1); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class OptionsCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CD10; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "Options"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_OPTIONS", NULL, "D:\\Ra2\\Init.CPP", 7335); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7337); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_OPTIONS_DESC", NULL, "D:\\Ra2\\Init.CPP", 7339); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Queue_Options(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class View1CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CD90; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "View1"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK1", NULL, "D:\\Ra2\\Init.CPP", 7512); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7514); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK1_DESC", NULL, "D:\\Ra2\\Init.CPP", 7516); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Coord coord(Scen->Views[0]); // RA2: as above
+			coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+			TacticalMap->Set_Tactical_Position(coord); // RA2: as above
+			if (Map.PendingObject) { // RA2: as above
+				Map.Set_Cursor_Pos(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class View2CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CE80; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "View2"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK2", NULL, "D:\\Ra2\\Init.CPP", 7548); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7550); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK2_DESC", NULL, "D:\\Ra2\\Init.CPP", 7552); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Coord coord(Scen->Views[1]); // RA2: as above
+			coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+			TacticalMap->Set_Tactical_Position(coord); // RA2: as above
+			if (Map.PendingObject) { // RA2: as above
+				Map.Set_Cursor_Pos(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class View3CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051CF70; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "View3"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK3", NULL, "D:\\Ra2\\Init.CPP", 7584); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7586); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK3_DESC", NULL, "D:\\Ra2\\Init.CPP", 7588); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Coord coord(Scen->Views[2]); // RA2: as above
+			coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+			TacticalMap->Set_Tactical_Position(coord); // RA2: as above
+			if (Map.PendingObject) { // RA2: as above
+				Map.Set_Cursor_Pos(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class View4CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D060; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "View4"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK4", NULL, "D:\\Ra2\\Init.CPP", 7620); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7622); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_VIEW_BOOKMARK4_DESC", NULL, "D:\\Ra2\\Init.CPP", 7624); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Coord coord(Scen->Views[3]); // RA2: as above
+			coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+			TacticalMap->Set_Tactical_Position(coord); // RA2: as above
+			if (Map.PendingObject) { // RA2: as above
+				Map.Set_Cursor_Pos(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetView1CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D150; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SetView1"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK1", NULL, "D:\\Ra2\\Init.CPP", 7656); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7658); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK1_DESC", NULL, "D:\\Ra2\\Init.CPP", 7660); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Point2D pixel = TacticalMap->Get_Relative_Tactical_Position(); // RA2: as above
+			Scen->Views[0] = TacticalMap->Pixel_To_Cell(pixel); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetView2CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D210; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SetView2"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK2", NULL, "D:\\Ra2\\Init.CPP", 7683); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7685); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK2_DESC", NULL, "D:\\Ra2\\Init.CPP", 7687); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Point2D pixel = TacticalMap->Get_Relative_Tactical_Position(); // RA2: as above
+			Scen->Views[1] = TacticalMap->Pixel_To_Cell(pixel); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetView3CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D2D0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SetView3"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK3", NULL, "D:\\Ra2\\Init.CPP", 7710); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7712); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK3_DESC", NULL, "D:\\Ra2\\Init.CPP", 7714); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Point2D pixel = TacticalMap->Get_Relative_Tactical_Position(); // RA2: as above
+			Scen->Views[2] = TacticalMap->Pixel_To_Cell(pixel); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class SetView4CommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D390; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "SetView4"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK4", NULL, "D:\\Ra2\\Init.CPP", 7737); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7739); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SET_BOOKMARK4_DESC", NULL, "D:\\Ra2\\Init.CPP", 7741); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Point2D pixel = TacticalMap->Get_Relative_Tactical_Position(); // RA2: as above
+			Scen->Views[3] = TacticalMap->Pixel_To_Cell(pixel); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class FollowCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D450; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "Follow"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_FOLLOW", NULL, "D:\\Ra2\\Init.CPP", 7764); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7766); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_FOLLOW_DESC", NULL, "D:\\Ra2\\Init.CPP", 7768); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (CurrentObject.Count() != 0 && Map.Object_To_Follow() == NULL) { // RA2: as above
+				Map.Set_To_Follow(CurrentObject[0]); // RA2: as above
+			} else { // RA2: as above
+				Map.Break_Follow_Mode(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class ScreenCaptureCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D500; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ScreenCapture"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7876); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SCRNCAP", NULL, "D:\\Ra2\\Init.CPP", 7877); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_SCRNCAP_DESC", NULL, "D:\\Ra2\\Init.CPP", 7878); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			RECT win_rect; // RA2: as above
+			
+			if (GetClientRect(MainWindow, &win_rect)) { // RA2: as above
+				POINT upper_left; // RA2: as above
+				upper_left.x = win_rect.left; // RA2: as above
+				upper_left.y = win_rect.top; // RA2: as above
+				if (!ClientToScreen(MainWindow, &upper_left)) { // RA2: as above
+					return; // RA2: as above
+				} // RA2: as above
+				POINT lower_right; // RA2: as above
+				lower_right.x = win_rect.right; // RA2: as above
+				lower_right.y = win_rect.bottom; // RA2: as above
+				if (!ClientToScreen(MainWindow, &lower_right)) { // RA2: as above
+					return; // RA2: as above
+				} // RA2: as above
+				Rect dest_rect(upper_left.x, upper_left.y, win_rect.right + 1, win_rect.bottom + 1); // RA2: as above
+				dest_rect.Width = MIN(dest_rect.Width, HiddenSurface->Get_Width()); // RA2: as above
+				dest_rect.Height = MIN(dest_rect.Height, HiddenSurface->Get_Height()); // RA2: as above
+				MouseCursor->Hide_Mouse(); // RA2: as above
+				HiddenSurface->Blit_From(Rect(0, 0, HiddenSurface->Get_Width(), HiddenSurface->Get_Height()), *VisibleSurface, dest_rect); // RA2: as above
+				MouseCursor->Show_Mouse(); // RA2: as above
+				char fname[128]; // RA2: as above
+				int index = -1; // RA2: as above
+				do { // RA2: as above
+					index++; // RA2: as above
+					sprintf(fname, "SCRN%04d.pcx", index); // RA2: as above
+				} while (CCFileClass(fname).Is_Available()); // RA2: as above
+				CCFileClass file(fname); // RA2: as above
+				Write_PCX_File(file, *HiddenSurface, &GamePalette); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class MultiplayerDebugCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D780; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "MultiplayerDebug"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Debug"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Multiplayer debug info"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Turns multiplayer debug on or off."; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Session.EnableMultiplayerDebug) { // RA2: as above
+				Session.DrawMPDebugStats = !Session.DrawMPDebugStats; // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class MultiplayerSyncCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D7E0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "ExtraSyncChecking"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Debug"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Game sync logging"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return L"Turns extra game sync logging on or off."; // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			ExtraSyncInfo = !ExtraSyncInfo; // RA2: as above
+			if (ExtraSyncInfo) { // RA2: as above
+				Session.Messages.Add_Message(NULL, 0, Narrow_To_Wide("Extra sync info ON"), 3, TextPrintType(0x4046), 150, false); // RA2: as above
+			} else { // RA2: as above
+				Session.Messages.Add_Message(NULL, 0, Narrow_To_Wide("Extra sync info OFF"), 3, TextPrintType(0x4046), 150, false); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class PageUserCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D870; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "PageUser"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PAGEUSER", NULL, "D:\\Ra2\\Init.CPP", 7368); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 7370); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_PAGEUSER_DESC", NULL, "D:\\Ra2\\Init.CPP", 7372); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			if (Session.Type == GAME_INTERNET) { // RA2: as above
+				Queue_PageUser(); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class CursorPositionCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D910; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "CursorCheat"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("GUI:CursorCheat", NULL, "D:\\Ra2\\Init.CPP", 8040); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("GUI:Debug", NULL, "D:\\Ra2\\Init.CPP", 8041); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("DESC:CursorCheat", NULL, "D:\\Ra2\\Init.CPP", 8042); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			CursorCheat = !CursorCheat; // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+class DeleteCommandClass : public CommandClass // RA2: the executable's methods of this class start at 0x0051D9B0; not in TibSun's text
+{ // RA2: as above
+	public: // RA2: as above
+		virtual char const * Get_Unique_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return "Delete"; // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Display_Name(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:Delete", NULL, "D:\\Ra2\\Init.CPP", 6304); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Category(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("TXT_INTERFACE", NULL, "D:\\Ra2\\Init.CPP", 6306); // RA2: as above
+		} // RA2: as above
+		virtual wchar_t const * Get_Description(void) const // RA2: as above
+		{ // RA2: as above
+			return StringTable::LoadString("Cmnd:DeleteDesc", NULL, "D:\\Ra2\\Init.CPP", 6308); // RA2: as above
+		} // RA2: as above
+		virtual void Execute(int key) const // RA2: as above
+		{ // RA2: as above
+			Command_Delete_Plan_Or_Beacon(); // RA2: as above
+		} // RA2: as above
+}; // RA2: as above
+
+bool Init_Hotkeys(void); // RA2: as above
+
+void Init_Commands(void) // RA2: 0x005173C0; not static; the list is RA2's: the multiplayer debug commands first, the sidebar commands in left and right variants, the team, taunt, screen capture, page user, cursor position and delete commands
+{
+	if (Session.EnableMultiplayerDebug) { // RA2: as above
+		AllCommands.Add(new MultiplayerDebugCommandClass); // RA2: as above
+		AllCommands.Add(new MultiplayerSyncCommandClass); // RA2: as above
+	}
+	AllCommands.Add(new FollowCommandClass);
+	AllCommands.Add(new View1CommandClass);
+	AllCommands.Add(new View2CommandClass);
+	AllCommands.Add(new View3CommandClass);
+	AllCommands.Add(new View4CommandClass);
+	AllCommands.Add(new SetView1CommandClass);
+	AllCommands.Add(new SetView2CommandClass);
+	AllCommands.Add(new SetView3CommandClass);
+	AllCommands.Add(new SetView4CommandClass);
+	const CommandClass * optcmd = new OptionsCommandClass;
+	AllCommands.Add(optcmd);
+	AllCommands.Add(new SidebarUpCommandClass);
+	AllCommands.Add(new LSidebarUpCommandClass);
+	AllCommands.Add(new RSidebarUpCommandClass);
+	AllCommands.Add(new SidebarDownCommandClass);
+	AllCommands.Add(new LSidebarDownCommandClass);
+	AllCommands.Add(new RSidebarDownCommandClass);
+	AllCommands.Add(new SidebarPageUpCommandClass);
+	AllCommands.Add(new LSidebarPageUpCommandClass);
+	AllCommands.Add(new RSidebarPageUpCommandClass);
+	AllCommands.Add(new SidebarPageDownCommandClass);
+	AllCommands.Add(new LSidebarPageDownCommandClass);
+	AllCommands.Add(new RSidebarPageDownCommandClass);
+	const CommandClass * reventcmd = new CenterREventCommandClass; // RA2: as above
+	AllCommands.Add(reventcmd); // RA2: as above
+	AllCommands.Add(new BeaconPlacementCommandClass); // RA2: as above
+	AllCommands.Add(new ToggleSellCommandClass);
+	AllCommands.Add(new ToggleRepairCommandClass);
+	AllCommands.Add(new AllianceCommandClass);
+	AllCommands.Add(new CenterBaseCommandClass);
+	AllCommands.Add(new CenterViewCommandClass);
+	AllCommands.Add(new ScatterCommandClass);
+	AllCommands.Add(new GuardCommandClass);
+	AllCommands.Add(new StopCommandClass);
+	AllCommands.Add(new AllToCheerCommandClass); // RA2: as above
+	AllCommands.Add(new DeployCommandClass);
+	AllCommands.Add(new PrevObjectCommandClass);
+	AllCommands.Add(new NextObjectCommandClass);
+	AllCommands.Add(new PlanningModeCommandClass); // RA2: as above
+	AllCommands.Add(new CombatantSelectCommandClass); // RA2: as above
+	AllCommands.Add(new TypeSelectCommandClass); // RA2: as above
+	AllCommands.Add(new HealthNavCommandClass); // RA2: as above
+	AllCommands.Add(new VeterancyNavCommandClass); // RA2: as above
+	AllCommands.Add(new SetStructureTabCommandClass); // RA2: as above
+	AllCommands.Add(new SetDefenseTabCommandClass); // RA2: as above
+	AllCommands.Add(new SetUnitTabCommandClass); // RA2: as above
+	AllCommands.Add(new SetInfantryTabCommandClass); // RA2: as above
+	AllCommands.Add(new CreateTeamCommandClass(1));
+	AllCommands.Add(new CreateTeamCommandClass(2));
+	AllCommands.Add(new CreateTeamCommandClass(3));
+	AllCommands.Add(new CreateTeamCommandClass(4));
+	AllCommands.Add(new CreateTeamCommandClass(5));
+	AllCommands.Add(new CreateTeamCommandClass(6));
+	AllCommands.Add(new CreateTeamCommandClass(7));
+	AllCommands.Add(new CreateTeamCommandClass(8));
+	AllCommands.Add(new CreateTeamCommandClass(9));
+	AllCommands.Add(new CreateTeamCommandClass(10));
+	AllCommands.Add(new SelectTeamCommandClass(1));
+	AllCommands.Add(new SelectTeamCommandClass(2));
+	AllCommands.Add(new SelectTeamCommandClass(3));
+	AllCommands.Add(new SelectTeamCommandClass(4));
+	AllCommands.Add(new SelectTeamCommandClass(5));
+	AllCommands.Add(new SelectTeamCommandClass(6));
+	AllCommands.Add(new SelectTeamCommandClass(7));
+	AllCommands.Add(new SelectTeamCommandClass(8));
+	AllCommands.Add(new SelectTeamCommandClass(9));
+	AllCommands.Add(new SelectTeamCommandClass(10));
+	AllCommands.Add(new AddTeamCommandClass(1));
+	AllCommands.Add(new AddTeamCommandClass(2));
+	AllCommands.Add(new AddTeamCommandClass(3));
+	AllCommands.Add(new AddTeamCommandClass(4));
+	AllCommands.Add(new AddTeamCommandClass(5));
+	AllCommands.Add(new AddTeamCommandClass(6));
+	AllCommands.Add(new AddTeamCommandClass(7));
+	AllCommands.Add(new AddTeamCommandClass(8));
+	AllCommands.Add(new AddTeamCommandClass(9));
+	AllCommands.Add(new AddTeamCommandClass(10));
+	AllCommands.Add(new CenterTeamCommandClass(1));
+	AllCommands.Add(new CenterTeamCommandClass(2));
+	AllCommands.Add(new CenterTeamCommandClass(3));
+	AllCommands.Add(new CenterTeamCommandClass(4));
+	AllCommands.Add(new CenterTeamCommandClass(5));
+	AllCommands.Add(new CenterTeamCommandClass(6));
+	AllCommands.Add(new CenterTeamCommandClass(7));
+	AllCommands.Add(new CenterTeamCommandClass(8));
+	AllCommands.Add(new CenterTeamCommandClass(9));
+	AllCommands.Add(new CenterTeamCommandClass(10));
+	AllCommands.Add(new TauntCommandClass(1)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(2)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(3)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(4)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(5)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(6)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(7)); // RA2: as above
+	AllCommands.Add(new TauntCommandClass(8)); // RA2: as above
+	AllCommands.Add(new ScreenCaptureCommandClass);
+	AllCommands.Add(new PageUserCommandClass);
+	AllCommands.Add(new CursorPositionCommandClass); // RA2: as above
+	const CommandClass * delcmd = new DeleteCommandClass; // RA2: as above
+	AllCommands.Add(delcmd); // RA2: as above
+	Init_Hotkeys();
+	if (HotkeyCommands.Is_Present(KN_DELETE)) {
+		HotkeyCommands.Remove_Index(KN_DELETE);
+	}
+	HotkeyCommands.Add_Index(KN_DELETE, delcmd); // RA2: as above
+	if (HotkeyCommands.Is_Present(KN_ESC)) {
+		HotkeyCommands.Remove_Index(KN_ESC);
+	}
+	HotkeyCommands.Add_Index(KN_ESC, optcmd);
+	if (HotkeyCommands.Is_Present(KN_SPACE)) { // RA2: as above
+		HotkeyCommands.Remove_Index(KN_SPACE); // RA2: as above
+	}
+	HotkeyCommands.Add_Index(KN_SPACE, reventcmd); // RA2: as above
+}
+
+
+/// <summary>
+/// Binds the game commands to the keys named in KEYBOARD.INI.
+/// This routine throws the current key assignments away and rebuilds them from the
+/// player's keyboard file, matching each entry against a command's unique name.
+/// </summary>
+/// <returns>bool; Was the keyboard file loaded?</returns>
+/// <remarks>The command list must already be built before calling this routine.</remarks>
+bool Init_Hotkeys(void) // RA2: 0x00519240; KEYBOARD.INI is read with Load(file, false) and a command is found by its unique name
+{
+	CCINIClass ini;
+	CCFileClass file("KEYBOARD.INI");
+
+	if (ini.Load(file, false)) {
+		HotkeyCommands.Clear();
+		for (int index = 0; index < ini.Entry_Count("Hotkey"); index++) {
+			const char * entry = ini.Get_Entry("Hotkey", index); // RA2: as above
+			int id = ini.Get_Int("Hotkey", entry, 0);
+			const CommandClass * command = NULL; // RA2: as above
+
+			for (int cindex = 0; cindex < AllCommands.Count(); cindex++) {
+				if (strcmp(AllCommands[cindex]->Get_Unique_Name(), entry) == 0) {
+					command = AllCommands[cindex];
+					break;
+				}
+			}
+
+			if ((command != NULL) && (id != 0)) {
+				HotkeyCommands.Add_Index(id, command);
+			}
+		}
+		return(true);
+	}
+
+	DebugString("Unable to load KEYBOARD.INI\n");
+	return(false);
+}
+
+/// <summary>
+/// Executes the command that goes by the specified unique name.
+/// Use this routine where a command must be triggered by name rather than by the key it
+/// happens to be bound to. A name that matches no command is quietly ignored.
+/// </summary>
+/// <param name="name">The unique name of the command to execute.</param>
+void Execute_Command(char const * name) // RA2: 0x00519480; the command takes a key, 0 here
+{
+	for (int command = 0; command < AllCommands.Count(); command++) {
+		if (strcmp(AllCommands[command]->Get_Unique_Name(), name) == 0) {
+			AllCommands[command]->Execute(0); // RA2: as above
+			break;
+		}
+	}
+}
+
+
+
+/*
+**	RA2: globals this part of the file uses (addresses from the executable; the headers do not declare them yet).
+*/
+extern DynamicVectorClass<BombClass *> Bombs; // RA2: 0x0084EB78, the bombs Crazy Ivan planted (BombList at 0x008322E0 is a different object)
+extern int Get_CPU_Type(void); // RA2: 0x004D2A60 (getcpu.cpp holds the other, TibSun's Get_CPU_Type): the CPU class
+extern char const * Get_CPU_Type_Name(void); // RA2: 0x004D2B80 (queue.cpp declares it too)
+extern bool VideoBackBufferAllowed; // RA2: 0x007F4CC4, [Video] VideoBackBuffer (startup.cpp)
+extern MFCD * GenericMix; // RA2: 0x008374C8, GENERIC.MIX, kept while a theater other than snow is loaded
+extern MFCD * IsoGenericMix; // RA2: 0x008374D0, ISOGEN.MIX
+extern MFCD * NeutralMix; // RA2: 0x008374F0, NEUTRAL.MIX
+extern CCINIClass UIINI; // RA2: 0x00839860, UI.INI
+extern void __fastcall Set_Scheme_Table_Theater(TheaterType theater); // RA2: 0x00603750, palette.cpp: switches the colour scheme table to the theater
+extern void __cdecl Delete_All_Line_Trails(void); // RA2: 0x005397B0, deletes every line trail
+extern void __fastcall Reload_Sidebar_Art(void); // RA2: 0x006F44D0 (txtlabel2.cpp)
+extern void __fastcall Select_Tooltip_Color(int which); // RA2: 0x006F45A0 (txtlabel2.cpp)
+extern void __fastcall Load_Techno_Palettes(void); // RA2: 0x006DF640, TechnoTypeClass::Load_Palettes of the executable
+
+
+/// <summary>
+/// Allocates the game's drawing surfaces.
+/// This routine releases whatever surfaces are already in hand and builds a fresh set to
+/// the dimensions given. A rectangle that is not valid means that surface is not wanted.
+/// The composite and tile surfaces must share the same kind of memory as each other, so
+/// both are pushed into system memory if the video card cannot hold the pair.
+/// </summary>
+/// <param name="hidden_rect">The dimensions for the hidden and alternate surfaces.</param>
+/// <param name="composite_rect">The dimensions for the composite surface.</param>
+/// <param name="tile_rect">The dimensions for the tile surface.</param>
+/// <param name="sidebar_rect">The dimensions for the sidebar surface.</param>
+/// <param name="hidden_first">Should the hidden surface get first claim on video memory?</param>
+/// <returns>bool; Were the surfaces allocated?</returns>
+bool Allocate_Surfaces(const Rect & hidden_rect, const Rect & composite_rect, const Rect & tile_rect, const Rect & sidebar_rect, bool hidden_first) // RA2: 0x00519500; the composite and tile surfaces follow VideoBackBuffer, the sidebar surface AllowVRAMSidebar; compiles to the executable's 1120 bytes, but with the hidden and composite rectangles in the other two registers and the memory flags on the stack, so it is excepted
+{
+	DebugString("Allocating new surfaces\n");
+
+	if (AlternateSurface != NULL) {
+		DebugString("Deleting AlternateSurface\n");
+		delete AlternateSurface;
+		AlternateSurface = NULL;
+	}
+
+	if (HiddenSurface != NULL) {
+		DebugString("Deleting HiddenSurface\n");
+		delete HiddenSurface;
+		HiddenSurface = NULL;
+	}
+
+	if (CompositeSurface != NULL) {
+		DebugString("Deleting CompositeSurface\n");
+		delete CompositeSurface;
+		CompositeSurface = NULL;
+	}
+
+	if (TileSurface != NULL) {
+		DebugString("Deleting TileSurface\n");
+		delete TileSurface;
+		TileSurface = NULL;
+	}
+
+	if (SidebarSurface != NULL) {
+		DebugString("Deleting SidebarSurface\n");
+		delete SidebarSurface;
+		SidebarSurface = NULL;
+	}
+
+	bool tile_in_system = !VideoBackBufferAllowed; // RA2: the composite and tile surfaces go to system memory unless the video back buffer is allowed
+	bool sidebar_in_system = !Options.AllowVRAMSidebar; // RA2: as above for the sidebar surface
+
+	if (hidden_first && hidden_rect.Is_Valid()) {
+		HiddenSurface = new DSurface(hidden_rect.Width, hidden_rect.Height, false); // RA2: as above
+		HiddenSurface->Fill(0);
+
+		DebugString("HiddenSurface (%dx%d) %s\n", hidden_rect.Width, hidden_rect.Height,
+					((DSurface *)HiddenSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	if (composite_rect.Is_Valid()) {
+		CompositeSurface = new DSurface(composite_rect.Width, composite_rect.Height, tile_in_system); // RA2: as above
+		CompositeSurface->Fill(0);
+
+		DebugString("CompositeSurface (%dx%d) %s\n", composite_rect.Width, composite_rect.Height,
+					((DSurface *)CompositeSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	if (tile_rect.Is_Valid()) {
+		TileSurface = new DSurface(tile_rect.Width, tile_rect.Height, tile_in_system); // RA2: as above
+		TileSurface->Fill(0);
+
+		DebugString("TileSurface (%dx%d) %s\n", tile_rect.Width, tile_rect.Height,
+					((DSurface *)TileSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	if ((CompositeSurface != NULL) && (TileSurface != NULL)) {
+		bool is_composite_surf_in_vram = ((DSurface *)CompositeSurface)->In_Video_Ram();
+		bool is_tile_surf_in_vram = ((DSurface *)TileSurface)->In_Video_Ram();
+
+		if (is_composite_surf_in_vram ^ is_tile_surf_in_vram) {
+			delete CompositeSurface;
+			delete TileSurface;
+			DebugString("Moving TileSurface and CompositeSurface into system memory\n");
+			CompositeSurface = new DSurface(composite_rect.Width, composite_rect.Height, true);
+			TileSurface = new DSurface(tile_rect.Width, tile_rect.Height, true);
+		}
+	}
+
+	if (sidebar_rect.Is_Valid()) {
+		SidebarSurface = new DSurface(sidebar_rect.Width, sidebar_rect.Height, sidebar_in_system); // RA2: as above
+		SidebarSurface->Fill(0);
+
+		DebugString("SidebarSurface (%dx%d) %s\n", sidebar_rect.Width, sidebar_rect.Height,
+					((DSurface *)SidebarSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	if (!hidden_first && hidden_rect.Is_Valid()) {
+		HiddenSurface = new DSurface(hidden_rect.Width, hidden_rect.Height, false); // RA2: as above
+		HiddenSurface->Fill(0);
+
+		DebugString("HiddenSurface (%dx%d) %s\n", hidden_rect.Width, hidden_rect.Height,
+					((DSurface *)HiddenSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	if (hidden_rect.Is_Valid()) {
+		AlternateSurface = new DSurface(hidden_rect.Width, hidden_rect.Height, true);
+		AlternateSurface->Fill(0);
+
+		DebugString("AlternateSurface (%dx%d) %s\n", hidden_rect.Width, hidden_rect.Height,
+					((DSurface *)AlternateSurface)->In_Video_Ram() ? "VRAM" : "SYSTEM MEMORY");
+	}
+
+	return(true);
+}
+
+
+/// <summary>
+/// Deletes every game object and object type in existence.
+/// This routine is used when tearing a scenario down so that the next one may start from a
+/// clean slate. Everything from bullets through houses to the tactical map itself is
+/// released, and the cell array goes with them.
+/// </summary>
+/// <remarks>The game logic must not be running -- there is nothing left for it to run
+/// upon.</remarks>
+void Delete_All_Objects(void) // RA2: 0x00519960; RA2 has more object lists to empty, no veinhole monsters, and no checks at the end
+{
+	ScenarioInit++;
+
+	ObjectsToDelete.Clear();
+
+	while (TargetTracker.Count()) {
+		AbstractClass * ptr = TargetTracker.Fetch_By_Position(0);
+		delete ptr;
+	}
+	Process_Deferred_Deletion();
+
+	while (Bullets.Count()) {
+		Bullets[0]->Release();
+	}
+	Process_Deferred_Deletion();
+
+	while (Objects.Count()) {
+		delete Objects[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Tags.Count()) {
+		delete Tags[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Triggers.Count()) {
+		delete Triggers[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Tubes.Count()) {
+		delete Tubes[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (BuildingLights.Count()) {
+		delete BuildingLights[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Overlays.Count()) {
+		delete Overlays[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (ParticleSystems.Count()) {
+		delete ParticleSystems[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Waves.Count()) {
+		delete Waves[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Factories.Count()) {
+		delete Factories[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Sides.Count()) {
+		delete Sides[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Teams.Count()) {
+		delete Teams[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Houses.Count()) {
+		delete Houses[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Anims.Count()) {
+		delete Anims[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Scripts.Count()) {
+		delete Scripts[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (RadSites.Count()) { // RA2: as above
+		delete RadSites[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (LightSources.Count()) {
+		delete LightSources[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (EMPulseClass::EMPulses.Count()) {
+		delete EMPulseClass::EMPulses[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (CaptureManagerArray.Count()) { // RA2: as above
+		delete CaptureManagerArray[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (Parasites.Count()) { // RA2: as above
+		delete Parasites[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (Temporals.Count()) { // RA2: as above
+		delete Temporals[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (SpawnManagers.Count()) { // RA2: as above
+		delete SpawnManagers[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (Bombs.Count()) { // RA2: as above
+		delete Bombs[0]; // RA2: as above
+	}
+	Process_Deferred_Deletion();
+
+	while (SpotLights.Count()) {
+		delete SpotLights[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (FoggedObjectClass::FoggyObjects.Count()) {
+		delete FoggedObjectClass::FoggyObjects[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (AlphaShapes.Count()) {
+		delete AlphaShapes[0];
+	}
+	Process_Deferred_Deletion();
+
+	while (Terrains.Count()) {
+		delete Terrains[0];
+	}
+	Process_Deferred_Deletion();
+
+	EBolt::Delete_All(); // RA2: as above
+	Delete_All_Line_Trails(); // RA2: as above
+	LaserDrawClass::All_Clear();
+
+	while (AbstractTypes.Count()) {
+		delete AbstractTypes[0];
+	}
+	Process_Deferred_Deletion();
+
+	delete TacticalMap;
+	TacticalMap = NULL;
+	Map.Free_Cells();
+	Process_Deferred_Deletion();
+
+	BeaconManager.Clear_Slots(); // RA2: as above
+	ScenarioInit--;
+}
+
+
+/***********************************************************************************************
+ * DisplayClass::Init_Theater -- Performs theater-specific initialization (mixfiles, etc)      *
+ *                                                                                             *
+ * INPUT:                                                                                      *
+ *      theater         new theater                                                            *
+ *                                                                                             *
+ * OUTPUT:                                                                                     *
+ *      none.                                                                                  *
+ *                                                                                             *
+ * WARNINGS:                                                                                   *
+ *      none.                                                                                  *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   03/17/1995 BRR : Created.                                                                 *
+ *   05/07/1996 JLB : Added translucent tables.                                                *
+ *=============================================================================================*/
+void Init_Theater(TheaterType theater) // RA2: 0x00519E70; RA2 also keeps GENERIC.MIX and ISOGEN.MIX, loads the UNIT palette by theater name and switches the colour scheme table
+{
+	char fullname[16];
+	char shortname[16];
+	char isofullname[16];
+
+	wsprintf(fullname, "%s.MIX", Theaters[theater].Root);
+	wsprintf(isofullname, "%s.MIX", Theaters[theater].IsoRoot);
+	wsprintf(shortname, "%s.MIX", Theaters[theater].Suffix);
+	DebugString("Init theater %s\n", Theaters[theater].Name);
+
+	Scen->Theater = theater;
+	Session.Update_Progress(8);
+
+	if (Scen->Theater != THEATER_SNOW && (LastTheater == THEATER_SNOW || LastTheater == THEATER_NONE)) { // RA2: as above
+		if (GenericMix != NULL) { // RA2: as above
+			delete GenericMix; // RA2: as above
+		}
+		GenericMix = new MFCD("GENERIC.MIX", &FastKey); // RA2: as above
+		GenericMix->Cache(); // RA2: as above
+	}
+
+	if (Scen->Theater != LastTheater) {
+		if (TheaterData != NULL) {
+			delete TheaterData;
+		}
+		TheaterData = new MFCD(fullname, &FastKey);
+
+		if (TheaterDat != NULL) {
+			delete TheaterDat;
+		}
+		TheaterDat = new MFCD(shortname, &FastKey);
+		TheaterDat->Cache();
+		TheaterData->Cache();
+		Session.Update_Progress(6);
+
+		if (IsometricTheaterData != NULL) {
+			delete IsometricTheaterData;
+		}
+		IsometricTheaterData = new MFCD(isofullname, &FastKey);
+
+		if (IsoGenericMix != NULL) { // RA2: as above
+			delete IsoGenericMix; // RA2: as above
+		}
+		IsoGenericMix = new MFCD("ISOGEN.MIX", &FastKey); // RA2: as above
+		Session.Update_Progress(12);
+
+		wsprintf(fullname, "%s.PAL", Theaters[theater].Root);
+		unsigned char * ptr = (unsigned char *)MFCD::Retrieve(fullname);
+		if (ptr != NULL) {
+			for (int color = 0; color < PaletteClass::COLOR_COUNT; color++) {
+				unsigned char r = (unsigned char)((*ptr++)<<2);
+				unsigned char g = (unsigned char)((*ptr++)<<2);
+				unsigned char b = (unsigned char)((*ptr++)<<2);
+				GamePalette[color] = RGBClass(r, g, b);
+			}
+		} else {
+			for (int color = 0; color < PaletteClass::COLOR_COUNT; color++) {
+				GamePalette[color] = RGBClass(color, 255 - color, ((color << 2) & 0xff));
+			}
+		}
+		OriginalPalette = GamePalette;
+
+		wsprintf(fullname, "UNIT%s.PAL", Theaters[theater].Suffix); // RA2: as above
+		PaletteClass * unitpal = (PaletteClass *)MFCD::Retrieve(fullname); // RA2: as above
+		Call_Back();
+		if (unitpal != NULL) {
+			SchemePalette = *unitpal;
+		}
+		for (int index = 0; index < 256; index++) {
+			SchemePalette[index] = RGBClass(
+					(unsigned char)(SchemePalette[index].Get_Red()<<2),
+					(unsigned char)(SchemePalette[index].Get_Green()<<2),
+					(unsigned char)(SchemePalette[index].Get_Blue()<<2));
+		}
+
+		int last_percent = 12;
+		int prog_step = ColorSchemes.Count() / (25 - 12);
+		for (int s = 0; s < ColorSchemes.Count(); s++) {
+			ColorSchemes[s]->Build_Light_Converters(SchemePalette, GamePalette);
+			int percent = (min(12 + (s / prog_step),25));
+			if (percent != last_percent) {
+				Session.Update_Progress(percent);
+				last_percent = percent;
+			}
+			Call_Back();
+		}
+		Set_Scheme_Table_Theater(theater); // RA2: as above
+		Load_Techno_Palettes(); // RA2: as above
+		Session.Update_Progress(25);
+	}
+}
+
+
+bool __cdecl Release_Neutral_Mix(void) // RA2: as above
+{
+	if (NeutralMix != NULL) { // RA2: as above
+		DebugString("     Releasing %s\n", NeutralMix->Filename); // RA2: as above
+		delete NeutralMix; // RA2: as above
+		NeutralMix = NULL; // RA2: as above
+	}
+	return(true);
+}
+
+
+bool __cdecl Load_Neutral_Mix(void) // RA2: as above
+{
+	if (NeutralMix != NULL) { // RA2: as above
+		DebugString("     Releasing %s\n", NeutralMix->Filename); // RA2: as above
+		delete NeutralMix; // RA2: as above
+		NeutralMix = NULL; // RA2: as above
+	}
+	NeutralMix = new MFCD("NEUTRAL.MIX", &FastKey); // RA2: as above
+	if (NeutralMix == NULL) { // RA2: as above
+		return(false);
+	}
+	DebugStringNoPrefix("LOADED NEUTRAL.MIX"); // RA2: as above
+	return(true);
+}
+
+
+/// <summary>
+/// Prepares the art and data mixfiles for the specified side.
+/// This routine is called whenever the side being played changes. It releases the previous
+/// side's archives, mounts the cached, uncached and CD archives belonging to the new one,
+/// and then lets the map rebuild whatever it keeps on a per house basis.
+/// </summary>
+/// <param name="side">The side whose archives should be made available.</param>
+/// <returns>bool; Were all of the required archives for the side found?</returns>
+bool Prep_For_Side(SideType side) // RA2: 0x0051A330; RA2 knows no expansion mixes, loads SIDEC and SIDENC only and then UI.INI
+{
+	if (side == -1) { // RA2: as above
+		int disk = DiskSwap::Get_Disk_ID(CDFileClass::Get_CD_Drive(), 60); // RA2: as above
+		if (disk != 0 && disk != 1) { // RA2: as above
+			DebugString("     FAILED!  This was not disk one or two!!!\n"); // RA2: as above
+			return(false);
+		}
+		side = (SideType)disk; // RA2: as above
+	}
+	DebugString("Preparing Mixfiles for Side %02d.\n", side);
+
+	if (SideCDMix != NULL) {
+		DebugString("     Releasing %s\n", SideCDMix->Filename);
+		delete SideCDMix;
+		SideCDMix = NULL;
+	}
+	if (SideCMix != NULL) {
+		DebugString("     Releasing %s\n", SideCMix->Filename);
+		delete SideCMix;
+		SideCMix = NULL;
+	}
+	if (SideNCMix != NULL) {
+		DebugString("     Releasing %s\n", SideNCMix->Filename);
+		delete SideNCMix;
+		SideNCMix = NULL;
+	}
+
+	int id = (int)side + 1; // RA2: as above
+	Speech_Set_Side(side); // RA2: as above
+
+	char name[64];
+	sprintf(name, "SIDEC%02d.MIX", id);
+	DebugString("     Initilizing %s\n", name);
+	if (CCFileClass(name).Is_Available()) {
+		SideCMix = new MFCD(name, &FastKey);
+	}
+	if (SideCMix == NULL) {
+		DebugString("     FAILED!\n");
+		return(false);
+	}
+	SideCMix->Cache();
+
+	sprintf(name, "SIDENC%02d.MIX", id);
+	DebugString("     Initilizing %s\n", name);
+	if (CCFileClass(name).Is_Available()) {
+		SideNCMix = new MFCD(name, &FastKey);
+	}
+
+	Reload_Sidebar_Art(); // RA2: as above
+	Select_Tooltip_Color(side); // RA2: as above
+
+	CCFileClass file("UI.INI"); // RA2: as above
+	if (UIINI.Load(file, false)) { // RA2: as above
+		Rule->Read_AdvancedCommandBar(UIINI, Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH); // RA2: as above
+		Map.Init_For_House();
+		return(true);
+	}
+	DebugString("Failed to load UI.INI!\n"); // RA2: as above
+	return(false);
+}
+
+
+/// <summary>
+/// Fetches the most interesting object out of the current selection.
+/// This routine is used wherever a single object must stand in for the whole selection.
+/// An armed and mobile combatant outranks a defensive building, and anything that cannot
+/// move under its own power ranks lowest of all.
+/// </summary>
+/// <returns>Returns with a pointer to the best object selected. Otherwise, NULL is
+/// returned.</returns>
+ObjectClass * Best_Selected_Object(Cell const * cell, ObjectClass const * object) // RA2: 0x0051A690; takes the cell or the object the answer is nearest to
+{
+	ObjectClass * best_obj = NULL; // RA2: as above
+	int best_value = -1;
+	int best_distance = 0x7FFFFFFF; // RA2: as above
+
+	if (CurrentObject.Count() > 0) {
+		for (int index = 0; index < CurrentObject.Count(); index++) {
+			ObjectClass * obj = CurrentObject[index];
+
+			int value = 0;
+
+			bool is_techno = false; // RA2: as above
+			if (obj != NULL) {
+				is_techno = obj->AbstractFlags & 1; // RA2: as above
+			}
+			if (is_techno) { // RA2: as above
+				value = 2;
+				TechnoClass * tech = (TechnoClass *)obj;
+				if (tech->IsUnderEMP()) { // RA2: as above
+					value = 1;
+				} else if (tech->Is_Weapon_Equipped()) {
+					value = 3;
+					if (tech->RTTI != RTTI_BUILDING) {
+						value = 4;
+						if (tech->Combat_Damage() > 0) {
+							value = 5;
+						}
+					}
+				}
+			}
+
+			if (value >= best_value) { // RA2: as above
+				int distance = 0x7FFFFFFF; // RA2: as above
+				bool has_cell = cell != NULL; // RA2: as above
+				if (has_cell || object != NULL) { // RA2: as above
+					Coord here = obj->Center_Coord(); // RA2: as above
+					Coord there; // RA2: as above
+					if (has_cell) { // RA2: as above
+						there = cell->As_Coord(); // RA2: as above
+					} else {
+						there = object->Center_Coord(); // RA2: as above
+					}
+					distance = here.Distance_To(there); // RA2: as above
+				}
+				if (value > best_value) {
+					best_value = value;
+					best_obj = obj;
+					best_distance = distance; // RA2: as above
+				} else if (distance < best_distance) { // RA2: as above
+					best_obj = obj;
+					best_distance = distance; // RA2: as above
+				}
+			}
+		}
+	}
+	return(best_obj);
+}
+
+
+ThemeType Fetch_Main_Menu_Theme(void)
+{
+	return(Theme.From_Name("INTRO"));
+}
+
+
+static int PerformanceProfile = -1; // RA2: 0x007DB564; the overall rating of this machine, -1 until Get_Performance_Profile has measured it
+
+int Get_Performance_Profile(void) // RA2: as above
+{
+	if (PerformanceProfile == -1) { // RA2: as above
+		ProfileText[0] = 0; // RA2: as above
+		ProfileCPUText[0] = 0; // RA2: as above
+		ProfileRAMText[0] = 0; // RA2: as above
+		ProfileVRAMText[0] = 0; // RA2: as above
+		ProfileBlitText[0] = 0; // RA2: as above
+
+		int type = Get_CPU_Type(); // RA2: as above
+		int mhz = Get_RDTSC_CPU_Speed(); // RA2: as above
+		int cpu = 5; // RA2: as above
+		switch (type) { // RA2: as above
+			case -1: // RA2: as above
+				break;
+
+			case 3:
+			case 5: // RA2: as above
+				cpu = mhz / 100 + 1; // RA2: as above
+				break;
+
+			case 4:
+			case 7: // RA2: as above
+				cpu = mhz / 100 + 2; // RA2: as above
+				break;
+
+			case 6: // RA2: as above
+				cpu = mhz / 100 + 3; // RA2: as above
+				break;
+
+			default:
+				cpu = 1; // RA2: as above
+				break;
+		}
+		DebugString("Profile: CPU:%d (%dMhz %s)\n", cpu, mhz, Get_CPU_Type_Name()); // RA2: as above
+		sprintf(ProfileCPUText, "CPU: %d Mhz %s", mhz, Get_CPU_Type_Name()); // RA2: as above
+
+		MEMORYSTATUS status; // RA2: as above
+		status.dwLength = sizeof(status); // RA2: as above
+		GlobalMemoryStatus(&status); // RA2: as above
+		int ram = 2; // RA2: as above
+		unsigned int megabytes = (status.dwTotalPhys + 0xA0000) >> 20; // RA2: as above
+		if (megabytes >= 64) { // RA2: as above
+			ram = 5; // RA2: as above
+		}
+		if (megabytes >= 128) { // RA2: as above
+			ram += 2; // RA2: as above
+		}
+		if (megabytes == 256) { // RA2: as above
+			ram += 2; // RA2: as above
+		} else if (megabytes > 256) { // RA2: as above
+			ram = 10; // RA2: as above
+		}
+		DebugString("Profile: RAM:%d (%dMb)\n", ram, megabytes); // RA2: as above
+		sprintf(ProfileRAMText, "RAM reported: %d Mb", megabytes); // RA2: as above
+
+		megabytes = 4; // RA2: as above
+		int vram = 5; // RA2: as above
+		if (DirectDrawObject != NULL) { // RA2: as above
+			DDCAPS caps; // RA2: as above
+			caps.dwSize = sizeof(caps); // RA2: as above
+			if (DirectDrawObject->GetCaps(&caps, NULL) == 0) { // RA2: as above
+				unsigned int memory = caps.dwVidMemTotal > caps.dwVidMemFree ? caps.dwVidMemTotal : caps.dwVidMemFree; // RA2: as above
+				megabytes = (memory + 0xFFFFF) >> 20; // RA2: as above
+			}
+		}
+		if (megabytes >= 32) { // RA2: as above
+			vram = 10; // RA2: as above
+		} else if (megabytes >= 16) { // RA2: as above
+			vram = 9; // RA2: as above
+		} else if (megabytes >= 8) { // RA2: as above
+			vram = 7; // RA2: as above
+		} else if (megabytes >= 4) { // RA2: as above
+			vram = 5; // RA2: as above
+		} else if (megabytes <= 2) { // RA2: as above
+			vram = 3; // RA2: as above
+		}
+		DebugString("Profile: VRAM:%d (%dMb)\n", vram, megabytes); // RA2: as above
+		sprintf(ProfileVRAMText, "VRAM reported: %d Mb", megabytes); // RA2: as above
+
+		int speed = 5; // RA2: as above
+		int blits = 0; // RA2: as above
+		if (TileSurface != NULL && ((DSurface *)TileSurface)->In_Video_Ram() && !((DSurface *)AlternateSurface)->In_Video_Ram()) { // RA2: as above
+			Rect area = TileSurface->Get_Rect(); // RA2: as above
+			Rect other = AlternateSurface->Get_Rect(); // RA2: as above
+			if (area.Width >= other.Width) { // RA2: as above
+				area.Width = other.Width; // RA2: as above
+			}
+			if (area.Height >= other.Height) { // RA2: as above
+				area.Height = other.Height; // RA2: as above
+			}
+			if (area.Width >= 480) { // RA2: as above
+				area.Width = 480; // RA2: as above
+			}
+			if (area.Height >= 400) { // RA2: as above
+				area.Height = 400; // RA2: as above
+			}
+			for (int index = 0; index < 4; index++) { // RA2: as above
+				TileSurface->Blit_From(area, *AlternateSurface, area, false, true); // RA2: as above
+				AlternateSurface->Blit_From(area, *TileSurface, area, false, true); // RA2: as above
+				Sleep(0); // RA2: as above
+			}
+			DWORD start = timeGetTime(); // RA2: as above
+			if ((start & 0xFF000000) != 0xFF) { // RA2: as above
+				TileSurface->Blit_From(area, *AlternateSurface, area, false, true); // RA2: as above
+				AlternateSurface->Blit_From(area, *TileSurface, area, false, true); // RA2: as above
+				blits++; // RA2: as above
+				while (timeGetTime() - start <= 1000 && blits <= 5000) { // RA2: as above
+					TileSurface->Blit_From(area, *AlternateSurface, area, false, true); // RA2: as above
+					AlternateSurface->Blit_From(area, *TileSurface, area, false, true); // RA2: as above
+					blits++; // RA2: as above
+				}
+				speed = blits / 4 < 1 ? 1 : blits / 4; // RA2: as above
+			}
+		}
+		DebugString("Profile: VRAM speed:%d (%d blits per second)\n", speed, blits * 2); // RA2: as above
+		sprintf(ProfileBlitText, "%d blits per second\n", blits * 2); // RA2: as above
+
+		PerformanceProfile = cpu; // RA2: as above
+		if (PerformanceProfile >= ram) { // RA2: as above
+			PerformanceProfile = ram; // RA2: as above
+		}
+		if (PerformanceProfile >= vram) { // RA2: as above
+			PerformanceProfile = vram; // RA2: as above
+		}
+		if (PerformanceProfile >= speed) { // RA2: as above
+			PerformanceProfile = speed; // RA2: as above
+		}
+		DebugString("Overall performance profile = %d\n", PerformanceProfile); // RA2: as above
+		sprintf(ProfileText, "Profile: %d\n", PerformanceProfile); // RA2: as above
+	}
+	return(PerformanceProfile); // RA2: as above
+}
+

@@ -144,6 +144,8 @@ class OptionsClass {
 		 */
 		bool AllowHiResModes;
 
+		bool AllowVRAMSidebar; // RA2: +0x2A, [Video] AllowVRAMSidebar (false): the sidebar surface may live in video memory; options.cpp does not read it yet
+
 		float SoundVolume;				// Volume for sound effects.
 		float VoiceVolume;				/// Volume for voices.
 		float ScoreVolume;				// Volume for scores.

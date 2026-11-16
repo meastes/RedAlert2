@@ -707,7 +707,7 @@ BOOL CALLBACK Hotkey_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARA
 						int key = SendMessage((HWND)lparam, HKM_GETHOTKEY, 0, 0);
 						char const * key_name;
 						if (HotkeyCommands.Is_Present(key)) {
-							key_name = HotkeyCommands[key]->Get_Display_Name();
+							key_name = (char const *)HotkeyCommands[key]->Get_Display_Name(); // RA2: the command texts are wide now; this dialog still reads them as narrow text
 							if (key_name == NULL) {
 								key_name = "";
 							}
@@ -770,7 +770,7 @@ BOOL CALLBACK Hotkey_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARA
 			if (selection != LB_ERR) {
 				CommandClass const * cmd = (CommandClass const *)ListBox_GetItemData(list_commands, selection);
 				HWND description = GetDlgItem(window, IDC_KEY_DESCRIPTION);
-				SetWindowText(description, cmd->Get_Description());
+				SetWindowText(description, (char const *)cmd->Get_Description()); // RA2: as above
 
 				int key = 0;
 				for (int i = 0; i < HotkeyCommands.Count(); i++) {
@@ -803,8 +803,8 @@ BOOL CALLBACK Hotkey_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARA
 				ListBox_ResetContent(list_commands);
 				for (int i = 0; i < AllCommands.Count(); i++) {
 					CommandClass const * cmd = AllCommands[i];
-					if (stricmp(cmd->Get_Category(), buffer) == 0) {
-						int index = ListBox_AddString(list_commands, cmd->Get_Display_Name());
+					if (stricmp((char const *)cmd->Get_Category(), buffer) == 0) { // RA2: as above
+						int index = ListBox_AddString(list_commands, (char const *)cmd->Get_Display_Name()); // RA2: as above
 						if (index != LB_ERR) {
 							ListBox_SetItemData(list_commands, index, (LPARAM)cmd);
 						}
@@ -824,9 +824,9 @@ BOOL CALLBACK Hotkey_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARA
 			ComboBox_ResetContent(cmb_category);
 			for (int i = 0; i < AllCommands.Count(); i++) {
 				CommandClass const * cmd = AllCommands[i];
-				const char * s = cmd->Get_Category();
+				const char * s = (char const *)cmd->Get_Category(); // RA2: as above
 				if (ComboBox_FindString(cmb_category, 0, s) == CB_ERR) {
-					s = cmd->Get_Category();
+					s = (char const *)cmd->Get_Category(); // RA2: as above
 					ComboBox_AddString(cmb_category, s);
 				}
 			}
