@@ -42,6 +42,12 @@ class IonBlastClass
 		 */
 		int Lifetime;
 
+		/*
+		 * RA2: a fifth word at +0x10 (the constructor at 0x521270 clears it; YR's DisableIonBeam).
+		 * It makes the object 20 bytes, as the allocation in TAction_ION_CANNON shows.
+		 */
+		int DisableIonBeam;
+
 	public:
 		/*
 		 * This is the list of every ion blast currently in progress. A blast adds itself

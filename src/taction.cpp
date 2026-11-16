@@ -226,7 +226,12 @@ enum ParamCodeType {
 	PARAM_CODE_TEAM,
 	PARAM_CODE_TRIGGER,
 	PARAM_CODE_TAG,
-	PARAM_CODE_TEAM_AND_TIME,
+	PARAM_CODE_TEXT, // RA2: 4, the text label (Build_INI_Entry 0x6AD6FE)
+	PARAM_CODE_TEAM_AND_TIME, // RA2: 5 (TibSun had it at 4)
+	PARAM_CODE_SPEECH, // RA2: 6
+	PARAM_CODE_SOUND, // RA2: 7
+	PARAM_CODE_THEME, // RA2: 8
+	PARAM_CODE_NUMBER_AND_TECHNO, // RA2: 9
 };
 
 
@@ -326,49 +331,74 @@ void TActionClass::Detach(AbstractClass const * target, bool all)
 void TActionClass::Build_INI_Entry(char * ptr) const
 {
 	NeedType need = Action_Needs(Action);
-	ParamCodeType code = PARAM_CODE_OTHER;
 	int val = Data.Value;
+	int number = 0; // RA2: the number and techno pair of NEED_NUMBER_AND_TECHNO (0x6AD66B)
+	int techno = 0; // RA2: as above
+	ParamCodeType code = PARAM_CODE_OTHER; // RA2: declared after the number and techno pair (stack layout at 0x6AD661)
 	char const * str = NULL;
 
+	if (need == NEED_NUMBER_AND_TECHNO) { // RA2: a number and a techno pair, written as a kind 9 line
+		code = PARAM_CODE_NUMBER_AND_TECHNO; // RA2: as above
+		number = val; // RA2: as above
+		techno = Value2; // RA2: as above
+	}
 	if (Team != NULL && need == NEED_TEAM_AND_TIME) {
 		code = PARAM_CODE_TEAM_AND_TIME;
-		if (Team == NULL) {
-			val = -1;
-		} else {
-			val = Team->HeapID;
-			str = Team->IniName;
-		}
+		val = Team->HeapID; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		str = Team->IniName; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
 	}
 	if (Team != NULL && (need == NEED_TEAM || need == NEED_TEAM_AND_LOCATION)) {
-		code = PARAM_CODE_TEAM;
-		if (Team == NULL) {
-			val = -1;
-		} else {
-			val = Team->HeapID;
-			str = Team->IniName;
-		}
+		val = Team->HeapID; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		code = PARAM_CODE_TEAM; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		str = Team->IniName; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
 	}
 	else if (Trigger != NULL && need == NEED_TRIGGER) {
-		code = PARAM_CODE_TRIGGER;
-		if (Trigger == NULL) {
-			val = -1;
-		} else {
-			val = Trigger->HeapID;
-			str = Trigger->IniName;
-		}
+		val = Trigger->HeapID; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		code = PARAM_CODE_TRIGGER; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		str = Trigger->IniName; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
 	}
 	else if (Tag != NULL && need == NEED_TAG) {
-		code = PARAM_CODE_TAG;
-		if (Tag == NULL) {
-			val = -1;
-		} else {
-			val = Tag->HeapID;
-			str = Tag->IniName;
+		val = Tag->HeapID; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		code = PARAM_CODE_TAG; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+		str = Tag->IniName; // RA2: the pointer was tested in the condition, so there is no NULL branch (0x6AD687)
+	}
+	else if (need == NEED_TEXT) { // RA2: text label, "-1" when there is none (0x6AD6FE)
+		code = PARAM_CODE_TEXT; // RA2: as above
+		str = NULL; // RA2: the text is chosen by a branch on Text[0] (0x6AD703), not the accessor's neg/sbb select
+		if (Text[0] != 0) { // RA2: as above
+			str = Text; // RA2: as above
 		}
+		if (str == NULL) { // RA2: as above
+			str = "-1"; // RA2: as above
+		}
+	}
+	else if (need == NEED_SPEECH) { // RA2: the EVA line by name (0x6AD71D)
+		code = PARAM_CODE_SPEECH; // RA2: as above
+		str = VoxClass::Name_From(Data.Value); // RA2: as above
+	}
+	else if (need == NEED_SOUND || need == NEED_SOUND_AND_LOCATION) { // RA2: the sound by name (0x6AD72E)
+		code = PARAM_CODE_SOUND; // RA2: as above
+		str = Voc_Name(Data.Sound); // RA2: as above
+	}
+	else if (need == NEED_THEME) { // RA2: the theme by name (0x6AD738)
+		code = PARAM_CODE_THEME; // RA2: as above
+		str = Theme.INI_Name(Data.Theme); // RA2: as above
 	}
 
 	ptr += strlen(ptr);
-	if (code == PARAM_CODE_TEAM_AND_TIME) {
+	if (code == PARAM_CODE_NUMBER_AND_TECHNO) { // RA2: the number and the techno are written as two numbers (0x6AD76D)
+		sprintf(ptr, "%d,%d,%d,%d,%d,%d,%d,%d",
+			Action,
+			code,
+			number,
+			TriggerRect.X,
+			TriggerRect.Y,
+			TriggerRect.Width,
+			TriggerRect.Height,
+			techno
+			);
+	}
+	else if (code == PARAM_CODE_TEAM_AND_TIME) {
 		sprintf(ptr, "%d,%d,%s,%d,%d,%d,%d,%d",
 			Action,
 			code,
@@ -407,6 +437,7 @@ void TActionClass::Build_INI_Entry(char * ptr) const
 }
 
 
+
 /***********************************************************************************************
  * TActionClass::Read_INI -- Converts INI text into appropriate action data.                   *
  *                                                                                             *
@@ -433,6 +464,7 @@ void TActionClass::Read_INI(void)
 	switch (code)
 	{
 		case PARAM_CODE_OTHER:
+		case PARAM_CODE_NUMBER_AND_TECHNO: // RA2: the number of the kind 9 pair (0x6AD8AA)
 			Data.Value = val;
 			break;
 
@@ -471,6 +503,26 @@ void TActionClass::Read_INI(void)
 				}
 			}
 			break;
+
+		case PARAM_CODE_TEXT: // RA2: the text label (0x6AD98E)
+			if (val == -1) { // RA2: as above
+				Text[0] = '\0'; // RA2: as above
+			} else {
+				Set_Text(text); // RA2: as above
+			}
+			break;
+
+		case PARAM_CODE_SPEECH: // RA2: the EVA line by name (0x6AD9A8)
+			Data.Value = Vox_From_Name(text); // RA2: as above
+			break;
+
+		case PARAM_CODE_SOUND: // RA2: the sound by name (0x6ADA66)
+			Data.Value = VocClass::From_Name(text); // RA2: as above
+			break;
+
+		case PARAM_CODE_THEME: // RA2: the theme by name (0x6ADA79)
+			Data.Value = Theme.From_Name(text); // RA2: as above
+			break;
 	}
 
 	TriggerRect.X = atoi(strtok(NULL, ","));
@@ -482,11 +534,15 @@ void TActionClass::Read_INI(void)
 		if (code == PARAM_CODE_TEAM_AND_TIME) {
 			Data.Value = atoi(temp);
 		}
+		else if (code == PARAM_CODE_NUMBER_AND_TECHNO) { // RA2: the techno of the pair is stored in Value2 (0x6ADA8C)
+			Value2 = atoi(temp); // RA2: as above
+		}
 		else {
 			EffectLocation = Waypoint_From_Name(temp);
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -543,9 +599,8 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 		INVOKE(TOGGLE_TRAIN_CARGO);
 		INVOKE(ION_CANNON);
 		INVOKE(MULTI_MISSILE);
+		INVOKE(LIGHTNING_STORM); // RA2: case 102 comes right after MULTI_MISSILE (0x6ADC0C)
 		INVOKE(CHEM_MISSILE);
-		INVOKE(ACTIVATE_FIRESTORM);
-		INVOKE(DEACTIVATE_FIRESTORM);
 		INVOKE(GO_BERZERK);
 		INVOKE(WAKEUP_SELF);
 		INVOKE(VEIN_GROWTH);
@@ -583,10 +638,12 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 		INVOKE(ADD_TIMER);
 		INVOKE(SUB_TIMER);
 		INVOKE(SET_TIMER);
+		INVOKE(SET_TIMER_TEXT); // RA2: case 103 follows SET_TIMER
 		INVOKE(PLAY_MOVIE);
 		INVOKE(PLAY_SOUND);
 		INVOKE(PLAY_SOUND_RANDOM);
 		INVOKE(PLAY_SOUND_AT);
+		INVOKE(REVEAL_AROUND_WAYPOINT); // RA2: case 101 follows PLAY_SOUND_AT
 		INVOKE(PLAY_MUSIC);
 		INVOKE(PLAY_SPEECH);
 		INVOKE(1_SPECIAL);
@@ -613,7 +670,6 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 		INVOKE(LOCK_INPUT);
 		INVOKE(UNLOCK_INPUT);
 		INVOKE(CENTER_VIEWPOINT);
-		INVOKE(JUMP_VIEWPOINT); // RA2
 		INVOKE(ZOOM_IN);
 		INVOKE(ZOOM_OUT);
 		INVOKE(RESHROUD);
@@ -640,8 +696,22 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 		INVOKE(REMOVE_PARTICLE_ANIM);
 		INVOKE(ION_LIGHTNING_STRIKE);
 		INVOKE(PLAY_INGAME_MOVIE);
+		INVOKE(ACTIVATE_FIRESTORM); // RA2: the case order follows the executable; both firestorm cases come after PLAY_INGAME_MOVIE
+		INVOKE(DEACTIVATE_FIRESTORM); // RA2: as above
 		INVOKE(FLASH_TEAM);
-		INVOKE(TALK_BUBBLE); // RA2: no INVOKE (not in RA2's layout)
+		INVOKE(TALK_BUBBLE); // RA2: called from the switch (0x6AF550)
+		INVOKE(SET_TECH_LEVEL); // RA2: the actions numbered 106 to 117 follow TALK_BUBBLE in the executable
+		INVOKE(CHRONO_IN_TEAM); // RA2: as above
+		INVOKE(CREATE_CRATE); // RA2: as above
+		INVOKE(IRON_CURTAIN); // RA2: as above
+		INVOKE(PAUSE_SCENARIO); // RA2: as above
+		INVOKE(EJECT_OCCUPANTS); // RA2: as above
+		INVOKE(JUMP_VIEWPOINT); // RA2: as above (112 comes after EJECT_OCCUPANTS)
+		INVOKE(CHEER); // RA2: as above
+		INVOKE(SWITCH_TAB); // RA2: as above
+		INVOKE(FLASH_CAMEO); // RA2: as above
+		INVOKE(STOP_SOUND_AT); // RA2: as above
+		INVOKE(PLAY_INGAME_MOVIE_PAUSE); // RA2: as above
 
 		/*
 		**	Do no action at all.
@@ -654,6 +724,7 @@ bool TActionClass::operator() (HouseClass * house, ObjectClass * object, Trigger
 	}
 	return(success);
 }
+
 
 
 /// <summary>
@@ -896,9 +967,10 @@ bool TActionClass::TAction_DAMAGE(HouseClass * , ObjectClass * , TriggerClass * 
 bool TActionClass::TAction_LIGHT_SMALL(HouseClass * , ObjectClass * , TriggerClass * , Cell const & )
 {
 	int damage = 50;
-	Combat_Lighting(Waypoint_As_Coord(), damage, Rule->C4Warhead);
+	Combat_Lighting(Scen->Get_Waypoint_Coord(Data.Value), damage, Rule->C4Warhead, 0, 0); // RA2: the five argument form (forced and flags both 0), the waypoint read from Data.Value directly
 	return(true);
 }
+
 
 
 /// <summary>
@@ -909,9 +981,10 @@ bool TActionClass::TAction_LIGHT_SMALL(HouseClass * , ObjectClass * , TriggerCla
 bool TActionClass::TAction_LIGHT_MEDIUM(HouseClass * , ObjectClass * , TriggerClass * , Cell const & )
 {
 	int damage = 100;
-	Combat_Lighting(Waypoint_As_Coord(), damage, Rule->C4Warhead);
+	Combat_Lighting(Scen->Get_Waypoint_Coord(Data.Value), damage, Rule->C4Warhead, 0, 0); // RA2: the five argument form (forced and flags both 0), the waypoint read from Data.Value directly
 	return(true);
 }
+
 
 
 /// <summary>
@@ -922,9 +995,10 @@ bool TActionClass::TAction_LIGHT_MEDIUM(HouseClass * , ObjectClass * , TriggerCl
 bool TActionClass::TAction_LIGHT_LARGE(HouseClass * , ObjectClass * , TriggerClass * , Cell const & )
 {
 	int damage = 300;
-	Combat_Lighting(Waypoint_As_Coord(), damage, Rule->C4Warhead);
+	Combat_Lighting(Scen->Get_Waypoint_Coord(Data.Value), damage, Rule->C4Warhead, 0, 0); // RA2: the five argument form (forced and flags both 0), the waypoint read from Data.Value directly
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1043,12 +1117,13 @@ bool TActionClass::TAction_CHANGE_HOUSE(HouseClass * , ObjectClass * , TriggerCl
 				techno->Tag != NULL &&
 				techno->Tag->Is_Trigger_Attached(trig)) {
 
-			techno->Captured(House_From_HousesType(Data.House));
+			techno->Captured(House_From_HousesType(Data.House), false); // RA2: announce flag false
 			success = true;
 		}
 	}
 	return(success);
 }
+
 
 
 /// <summary>
@@ -1066,13 +1141,14 @@ bool TActionClass::TAction_ALL_CHANGE_HOUSE(HouseClass * house, ObjectClass * , 
 
 	for (int index = 0; index < Technos.Count(); index++) {
 		if (Technos[index]->House == house) {
-			Technos[index]->Captured(hptr);
+			Technos[index]->Captured(hptr, false); // RA2: announce flag false
 			retval = true;
 		}
 	}
 
 	return(retval);
 }
+
 
 
 
@@ -1091,13 +1167,16 @@ bool TActionClass::TAction_TEXT_TRIGGER(HouseClass * , ObjectClass * , TriggerCl
 	/*
 	**	Display a text message overlayed onto the tactical map.
 	*/
-	char * label = Text[0] ? Text : NULL; // RA2: a string table label, as inlined in operator() at 0x006AE33x
-	int scheme = Session.Color_Index_To_Scheme(Scen->IsGDI + 1); // RA2: the scheme from IsGDI + 1
-	if (label != NULL) { // RA2: as above, inlined in operator() at 0x006AE33x
+	char const * label = Get_Text(); // RA2: the accessor, inlined here (0x6B0440 shows its neg/sbb select); the label is a string table key
+	ScenarioClass * scenario = Scen; // RA2: Scen is held in a local (0x6B0443)
+	int color_scheme = scenario->IsGDI ? 2 : 1; // RA2: setne/inc at 0x6B045F
+	int scheme = Session.Color_Index_To_Scheme(color_scheme); // RA2: as above
+	if (label != NULL) { // RA2: as above
 		Session.Messages.Add_Message(NULL, 0, StringTable::LoadString(label, NULL, "D:\\Ra2\\TAction.CPP", 1582), scheme, TextPrintType(0x4046), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: as above, inlined in operator() at 0x006AE33x
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1109,11 +1188,12 @@ bool TActionClass::TAction_MAKE_ALLY(HouseClass * house, ObjectClass * , Trigger
 {
 	if (Data.House != HOUSE_NONE) {
 		HouseClass * house2 = House_From_HousesType(Data.House);
-		house->Make_Ally(house2);
-		house2->Make_Ally(house);
+		house->Make_Ally(house2, false); // RA2: announce flag false, as meastes' body at the address
+		house2->Make_Ally(house, false); // RA2: as above
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1125,11 +1205,12 @@ bool TActionClass::TAction_MAKE_ENEMY(HouseClass * house, ObjectClass * , Trigge
 {
 	if (Data.House != HOUSE_NONE) {
 		HouseClass * house2 = House_From_HousesType(Data.House);
-		house->Make_Enemy(house2);
-		house2->Make_Enemy(house);
+		house->Make_Enemy(house2, false); // RA2: announce flag false, as meastes' body at the address
+		house2->Make_Enemy(house, false); // RA2: as above
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1157,8 +1238,7 @@ bool TActionClass::TAction_BASE_BUILDING(HouseClass * house, ObjectClass * , Tri
 	if (Data.Bool) {
 		house->IsBaseBuilding = true;
 		if (house->ConYards.Count() > 0) {
-			Coord coord = house->ConYards[0]->Get_Coord(); // RA2: as above
-			Cell base_cell = coord.As_Cell(); // RA2: as above
+			Cell base_cell = house->ConYards[0]->Get_Coord().As_Cell(); // RA2: one statement (the inline expansion in operator() at 0x6AE423 needs the body this small)
 			house->Center = Coord(base_cell);
 			house->Base.PlacementCenter = base_cell;
 		}
@@ -1170,6 +1250,7 @@ bool TActionClass::TAction_BASE_BUILDING(HouseClass * house, ObjectClass * , Tri
 	}
 	return(true);
 }
+
 
 
 
@@ -1219,11 +1300,19 @@ bool TActionClass::TAction_REVEAL_SOME(HouseClass * , ObjectClass * , TriggerCla
 {
 	if (!PlayerPtr->IsVisionary) {
 		Cell waypoint = Scen->Get_Waypoint_Cell(Data.Value);
-		int height = Map[waypoint].Height + ((Map[waypoint].IsUnderBridge || Map[waypoint].WasUnderBridge) ? BRIDGE_CELL_HEIGHT : 0);
-		Map.Sight_From(Coord(waypoint - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), Rule->RevealTriggerRadius, PlayerPtr, false ,false, false, true);
+		int extra; // RA2: the bridge height is chosen by an if/else (0x6B06BA..0x6B06DA)
+		if (Map[waypoint].IsUnderBridge || Map[waypoint].WasUnderBridge) {
+			extra = BRIDGE_CELL_HEIGHT; // RA2: as above
+		} else {
+			extra = 0; // RA2: as above
+		}
+		int height = Map[waypoint].Height + extra; // RA2: as above
+		Map.Sight_From(Coord(waypoint - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), Rule->RevealTriggerRadius, PlayerPtr, false, false, false, true, false); // RA2: the eighth argument false for the first reveal (0x6B0772)
+		Map.Sight_From(Coord(waypoint - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), Rule->RevealTriggerRadius, PlayerPtr, false, false, false, true, true); // RA2: and again with it true (0x6B07E8)
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1255,7 +1344,8 @@ bool TActionClass::TAction_REVEAL_ZONE(HouseClass * , ObjectClass * , TriggerCla
 		while (cellptr) {
 			if (Map.Get_Cell_Zone(cellptr->CellID, MZONE_CRUSHER) == zone) {
 				int height = cellptr->Height/2;
-				Map.Sight_From(Coord(cellptr->CellID - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), 2, PlayerPtr, false, false, false, true);
+				Map.Sight_From(Coord(cellptr->CellID - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), 2, PlayerPtr, false, false, false, true, false); // RA2: the eighth argument (0x6B0923) is false for the first reveal
+				Map.Sight_From(Coord(cellptr->CellID - Cell(height/2, height/2)) + Coord(0, 0, height * LEVEL_LEPTON_H), 2, PlayerPtr, false, false, false, true, true); // RA2: and the cell is revealed again with it true (0x6B097E)
 			}
 			cellptr = Map.Local_Iterate();
 		}
@@ -1263,6 +1353,7 @@ bool TActionClass::TAction_REVEAL_ZONE(HouseClass * , ObjectClass * , TriggerCla
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1354,12 +1445,15 @@ bool TActionClass::TAction_SUB_TIMER(HouseClass * , ObjectClass * , TriggerClass
 /// </summary>
 bool TActionClass::TAction_SET_TIMER(HouseClass * , ObjectClass * , TriggerClass * , Cell const & )
 {
-	Speak(VOX_TIMER_STARTED);
-	Scen->MissionTimer = Data.Value * TICKS_PER_SECOND;
+	Scen->MissionTimer = Data.Value * TICKS_PER_SECOND; // RA2: no Speak (0x6B0BA0 starts with the timer assignment)
 	Scen->MissionTimer.Start();
+	Scen->MissionTimerTextCSF = L""; // RA2: the timer text is cleared as in SET_TIMER_TEXT's empty case (0x6B0BE9)
+	TStringID<31> label(""); // RA2: as above
+	Scen->MissionTimerText = label; // RA2: as above
 	Map.Redraw_Tab();
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1367,19 +1461,23 @@ bool TActionClass::TAction_SET_TIMER(HouseClass * , ObjectClass * , TriggerClass
 /// </summary>
 bool TActionClass::TAction_SET_TIMER_TEXT(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: not in TibSun, at 0x006B0C50
 {
-	char const * text = Text[0] ? Text : NULL;
+	char const * text = NULL; // RA2: the text pointer is chosen by a branch on Text[0] (0x6B0C5D), not the accessor's neg/sbb select
+	if (Text[0] != 0) { // RA2: as above
+		text = Text; // RA2: as above
+	}
+	TStringID<31> label(text); // RA2: built before the test, from the possibly empty text (0x6B0C71 clears it when there is none)
 	if (text != NULL) {
-		TStringID<31> label(text);
 		Scen->MissionTimerTextCSF = StringTable::LoadString(text, NULL, "D:\\Ra2\\TAction.CPP", 2050);
 		Scen->MissionTimerText = label;
 	} else {
-		TStringID<31> label("");
 		Scen->MissionTimerTextCSF = L"";
-		Scen->MissionTimerText = label;
+		TStringID<31> empty_label(""); // RA2: a second label built from "" (0x6B0CDB), which is assigned
+		Scen->MissionTimerText = empty_label; // RA2: as above
 	}
 	Map.Redraw_Tab();
 	return(true);
 }
+
 
 
 
@@ -1903,8 +2001,10 @@ bool TActionClass::TAction_RESIZE_PLAYER_VIEW(HouseClass * , ObjectClass * , Tri
 		Buildings[i]->Update_Radar_Position(true);
 	}
 
-	return(true); // RA2: no Speak (not in RA2's layout)
+	Queue_Speech("EVA_NewTerrainDiscovered", -1, -1); // RA2: 0x6B16F8 queues the EVA line by name (0x715B40)
+	return(true);
 }
+
 
 
 /// <summary>
@@ -1950,13 +2050,11 @@ bool TActionClass::TAction_DO_EXPLOSION(HouseClass * , ObjectClass * , TriggerCl
 		new AnimClass(aptr, coord, 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), Get_Explosion_Z(coord));
 	}
 
-	Combat_Lighting(coord, damage, Weapons[weapon]->WarheadPtr);
-	Explosion_Damage(coord, damage, NULL, Weapons[weapon]->WarheadPtr);
-	if (stricmp(ww->IniName, "empulseweapon") == 0) {
-		new EMPulseClass(coord.As_Cell(), ww->WarheadPtr->SpreadFactor, damage, NULL);
-	}
+	Combat_Lighting(coord, damage, Weapons[weapon]->WarheadPtr, 0, 0); // RA2: the five argument form (forced and flags 0), as in the LIGHT_ actions
+	Explosion_Damage(coord, damage, NULL, Weapons[weapon]->WarheadPtr); // RA2: the function ends here (0x6B1990); there is no EM pulse test
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2089,8 +2187,7 @@ bool TActionClass::TAction_ZOOM_IN(HouseClass * , ObjectClass * , TriggerClass *
 {
 	TacticalMap->ZoomFactor = Rule->ZoomInFactor;
 	IgnoreInput = true;
-	// Keyboard->Clear(); /// should do this too?? ZOOM_OUT does...
-
+	Keyboard->Clear(); // RA2: 0x6B1CB4 clears the keyboard buffer as ZOOM_OUT does
 	Hide_Mouse();
 	Map.Abort_Drag_Select();
 	Map.Flag_To_Redraw();
@@ -2099,6 +2196,7 @@ bool TActionClass::TAction_ZOOM_IN(HouseClass * , ObjectClass * , TriggerClass *
 	Sleep(1000);
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2325,9 +2423,10 @@ bool TActionClass::TAction_METEOR_SHOWER(HouseClass * , ObjectClass * , TriggerC
 		new AnimClass(AnimTypes[abs(Scen->RandomNumber) % 2 ? met_large : met_small], meteor_coord);
 	}
 
-	Speak(VOX_METEOR_STORM);
+	// RA2: no Speak(VOX_METEOR_STORM): the function ends after the loop (0x6B2210)
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2536,12 +2635,20 @@ bool TActionClass::TAction_MULTI_MISSILE(HouseClass * , ObjectClass * , TriggerC
 
 	Coord launch(coord.X, coord.Y, coord.Z + 20000); // RA2: YR's form; TibSun's needs WeaponTypeClass::ProjectileRange, which RA2 lacks
 	if (bullet != NULL) {
-		TVelocity3D<double> velocity(Dir256(DIR_N), Dir256(DIR_N), -100.0); // RA2: YR's form; TibSun's needs WeaponTypeClass::ProjectileRange, which RA2 lacks
+		double angle = DirType(DIR_N).As_Radian(); // RA2: the constants at 0x6B2501 are DIR_N's radian value
+		double y = fastmath::sin(angle); // RA2: Y is built first (sin at 0x6B250B before any cos), then X; written out because the TVelocity3D constructors compute X first
+		y *= fastmath::cos(angle); // RA2: as above
+		y *= -100.0; // RA2: as above
+		TVelocity2D<double> planar(fastmath::cos(angle) * fastmath::cos(angle) * -100.0, y); // RA2: as above
+		TVelocity3D<double> velocity; // RA2: as above
+		static_cast<TVelocity2D<double> &>(velocity) = planar; // RA2: as above, X and Y copied together
+		velocity.Z = fastmath::sin(angle) * -100.0; // RA2: as above
 		bullet->Unlimbo(launch, velocity); // RA2: YR's form; TibSun's needs WeaponTypeClass::ProjectileRange, which RA2 lacks
 		return(true);
 	}
 	return(false);
 }
+
 
 
 
@@ -2945,18 +3052,19 @@ HRESULT STDMETHODCALLTYPE TActionClass::GetClassID(CLSID * retval)
 HRESULT STDMETHODCALLTYPE TActionClass::Load(IStream * stream)
 {
 	HRESULT result = BASECLASS::Load(stream);
-	if (SUCCEEDED(result)) {
-		new (this) TActionClass(NoInitClass());
-
-		Swizzle_Pointer(&Next);
-		Swizzle_Pointer(&Team);
-		Swizzle_Pointer(&Tag);
-		Swizzle_Pointer(&Trigger);
-
-		result = S_OK;
+	if (FAILED(result)) { // RA2: the failure code is returned at once (0x6B2CD2)
+		return(result);
 	}
-	return(result);
+	new (this) TActionClass(NoInitClass());
+
+	Swizzle_Pointer(&Next);
+	Swizzle_Pointer(&Team);
+	Swizzle_Pointer(&Tag);
+	Swizzle_Pointer(&Trigger);
+
+	return(S_OK); // RA2: as above
 }
+
 
 
 /// <summary>

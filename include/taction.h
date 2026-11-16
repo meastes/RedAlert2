@@ -123,7 +123,7 @@ class TActionClass : public AbstractClass
 
 		TriggerTypeClass * Trigger;	// Trigger type pointer for this action (if needed).
 
-		TStringID<31> Text; // RA2: +0x54; the action's text argument
+		char Text[32]; // RA2: +0x54; the action's text argument, a plain char array (Set_Text 0x6B2EC0 and Read_INI use it as one)
 
 		union {
 			ThemeType					Theme;		// Musical theme.
