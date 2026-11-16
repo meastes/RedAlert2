@@ -121,6 +121,7 @@
 #include "super.h" // RA2: the seven RA2 functions
 #include "dbgprint.h" // RA2: the seven RA2 functions
 #include "suprtype.h" // RA2: the super weapon missions
+#include "airctype.h" // RA2: Can_Add reads AircraftTypeClass::IsAirportBound
 #include "houstype.h" // RA2: Pick_Building_With_Property reads IsMultiplayPassive
 static inline void Find_Gathering_Cell(Coord const & base, DirType dir, FootClass const * leader, Cell & cell); // RA2: defined after its first caller
 static inline void _Fire_Super(HouseClass * house, SuperClass * super, Cell const & cell); // RA2: defined after its first caller
@@ -141,6 +142,13 @@ static inline int _Coord_Distance(Coord const & a, Coord const & b)
 {
 	Coord t = a - b;
 	return(t.Length());
+}
+
+
+static inline CellClass * _As_Cell(AbstractClass * object) // RA2: a null-checked RTTI cast of the target to a cell, inlined in the mission code
+{
+	if (object == NULL) return(NULL);
+	return(object->Fetch_RTTI() == RTTI_CELL ? (CellClass *)object : NULL);
 }
 
 
@@ -539,16 +547,21 @@ void TeamClass::AI(void)
 	**	this time. Various events may cause the mission to advance, but it
 	**	all boils down to the following change-mission code.
 	*/
-	if (IsMoving && !IsReforming && !IsUnderStrength) {
+	bool leaving = Member != NULL && Member->IsWarpingIn(); // RA2: a member that is warping in holds the mission logic back
+	if (IsMoving && !IsReforming && !IsUnderStrength && !leaving) { // RA2: as above
 		bool is_next = false;
 		if (IsNextMission) {
 			is_next = true;
 			IsNextMission = false;
 			Script->Next_Mission();
-			FootClass * techno = Member;
-			while (techno) {
-				techno->ArchiveTarget = NULL;
-				techno = techno->Member;
+			for (FootClass * techno = Member; techno != NULL; techno = techno->Member) { // RA2: transports keep their archive target for the trip home
+				if (Class->TransportsReturnOnUnload && techno->Techno_Type_Class()->MaxPassengers > 0) {
+					if (techno->ArchiveTarget != NULL) {
+						DebugString("A Transport just recieved orders to go home after unloading\n");
+					}
+				} else {
+					techno->Assign_Archive_Target(NULL);
+				}
 			}
 
 			if (Script->Has_Missions_Remaining()) {
@@ -591,6 +604,7 @@ void TeamClass::AI(void)
 
 		switch (mission.Mission) {
 			INVOKE(UNLOAD_TRUCK);
+			INVOKE(PLAY_SPEECH);
 			INVOKE(LOAD_TRUCK);
 			INVOKE(CLEAR_GLOBAL);
 			INVOKE(DESTROY_MEMBERS);
@@ -616,7 +630,6 @@ void TeamClass::AI(void)
 			INVOKE(LOOP);
 			INVOKE(WIN);
 			INVOKE(LOSE);
-			INVOKE(PLAY_SPEECH);
 			INVOKE(PLAY_SOUND);
 			INVOKE(PLAY_MOVIE);
 			INVOKE(PLAY_MUSIC);
@@ -636,12 +649,18 @@ void TeamClass::AI(void)
 			INVOKE(FULLY_LOADED);
 			INVOKE(ATTACK_BUILDING_WITH_PROPERTY);
 			INVOKE(MOVETO_BUILDING_WITH_PROPERTY);
+			case TMISSION_MOVETO_OWN_BUILDING: TMission_MOVETO_FRIENDLY_BUILDING_WITH_PROPERTY(&mission, is_next); break; // RA2: the friendly-building variant, enumerator 0x3A
 			INVOKE(SCOUT);
 			INVOKE(UNLOAD);
 			INVOKE(SUCCESS);
 			INVOKE(FLASH);
 			INVOKE(PLAY_ANIM);
 			INVOKE(TALK_BUBBLE);
+			case TMISSION_GATHER_AT_ENEMY_BASE: TMission_MOVE_TO_ENEMY_APPROACH(&mission, is_next); break; // RA2: the six RA2 missions
+			case TMISSION_GATHER_AT_BASE: TMission_MOVE_TO_BASE_FRONT(&mission, is_next); break; // RA2: as above
+			case TMISSION_IRON_CURTAIN_ME: TMission_IRON_CURTAIN(&mission, is_next); break; // RA2: as above
+			case TMISSION_CHRONO_PREP_FOR_ABWRD: TMission_CHRONO_BUILDING(&mission, is_next); break; // RA2: as above
+			case TMISSION_CHRONO_PREP_FOR_AQ: TMission_CHRONO_ATTACK(&mission, is_next); break; // RA2: as above
 		}
 
 	} else {
@@ -653,6 +672,7 @@ void TeamClass::AI(void)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -904,7 +924,14 @@ bool TeamClass::Can_Add(FootClass * obj, int & typeindex) const
 	**	units that are in radio contact. It is presumed that they are very busy and should
 	**	not be disturbed.
 	*/
-	if (!_Is_It_Breathing(obj) || obj->In_Radio_Contact() || obj->House != House) {
+	if (!_Is_It_Breathing(obj) || obj->House != House) { // RA2: the radio test follows below
+		return(false);
+	}
+
+	/*
+	**	RA2: an object in radio contact stays busy, except an airport-bound aircraft.
+	*/
+	if (obj->HasAnyLink() && !(obj->Fetch_RTTI() == RTTI_AIRCRAFT && ((AircraftClass *)obj)->Class->IsAirportBound)) {
 		return(false);
 	}
 
@@ -920,7 +947,15 @@ bool TeamClass::Can_Add(FootClass * obj, int & typeindex) const
 		return(false);
 	}
 
-	if (!obj->IsAutocreateRecruitable && Class->IsAutocreate) {
+	bool unloading = false; // RA2: the autocreate rules are waived while the team script unloads, and for aircraft
+	if (Script != NULL && Script->Get_Current_Mission().Mission == TMISSION_UNLOAD) { // RA2: as above
+		unloading = true; // RA2: as above
+	}
+	if (obj->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+		unloading = true; // RA2: as above
+	}
+
+	if (!obj->IsAutocreateRecruitable && Class->IsAutocreate && !unloading) { // RA2: waived, see above
 		return(false);
 	}
 
@@ -936,7 +971,7 @@ bool TeamClass::Can_Add(FootClass * obj, int & typeindex) const
 	/*
 	**	Aircraft that have no ammo for their weapons cannot be recruited into a team.
 	*/
-	if (obj->RTTI == RTTI_AIRCRAFT && obj->PrimaryWeapon != NULL && !obj->Ammo) {
+	if (obj->Fetch_RTTI() == RTTI_AIRCRAFT && obj->Get_Class_Weapon_Data(0)->Weapon != NULL && !obj->Ammo) { // RA2: the weapon is read through the virtual
 		return(false);
 	}
 
@@ -960,11 +995,9 @@ bool TeamClass::Can_Add(FootClass * obj, int & typeindex) const
 	**	If the team is already full of this type, then adding the object is not allowed.
 	**	Return with a failure flag in this case.
 	*/
-	if (Quantity[typeindex] >= tptr->Members[typeindex].Quantity) {
-		return(false);
-	}
-	return(true);
+	return(Quantity[typeindex] < tptr->Members[typeindex].Quantity ? true : false); // RA2: written as a conditional
 }
+
 
 
 /***********************************************************************************************
@@ -1568,8 +1601,8 @@ void TeamClass::Coordinate_Attack(void)
 	**	can "attack" an empty cell and this is perfectly ok (paratrooper drop and parabombs
 	**	are prime examples).
 	*/
-	if (Is_Target_Cell(Target) && Member != NULL && Fetch_A_Leader()->RTTI != RTTI_AIRCRAFT) {
-		CellClass *cellptr = dynamic_cast<CellClass*>(Target);
+	if (Target != NULL && Target->Fetch_RTTI() == RTTI_CELL && Member != NULL && Fetch_A_Leader()->Fetch_RTTI() != RTTI_AIRCRAFT) { // RA2: the RTTI is read through the virtual
+		CellClass * cellptr = _As_Cell(Target); // RA2: RTTI cast, not dynamic_cast
 		if (cellptr->Cell_Object()) {
 			Target = cellptr->Cell_Object();
 		}
@@ -1585,16 +1618,16 @@ void TeamClass::Coordinate_Attack(void)
 		FootClass * unit = Member;
 		while (unit != NULL) {
 
-			Coordinate_Conscript(unit);
+			_Conscript(this, unit); // RA2: inlined here
 
-			if (_Is_It_Playing(unit)) {
-				if (mission.Mission == TMISSION_SPY && unit->RTTI == RTTI_INFANTRY && ((InfantryClass *)unit)->Class->IsCapture) {
-					unit->Assign_Mission(MISSION_CAPTURE);
+			if (_Is_It_Breathing(unit) && (unit->IsInitiated || unit->Fetch_RTTI() == RTTI_AIRCRAFT)) { // RA2: RA2's form, as in the deploy mission
+				if (mission.Mission == TMISSION_SPY && unit->Fetch_RTTI() == RTTI_INFANTRY && ((InfantryClass *)unit)->Class->IsCapture) { // RA2: the RTTI is read through the virtual
+					unit->QueueMission(MISSION_CAPTURE, false); // RA2: queued
 					unit->Assign_Target(Target);
 				} else {
-					if (unit->Mission != MISSION_ATTACK && unit->Mission != MISSION_ENTER && unit->Mission != MISSION_CAPTURE && (unit->Mission != MISSION_UNLOAD || !unit->Deploy_To_Fire())) {
+					if (unit->Get_Mission() != MISSION_ATTACK && unit->Get_Mission() != MISSION_ENTER && unit->Get_Mission() != MISSION_CAPTURE && unit->Get_Mission() != MISSION_SABOTAGE && (unit->Get_Mission() != MISSION_UNLOAD || !unit->Deploy_To_Fire())) { // RA2: the mission is read through the virtual, and sabotage joins the list
 						unit->Transmit_Message(RADIO_OVER_OUT);
-						unit->Assign_Mission(MISSION_ATTACK);
+						unit->QueueMission(MISSION_ATTACK, false); // RA2: queued
 						unit->Assign_Target(NULL);
 						unit->Assign_Destination(NULL);
 					}
@@ -1604,7 +1637,7 @@ void TeamClass::Coordinate_Attack(void)
 					unit->Assign_Target(Target);
 				}
 
-				if (unit->RTTI != RTTI_AIRCRAFT || unit->PrimaryWeapon == NULL || unit->Ammo > 0) {
+				if (unit->Fetch_RTTI() != RTTI_AIRCRAFT || unit->Get_Class_Weapon_Data(0)->Weapon == NULL || unit->Ammo > 0) { // RA2: the weapon is read through the virtual
 					has_attacker = true;
 				}
 			}
@@ -1616,6 +1649,7 @@ void TeamClass::Coordinate_Attack(void)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2400,9 +2434,8 @@ void TeamClass::TMission_SPY(TeamMissionClass * mission, bool first_time)
 		Assign_Mission_Target(Scen->Get_Waypoint_Target(mission->Data.Value));
 	}
 
-	if (Is_Target_Cell(MissionTarget)) {
-		CellClass * cellptr = MissionTarget->As_CellClass();
-
+	if (MissionTarget != NULL && MissionTarget->Fetch_RTTI() == RTTI_CELL) { // RA2: reads the RTTI through the virtual
+		CellClass * cellptr = _As_Cell(MissionTarget); // RA2: as above
 		ObjectClass * bldg = cellptr->Cell_Object();
 		if (bldg != NULL) {
 			Assign_Mission_Target(bldg);
@@ -2417,6 +2450,7 @@ void TeamClass::TMission_SPY(TeamMissionClass * mission, bool first_time)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -3558,12 +3592,11 @@ void TeamClass::TMission_UNLOAD(TeamMissionClass * mission, bool)
 	bool finished = true;
 
 	while (unit != NULL) {
+		FootClass * next = unit->Member;
 
-		FootClass *next = unit->Member;
+		_Conscript(this, unit); // RA2: inlined here
 
-		Coordinate_Conscript(unit);
-
-		if (_Is_It_Playing(unit)) {
+		if (_Is_It_Breathing(unit) && (unit->IsInitiated || unit->Fetch_RTTI() == RTTI_AIRCRAFT)) { // RA2: RA2's form, as in the deploy mission
 			/*
 			**	Only assign the mission if the unit is carrying a passenger, OR
 			**	if the unit is a minelayer, with mines in it, and the cell it's
@@ -3582,10 +3615,10 @@ void TeamClass::TMission_UNLOAD(TeamMissionClass * mission, bool)
 				**	the mine layer. During this time, it should not be considered to have
 				**	finished its unload mission.
 				*/
-				if (Map[unit->Center_Coord()].Cell_Building() == NULL && unit->Mission != MISSION_UNLOAD) {
+				if (Map[unit->Center_Coord()].Cell_Building() == NULL && unit->Get_Mission() != MISSION_UNLOAD) { // RA2: the mission is read through the virtual
 					unit->Assign_Destination(NULL);
 					unit->Assign_Target(NULL);
-					unit->Assign_Mission(MISSION_UNLOAD);
+					unit->QueueMission(MISSION_UNLOAD, false); // RA2: queued, as in the deploy mission
 					finished = false;
 				}
 
@@ -3600,24 +3633,24 @@ void TeamClass::TMission_UNLOAD(TeamMissionClass * mission, bool)
 		int unload = mission->Data.Value;
 		bool transportisaircraft = Has_Air_Transport();
 		while (unit != NULL) {
-			FootClass *next = unit->Member;
+			FootClass * next = unit->Member;
 
-			if (unit->TClass->Max_Passengers() == 0 || (transportisaircraft && unit->RTTI != RTTI_AIRCRAFT)) {
+			if (unit->Techno_Type_Class()->MaxPassengers == 0 || (transportisaircraft && unit->Fetch_RTTI() != RTTI_AIRCRAFT)) { // RA2: the type is read through the virtual
 				if (unload == 1 || unload == 3) {
 					Remove(unit);
 					unit->Assign_Target(NULL);
 					unit->Assign_Destination(NULL);
 				}
-			} else if (unit->TClass->Max_Passengers() > 0) {
+			} else if (unit->Techno_Type_Class()->MaxPassengers > 0) { // RA2: as above
 				if (Class->TransportsReturnOnUnload) {
 					Remove(unit);
 					unit->Assign_Target(NULL);
 					unit->Assign_Destination(unit->ArchiveTarget);
-					unit->Assign_Mission(MISSION_MOVE);
+					unit->QueueMission(MISSION_MOVE, false); // RA2: queued
 					if (unit->Ready_To_Commence()) {
 						unit->Commence();
 					}
-					unit->ArchiveTarget = NULL;
+					unit->Assign_Archive_Target(NULL); // RA2: through the setter
 				}
 				else if (unload == 3 || unload == 2) {
 
@@ -3633,6 +3666,7 @@ void TeamClass::TMission_UNLOAD(TeamMissionClass * mission, bool)
 		IsNextMission = true;
 	}
 }
+
 
 
 /// <summary>
@@ -3763,7 +3797,7 @@ void TeamClass::TMission_TALK_BUBBLE(TeamMissionClass * mission, bool first_time
 void TeamClass::TMission_MOVE_TO_ENEMY_APPROACH(TeamMissionClass * mission, bool first_time) // RA2: not in TibSun, at 0x6BDAA0
 {
 	if (first_time) {
-		FootClass * leader = Fetch_A_Leader(); // RA2: in RA2's terms
+		FootClass * leader = _Team_Leader(this); // RA2: _Team_Leader's form (Member read twice)
 		if (leader == NULL) {
 			IsNextMission = true;
 			return;
@@ -3801,6 +3835,7 @@ void TeamClass::TMission_MOVE_TO_ENEMY_APPROACH(TeamMissionClass * mission, bool
 }
 
 
+
 void TeamClass::TMission_MOVE_TO_BASE_FRONT(TeamMissionClass * mission, bool first_time) // RA2: not in TibSun, at 0x6BDDB0
 {
 	if (first_time) {
@@ -3828,7 +3863,7 @@ void TeamClass::TMission_MOVE_TO_BASE_FRONT(TeamMissionClass * mission, bool fir
 
 void TeamClass::TMission_IRON_CURTAIN(TeamMissionClass * mission, bool) // RA2: not in TibSun, at 0x6BE010
 {
-	FootClass * leader = Fetch_A_Leader(); // RA2: in RA2's terms
+	FootClass * leader = _Team_Leader(this); // RA2: _Team_Leader's form (Member read twice)
 	if (leader == NULL) {
 		IsNextMission = true;
 		return;
@@ -3846,118 +3881,112 @@ void TeamClass::TMission_IRON_CURTAIN(TeamMissionClass * mission, bool) // RA2: 
 		return;
 	}
 
-	if (super->Is_Ready()) { // RA2: in RA2's terms
-		Cell cell = Zone->Center_Coord().As_Cell();
-		house->Place_Special_Blast(super->Class->Type, cell);
+	if (!super->Is_Ready()) { // RA2: the waiting branch comes first
+		int left = super->Control;
+		double recharge = super->Class->RechargeTime; // RA2: in RA2's terms
+		if (super->Is_Present() && (double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) { // RA2: as above
+			return;
+		}
 		IsNextMission = true;
 		return;
 	}
 
-	int left = super->Control;
-	double recharge = super->Class->RechargeTime; // RA2: in RA2's terms
-	if (super->Is_Present()) { // RA2: in RA2's terms
-		if ((double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) {
+	house->Place_Special_Blast(super->Class->Type, Zone->Center_Coord().As_Cell()); // RA2: ready: place the blast at the zone's cell, no named local
+	IsNextMission = true;
+}
+
+
+
+void TeamClass::TMission_CHRONO_BUILDING(TeamMissionClass * mission, bool) // RA2: not in TibSun, at 0x6BE1C0
+{
+	FootClass * leader = _Team_Leader(this); // RA2: _Team_Leader's form (Member read twice)
+	if (leader == NULL) {
+		IsNextMission = true;
+		return;
+	}
+	HouseClass * house = leader->House;
+	SuperClass * sphere = NULL;
+	SuperClass * warp = NULL;
+	for (int index = 0; index < house->SuperWeapon.Count(); index++) {
+		SuperClass * super = house->SuperWeapon[index];
+		if (super->Class->Type == SUPER_CHRONO_SPHERE) {
+			sphere = super;
+		}
+		if (super->Class->Type == SUPER_CHRONO_WARP) {
+			warp = super;
+		}
+	}
+	if (sphere != NULL && warp != NULL) {
+		if (!sphere->Is_Ready()) { // RA2: the waiting branch comes first
+			int left = sphere->Control;
+			double recharge = sphere->Class->RechargeTime; // RA2: in RA2's terms
+			if (sphere->Is_Present() && (double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) { // RA2: as above
+				return;
+			}
+			IsNextMission = true;
 			return;
 		}
+		TargetPropertyType prop = TargetPropertyType((unsigned short)mission->Data.Prop);
+		int type = mission->Data.Type;
+		BuildingTypeClass * btype = BuildingTypes[type];
+		HouseClass * enemy = NULL;
+		if (house->Enemy != HOUSE_NONE) enemy = Houses[house->Enemy];
+		BuildingClass * target = Pick_Building_With_Property(btype, enemy, leader, prop, Class->OnlyTargetHouseEnemy);
+		if (target != NULL) {
+			_Fire_Super(house, sphere, Zone->Center_Coord().As_Cell());
+			_Fire_Super(house, warp, target->Center_Coord().As_Cell());
+			Assign_Mission_Target(target);
+		}
+		IsNextMission = true;
+		return;
 	}
 	IsNextMission = true;
 }
 
 
-void TeamClass::TMission_CHRONO_BUILDING(TeamMissionClass * mission, bool) // RA2: not in TibSun, at 0x6BE1C0
+
+void TeamClass::TMission_CHRONO_ATTACK(TeamMissionClass * mission, bool) // RA2: not in TibSun, at 0x6BE440
 {
-	FootClass * leader = Fetch_A_Leader(); // RA2: in RA2's terms
+	FootClass * leader = _Team_Leader(this); // RA2: _Team_Leader's form (Member read twice)
 	if (leader == NULL) {
 		IsNextMission = true;
 		return;
 	}
-	{
-		HouseClass * house = leader->House;
-		SuperClass * sphere = NULL;
-		SuperClass * warp = NULL;
-		for (int index = 0; index < house->SuperWeapon.Count(); index++) {
-			SuperClass * super = house->SuperWeapon[index];
-			if (super->Class->Type == SUPER_CHRONO_SPHERE) {
-				sphere = super;
-			}
-			if (super->Class->Type == SUPER_CHRONO_WARP) {
-				warp = super;
-			}
+	HouseClass * house = leader->House;
+	SuperClass * sphere = NULL;
+	SuperClass * warp = NULL;
+	for (int index = 0; index < house->SuperWeapon.Count(); index++) {
+		SuperClass * super = house->SuperWeapon[index];
+		if (super->Class->Type == SUPER_CHRONO_SPHERE) {
+			sphere = super;
 		}
-		if (sphere != NULL && warp != NULL) {
-			if (sphere->Is_Ready()) { // RA2: in RA2's terms
-				TargetPropertyType prop = TargetPropertyType((unsigned short)mission->Data.Prop);
-				int type = mission->Data.Type;
-				BuildingTypeClass * btype = BuildingTypes[type];
-				HouseClass * enemy = NULL;
-				if (leader->House->Enemy != HOUSE_NONE) enemy = Houses[leader->House->Enemy];
-				BuildingClass * target = Pick_Building_With_Property(btype, enemy, leader, prop, Class->OnlyTargetHouseEnemy);
-				if (target != NULL) {
-					_Fire_Super(house, sphere, Zone->Center_Coord().As_Cell());
-					_Fire_Super(house, warp, target->Center_Coord().As_Cell());
-					Assign_Mission_Target(target);
-				}
-				IsNextMission = true;
-			} else {
-				int left = sphere->Control;
-				double recharge = sphere->Class->RechargeTime; // RA2: in RA2's terms
-				if (sphere->Is_Present()) { // RA2: in RA2's terms
-					if ((double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) {
-						return;
-					}
-				}
-				IsNextMission = true;
-			}
-		} else {
-			IsNextMission = true;
+		if (super->Class->Type == SUPER_CHRONO_WARP) {
+			warp = super;
 		}
 	}
-}
-
-
-void TeamClass::TMission_CHRONO_ATTACK(TeamMissionClass * mission, bool) // RA2: not in TibSun, at 0x6BE440
-{
-	FootClass * leader = Fetch_A_Leader(); // RA2: in RA2's terms
-	if (leader != NULL) {
-		HouseClass * house = leader->House;
-		SuperClass * sphere = NULL;
-		SuperClass * warp = NULL;
-		for (int index = 0; index < house->SuperWeapon.Count(); index++) {
-			SuperClass * super = house->SuperWeapon[index];
-			if (super->Class->Type == SUPER_CHRONO_SPHERE) {
-				sphere = super;
+	if (sphere != NULL && warp != NULL) {
+		if (!sphere->Is_Ready()) { // RA2: the waiting branch comes first
+			int left = sphere->Control;
+			double recharge = sphere->Class->RechargeTime; // RA2: in RA2's terms
+			if (sphere->Is_Present() && (double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) { // RA2: as above
+				return;
 			}
-			if (super->Class->Type == SUPER_CHRONO_WARP) {
-				warp = super;
-			}
-		}
-		if (sphere != NULL && warp != NULL) {
-			if (sphere->Is_Ready()) { // RA2: in RA2's terms
-				ThreatType threat = Quarry_To_Threat(mission->Data.Quarry); // RA2: in RA2's terms
-				AbstractClass * target = leader->Greatest_Threat(threat, leader->PositionCoord, Class->OnlyTargetHouseEnemy);
-				if (target != NULL) {
-					_Fire_Super(house, sphere, Zone->Center_Coord().As_Cell());
-					_Fire_Super(house, warp, target->Center_Coord().As_Cell());
-					Assign_Mission_Target(target);
-				}
-				IsNextMission = true;
-			} else {
-				int left = sphere->Control;
-				double recharge = sphere->Class->RechargeTime; // RA2: in RA2's terms
-				if (sphere->Is_Present()) { // RA2: in RA2's terms
-					if ((double)left / recharge <= 1.0f - Rule->AIMinorSuperReadyPercent) {
-						return;
-					}
-				}
-				IsNextMission = true;
-			}
-		} else {
 			IsNextMission = true;
+			return;
 		}
-	} else {
+		ThreatType threat = Quarry_To_Threat(mission->Data.Quarry); // RA2: in RA2's terms
+		AbstractClass * target = leader->Greatest_Threat(threat, leader->PositionCoord, Class->OnlyTargetHouseEnemy);
+		if (target != NULL) {
+			_Fire_Super(house, sphere, Zone->Center_Coord().As_Cell());
+			_Fire_Super(house, warp, target->Center_Coord().As_Cell());
+			Assign_Mission_Target(target);
+		}
 		IsNextMission = true;
+		return;
 	}
+	IsNextMission = true;
 }
+
 
 
 int TeamClass::Stray_Distance(void) // RA2: not in TibSun, at 0x6BE6A0
