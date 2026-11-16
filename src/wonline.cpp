@@ -11,24 +11,30 @@
  * disclaimers apply; see LICENSE.md.
  ******************************************************************************/
 
-// RA2: the first part of wonline.cpp (0x0073C040-0x0073E100): the lobby helpers, the chat text senders, the channel list requests
+// RA2: the first part of wonline.cpp (0x0073C040-0x0073FEE0): the lobby helpers, the chat text senders, the channel list requests, the idle callback, the reset of the globals, the lobby, game and user lists
 #include "always.h"
 
 #include "_keyboar.h"
 #include "_map.h"
 #include "_rules.h"
 #include "arraylist.h"
+#include "dict.h" // RA2: the lobby dictionaries
 #include "conquer.h"
 #include "data.h"
 #include "dbgprint.h"
 #include "globals.h"
 #include "goptions.h"
 #include "ini.h" // RA2: the includes this file needs
+#include "rcptr.h" // RA2: the profile pointer
+#include "rules.h" // RA2: the CRCs of the rules
+#include "init.h" // RA2: Title_Screen_Restore
+#include "msgloop.h" // RA2: Peek_Windows_Message, MessageLoopCount
 #include "ipxmgr.h"
 #include "language\language.h"
 #include "netshare.h"
 #include "ownrdraw.h"
 #include "scenario.h"
+#include "srfcache.h" // RA2: the images of the game list
 #include "session.h"
 #include "theme.h"
 #include "widewstring.h" // RA2: the lobby text is wide
@@ -63,8 +69,8 @@ extern int g_RuleCRC; // RA2: the three CRCs 0x0073CFD0 xors (0x00B2AC18 to 0x00
 extern int g_ArtCRC; // RA2: as above
 extern int g_AICRC; // RA2: as above
 extern ArrayList<unsigned int> g_ChanListQueue; // RA2: 0x00B29390, the channel list requests that wait for an answer
-extern HANDLE g_WaitEventHandles[]; // RA2: 0x00B264F8, EV_COUNT events
-extern unsigned int g_ActiveWaitFlags; // RA2: 0x00B2AC60, the events the wait dialog (0xC4) waits for
+extern HANDLE g_WaitEventHandles[18]; // RA2: 0x00B264F8, EV_COUNT events
+extern unsigned int g_ActiveWaitFlags; // RA2: 0x00B2ABE0, the events the wait dialog (0xC4) waits for
 extern wchar_t g_LastErrorMessage[]; // RA2: 0x00B2A8EC, wide
 extern int g_IsChannelCreator; // RA2: 0x00B2AC58, 1 for the host of the channel
 extern bool g_GameStartRequested; // RA2: 0x00B2AC04
@@ -83,6 +89,78 @@ extern int g_DisplayAsian; // RA2: 0x00B2A804, the two settings TibSun does not 
 extern int g_DisplayLatin; // RA2: 0x00B2A7E8
 extern int g_LanguageCode; // RA2: 0x00B2AC5C
 extern int Online_Session_State; // RA2: as in ownrdraw.cpp
+extern ArrayList<Wstring> g_WDTTeamLookupQueue; // RA2: 0x00B2A648, the names whose team is asked for (0x0073E100 sends them in batches)
+extern ArrayList<Wstring> g_UserLocaleLookupQueue; // RA2: 0x00B29468, the names whose locale is asked for
+extern unsigned g_LastWDTUserTeamRequestTime; // RA2: 0x00B28FF8
+extern unsigned g_LastChannelLocaleRequestTime; // RA2: 0x00B28FF4
+extern int g_NextWDTStatePollTime; // RA2: 0x00B292DC
+extern int WolOptionsLocked; // RA2: 0x00B2AC40, as in netshare.cpp (2 once the host started the game)
+extern bool g_StartGameReceived; // RA2: 0x00B2AC45, the start of the game was announced, Start_Game_Now runs it
+extern bool g_StartGameRunning; // RA2: 0x00B2AC44, Start_Game_Now is running (it sets it first and clears it at its end)
+void Start_Game_Now(void); // RA2: 0x0074F300, the executable's own debug text names it so
+class PlayerProfile : public rc_object // RA2: the profile of the player, only its loader is used here
+{
+	public:
+		static rc_ptr<PlayerProfile> Load_Default(void); // RA2: 0x00738670
+};
+extern rc_ptr<PlayerProfile> g_PlayerProfile; // RA2: 0x00B28CC0, set by Reset_WOL_Globals
+extern ArrayList<Channel> g_UserChannels; // RA2: 0x00B26C88
+extern ArrayList<Channel> g_GameChannelList; // RA2: 0x00B29990
+extern Dictionary<Wstring, int> g_WDTTeams; // RA2: 0x00B294B8
+extern Dictionary<Wstring, int> g_UserLocales; // RA2: 0x00B293A0
+extern Dictionary<Wstring, Ladder> g_BattleClansLadderDict; // RA2: 0x00B296F8
+extern Dictionary<Wstring, Ladder> g_WDTLadderDict; // RA2: 0x00B26970
+extern Dictionary<Wstring, Ladder> g_GeneralLadderDict; // RA2: 0x00B2AB98
+extern Dictionary<Wstring, Channel> g_BuddyChannels; // RA2: 0x00B29478, the channel a buddy is in, by name
+extern ArrayList<Wstring> g_BuddyList; // RA2: 0x00B26920, the names of the buddies
+extern ArrayList<Wstring> g_BuddyRequests; // RA2: 0x00B29838, the buddies whose status waits to be asked for
+extern Dictionary<Wstring, unsigned int> g_BuddyStatus; // RA2: 0x00B29848, the status of a buddy by name
+extern Dictionary<Wstring, Ladder> * g_ActiveLadder; // RA2: 0x00B2AC24
+extern int g_InstalledLadderSKU; // RA2: 0x00B2A7F0
+extern int g_SelectedLadderSKU; // RA2: 0x00B26564
+extern int g_GameSKU; // RA2: 0x007FD370, 0x2100
+extern Channel g_PendingChannel; // RA2: 0x00B26A60, cleared with the current channel
+extern Server g_GameServer; // RA2: 0x00B28CD0
+extern Server g_WDTServer; // RA2: 0x00B29880
+extern int g_CurrentServerIndex; // RA2: 0x00B292D8
+extern int g_TargetServerIndex; // RA2: 0x00B2A7F4
+extern bool g_IgnoreNetStatus; // RA2: 0x00B2ABD8
+extern bool g_ShowMOTD; // RA2: 0x007FD2FC, true at first
+extern Wstring g_Motd; // RA2: 0x00B26954, the message of the day
+extern bool g_PlayingNetGame; // RA2: 0x00B2ABD9, as windlg.cpp
+extern bool g_ConnectionLost; // RA2: 0x00B2ABDA
+extern int g_ServerType; // RA2: 0x007FD300, -1 at first
+extern int g_LastChatListTime; // RA2: 0x00B2ABD0
+extern int g_LastGameListTime; // RA2: 0x00B2ABD4
+extern unsigned short const * g_Lobbies[8]; // RA2: 0x00B26C94, the eight lobby names, wide
+extern int WDT_TERRITORY_LOBBY_INDEXES[8]; // RA2: 0x00B26540, eight indexes
+extern int g_dwChatAdvise; // RA2: 0x00B2AC60
+extern int g_dwNetUtilAdvise; // RA2: 0x00B2AC64
+extern int g_dwDownloadAdvise; // RA2: 0x00B2AC68
+extern int g_SquadInfoRequests; // RA2: 0x00B2ABF4
+extern int g_RequestingOwnSquadInfo; // RA2: 0x00B2ABF8
+extern int g_OwnSquadID; // RA2: 0x00B2ABFC
+extern char g_OwnSquadName[41]; // RA2: 0x00B2A8B0
+extern int g_ChannelCount; // RA2: 0x00B2ABE8
+extern int g_LadderPos; // RA2: 0x00B29CE8
+extern int g_JoinLobbyNow; // RA2: 0x00B2ABF0
+extern int g_UserAge; // RA2: 0x00B2AC6C
+extern int g_UserConsent; // RA2: 0x00B2AC70
+extern int CurrentLevel; // RA2: 0x00B2AC38, the view of the lobby (0 is the server choice)
+extern int g_Col_ChanName; // RA2: 0x00B29CCC, the column of the channel names in the lobby lists
+extern int g_Col_GameName; // RA2: 0x00B2A8A8, the columns of the game list (TibSun's g_Col_GameName, g_Col_GameIcon, g_Col_GamePrivate, g_Col_GamePingTime and the observer column RA2 adds)
+extern int g_Col_GameIcon; // RA2: 0x00B2A6F8
+extern int g_Col_GamePrivate; // RA2: 0x00B2A6F4
+extern int g_Col_GameObserver; // RA2: 0x00B299A0
+extern int g_Col_GamePingTime; // RA2: 0x00B292A8
+extern bool g_GameListRefreshing; // RA2: 0x00B2AC80, set while Refresh_Game_List fills the list
+extern int ObserverMode; // RA2: 0x00A72C68, as in init.cpp
+void __fastcall Clear_Listbox(HWND list); // RA2: 0x00600DB0, removes every row of an owner drawn list box
+void __fastcall Get_Window_Item_Text(HWND list, int row, Wstring & text); // RA2: 0x00600EB0, the text of a row
+#define OD_INSERTSTRING (WM_USER + 199) // RA2: 0x4C7, inserts the string at the row of wParam and returns the new row (name guessed from its use)
+#define OD_FINDSTRING (WM_USER + 197) // RA2: 0x4C5, the row whose text is lParam, -1 if none (name guessed from its use)
+WideWstring WideWstring_FromInt(int value); // RA2: 0x007710C0, the number as wide text ("%d")
+WideWstring operator+(wchar_t const * first, WideWstring const & second); // RA2: 0x00771380
 
 int Count_AI_Slots(void); // RA2: 0x005C9400, the slots holding an easy, medium or hard computer player
 bool Is_Observer_Slot_Occupied(void); // RA2: 0x005C94B0, the observer slot holds a seated entry whose team is -1
@@ -1010,6 +1088,585 @@ bool Request_Game_Channel_List(unsigned char autoping, bool wait) // RA2: 0x0073
 	}
 	if (wait) return(Wait_Channel_List()); // RA2: as above
 	return(true);
+}
+
+inline bool Is_Tournament_Session_Inline(void) // RA2: 0x0073BDB0 is this test, inlined here
+{
+	return(Online_Session_State == 2 || Online_Session_State == 1);
+}
+
+bool WOL_Wait_Callback(void) // RA2: 0x0073E100, no channel list requests (TibSun's are gone), the match timeout and the start of the game are RA2's
+{
+	Title_Screen_Restore(false); // RA2: as above
+
+	static int prev_exinfo = 0;
+	static int prev_ping = 0;
+
+	MSG msg;
+	int counter = 0;
+	MessageLoopCount++; // RA2: as above
+	while (Peek_Windows_Message(&msg, NULL, 0, 0, 1)) { // RA2: as above
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		counter++;
+		if (counter == 100) break;
+	}
+
+	// RA2: a tournament match that waited longer than its timeout is cancelled (states 2 to 5) or given 30 seconds more
+	if (Is_Tournament_Session_Inline() && g_MatchTimeout != -1 && g_MatchState != 1 && g_MatchState != 0 && g_MatchState != 11 && (unsigned)(time(NULL) - g_MatchStartTime) > (unsigned)g_MatchTimeout) {
+		if (g_MatchState >= 2 && g_MatchState <= 5) {
+			Set_Match_State(0, -1, 2);
+		} else {
+			Lobby_Chat_Printf(0x20BFFF, StringTable::LoadString("WOL:MatchTimeout", NULL, "D:\\Ra2\\wonline.cpp", 2155));
+			Set_Match_State(2, 30, 0);
+		}
+		SetEvent(g_WaitEventHandles[EV_ERROR]);
+	}
+
+	WS_Top_Window_ID(); // RA2: the result is not used
+
+	if (g_WDTTeamLookupQueue.length() > 200) {
+		g_WDTTeamLookupQueue.clear();
+	}
+
+	if (g_LastWDTUserTeamRequestTime < (unsigned)time(0) - 2 && g_WDTTeamLookupQueue.length() > 65 ||
+		g_LastWDTUserTeamRequestTime < (unsigned)time(0) - 3 && g_WDTTeamLookupQueue.length() > 10 ||
+		g_LastWDTUserTeamRequestTime < (unsigned)time(0) - 15 && g_WDTTeamLookupQueue.length() > 0) {
+
+		User * list = NULL;
+		User * last_user = NULL;
+		for (int i = 0; i < 10; i++) {
+			if (g_WDTTeamLookupQueue.length() > 0) {
+				User * new_user = new User;
+				memset(new_user, 0, sizeof(User));
+				Wstring name;
+				g_WDTTeamLookupQueue.removeTail(name);
+				char * rawName = name.get();
+				if (strlen(rawName) > 9) {
+					rawName[9] = '\0';
+				}
+				strcpy((char *)new_user->name, rawName);
+				if (last_user == NULL) {
+					list = new_user;
+				} else {
+					last_user->next = new_user;
+				}
+				last_user = new_user;
+			} else {
+				break;
+			}
+		}
+
+		if (g_pChat != NULL) {
+			g_pChat->RequestUserTeam(list);
+		}
+
+		User * d = list;
+		while (d != NULL) {
+			User * next = d->next;
+			delete d;
+			d = next;
+		}
+
+		g_LastWDTUserTeamRequestTime = time(0);
+	}
+
+	if (g_UserLocaleLookupQueue.length() > 200) {
+		g_UserLocaleLookupQueue.clear();
+	}
+
+	if (g_LastChannelLocaleRequestTime < (unsigned)time(0) - 2 && g_UserLocaleLookupQueue.length() > 65 ||
+		g_LastChannelLocaleRequestTime < (unsigned)time(0) - 3 && g_UserLocaleLookupQueue.length() > 10 ||
+		g_LastChannelLocaleRequestTime < (unsigned)time(0) - 15 && g_UserLocaleLookupQueue.length() > 0) {
+
+		User * list = NULL;
+		User * last_user = NULL;
+		for (int i = 0; i < 10; i++) {
+			if (g_UserLocaleLookupQueue.length() > 0) {
+				User * new_user = new User;
+				memset(new_user, 0, sizeof(User));
+				Wstring name;
+				g_UserLocaleLookupQueue.removeTail(name);
+				char * rawName = name.get();
+				if (strlen(rawName) > 9) {
+					rawName[9] = '\0';
+				}
+				strcpy((char *)new_user->name, rawName);
+				if (last_user == NULL) {
+					list = new_user;
+				} else {
+					last_user->next = new_user;
+				}
+				last_user = new_user;
+			} else {
+				break;
+			}
+		}
+
+		if (g_pChat != NULL) {
+			g_pChat->RequestUserLocale(list);
+		}
+
+		User * d = list;
+		while (d != NULL) {
+			User * next = d->next;
+			delete d;
+			d = next;
+		}
+
+		g_LastChannelLocaleRequestTime = time(0);
+	}
+
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2 && time(0) > g_NextWDTStatePollTime) { // RA2: an Internet tournament session, not TibSun's Session.IsWDT
+		g_NextWDTStatePollTime = time(0) + 30;
+		Get_WDT_State_Silent();
+	}
+
+	if ((g_pChat) && (g_SuspendChatPump == 0)) g_pChat->PumpMessages();
+	if (g_pNetUtil) g_pNetUtil->PumpMessages();
+	if (g_pDownload) g_pDownload->PumpMessages();
+
+	Call_Back();
+
+	if ((g_CurrentChannel.name[0]) && (g_CurrentChannel.type == 0x21) && (g_IsChannelCreator)) Send_Lobby_Options(false, false); // RA2: for PumpGameopts(false)
+
+	if ((g_pChat != NULL) && (g_CurrentChannel.type != 0) && (g_IsChannelCreator)) {
+		if ((time(NULL) - prev_exinfo) > 10) {
+			char exinfo_out[80];
+			memset(exinfo_out, 0, 80);
+			Encode_Channel_ExInfo(exinfo_out);
+			exinfo_out[40] = 0;
+			g_pChat->SetChannelExInfo(exinfo_out);
+			prev_exinfo = time(NULL);
+		}
+	}
+
+	if (WolOptionsLocked != 2) { // RA2: no pings once the game is locked in
+		if ((g_pChat != NULL) && (g_CurrentChannel.type != 0) && ((time(NULL) - prev_ping) > 10)) {
+			User user;
+			Wstring nick = ((Wstring const &)g_NickName).toLower(); // RA2: the names are compared as Wstrings, not with stricmp; the const member returns the lower case copy
+			int handle;
+			int i;
+			in_addr addr;
+
+			if (!Is_Tournament_Session_Inline()) { // RA2: as above
+				for (i = 0; i < g_UserList.length(); i++) {
+					g_UserList.get(user, i);
+					Wstring const user_name((char *)user.name); // RA2: as above
+					if (nick == user_name.toLower()) continue; // RA2: as above
+					addr.s_addr = user.ipaddr;
+					if (user.ipaddr != 0) g_pNetUtil->RequestPing(inet_ntoa(addr), 1000, &handle);
+				}
+			}
+			prev_ping = time(NULL);
+		}
+	}
+
+	if (WolOptionsLocked == 2) { // RA2: the host announced the start, the game is started from here
+		if (g_StartGameReceived && !g_StartGameRunning) {
+			Start_Game_Now();
+		}
+	}
+
+	Handle_Preview_Download();
+	return(false);
+}
+
+void Reset_WOL_Globals(void) // RA2: 0x0073E8D0, loads the default profile, clears the buddy lists and sets the SKU of the tournament ladder
+{
+	g_PlayerProfile = PlayerProfile::Load_Default(); // RA2: as above
+
+	g_UserChannels.clear();
+	g_GameChannelList.clear();
+	g_UserList.clear();
+
+	g_WDTTeamLookupQueue.clear();
+	g_WDTTeams.clear();
+
+	g_UserLocaleLookupQueue.clear();
+	g_UserLocales.clear();
+
+	g_NextWDTStatePollTime = time(0) + 86400;
+	g_LastChannelLocaleRequestTime = 0;
+	g_LastWDTUserTeamRequestTime = 0;
+
+	g_BattleClansLadderDict.clear();
+	g_WDTLadderDict.clear();
+	g_BuddyChannels.clear(); // RA2: as above
+	g_BuddyList.clear(); // RA2: as above
+	g_BuddyRequests.clear(); // RA2: as above
+	g_BuddyStatus.clear(); // RA2: as above
+
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: an Internet tournament session, not TibSun's Addon_Enabled(ADDON_FIRESTORM) && Session.IsWDT
+		int sku = 0x2300; // RA2: the SKU of the tournament ladder
+		g_InstalledLadderSKU = sku;
+		g_SelectedLadderSKU = sku;
+		g_ActiveLadder = &g_WDTLadderDict;
+	} else {
+		int sku = g_GameSKU;
+		g_InstalledLadderSKU = sku;
+		g_SelectedLadderSKU = sku;
+		g_ActiveLadder = &g_GeneralLadderDict;
+	}
+
+	memset(&g_CurrentChannel, 0, sizeof(g_CurrentChannel));
+	memset(&g_PendingChannel, 0, sizeof(g_PendingChannel)); // RA2: as above
+	memset(&g_GameServer, 0, sizeof(g_GameServer));
+	memset(&g_WDTServer, 0, sizeof(g_WDTServer));
+
+	g_LastErrorMessage[0] = 0;
+
+	g_MatchResult = 0;
+	g_MatchState = 1;
+	g_MatchTimeout = -1;
+	g_MatchStartTime = time(0);
+
+	g_CurrentServerIndex = 0;
+	g_TargetServerIndex = 0;
+
+	g_IsChannelCreator = 0;
+	g_ActiveWaitFlags = 0;
+
+	g_GameStartRequested = false;
+
+	g_IgnoreNetStatus = false;
+	g_ShowMOTD = true;
+	g_Motd.clear(); // RA2: as above
+
+	memset(&g_WaitEventHandles, 0, sizeof(g_WaitEventHandles));
+
+	g_PlayingNetGame = false;
+	g_ConnectionLost = false;
+
+	g_ServerType = -1;
+
+	g_SuspendChatPump = 0;
+
+	g_LastChatListTime = 0xFFFFFFFF;
+	g_LastGameListTime = 0xFFFFFFFF;
+
+	g_Lobbies[0] = StringTable::LoadString("TXT_LOB_1", NULL, "D:\\Ra2\\wonline.cpp", 2485); // RA2: as above
+	g_Lobbies[1] = StringTable::LoadString("TXT_LOB_2", NULL, "D:\\Ra2\\wonline.cpp", 2486); // RA2: as above
+	g_Lobbies[2] = StringTable::LoadString("TXT_LOB_3", NULL, "D:\\Ra2\\wonline.cpp", 2487); // RA2: as above
+	g_Lobbies[3] = StringTable::LoadString("TXT_LOB_4", NULL, "D:\\Ra2\\wonline.cpp", 2488); // RA2: as above
+	g_Lobbies[4] = StringTable::LoadString("TXT_LOB_5", NULL, "D:\\Ra2\\wonline.cpp", 2489); // RA2: as above
+	g_Lobbies[5] = StringTable::LoadString("TXT_LOB_6", NULL, "D:\\Ra2\\wonline.cpp", 2490); // RA2: as above
+	g_Lobbies[6] = StringTable::LoadString("TXT_LOB_7", NULL, "D:\\Ra2\\wonline.cpp", 2491); // RA2: as above
+	g_Lobbies[7] = StringTable::LoadString("TXT_LOB_8", NULL, "D:\\Ra2\\wonline.cpp", 2492); // RA2: as above
+
+	memset(WDT_TERRITORY_LOBBY_INDEXES, 0xFFFFFFFF, sizeof(WDT_TERRITORY_LOBBY_INDEXES));
+
+	g_pChat = NULL;
+	g_pNetUtil = NULL;
+	g_pDownload = NULL;
+
+	g_dwChatAdvise = 0;
+	g_dwNetUtilAdvise = 0;
+	g_dwDownloadAdvise = 0;
+
+	g_SquadInfoRequests = 0;
+	g_RequestingOwnSquadInfo = 0;
+	g_OwnSquadID = 0;
+	memset(g_OwnSquadName, 0, 41); // RA2: as above
+
+	g_ChannelCount = 0;
+
+	g_LadderPos = 1;
+
+	g_JoinLobbyNow = 0;
+
+	g_ChanListQueue.setEmpty();
+
+	WolOptionsLocked = 0; // RA2: TibSun's g_GameStarted
+
+	g_UserAge = 0;
+	g_UserConsent = 0;
+
+	g_RuleCRC = RulesClass::Get_Rule_Unique_ID();
+	RulesClass::Load_Art_INI();
+	g_ArtCRC = RulesClass::Get_Art_Unique_ID();
+	g_AICRC = RulesClass::Get_AI_Unique_ID();
+
+	CurrentLevel = 0; // RA2: as above
+}
+
+void Refresh_Lobby_List(void) // RA2: 0x0073EE80, fills the lobby list of dialog 0x113 with the "Lob_33_" channels in number order, the current one selected
+{
+	HWND dialog = WS_Find_Dialog(0x113);
+	if (!dialog) return; // RA2: as above
+	HWND list = GetDlgItem(dialog, 0x53D);
+	if (!list) return; // RA2: as above
+
+	Wstring selected; // RA2: the text of the first visible row
+	int top_row = SendMessageA(list, LB_GETTOPINDEX, 0, 0); // RA2: the first visible row is kept, not the selected one
+	if (top_row != -1) Get_Window_Item_Text(list, top_row, selected);
+	SendMessageA(list, OD_DISABLEPAINT, 0, 1);
+	Clear_Listbox(list);
+
+	int count = g_UserChannels.length();
+	for (int i = 0; i < count; ++i) {
+		Channel channel;
+		g_UserChannels.get(channel, i);
+		if (strncmp((char *)channel.name, "Lob_33_", strlen("Lob_33_")) != 0) continue;
+		int number = atol((char *)channel.name + strlen("Lob_33_"));
+		bool current = strcmp((char *)channel.name, (char *)g_CurrentChannel.name) == 0;
+		wchar_t title[80];
+		int page = number / 8;
+		int name_index = number % 8;
+		if (page == 0) {
+			swprintf(title, L"%s  (%d)", (wchar_t const *)g_Lobbies[name_index], channel.currentUsers);
+		} else {
+			swprintf(title, L"%s_%d  (%d)", (wchar_t const *)g_Lobbies[name_index], page + 1, channel.currentUsers);
+		}
+		int rows = SendMessageA(list, LB_GETCOUNT, 0, 0);
+		int at = 0;
+		Channel other;
+		for (; at < rows; ++at) {
+			int index = SendMessageA(list, LB_GETITEMDATA, at, 0);
+			g_UserChannels.get(other, index);
+			if (atol((char *)other.name + strlen("Lob_33_")) > number) break;
+		}
+		int row = SendMessageA(list, OD_INSERTSTRING, at, (LPARAM)channel.name);
+		SendMessageA(list, LB_SETITEMDATA, row, i);
+		OwnerDraw::CellData cell;
+		cell.type = OwnerDraw::CellData::TEXT;
+		cell.string.set((unsigned short *)title);
+		cell.hint.set((unsigned short *)L"");
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_ChanName, row), (LPARAM)&cell);
+		if (current) SendMessageA(list, LB_SETCURSEL, row, 0);
+	}
+
+	int restored = SendMessageA(list, OD_FINDSTRING, 0, (LPARAM)selected.text());
+	if (restored != -1) SendMessageA(list, LB_SETTOPINDEX, restored, 0);
+	SendMessageA(list, OD_DISABLEPAINT, 0, 0);
+	InvalidateRect(list, NULL, false);
+}
+
+WideWstring Get_Locale_Name(int locale) // RA2: 0x0073F1C0, the localized name of a locale number, from the string "WOL:Locale" and the number in two digits
+{
+	Wstring label = "WOL:Locale" + Wstring_FromInt(locale, 2); // RA2: as above
+	WideWstring text(StringTable::LoadString(label.get(), NULL, "D:\\Ra2\\wonline.cpp", 2644)); // RA2: as above
+	if (locale < 37) { // RA2: both ways return the same text, the test is kept
+		return(text);
+	} else {
+		return(text);
+	}
+}
+
+WideWstring User_Tooltip(User const & user) // RA2: 0x0073F250, the text of the tooltip of a lobby user: name, rank in the active ladder, squad and locale
+{
+	Wstring name((char *)user.name); // RA2: as above
+	WideWstring text = Wstring_ToWide(name) + L" : "; // RA2: as above
+	name.toLower();
+	Ladder ladder;
+	memset(&ladder, 0, sizeof(ladder));
+	if (g_ActiveLadder && g_ActiveLadder->getValue(name, ladder)) { // RA2: as above
+		text += WideWstring(StringTable::LoadString("TXT_RANK", NULL, "D:\\Ra2\\wonline.cpp", 2672)) + WideWstring(L" ") + WideWstring_FromInt(ladder.rung); // RA2: as above
+	} else {
+		text += StringTable::LoadString("TXT_UNRANKED", NULL, "D:\\Ra2\\wonline.cpp", 2674); // RA2: as above
+	}
+	Wstring squad((char *)user.squadname); // RA2: as above
+	if (squad.length() == 0) squad = (char *)user.squadabbrev; // RA2: the abbreviation stands for a squad without a name
+	if (squad.length() > 0) {
+		text += L": " + Wstring_ToWide(squad); // RA2: as above
+	}
+	if (g_UserLocales.contains(name)) { // RA2: as above
+		int * locale = 0;
+		if (g_pChat && g_UserLocales.getPointer(name, &locale) && locale && *locale) { // RA2: as above
+			text += L" : " + Get_Locale_Name(*locale); // RA2: as above
+		}
+	}
+	return(text);
+}
+
+WideWstring Get_Mission_Description(Wstring const & filename) // RA2: 0x0073F550, the description of the scenario of a file name, a fixed text for the random map and none for an unknown file
+{
+	if (stricmp(filename.text(), "RandMap.Sed") == 0) { // RA2: as above
+		return(WideWstring(StringTable::LoadString("TXT_RANDOM_MAP_DESCRIPTION", NULL, "D:\\Ra2\\wonline.cpp", 2705))); // RA2: as above
+	}
+	for (int index = 0; index < Session.Scenarios.Count(); index++) { // RA2: as above
+		MultiMission * mission = Session.Scenarios[index]; // RA2: as above
+		if (stricmp(filename.text(), mission->Get_Filename()) == 0) { // RA2: as above
+			return(WideWstring(mission->Description())); // RA2: as above
+		}
+	}
+	return(WideWstring(L"")); // RA2: as above
+}
+
+WideWstring Game_List_Tooltip(HWND list, int row) // RA2: 0x0073F5F0, the tooltip of a row of the game list: the host as User_Tooltip makes it, the ping and the description of the scenario
+{
+	if (row == -1) { // RA2: as above
+		return(WideWstring(StringTable::LoadString("STT:LobbyListGames", NULL, "D:\\Ra2\\wonline.cpp", 2722))); // RA2: as above
+	}
+	Channel channel;
+	memset(&channel, 0, sizeof(channel));
+	int index = SendMessageA(list, LB_GETITEMDATA, row, 0);
+	if (index >= 0 && index < g_GameChannelList.length()) { // RA2: as above
+		g_GameChannelList.get(channel, index);
+		Wstring host((char *)channel.name);
+		host.truncate('\''); // RA2: the host name ends before the first quote
+		User user;
+		memset(&user, 0, sizeof(user));
+		strncpy((char *)user.name, host.get(), 10);
+		WideWstring tooltip = User_Tooltip(user);
+		tooltip += WideWstring(L", ");
+		wchar_t ping_text[64];
+		if (channel.latency != -1) {
+			swprintf(ping_text, StringTable::LoadString("MSG:PingInfo", NULL, "D:\\Ra2\\wonline.cpp", 2756), channel.latency);
+			tooltip += ping_text;
+		} else {
+			tooltip += StringTable::LoadString("TXT_UNKNOWN_PING", NULL, "D:\\Ra2\\wonline.cpp", 2759);
+		}
+		char options[132];
+		strncpy(options, (char *)channel.exInfo, 128);
+		int build = 0;
+		int hash = 0;
+		int ai_count = 0;
+		int observer = 0;
+		int not_full = 0;
+		Wstring scenario;
+		Parse_Channel_ExInfo(options, &build, &hash, &ai_count, &observer, &not_full, &scenario);
+		if (scenario.length() > 0) {
+			WideWstring description = Get_Mission_Description(scenario);
+			if (description.length() > 0) {
+				tooltip += L", ";
+				tooltip += description;
+			}
+		}
+		return(tooltip);
+	}
+	return(WideWstring(StringTable::LoadString("STT:LobbyListGames", NULL, "D:\\Ra2\\wonline.cpp", 2729))); // RA2: as above
+}
+
+WideWstring User_List_Tooltip(HWND list, int row) // RA2: 0x0073F850, the tooltip of a row of the user list: User_Tooltip of the user
+{
+	if (row == -1) { // RA2: as above
+		return(WideWstring(StringTable::LoadString("STT:LobbyListUsers", NULL, "D:\\Ra2\\wonline.cpp", 2785))); // RA2: as above
+	}
+	int index = SendMessageA(list, LB_GETITEMDATA, row, 0);
+	if (index >= 0 && index < g_UserList.length()) { // RA2: as above
+		User user;
+		memset(&user, 0, sizeof(user));
+		g_UserList.get(user, index);
+		return(User_Tooltip(user));
+	}
+	return(WideWstring(StringTable::LoadString("STT:LobbyListUsers", NULL, "D:\\Ra2\\wonline.cpp", 2790))); // RA2: as above
+}
+
+void Refresh_Game_List(void) // RA2: 0x0073F8F0, fills the game list of dialog 0x113 from the game channels: name with the players, kind, password, observer and ping cells, the selection and the first visible row kept
+{
+	HWND dialog = WS_Find_Dialog(0x113);
+	if (!dialog) return; // RA2: as above
+	HWND list = GetDlgItem(dialog, 0x6EE);
+	if (!list) return; // RA2: as above
+
+	Wstring selected;
+	int selected_row = SendMessageA(list, LB_GETCURSEL, 0, 0);
+	if (selected_row != -1) Get_Window_Item_Text(list, selected_row, selected);
+	Wstring top;
+	int top_row = SendMessageA(list, LB_GETTOPINDEX, 0, 0);
+	if (top_row != -1) Get_Window_Item_Text(list, top_row, top);
+	SendMessageA(list, OD_DISABLEPAINT, 0, 1);
+	g_GameListRefreshing = true; // RA2: as above
+	SendMessageA(list, LB_RESETCONTENT, 0, 0);
+
+	int count = g_GameChannelList.length();
+	for (int i = 0; i < count; ++i) {
+		Channel channel;
+		memset(&channel, 0, sizeof(channel));
+		g_GameChannelList.get(channel, i);
+		if (Is_Channel_Flag_11(&channel) || Is_Channel_Flag_12(&channel)) continue; // RA2: as above
+		char options[132];
+		strncpy(options, (char *)channel.exInfo, 128);
+		int build = 0;
+		int hash = 0;
+		int ai_count = 0;
+		int observer = 0;
+		int not_full = 0;
+		Wstring scenario;
+		Parse_Channel_ExInfo(options, &build, &hash, &ai_count, &observer, &not_full, &scenario);
+		int participants = channel.currentUsers - observer + ai_count;
+		int capacity = channel.maxUsers - ((observer || not_full) ? 1 : 0);
+		wchar_t title[80];
+		swprintf(title, L"%hs %d/%d", channel.name, participants, capacity); // RA2: as above
+		int row = SendMessageA(list, OD_INSERTSTRING, -1, (LPARAM)channel.name);
+		SendMessageA(list, LB_SETITEMDATA, row, i);
+
+		OwnerDraw::CellData cell;
+		cell.type = OwnerDraw::CellData::TEXT;
+		cell.string.set((unsigned short *)title);
+		cell.hint.set((unsigned short *)L"");
+		cell.color = ColorSystem;
+		if (ObserverMode) { // RA2: a game that takes no observer, or has one, cannot be joined as an observer
+			if (!not_full || observer) cell.color = ColorNoJoin;
+		} else if (participants == capacity) {
+			cell.color = ColorNoJoin;
+		}
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_GameName, row), (LPARAM)&cell);
+
+		cell.type = OwnerDraw::CellData::INVALID;
+		cell.hint.set((unsigned short *)L"");
+		cell.type = OwnerDraw::CellData::SURFACE;
+		cell.hint.set((unsigned short *)L"");
+		if (Is_Channel_Flag_8(&channel)) { // RA2: a battle clan game
+			cell.surf = SurfaceCache.GetSurface("wolclan.pcx", false);
+			cell.hint.set(StringTable::LoadString("TXT_BATTLECLAN_GAME", NULL, "D:\\Ra2\\wonline.cpp", 2903));
+		} else if (Is_Channel_Tournament(&channel)) {
+			cell.surf = SurfaceCache.GetSurface("woltrny.pcx", false);
+			cell.hint.set(StringTable::LoadString("TXT_TOURNAMENT_GAME", NULL, "D:\\Ra2\\wonline.cpp", 2908));
+		} else {
+			cell.surf = SurfaceCache.GetSurface("gt18.pcx", false);
+			cell.hint.set((unsigned short *)L"");
+		}
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_GameIcon, row), (LPARAM)&cell);
+
+		cell.type = OwnerDraw::CellData::SURFACE;
+		cell.hint.set((unsigned short *)L"");
+		if (channel.flags & 0x100) {
+			cell.surf = SurfaceCache.GetSurface("wolpriv.pcx", false);
+			cell.hint.set(StringTable::LoadString("TXT_GAME_PASSWORD", NULL, "D:\\Ra2\\wonline.cpp", 2922));
+		} else {
+			cell.type = OwnerDraw::CellData::INVALID;
+			cell.hint.set((unsigned short *)L"");
+		}
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_GamePrivate, row), (LPARAM)&cell);
+
+		cell.type = OwnerDraw::CellData::INVALID;
+		cell.string.set((unsigned short *)L"");
+		cell.hint.set((unsigned short *)L"");
+		if (channel.reserved & 0x600) {
+			if (!observer && not_full) {
+				cell.type = OwnerDraw::CellData::SURFACE;
+				cell.surf = SurfaceCache.GetSurface("wolrslkob.pcx", false);
+			} else {
+				cell.type = OwnerDraw::CellData::SURFACE;
+				cell.surf = SurfaceCache.GetSurface("wolreslk.pcx", false);
+			}
+		} else if (!observer && not_full) {
+			cell.type = OwnerDraw::CellData::SURFACE;
+			cell.surf = SurfaceCache.GetSurface("wolob.pcx", false);
+		}
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_GameObserver, row), (LPARAM)&cell);
+
+		if (channel.latency == -1) {
+			cell.type = OwnerDraw::CellData::TEXT;
+			cell.string.set((unsigned short *)L"??");
+		} else {
+			cell.pingtime = channel.latency;
+			cell.type = OwnerDraw::CellData::PING;
+		}
+		swprintf(title, StringTable::LoadString("WOL:GamePing", NULL, "D:\\Ra2\\wonline.cpp", 2962), channel.latency);
+		cell.hint.set((unsigned short *)title);
+		SendMessageA(list, OD_SETCELL, MAKEWPARAM(g_Col_GamePingTime, row), (LPARAM)&cell);
+	}
+
+	int restored = SendMessageA(list, OD_FINDSTRING, 0, (LPARAM)selected.text());
+	SendMessageA(list, LB_SETCURSEL, restored, 0);
+	int restored_top = SendMessageA(list, OD_FINDSTRING, 0, (LPARAM)top.text());
+	if (restored_top != -1) SendMessageA(list, LB_SETTOPINDEX, restored_top, 0);
+	SendMessageA(list, OD_DISABLEPAINT, 0, 0);
+	InvalidateRect(list, NULL, false);
+	if (dialog == WS_Top_Window()) SetFocus(GetDlgItem(dialog, 0x540));
 }
 
 /// <summary>

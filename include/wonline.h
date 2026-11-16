@@ -74,7 +74,7 @@ int Startup_Chat(HINSTANCE hInstance);
 void Handle_User_Leave(struct User & user);
 void Logout_WOnline(void);
 void Shutdown_Chat(void);
-int Get_WDT_State_Silent(void);
+bool Get_WDT_State_Silent(void); // RA2: 0x00742270, returns whether the state was asked for
 WonlineResult Login_WOL(void);
 int Join_WOL_Lobby(HWND win);
 int Pick_Lobby(void);
