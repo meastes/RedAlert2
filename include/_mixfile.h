@@ -41,6 +41,7 @@ extern MFCD * MoviesMix;
 extern MFCD * ScoresMix;
 extern MFCD * MainMix;
 extern MFCD * ConquerMix;
+extern MFCD * CameoMix; // RA2: 0x008374E4, CAMEO.MIX with the cameo icons
 extern MFCD * CacheMix;
 extern MFCD * LocalMix;
 extern MFCD * MapsMix;
@@ -53,7 +54,5 @@ extern MFCD * SideCMix;
 extern MFCD * SideNCMix;
 extern MFCD * SideCDMix;
 
-#if defined(_DEMO) || defined(_DEBUG)
-extern DynamicVectorClass<MFCD *> MapsMixLocal;
-extern DynamicVectorClass<MFCD *> MoviesMixLocal;
-#endif
+extern DynamicVectorClass<MFCD *> MapsMixLocal; // RA2: 0x00837468, the further MAPS*.MIX files
+extern DynamicVectorClass<MFCD *> MoviesMixLocal; // RA2: 0x008374A0, the further MOVIES*.MIX files
