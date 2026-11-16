@@ -59,6 +59,7 @@
 #include "pixelfx.h" // RA2: Draw_Pixel_Effects
 #include "rules.h"
 #include "scheme.h"
+#include "shapeset.h" // RA2: Draw_Screen_Text reads the end game graphic
 #include "session.h"
 #include "stimer.h"
 #include "sun.h"
@@ -83,7 +84,10 @@ static inline void Set_Ground_Position(Coord & coord, Point2D const & point); //
 namespace Unsorted { extern bool ArmageddonMode; }
 namespace Game { extern HWND hWnd; }
 namespace Game { unsigned __int64 __fastcall AudioGetTime(void); }
-namespace Game { void __fastcall UICommands_TypeSelect_7327D0(char const * name); }
+extern ConvertClass * EndGameGraphicsConvert; // RA2: 0xA41678, the palette conversion of the end game graphic (set up in Init_Game, not in main yet)
+extern ShapeSet const * EndGameGraphicsShape; // RA2: 0xA41674, the end game graphic loaded in Init_Game
+bool Is_Type_Select_Key_Held(void); // RA2: 0x6F76B0 in the user interface commands (not in main yet); reads the flag the type select key sets at 0xAC133D
+void __fastcall Select_Type(char const * name); // RA2: 0x6F71E0 in the user interface commands (not in main yet)
 
 
 
@@ -116,6 +120,11 @@ Tactical::Selectable Tactical::SelectableObjects[MAX_SELECTABLE_OBJECTS];
 DynamicVectorClass<DirtyAreaStruct> Tactical::DirtyAreas;
 
 DynamicVectorClass<ShadowControlClass *> Tactical::ShadowControls;
+
+// RA2: file statics filled in by the dynamic initializers at 0x006A2440 (the first two, one function) and 0x006A2480
+static double PixelsPerLepton; // RA2: at 0x00ABE550, set inside the initializer of ZPixelsPerLepton
+static double ZPixelsPerLepton = fastmath::sin(RAD_60) * (PixelsPerLepton = ISO_TILE_PIXEL_W / CELL_LEPTON_DIAG); // RA2: at 0x00ABE490; one initializer stores both
+static double ZLeptonsPerPixel = CELL_LEPTON_DIAG / (fastmath::sin(RAD_60) * ISO_TILE_PIXEL_W); // RA2: at 0x00ABE520
 
 
 /// <summary>
@@ -300,15 +309,13 @@ int Tactical::Z_Lepton_To_Pixel(LEPTON lepton)
 {
 	int fudge = 0;
 
-	static double pixels_per_lepton = ISO_TILE_PIXEL_W / CELL_LEPTON_DIAG;
-	static double z_pixels_per_lepton = fastmath::sin(RAD_60) * pixels_per_lepton;
-
-	if (lepton >= (CELL_LEPTON * 3) + (CELL_LEPTON / 2) + 40) {
+	if (lepton >= 728) { // RA2: the threshold is 728 leptons
 		fudge = 1;
 	}
 
-	return(int(lepton * z_pixels_per_lepton + fudge + 0.5));
+	return(int(lepton * ZPixelsPerLepton + fudge + 0.5)); // RA2: reads the file scope ZPixelsPerLepton (0xABE490) instead of a local static
 }
+
 
 
 /// <summary>
@@ -318,10 +325,9 @@ int Tactical::Z_Lepton_To_Pixel(LEPTON lepton)
 /// <returns>Returns with the height that the pixel lift stands for.</returns>
 LEPTON Tactical::Pixel_To_Z_Lepton(int pixel)
 {
-	static double z_leptons_per_pixel = CELL_LEPTON_DIAG / (fastmath::sin(RAD_60) * ISO_TILE_PIXEL_W);
-
-	return(LEPTON(z_leptons_per_pixel * (pixel - 0.5)));
+	return(LEPTON(ZLeptonsPerPixel * (pixel - 0.5))); // RA2: reads the file scope ZLeptonsPerPixel (0xABE520) instead of a local static
 }
+
 
 
 /***********************************************************************************************
@@ -1365,27 +1371,39 @@ void Tactical::Draw_Screen_Text(wchar_t const * text) // RA2: wide text
 	if (Debug_Map) {
 		return;
 	}
-	if (text == NULL || !wcslen(text)) { // RA2: wide
+	if ((text == NULL || !wcslen(text)) && EndGameGraphicsFrame == -1) { // RA2: the end game graphic can show without text
 		return;
 	}
 	if (CompositeSurface->Is_Direct_Draw()) {
-		HDC hdc;
-		Rect rect = TacticalRect;
-		HRESULT hr = ((DSurface*)CompositeSurface)->Get_DD_Surface()->GetDC(&hdc);
-		if (SUCCEEDED(hr)) {
-			HFONT font = CreateFont(28, 20, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_RASTER_PRECIS, CLIP_DEFAULT_PRECIS, PROOF_QUALITY, FF_SWISS | DEFAULT_PITCH, NULL);
-			HGDIOBJ h = SelectObject(hdc, font);
-			Point2D point = Point2D(TacticalRect.Width / 2, TacticalRect.Height / 2);
-			SetBkMode(hdc, TRANSPARENT);
-			SetTextAlign(hdc, TA_CENTER);
-			SetTextColor(hdc, RGB(255, 255, 255));
-			TextOutW(hdc, rect.X + point.X, rect.Y + point.Y, text, wcslen(text)); // RA2: wide
-			SelectObject(hdc, h);
-			DeleteObject(font);
-			((DSurface*)CompositeSurface)->Get_DD_Surface()->ReleaseDC(hdc);
+		int frame = EndGameGraphicsFrame; // RA2: draws the caption frame of the end game graphic, centered, instead of the text
+		if (frame != -1 && EndGameGraphicsConvert != NULL && EndGameGraphicsShape != NULL && EndGameGraphicsShape->Get_Count() > frame) { // RA2: as above
+			ShapeSet const * shape = EndGameGraphicsShape; // RA2: as above
+			Point2D point((TacticalRect.Width - shape->Get_Width()) / 2, (TacticalRect.Height - shape->Get_Height()) / 2); // RA2: as above
+			Draw_Shape(*CompositeSurface, *EndGameGraphicsConvert, shape, frame, point, TacticalRect, SHAPE_NORMAL, NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+			return; // RA2: as above
+		}
+		if (text != NULL && wcslen(text) > 0) {
+			BitFont * font = BitFont::Instance; // RA2: prints the text with the game's bitmap font instead of a GDI font
+			Rect rect = TacticalRect; // RA2: as above
+			unsigned short color = DSurface::Build_Hicolor_Pixel(255, 255, 255); // RA2: as above
+			int width; // RA2: as above
+			int height; // RA2: as above
+			font->Text_Dimensions(text, &width, &height, rect.Width); // RA2: as above
+			int x = (rect.Width - width) / 2 + rect.X; // RA2: as above
+			int y = rect.Y + (rect.Height - height) / 2; // RA2: as above
+			LTRBStruct box; // RA2: as above
+			box.Left = rect.X; // RA2: as above
+			box.Top = rect.Y; // RA2: as above
+			box.Right = rect.X + rect.Width; // RA2: as above
+			box.Bottom = rect.Height + rect.Y; // RA2: as above
+			font->Set_Clip(true); // RA2: as above
+			font->Set_Bounds(&box); // RA2: as above
+			font->Set_Color(color); // RA2: as above
+			BitText::Instance->Print(font, CompositeSurface, text, x, y, 0, 0); // RA2: as above
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1635,19 +1653,16 @@ void Tactical::Draw_Wall_Placement(bool drawtrans, Cell cell)
 		 */
 		FacingType facing = (FacingType)index;
 		bool found = false;
-		while (true) {
+		for (; count < range; count++) { // RA2: a counted loop that stops at the first cell that is not clear to build (0x6A6320)
 			scan = Adjacent_Cell(scan, facing);
 			CellClass * cellptr = &Map[scan];
 			if (cellptr->Overlay != OVERLAY_NONE && to_overlay->HeapID == cellptr->Overlay && PlayerPtr->HeapID == Map[scan].Owner) {
 				found = true;
 				break;
 			}
-			if (Map[scan].Is_Clear_To_Build(cls->Speed, cls, PlayerPtr)) {
-				if (++count < range) {
-					continue;
-				}
+			if (!Map[scan].Is_Clear_To_Build(cls->Speed, cls, PlayerPtr)) { // RA2: as above
+				break;
 			}
-			break;
 		}
 
 		/*
@@ -1658,8 +1673,8 @@ void Tactical::Draw_Wall_Placement(bool drawtrans, Cell cell)
 								  : (SHAPE_NONZERO_ALPHA | SHAPE_WIN_REL | SHAPE_CENTER | SHAPE_TRANSLUCENT75);
 			Cell drawcell = Adjacent_Cell(cell, facing);
 			for (int i = count; i > 0; i--) {
-				int yoff = -1 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
-				int zoff = -2 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
+				int yoff = -1 - 15 * Map[drawcell].Height; // RA2: the per level pixel height is the constant 15 here
+				int zoff = -2 - 15 * Map[drawcell].Height; // RA2: as above
 				Coord coord = Coord_Whole(Coord(drawcell));
 				Point2D pixel;
 				Coord_To_Pixel(coord, pixel);
@@ -1672,6 +1687,7 @@ void Tactical::Draw_Wall_Placement(bool drawtrans, Cell cell)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -2963,7 +2979,7 @@ void Tactical::Draw_Terrain(bool forced, Rect const & area, Rect const & cliprec
 	Rect inter = Intersect(area, cliprect);
 	for (int i = DisplayClass::Layer[LAYER_GROUND].Count() - 1; i >= 0; i--) {
 		ObjectClass * obj = DisplayClass::Layer[LAYER_GROUND][i];
-		if (obj->RTTI == RTTI_TERRAIN && !obj->Is_Inactive() && !((TerrainClass*)obj)->Is_Animating()) {
+		if (obj->RTTI == RTTI_TERRAIN && !obj->Is_Inactive() && !((TerrainClass*)obj)->Class->IsAnimated && !((TerrainClass*)obj)->IsCrumbling) { // RA2: tests the type's IsAnimated and the object's IsCrumbling (at 0x6A9E81, 0x6A9E95)
 			Rect render = obj->Get_Render_Rect() + Point2D(TacticalRect.X, TacticalRect.Y);
 			if (render.Is_Overlapping(inter)) {
 				Rect clip = cliprect;
@@ -2973,6 +2989,7 @@ void Tactical::Draw_Terrain(bool forced, Rect const & area, Rect const & cliprec
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -3415,11 +3432,10 @@ void Tactical::Select_These(Rect const & rect, void (*select_callback)(ObjectCla
 		 */
 		for (int index = 0; index < SelectableCount; index++) {
 			Selectable & sel = SelectableObjects[index];
-			ObjectClass * obj = sel.Object;
-
-			if (obj == NULL || !obj->IsActive) {
+			if (sel.Object == NULL || !sel.Object->IsActive) { // RA2: tests sel.Object itself; the local is taken after the test
 				continue;
 			}
+			ObjectClass * obj = sel.Object; // RA2: as above
 
 			Point2D pos = sel.Position - Point2D(TacPixelX, TacPixelY);
 
@@ -3429,6 +3445,11 @@ void Tactical::Select_These(Rect const & rect, void (*select_callback)(ObjectCla
 			*/
 			if (!rect.Is_Point_Within(pos)) {
 				continue;
+			}
+
+			if (Is_Type_Select_Key_Held()) { // RA2: while the type select key is held, a rubber band selects by type
+				Select_Type(obj->Class_Of()->IniName); // RA2: as above
+				continue; // RA2: as above
 			}
 
 			if (select_callback == NULL) {
@@ -3444,19 +3465,20 @@ void Tactical::Select_These(Rect const & rect, void (*select_callback)(ObjectCla
 
 				HouseClass * hptr = obj->Owner_HouseClass();
 				if (hptr != NULL && hptr->Is_Player_Control() &&
-					obj->Class_Of()->IsSelectable &&
+					obj->CanBeSelected() && // RA2: virtual CanBeSelected (0x6AACD5) in place of the type's IsSelectable
 					(obj->RTTI != RTTI_BUILDING || force)) {
 					if (obj->Select()) {
 						AllowVoice = false;
 					}
 				}
 			} else {
-				select_callback(sel.Object);
+				select_callback(obj); // RA2: passes the object pointer already loaded (0x6AAD27)
 			}
 		}
 	}
 	AllowVoice = true;
 }
+
 
 
 void Set_Type_Select_Mode(unsigned mode); // RA2: 0x6F6780 in the user interface commands (not in main yet)
@@ -3520,7 +3542,7 @@ bool Tactical::Unselect_Foreign_Object(void) // RA2: not in TibSun, at 0x6AAD70
  *=============================================================================================*/
 void Tactical::Flag_Cell(CellClass & cell)
 {
-	if (Map.DrawFlags == GS_REDRAW_DIRTY && cell.LastRedrawFrame != Frame && cell.IsMapped) {
+	if (Map.DrawFlags == GS_REDRAW_DIRTY && cell.LastRedrawFrame != Frame && (cell.IsMapped || cell.VisibilityChanged)) { // RA2: also redraws a cell whose visibility changed (+0x138)
 		cell.LastRedrawFrame = Frame;
 
 		Coord coord = cell.Cell_Coord();
@@ -3529,11 +3551,11 @@ void Tactical::Flag_Cell(CellClass & cell)
 
 		Point2D pixel;
 		if (cell.IsMapped && cell.IsVisible) {
-			Coord_To_Pixel(ground, pixel);
+			pixel = Coord_To_Pixel_Absolute(ground); // RA2: both branches inline the same conversion (0x6AAE38, 0x6AAE7F)
 		} else {
 			pixel = Coord_To_Pixel_Absolute(ground);
-			pixel -= Point2D(TacPixelX, TacPixelY);
 		}
+		pixel -= Point2D(TacPixelX, TacPixelY); // RA2: taken out of the branches
 
 		if (pixel.X >= TacticalRect.X - ISO_TILE_PIXEL_W / 2
 			&& pixel.Y >= -ISO_TILE_PIXEL_H
@@ -3544,10 +3566,12 @@ void Tactical::Flag_Cell(CellClass & cell)
 				CellRedraw[CellRedrawCount] = &cell;
 				CellRedrawCount++;
 			}
+			cell.VisibilityChanged = false; // RA2: the redraw consumes the visibility change
 			IsToRedraw = true;
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -3584,76 +3608,56 @@ void Tactical::Draw_Rally_Points(bool inshroud)
 	};
 
 	int phase = (0x7FFFFFFF - Frame) % TICKS_PER_SECOND;
+	int shadow = DSurface::Build_Hicolor_Pixel(BlackColor.Get_Red(), BlackColor.Get_Green(), BlackColor.Get_Blue()); // RA2: a black shadow line is drawn under the colored ones
 
 	for (int index = CurrentObject.Count() - 1; index >= 0; index--) {
-
 		ObjectClass * object = CurrentObject[index];
 
 		/*
-		 * Only player-owned, selected, factory buildings with an assigned rally
-		 * point (and not currently deconstructing) should display a rally line.
+		 * Only selected, active buildings of the player that can move units to a rally point
+		 * and have one assigned show a rally line.
 		 */
-		if (object->What_Am_I() != RTTI_BUILDING) {
-			continue;
-		}
+		if (object->What_Am_I() == RTTI_BUILDING && object->IsActive && object->IsSelected) { // RA2: one condition instead of the tests that continue
+			BuildingClass * building = (BuildingClass *)object;
+			if (building->House == PlayerPtr && building->Is_Move_Override() && building->ArchiveTarget != NULL) { // RA2: Is_Move_Override replaces the ToBuild and mission tests
+				Point2D start;
+				Coord_To_Pixel(building->Center_Coord(), start);
+				start += Point2D(TacticalRect.X, TacticalRect.Y);
 
-		BuildingClass * building = (BuildingClass *)object;
+				Coord rally = building->ArchiveTarget->Center_Coord();
+				rally.Z = Map.Get_Height_GL(rally);
+				if (Map[rally].IsUnderBridge) {
+					rally.Z += BRIDGE_LEPTON_HEIGHT;
+				}
 
-		if (!building->IsActive) {
-			continue;
-		}
+				Point2D end;
+				Coord_To_Pixel(rally, end);
+				end += Point2D(TacticalRect.X, TacticalRect.Y);
 
-		if (!building->IsSelected) {
-			continue;
-		}
+				Point2D offset(0, 2); // RA2: the shadow line lies two pixels below the colored lines
+				start += offset; // RA2: as above
+				end += offset; // RA2: as above
+				if (Clip_Line_To_Rect(start, end, TacticalRect)) {
+					LogicalSurface->Draw_Masked_Dashed_Line(start, end, shadow, _pattern, phase, inshroud); // RA2: as above
+				}
 
-		if (building->House != PlayerPtr) {
-			continue;
-		}
-
-		if (building->Class->ToBuild != RTTI_INFANTRYTYPE &&
-			building->Class->ToBuild != RTTI_UNITTYPE &&
-			building->Class->ToBuild != RTTI_AIRCRAFTTYPE) {
-			continue;
-		}
-
-		if (building->ArchiveTarget == NULL) {
-			continue;
-		}
-
-		if (building->CurrentMission == MISSION_DECONSTRUCTION) {
-			continue;
-		}
-
-		/*
-		 * Compute the screen-space start point at the building's center.
-		 */
-		Point2D start;
-		Coord_To_Pixel(building->Center_Coord(), start);
-		start += Point2D(TacticalRect.X, TacticalRect.Y);
-
-		/*
-		 * Compute the screen-space end point at the rally point. Snap the rally
-		 * coordinate to the ground height and lift it onto the bridge if needed.
-		 */
-		Coord rally = building->ArchiveTarget->Center_Coord();
-		rally.Z = Map.Get_Height_GL(rally);
-		if (Map[rally].IsUnderBridge) {
-			rally.Z += BRIDGE_LEPTON_HEIGHT;
-		}
-
-		Point2D end;
-		Coord_To_Pixel(rally, end);
-		end += Point2D(TacticalRect.X, TacticalRect.Y);
-
-		/*
-		 * Clip the line to the tactical view and draw it as a marching green dash.
-		 */
-		if (Clip_Line_To_Rect(start, end, TacticalRect)) {
-			LogicalSurface->Draw_Masked_Dashed_Line(start, end, DSurface::Build_Hicolor_Pixel(0, 255, 0), _pattern, phase, inshroud);
+				RGBClass & rgb = building->House->RemapColorRGB; // RA2: the line is drawn in the owner's color, twice, one pixel apart
+				int color = DSurface::Build_Hicolor_Pixel(rgb.Get_Red(), rgb.Get_Green(), rgb.Get_Blue()); // RA2: as above
+				start.Y--; // RA2: as above
+				end.Y--; // RA2: as above
+				if (Clip_Line_To_Rect(start, end, TacticalRect)) {
+					LogicalSurface->Draw_Masked_Dashed_Line(start, end, color, _pattern, phase, inshroud); // RA2: as above
+				}
+				start.Y--; // RA2: as above
+				end.Y--; // RA2: as above
+				if (Clip_Line_To_Rect(start, end, TacticalRect)) {
+					LogicalSurface->Draw_Masked_Dashed_Line(start, end, color, _pattern, phase, inshroud); // RA2: as above
+				}
+			}
 		}
 	}
 }
+
 
 
 /*
@@ -3783,21 +3787,21 @@ void Tactical::Debug_Draw_Occupier_Links(void)
 	int ocolor1 = DSurface::Build_Hicolor_Pixel(255, 255, 0);
 	int lcolor = DSurface::Build_Hicolor_Pixel(255, 0, 255);
 	int ocolor2 = DSurface::Build_Hicolor_Pixel(0, 255, 255);
-	while (cellptr != NULL) {
+	while (cellptr) { // RA2: tests the pointer as a truth value
 		ObjectClass *object;
 
 		/*
 		 * Join the cell to whatever stands on the ground within it...
 		 */
-		object = cellptr->Cell_Occupier(false);
-		if (object != NULL) {
+		object = cellptr->OccupierPtr; // RA2: reads the member, not Cell_Occupier(false)
+		if (object) { // RA2: truth value test
 			Coord coord1 = cellptr->Cell_Coord();
 			Point2D start;
 			Coord_To_Pixel(coord1, start);
 			Coord coord2 = object->Center_Coord();
 			Point2D end;
 			Coord_To_Pixel(coord2, end);
-			Rect rect(start - Point2D(1, 1), 3, 3);
+			Rect rect(start.X - 1, start.Y - 1, 3, 3); // RA2: built from four numbers
 			LogicalSurface->Fill_Rect(TacticalRect, rect, ocolor1);
 			LogicalSurface->Draw_Line(TacticalRect, start, end, ocolor1);
 		}
@@ -3805,16 +3809,16 @@ void Tactical::Debug_Draw_Occupier_Links(void)
 		/*
 		 * ...and to whatever stands on the bridge deck above it.
 		 */
-		object = cellptr->Cell_Occupier(true);
-		if (object != NULL) {
+		object = cellptr->BridgeOccupierPtr; // RA2: reads the member, not Cell_Occupier(true)
+		if (object) { // RA2: truth value test
 			Coord coord1 = cellptr->Cell_Coord();
 			Point2D start;
 			Coord_To_Pixel(coord1, start);
-			start.Y -= CELL_PIXEL_H;
+			start.Y -= 60; // RA2: the constant 60 where TibSun has CELL_PIXEL_H
 			Coord coord2 = object->Center_Coord();
 			Point2D end;
 			Coord_To_Pixel(coord2, end);
-			Rect rect(start - Point2D(1, 1), 3, 3);
+			Rect rect(start.X - 1, start.Y - 1, 3, 3); // RA2: built from four numbers
 			LogicalSurface->Fill_Rect(TacticalRect, rect, ocolor2);
 			LogicalSurface->Draw_Line(TacticalRect, start, end, ocolor2);
 		}
@@ -3826,7 +3830,7 @@ void Tactical::Debug_Draw_Occupier_Links(void)
 	 */
 	for (int i = Objects.Count() - 1; i >= 0; i--) {
 		ObjectClass *object = Objects[i];
-		if (object->Next != NULL) {
+		if (object->Next) { // RA2: truth value test
 			Coord coord1 = object->Center_Coord();
 			Point2D start;
 			Coord_To_Pixel(coord1, start);
@@ -3837,6 +3841,7 @@ void Tactical::Debug_Draw_Occupier_Links(void)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -4020,3 +4025,19 @@ void Tactical::Draw_Radial_Indicators(void)
 	}
 }
 
+/// <summary>
+/// Returns how many objects drew themselves in the last render pass and can be clicked.
+/// </summary>
+int Tactical::Selectable_Count(void) const // RA2: 0x6AC7B0, not in TibSun
+{
+	return(SelectableCount); // RA2: reads the member at +0xDB0
+}
+
+
+/// <summary>
+/// Returns the object that drew itself at the given place in the last render pass.
+/// </summary>
+ObjectClass * Tactical::Selectable_Object(int index) const // RA2: 0x6AC7C0, not in TibSun
+{
+	return(SelectableObjects[index].Object); // RA2: indexes the table of 12 byte entries
+}

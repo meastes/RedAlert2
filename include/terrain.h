@@ -126,6 +126,8 @@ class TerrainClass : public ObjectClass, public StageClass
 
 	private:
 
+		friend class Tactical; // RA2: Tactical::Draw_Terrain reads IsCrumbling directly
+
 		/*
 		**	If this terrain object is on fire, then this flag will be true.
 		*/
