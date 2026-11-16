@@ -9507,7 +9507,6 @@ address,symbol,evidence
 0x007D9CB0,??_C@_0M@HDJ@GUI?3Observe?$AA@,"inferred: referenced by matched src/goptions.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D9CBC,??_C@_0M@BIAC@GUI?3Restart?$AA@,"inferred: referenced by matched src/goptions.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D9CC8,??_C@_09GNCJ@GUI?3Leave?$AA@,"inferred: referenced by matched src/goptions.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x007D9D6C,??_C@_0N@FJC@TransitTheme?$AA@,"inferred: referenced by matched src/scenario.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D9D74,??_C@_04HJCD@?4BIK?$AA@,"inferred: referenced by matched src/movies.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D9D7C,??_C@_04MOHI@?4VQA?$AA@,"inferred: referenced by matched src/movies.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D9D84,??_C@_04DCKM@?4PCX?$AA@,"inferred: referenced by matched src/msanim.cpp (4 references); across all matched code never at another address, and no other symbol here"

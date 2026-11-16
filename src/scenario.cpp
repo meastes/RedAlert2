@@ -3385,7 +3385,7 @@ bool ScenarioClass::Write_INI(CCINIClass & ini, bool mplayer) const
 	ini.Put_Int(BASIC, "Percent", Percent);
 	ini.Put_TechnoType_List(BASIC, "AllowableUnits", AllowableUnits);
 	ini.Put_IntList(BASIC, "AllowableUnitMaximums", AllowableUnitMaximums);
-	ini.Put_ThemeType(BASIC, "TransitTheme", TransitTheme); // RA2: as above
+	ini.Put_ThemeType(BASIC, "Theme", TransitTheme); // RA2: written under the key "Theme" (the string at 0x007D9D6C), the key Read_INI reads
 
 	if (!mplayer) {
 		char player[32]; // RA2: as above
