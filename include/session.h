@@ -731,7 +731,7 @@ class SessionClass
 		bool ViaPacketRouter;
 		unsigned char unknown_2969[3];
 		IPXAddressClass PacketRouterAddress;
-		IPXAddressClass unknown_2978;
+		IPXAddressClass PacketRouterAddressTranslate;
 		unsigned short PacketRouterPort;
 		unsigned short : 16;
 		IPXAddressClass unknown_2988;

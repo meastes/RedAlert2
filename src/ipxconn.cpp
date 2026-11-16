@@ -406,7 +406,7 @@ int IPXConnClass::Send_To(char *buf, int buflen, IPXAddressClass *address,
 		}
 		dest = Session.PacketRouterAddress;
 		dest_port = LoopbackPort;
-		if (Session.unknown_2978 == Session.Players[0]->Address && dest.Is_Same_Node(Session.Players[0]->Address)) {
+		if (Session.PacketRouterAddressTranslate == Session.Players[0]->Address && dest.Is_Same_Node(Session.Players[0]->Address)) {
 			((GlobalHeaderType *)buf)->Header.ForwardPort = 0;
 			memset(&((GlobalHeaderType *)buf)->Header.ForwardAddress, 0, 4);
 		}

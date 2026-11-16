@@ -623,7 +623,7 @@ int SessionClass::Create_Connections(void)
         node2[3] = 0; // RA2: as above
         node2[4] = 0; // RA2: as above
         node2[5] = 0; // RA2: as above
-        Session.unknown_2978.Set_Address(net2, node2, 0); // RA2: as above
+        Session.PacketRouterAddressTranslate.Set_Address(net2, node2, 0); // RA2: as above
         ViaPacketRouter = true; // RA2: as above
         SlowestResponse = 0; // RA2: as above
         RouterResponse = 20; // RA2: as above
