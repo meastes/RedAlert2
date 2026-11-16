@@ -9,313 +9,251 @@
 
 #include "always.h"
 
-#include "_mixfile.h"
-#include "ccfile.h"
-#include "ccrand.h"
-#include "data.h"
-#include "dsaudio.h"
-#include "globals.h"
-#include "goptions.h"
+#include "ccrand.h" // RA2: NonCriticalRandomNumber
+#include "audplay.h" // RA2: AudioStreamerDestroy
+#include "auddsnd.h" // RA2: AudioGetDevice
 #include "ini.h"
-#include "mixfile.h"
+#include "vox.h" // RA2: the speech queue
 #include "wdtnet.h"
+#include "wstring.h"
 
 using namespace WorldDominationTour;
 
-
-bool WDT_Make_Sound_Filename(int side, int index, char * buffer, int bufsize);
-bool WDT_Random_Pick_Sound_Filename(int side, VOICEINDEX_LIST & list, char * buffer, int bufsize);
-void Parse_Index_List(char * buffer, VOICEINDEX_LIST & list);
+Wstring operator+(Wstring const & a, Wstring const & b); // RA2: 0x0076F7D0; the free join of two strings (wstring.cpp defines it, wstring.h has only the member), which the exe calls here
 
 
 /// <summary>
-/// Constructs the voice player that speaks for one side.
-/// The voice-over categories are given the names they are known by in the INI database
-/// so that they can be read; the lists themselves are fetched later by Init.
+/// RA2: constructs the voice player that speaks for one faction.
+/// The six groups are named after the INI keys their lines are read under.
 /// </summary>
-/// <param name="side">The side whose voice-overs this player will speak.</param>
-Voices::Voices(int side) :
-	Side(side),
-	IsIdle(true),
-	QueuedSampleCount(0)
+Voices::Voices(int faction) : // RA2: constructs the voice player that speaks for one faction
+	Faction(faction), // RA2: as above
+	Idle(true), // RA2: as above
+	Pending(0), // RA2: as above
+	Stream(NULL) // RA2: as above
 {
-	VoiceCategories[VOICECAT_OLD_CYCLE].Set_Name("OldCycle");
-	VoiceCategories[VOICECAT_HISTORY].Set_Name("History");
-	VoiceCategories[VOICECAT_STATUS].Set_Name("Status");
-	VoiceCategories[VOICECAT_TERRITORY].Set_Name("Territory");
-	VoiceCategories[VOICECAT_GAME].Set_Name("Game");
-	VoiceCategories[VOICECAT_EVACUATE].Set_Name("Evacuate");
+	AudioGetDevice(); // RA2: the exe fetches the audio device here and does nothing with it
+	Groups[0].Set_Name("OldCycle"); // RA2: the group names
+	Groups[1].Set_Name("History"); // RA2: as above
+	Groups[2].Set_Name("Status"); // RA2: as above
+	Groups[3].Set_Name("Territory"); // RA2: as above
+	Groups[4].Set_Name("Game"); // RA2: as above
+	Groups[5].Set_Name("Evacuate"); // RA2: as above
 }
 
 
 /// <summary>
-/// Destroys the voice player.
-/// Anything still queued or playing is silenced and thrown away.
+/// RA2: destroys the voice player; whatever is queued is stopped and the audio stream is freed.
 /// </summary>
-Voices::~Voices(void)
+Voices::~Voices(void) // RA2: destroys the voice player; whatever is queued is stopped and the audio stream is freed
 {
-	Cleanup();
-}
-
-
-/// <summary>
-/// Reads every voice-over list this player will need.
-/// The World Domination Tour screens call this routine once, as they are being set up,
-/// with the INI section that holds the tour's voice-over lists.
-/// </summary>
-/// <param name="section">The INI section holding the voice-over lists.</param>
-void Voices::Init(INIClass const & ini, const char * section)
-{
-	for (int i = 0; i < VOICECAT_COUNT; i++) {
-		VoiceCategories[i].Read(ini, section, Side);
-	}
-	Init_Standalone(ini, section, VOICE_STARTUP, "Startup");
-	Init_Standalone(ini, section, VOICE_TERRITORY_SELECT, "TerritorySelect");
-}
-
-
-/// <summary>
-/// Reads the voice-over list for one standalone announcement.
-/// The INI entry is named for the side and the announcement, so each side gets its own
-/// set of lines for the same moment.
-/// </summary>
-/// <param name="section">The INI section holding the voice-over lists.</param>
-/// <param name="voice_name">The announcement's name as it appears in the INI entry.</param>
-void Voices::Init_Standalone(INIClass const & ini, const char * section, StandaloneVoiceType voice, const char * voice_name)
-{
-	char buffer[32];
-	char entry[64];
-
-	strcpy(entry, Side == 3 ? "NOD" : "GDI");
-	strncat(entry, voice_name, sizeof(entry));
-	ini.Get_String(section, entry, "", buffer, sizeof(buffer));
-	Parse_Index_List(buffer, StandaloneVoices[voice]);
-}
-
-
-/// <summary>
-/// Picks the filename of an ordinary voice-over for this player's side.
-/// </summary>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was a line available to pick?</returns>
-bool Voices::Pick_Standard_Voice(VoiceCategoryType category, Outcome outcome, char *buffer, int bufsize)
-{
-	return(VoiceCategories[category].Pick_Standard_Sound(Side, outcome, buffer, bufsize));
-}
-
-
-/// <summary>
-/// Picks the filename of an emphatic voice-over for this player's side.
-/// </summary>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was an emphatic line available to pick?</returns>
-bool Voices::Pick_Emphasis_Voice(VoiceCategoryType category, Outcome outcome, char *buffer, int bufsize)
-{
-	return(VoiceCategories[category].Pick_Emphasis_Sound(Side, outcome, buffer, bufsize));
-}
-
-
-/// <summary>
-/// Picks the filename of a standalone voice-over.
-/// </summary>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was a voice-over available to pick?</returns>
-bool Voices::Pick_Standalone_Voice(StandaloneVoiceType voice, char * buffer, int bufsize)
-{
-	return(WDT_Random_Pick_Sound_Filename(Side, StandaloneVoices[voice], buffer, bufsize));
-}
-
-
-/// <summary>
-/// Picks a voice-over at random from a list and builds its filename.
-/// This is the low level routine behind every voice-over pick. An empty list is not an
-/// error -- it just means that side has nothing to say in that situation.
-/// </summary>
-/// <param name="side">The side whose voice-over set to draw from.</param>
-/// <param name="list">The voice-over numbers to choose between.</param>
-/// <param name="buffer">Buffer to fill in with the sound filename. It is emptied when
-/// no pick can be made.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was a voice-over picked?</returns>
-bool WDT_Random_Pick_Sound_Filename(int side, VOICEINDEX_LIST & list, char * buffer, int bufsize)
-{
-	*buffer = '\0';
-
-	int count = list.Count();
-	if (count <= 0) {
-		return(false);
-	}
-	return(WDT_Make_Sound_Filename(side, list[count == 1 ? 0 : Sim_Random_Pick(0, count - 1)], buffer, bufsize));
-}
-
-
-/// <summary>
-/// Builds the sound filename for a voice-over number.
-/// The two sides keep their voice-overs in separate numbered sets, so the side decides
-/// which of the two naming patterns the number is plugged into.
-/// </summary>
-/// <param name="side">The side whose voice-over set the number belongs to.</param>
-/// <param name="index">The voice-over number within that set.</param>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <returns>bool; Was a filename built?</returns>
-/// <remarks>Be sure the destination buffer is big enough to hold a sound filename.</remarks>
-bool WDT_Make_Sound_Filename(int side, int index, char * buffer, int bufsize)
-{
-	sprintf(buffer, side == 3 ? "01-W%03d.v01" : "00-W%03d.v00", index);
-	return(true);
-}
-
-
-/// <summary>
-/// Converts a comma separated INI value into a list of voice-over numbers.
-/// This routine is how every voice-over list in the tour's INI section is turned into
-/// something the voice player can pick from.
-/// </summary>
-/// <param name="buffer">The comma separated text to parse. It is chopped up in place.</param>
-/// <param name="list">The list to fill in with the numbers found. Any previous contents
-/// are thrown away.</param>
-void Parse_Index_List(char * buffer, VOICEINDEX_LIST & list)
-{
-	list.Clear();
-	char *tok = strtok(buffer, ",");
-	while (tok != NULL) {
-		list.Add((unsigned int)atoi(tok));
-
-		tok = strtok(0, ",");
+	Stop(); // RA2: expanded here
+	if (Stream != NULL) { // RA2: as above
+		AudioStreamerDestroy((AudioStreamer *)Stream); // RA2: as above
 	}
 }
 
 
 /// <summary>
-/// Constructs an empty voice-over category.
-/// The category stays nameless and silent until it has been named and read from the
-/// INI database.
+/// RA2: reads every group's Win, Lose and Draw lines and the two stand-alone lists.
 /// </summary>
-Voices::VoiceCategory::VoiceCategory(void)
+void Voices::Load(INIClass & ini, Wstring const & section) // RA2: reads every group's Win, Lose and Draw lines and the two stand-alone lists
 {
-	Name[0] = '\0';
+	for (int group = 0; group < VOICECAT_COUNT; group++) { // RA2: as above
+		Groups[group].Load(ini, section, Faction); // RA2: as above
+	}
+	{
+		Wstring key("Startup"); // RA2: as above
+		Load_List(ini, section, 0, key); // RA2: as above
+	}
+	{
+		Wstring key("TerritorySelect"); // RA2: as above
+		Load_List(ini, section, 1, key); // RA2: as above
+	}
 }
 
 
 /// <summary>
-/// Sets the name this category is known by.
-/// The name forms part of the INI entry that each of the category's voice-over lists is
-/// read from, so it must be set before the category is read.
+/// RA2: reads one comma separated list of line numbers, named after the faction and the key.
 /// </summary>
-/// <param name="name">The category name as it appears in the INI entry.</param>
-void Voices::VoiceCategory::Set_Name(const char * name)
+void Voices::Load_List(INIClass & ini, Wstring const & section, int index, Wstring const & key) // RA2: reads one comma separated list of line numbers, named after the faction and the key
 {
-	strncpy(Name, name, sizeof(Name));
+	Wstring entry = operator+(Faction_Name(Faction), key); // RA2: the free join
+	Wstring value; // RA2: as above
+	{
+		Wstring empty(""); // RA2: as above
+		ini.Get_String(section, entry, empty, value); // RA2: as above
+	}
+	Parse_List(value, Lists[index]); // RA2: as above
 }
 
 
 /// <summary>
-/// Reads this category's voice-over lists from the INI database.
-/// Every outcome the category can announce -- win, lose and draw -- is read for the
-/// side specified.
+/// RA2: picks the speech name of an ordinary line of a group for a result.
 /// </summary>
-/// <param name="section">The INI section holding the voice-over lists.</param>
-/// <param name="side">The side whose voice-overs should be read.</param>
-void Voices::VoiceCategory::Read(INIClass const & ini, const char * section, int side)
+bool Voices::Pick(int group, int kind, Wstring & name) const // RA2: picks the speech name of an ordinary line of a group for a result
 {
-	Read_Voiceover(ini, section, side, OUTCOME_WIN, "Win");
-	Read_Voiceover(ini, section, side, OUTCOME_LOSE, "Lose");
-	Read_Voiceover(ini, section, side, OUTCOME_DRAW, "Draw");
+	return(Groups[group].Pick(Faction, kind, name)); // RA2: as above
 }
 
 
 /// <summary>
-/// Picks the ordinary voice-over for this category and outcome.
-/// One of the lines the side has recorded for the occasion is chosen at random, so the
-/// same announcement is not heard word for word every time.
+/// RA2: picks the speech name of an emphatic line of a group for a result.
 /// </summary>
-/// <param name="side">The side whose voice-over set to draw from.</param>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was there a line to pick?</returns>
-bool Voices::VoiceCategory::Pick_Standard_Sound(int side, Outcome outcome, char * buffer, int bufsize)
+bool Voices::Pick_Emphasis(int group, int kind, Wstring & name) const // RA2: picks the speech name of an emphatic line of a group for a result
 {
-	return(WDT_Random_Pick_Sound_Filename(side, VoiceIndexes[outcome][0], buffer, bufsize));
+	return(Groups[group].Pick_Emphasis(Faction, kind, name)); // RA2: as above
 }
 
 
 /// <summary>
-/// Picks an emphatic voice-over for this category and outcome.
-/// This is the stronger line that follows the ordinary announcement when the moment
-/// calls for one.
+/// RA2: picks the speech name of a line of one of the stand-alone lists.
 /// </summary>
-/// <param name="side">The side whose voice-over set to draw from.</param>
-/// <param name="buffer">Buffer to fill in with the sound filename.</param>
-/// <param name="bufsize">Size of the destination buffer.</param>
-/// <returns>bool; Was there an emphatic line to pick?</returns>
-bool Voices::VoiceCategory::Pick_Emphasis_Sound(int side, Outcome outcome, char * buffer, int bufsize)
+bool Voices::Pick_List(int index, Wstring & name) const // RA2: picks the speech name of a line of one of the stand-alone lists
 {
-	return(WDT_Random_Pick_Sound_Filename(side, VoiceIndexes[outcome][1], buffer, bufsize));
+	return(Pick(Faction, Lists[index], name)); // RA2: as above
 }
 
 
 /// <summary>
-/// Reads the voice-over lists for one outcome of this category.
-/// The INI entry is named for the side, the category and the outcome, and a companion
-/// entry with an "Emphasis" suffix supplies the more emphatic lines. A side that has
-/// nothing to say about this outcome simply leaves both entries out.
+/// RA2: picks a line of a list at random and makes its speech name; an empty list gives nothing.
 /// </summary>
-/// <param name="section">The INI section holding the voice-over lists.</param>
-/// <param name="side">The side whose voice-overs are being read.</param>
-/// <param name="outcome_string">The outcome's name as it appears in the INI entry.</param>
-void Voices::VoiceCategory::Read_Voiceover(INIClass const & ini, const char * section, int side, Outcome outcome, const char * outcome_string)
+bool __fastcall Voices::Pick(int faction, DynamicVectorClass<unsigned int> const & lines, Wstring & name) // RA2: picks a line of a list at random and makes its speech name; an empty list gives nothing
 {
-	char entry[64];
-	char buffer[32];
-
-	strcpy(entry, side == 3 ? "NOD" : "GDI");
-	strncat(entry, Name, sizeof(entry));
-	strncat(entry, outcome_string, sizeof(entry));
-
-	ini.Get_String(section, entry, "", buffer, sizeof(buffer));
-	Parse_Index_List(buffer, VoiceIndexes[outcome][0]);
-
-	strncat(entry, "Emphasis", sizeof(entry));
-	ini.Get_String(section, entry, "", buffer, sizeof(buffer));
-	Parse_Index_List(buffer, VoiceIndexes[outcome][1]);
+	name.clear(); // RA2: as above
+	if (lines.Count() <= 0) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	int index = lines.Count() == 1 ? 0 : NonCriticalRandomNumber(0, lines.Count() - 1); // RA2: as above
+	return(Make_Name(faction, lines[index], name)); // RA2: as above
 }
 
 
 /// <summary>
-/// Queues the voice-over that announces an outcome.
-/// This is how the World Domination Tour screens comment on what just happened -- the
-/// category says what is being talked about and the outcome says whether it went well.
-/// A second, more emphatic line can be queued behind the first for the occasions that
-/// deserve one.
+/// RA2: the speech name of a line, "WWD-Soviet" for faction 3 and "WWD_Allied" for the others, with the number.
 /// </summary>
-/// <param name="emphasis">Should a follow-up emphasis line be queued as well?</param>
-/// <param name="count_queued">Should these voice-overs be safe from being discarded?</param>
-/// <param name="delay">How long to wait before the queue starts speaking.</param>
-void Voices::Queue(VoiceCategoryType category, Outcome outcome, bool emphasis, bool count_queued, int delay)
+bool __fastcall Voices::Make_Name(int faction, int line, Wstring & name) // RA2: the speech name of a line, "WWD-Soviet" for faction 3 and "WWD_Allied" for the others, with the number
 {
-	Discard();
-	if (Audio_Available()) {
-		char buffer[64];
-		if (Pick_Standard_Voice(category, outcome, buffer, sizeof(buffer))) {
-			Sample * sample = new Sample(buffer);
-			if (!Playing()) {
-				Timer = delay;
-			}
-			QueuedSamples.Add(sample);
-			if (count_queued) {
-				QueuedSampleCount++;
-			}
-			if (emphasis) {
-				if (Pick_Emphasis_Voice(category, outcome, buffer, sizeof(buffer))) {
-					sample = new Sample(buffer);
-					QueuedSamples.Add(sample);
-					if (count_queued) {
-						QueuedSampleCount++;
-					}
-				}
+	if (faction == 3) { // RA2: as above
+		name = "WWD-Soviet" + Wstring_FromInt(line, 2); // RA2: as above
+	} else { // RA2: as above
+		name = "WWD_Allied" + Wstring_FromInt(line, 2); // RA2: as above
+	}
+	return(true); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: replaces a list with the comma separated numbers of a text.
+/// </summary>
+void __fastcall Voices::Parse_List(Wstring const & text, DynamicVectorClass<unsigned int> & lines) // RA2: replaces a list with the comma separated numbers of a text
+{
+	lines.Clear(); // RA2: as above
+	Wstring token; // RA2: as above
+	int position = text.getToken(0, ",", token); // RA2: as above
+	while (position != -1) { // RA2: as above
+		lines.Add(token.toInt()); // RA2: as above
+		position = text.getToken(position, ",", token); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2: a group starts with an empty name.
+/// </summary>
+Voices::Group::Group(void) // RA2: a group starts with an empty name
+{
+	Name = ""; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: names the group after the INI key its lines are read under.
+/// </summary>
+void Voices::Group::Set_Name(Wstring const & name) // RA2: names the group after the INI key its lines are read under
+{
+	Name = name; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: reads the lines of all three results of this group.
+/// </summary>
+void Voices::Group::Load(INIClass & ini, Wstring const & section, int faction) // RA2: reads the lines of all three results of this group
+{
+	{
+		Wstring key("Win"); // RA2: as above
+		Load(ini, section, faction, 0, key); // RA2: as above
+	}
+	{
+		Wstring key("Lose"); // RA2: as above
+		Load(ini, section, faction, 1, key); // RA2: as above
+	}
+	{
+		Wstring key("Draw"); // RA2: as above
+		Load(ini, section, faction, 2, key); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2: picks an ordinary line for a result.
+/// </summary>
+bool Voices::Group::Pick(int faction, int kind, Wstring & name) const // RA2: picks an ordinary line for a result
+{
+	return(Voices::Pick(faction, Lines[kind * 2], name)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: picks an emphatic line for a result.
+/// </summary>
+bool Voices::Group::Pick_Emphasis(int faction, int kind, Wstring & name) const // RA2: picks an emphatic line for a result
+{
+	return(Voices::Pick(faction, Lines[kind * 2 + 1], name)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: reads the plain and the emphatic lines of one result of this group (the entry is <faction><group><key>[Emphasis]).
+/// </summary>
+void Voices::Group::Load(INIClass & ini, Wstring const & section, int faction, int kind, Wstring const & key) // RA2: reads the plain and the emphatic lines of one result of this group (the entry is <faction><group><key>[Emphasis])
+{
+	Wstring entry = operator+(Faction_Name(faction), Name).operator+(key); // RA2: the free join of faction and group name, then the member join of the key
+	Wstring value; // RA2: as above
+	{
+		Wstring empty(""); // RA2: as above
+		ini.Get_String(section, entry, empty, value); // RA2: as above
+	}
+	Voices::Parse_List(value, Lines[kind * 2]); // RA2: as above
+	entry += "Emphasis"; // RA2: as above
+	{
+		Wstring empty(""); // RA2: as above
+		ini.Get_String(section, entry, empty, value); // RA2: as above
+	}
+	Voices::Parse_List(value, Lines[kind * 2 + 1]); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: queues the speech of a result of a group, and with emphasis a second line behind it.
+/// </summary>
+void Voices::Say(int group, int kind, bool emphasis, bool counted, int delay) // RA2: queues the speech of a result of a group, and with emphasis a second line behind it
+{
+	Trim(); // RA2: as above
+	Wstring name; // RA2: as above
+	if (Pick(group, kind, name)) { // RA2: as above
+		if (!Is_Speaking()) { // RA2: as above
+			Timer = delay; // RA2: as above
+		}
+		Queue.Add(name); // RA2: as above
+		if (counted) { // RA2: as above
+			Pending++; // RA2: as above
+		}
+		if (emphasis && Pick_Emphasis(group, kind, name)) { // RA2: as above
+			Queue.Add(name); // RA2: as above
+			if (counted) { // RA2: as above
+				Pending++; // RA2: as above
 			}
 		}
 	}
@@ -323,338 +261,180 @@ void Voices::Queue(VoiceCategoryType category, Outcome outcome, bool emphasis, b
 
 
 /// <summary>
-/// Queues one of the standalone voice-overs for playback.
-/// These are the one-off announcements -- the startup greeting and the territory
-/// selection prompt -- which are not tied to a win, lose or draw outcome. Nothing is
-/// queued when the side has no line for the occasion or when there is no audio at all.
+/// RA2: queues a line of one of the stand-alone lists (the startup list is 0).
 /// </summary>
-/// <param name="count_queued">Should this voice-over be safe from being discarded?</param>
-/// <param name="delay">How long to wait before the queue starts speaking.</param>
-void Voices::Queue(StandaloneVoiceType voice, bool count_queued, int delay)
+void Voices::Say_List(int index, bool counted, int delay) // RA2: queues a line of one of the stand-alone lists (the startup list is 0)
 {
-	Discard();
-	if (Audio_Available()) {
-		char buffer[64];
-		if (Pick_Standalone_Voice(voice, buffer, sizeof(buffer))) {
-			Sample * sample = new Sample(buffer);
-			if (!Playing()) {
-				Timer = delay;
-			}
-			QueuedSamples.Add(sample);
-			if (count_queued) {
-				QueuedSampleCount++;
-			}
+	Trim(); // RA2: as above
+	Wstring name; // RA2: as above
+	if (Pick_List(index, name)) { // RA2: as above
+		if (!Is_Speaking()) { // RA2: as above
+			Timer = delay; // RA2: as above
+		}
+		Queue.Add(name); // RA2: as above
+		if (counted) { // RA2: as above
+			Pending++; // RA2: as above
 		}
 	}
 }
 
 
 /// <summary>
-/// Services the voice-over queue.
-/// This routine retires the voice-over that has finished and starts the next one, so
-/// that a run of queued lines is heard one after another instead of all at once. The
-/// queue is left alone until the delay set when it was filled has expired.
+/// RA2: once the delay has run out and nothing is playing, drops the line just said and plays the next one.
 /// </summary>
-/// <remarks>Call this routine regularly, or the queue will never move along.</remarks>
-void Voices::Advance(void)
+void Voices::Update(void) // RA2: once the delay has run out and nothing is playing, drops the line just said and plays the next one
 {
-	if (Timer == 0 && QueuedSamples.Count() > 0) {
-		Sample * sample = QueuedSamples[0];
-		if (!sample->Playing()) {
-			if (!IsIdle) {
-				QueuedSamples.Delete_Index(0);
-				delete sample;
-				if (QueuedSampleCount > 0) {
-					QueuedSampleCount--;
-				}
-
-			}
-			if (QueuedSamples.Count() > 0) {
-				QueuedSamples[0]->Start();
-				IsIdle = false;
-			} else {
-				QueuedSampleCount = 0;
-				IsIdle = true;
+	if (Timer() == 0 && Queue.Count() > 0 && !Is_Speaking()) { // RA2: as above
+		if (!Idle) { // RA2: as above
+			Queue.Delete_Index(0); // RA2: as above
+			if (Pending > 0) { // RA2: as above
+				Pending--; // RA2: as above
 			}
 		}
-	}
-}
-
-
-/// <summary>
-/// Discards the queued voice-overs that were never spoken for.
-/// A voice-over may be queued either as something that must be heard or as something
-/// that may be dropped if events overtake it. This routine drops the latter kind, and
-/// the queue routines call it before adding anything new.
-/// </summary>
-void Voices::Discard(void)
-{
-	int last = QueuedSamples.Count();
-	while (last-- > QueuedSampleCount) {
-		delete QueuedSamples[last];
-		QueuedSamples.Delete_Index(last);
-	}
-	if (QueuedSampleCount == 0) {
-		IsIdle = true;
-	}
-}
-
-
-void Voices_Noop1(void)
-{
-
-}
-
-
-void Voices_Noop2(void)
-{
-
-}
-
-
-/// <summary>
-/// Silences the voice player and throws away everything it had queued.
-/// Use this routine when the screen is going away, or whenever the voice-overs must be
-/// abandoned outright rather than allowed to play themselves out.
-/// </summary>
-void Voices::Cleanup(void)
-{
-	int last = QueuedSamples.Count();
-	if (last > 0) {
-		QueuedSamples[0]->Stop();
-		while (last-- != 0) {
-			delete QueuedSamples[last];
-		}
-		QueuedSamples.Clear();
-	}
-
-	Timer = 0;
-}
-
-
-/// <summary>
-/// Is the voice player still busy?
-/// Use this routine to hold a presentation step open until everything queued for it has
-/// been heard. A voice-over waiting its turn counts as busy just as much as one that is
-/// actually sounding.
-/// </summary>
-/// <returns>bool; Are there voice-overs still queued or playing?</returns>
-bool Voices::Playing(void)
-{
-	return(QueuedSamples.Count() > 0 && (IsIdle || (QueuedSamples[0] != NULL && QueuedSamples[0]->Playing())));
-}
-
-
-/// <summary>
-/// Creates an animation that drives the supplied voice player.
-/// The World Domination Tour screens add the animation returned here to their animation
-/// list, which is how the voice player gets a chance to run at all.
-/// </summary>
-/// <returns>Returns with a pointer to the newly created animation.</returns>
-Voices::Anim * WorldDominationTour::WDT_New_Voiced_Animation(Voices & voices)
-{
-	return(new Voices::Anim(&voices));
-}
-
-
-/// <summary>
-/// Constructs a voice sample from the named sound file.
-/// The sound data is fetched from the loaded mixfiles when it can be, and only read
-/// off the disk when no mixfile has it. A sample whose sound was found nowhere is
-/// harmless -- it simply never makes any noise.
-/// </summary>
-/// <param name="name">Name of the sound file to fetch.</param>
-/// <param name="volume">The volume this sample should be played at.</param>
-Voices::Sample::Sample(const char * name, int volume) :
-	Volume(volume),
-	SoundHandle(INVALID_SAMPLE_HANDLE),
-	File(NULL),
-	Allocated(false)
-{
-	File = (void *)MFCD::Retrieve(name);
-
-	if (File == NULL) {
-		CCFileClass file;
-		file.Open(name);
-		if (file.Is_Available()) {
-			File = Load_Alloc_Data(file);
-			Allocated = true;
+		if (Queue.Count() > 0) { // RA2: as above
+			Queue_Speech(Vox_From_Name(Queue[0].get()), -1, -1); // RA2: as above
+			Idle = false; // RA2: as above
+		} else { // RA2: as above
+			Pending = 0; // RA2: as above
+			Idle = true; // RA2: as above
 		}
 	}
 }
 
 
 /// <summary>
-/// Destroys the sample.
-/// Playback is cut short if it is still going, and any sound data that was read from
-/// disk is freed. Data that came out of a mixfile belongs to the mixfile and is left
-/// where it is.
+/// RA2: drops the queued lines past the counted ones.
 /// </summary>
-Voices::Sample::~Sample(void)
+void Voices::Trim(void) // RA2: drops the queued lines past the counted ones
 {
-	if (Playing()) {
-		Audio.Stop_Sample(SoundHandle);
+	int index = Queue.Count(); // RA2: as above
+	while (index-- > Pending) { // RA2: as above
+		Queue.Delete_Index(index); // RA2: as above
 	}
-	if (Allocated) {
-		delete File;
+	if (Pending == 0) { // RA2: as above
+		Idle = true; // RA2: as above
 	}
 }
 
 
 /// <summary>
-/// Is this sample still being heard?
-/// The audio engine is asked directly, so a sample that has run to its end reports
-/// itself finished without anyone having to stop it.
+/// RA2: an empty function at 0x007329D0.
 /// </summary>
-/// <returns>bool; Is the audio engine still playing this sample?</returns>
-bool Voices::Sample::Playing(void) const
+void Voices_Noop1(void) // RA2: an empty function at 0x007329D0
 {
-	return(SoundHandle != INVALID_SAMPLE_HANDLE && Audio.Sample_Status(SoundHandle));
 }
 
 
 /// <summary>
-/// Starts this sample playing.
-/// The sample is handed to the audio engine at its own volume scaled by the player's
-/// sound volume setting. A sample that is already started, or whose sound data could
-/// not be found, is quietly ignored.
+/// RA2: an empty function at 0x007329E0.
 /// </summary>
-void Voices::Sample::Start(void)
+void Voices_Noop2(void) // RA2: an empty function at 0x007329E0
 {
-	if (SoundHandle == INVALID_SAMPLE_HANDLE && File != NULL) {
-		SoundHandle = Audio.Play_Sample(File, 255, Volume * Options.SoundVolume);
+}
+
+
+/// <summary>
+/// RA2: stops the speech and forgets everything queued.
+/// </summary>
+void Voices::Stop(void) // RA2: stops the speech and forgets everything queued
+{
+	if (Queue.Count() > 0) { // RA2: as above
+		Speech_Stop(true); // RA2: as above
+		Queue.Clear(); // RA2: as above
+	}
+	Timer = 0; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: is the speech stream busy?
+/// </summary>
+bool Voices::Is_Speaking(void) // RA2: is the speech stream busy?
+{
+	return(::Is_Speaking()); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: a new animation that plays this player's queue.
+/// </summary>
+Voices::Anim * Voices::Create_Anim(void) // RA2: a new animation that plays this player's queue
+{
+	return(new Anim(this)); // RA2: as above
+}
+
+
+Voices::Anim::Anim(Voices * voices) : // RA2: a new animation that plays this player's queue
+	MSAnim(0, 0, false), // RA2: the animation starts inactive
+	VoicePlayer(voices) // RA2: as above
+{
+}
+
+
+Voices::Anim::~Anim(void) // RA2: a new animation that plays this player's queue
+{
+}
+
+
+/// <summary>
+/// RA2: switching the animation off stops the voices.
+/// </summary>
+void Voices::Anim::Set_Active(bool active) // RA2: switching the animation off stops the voices
+{
+	Active = active; // RA2: as above
+	if (!Active) { // RA2: as above
+		VoicePlayer->Stop(); // RA2: as above
 	}
 }
 
 
-/// <summary>
-/// Stops this sample from playing.
-/// The sample forgets its sound handle, so it can be started over again afterwards.
-/// </summary>
-void Voices::Sample::Stop(void)
+void Voices::Anim::Pause(void) // RA2: switching the animation off stops the voices
 {
-	if (SoundHandle != INVALID_SAMPLE_HANDLE) {
-		Audio.Stop_Sample(SoundHandle);
-		SoundHandle = INVALID_SAMPLE_HANDLE;
-	}
+	Timer.Stop(); // RA2: as above
+}
+
+
+void Voices::Anim::Resume(void) // RA2: switching the animation off stops the voices
+{
+	Timer.Start(); // RA2: as above
 }
 
 
 /// <summary>
-/// Constructs a voice-over animation for the supplied voice player.
-/// This animation carries no artwork at all. It exists so that a voice player can be
-/// added to a screen's animation list and be pumped along with everything else.
+/// RA2: services the queue; the animation never asks to be deleted.
 /// </summary>
-/// <param name="voices">The voice player this animation will drive.</param>
-Voices::Anim::Anim(Voices *voices) :
-	MSAnim(0,0,false),
-	VoicePlayer(voices)
+bool Voices::Anim::Advance(Surface * surface, Rect & rect) // RA2: services the queue; the animation never asks to be deleted
 {
-	//nothing
+	VoicePlayer->Update(); // RA2: as above
+	return(false); // RA2: as above
+}
+
+
+void Voices::Anim::Redraw(Surface * surface, Rect const * rect) // RA2: services the queue; the animation never asks to be deleted
+{
+	VoicePlayer->Update(); // RA2: as above
 }
 
 
 /// <summary>
-/// Destroys the voice-over animation.
-/// The voice player is owned by the screen rather than by the animation, so it is left
-/// alone here.
+/// RA2: an animation that is heard, not seen, takes no screen area.
 /// </summary>
-Voices::Anim::~Anim(void)
+Rect Voices::Anim::Get_Rect(void) const // RA2: an animation that is heard, not seen, takes no screen area
 {
-	//nothing
+	return(Rect()); // RA2: as above
 }
 
 
 /// <summary>
-/// Activates or deactivates the voice-over animation.
-/// Switching the animation off silences the voice player outright, so the screen goes
-/// quiet the moment it stops being shown.
+/// RA2: finished once nothing is being said.
 /// </summary>
-/// <param name="active">Should this animation be active?</param>
-void Voices::Anim::Set_Active(bool active)
+bool Voices::Anim::Has_Finished(void) const // RA2: finished once nothing is being said
 {
-	Active=active;
-	if (!Active) {
-		VoicePlayer->Cleanup();
-	}
+	return(!::Is_Speaking()); // RA2: as above
 }
 
 
-/// <summary>
-/// Pauses the voice-over animation.
-/// The animation timer is held still until the animation is resumed. Anything already
-/// playing is left to finish -- this is not a way to silence the voice-overs.
-/// </summary>
-void Voices::Anim::Pause(void)
+void Voices::Anim::Restore(Rect const & rect) // RA2: finished once nothing is being said
 {
-	Timer.Stop();
-}
-
-
-/// <summary>
-/// Resumes the voice-over animation after a pause.
-/// The animation timer starts running again from where it was stopped.
-/// </summary>
-void Voices::Anim::Resume(void)
-{
-	Timer.Start();
-}
-
-
-/// <summary>
-/// Advances the voice-over animation by one frame.
-/// This routine is how the voice queue gets serviced -- the presentation engine ticks
-/// its animation list every frame, and this animation spends its tick retiring the
-/// sample that finished and starting the next one.
-/// </summary>
-/// <returns>bool; Should this animation be deleted? It lives as long as its owner does.</returns>
-bool Voices::Anim::Advance(Surface * surface, Rect & rect)
-{
-	VoicePlayer->Advance();
-	return(false);
-}
-
-
-/// <summary>
-/// Handles a redraw of this animation.
-/// There is nothing visible to draw, so the redraw hook simply gives the voice queue
-/// another chance to advance.
-/// </summary>
-void Voices::Anim::Redraw(Surface * surface, Rect const * rect)
-{
-	VoicePlayer->Advance();
-}
-
-
-/// <summary>
-/// Fetches the screen area this animation occupies.
-/// A voice-over animation is heard rather than seen, so it lays claim to nothing.
-/// </summary>
-/// <returns>Returns with an empty rectangle.</returns>
-Rect Voices::Anim::Get_Rect(void) const
-{
-	return(Rect());
-}
-
-
-/// <summary>
-/// Has this animation run its course?
-/// The presentation engine uses this routine to decide when the voice-overs are done
-/// and the screen may move on to whatever comes next.
-/// </summary>
-/// <returns>bool; Have all of the queued voice-overs been heard?</returns>
-bool Voices::Anim::Has_Finished(void) const
-{
-	return(VoicePlayer->Playing() == false);
-}
-
-
-/// <summary>
-/// Handles a restore request for this animation.
-/// A voice-over animation puts nothing on the screen, so there is nothing to restore.
-/// The hook is used to give the voice queue another chance to advance.
-/// </summary>
-void Voices::Anim::Restore(Rect const & rect)
-{
-	VoicePlayer->Advance();
+	VoicePlayer->Update(); // RA2: as above
 }

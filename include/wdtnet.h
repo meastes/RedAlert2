@@ -829,6 +829,8 @@ namespace WorldDominationTour
 				bool Pick(int faction, int kind, Wstring & name) const; // RA2: 0x00732160
 				bool Pick_Emphasis(int faction, int kind, Wstring & name) const; // RA2: 0x00732230
 
+				void Set_Name(Wstring const & name); // RA2: 0x007320B0; names the group (expanded in the Voices constructor too)
+
 				Wstring Name; // RA2: +0x00
 				DynamicVectorClass<unsigned int> Lines[6]; // RA2: +0x04; plain at [kind * 2], emphatic at [kind * 2 + 1]
 			};
@@ -846,6 +848,16 @@ namespace WorldDominationTour
 			Voices(int faction); // RA2: 0x007314C0
 			~Voices(void); // RA2: 0x00731680
 			void Load(INIClass & ini, Wstring const & section); // RA2: 0x007317A0
+			void Load_List(INIClass & ini, Wstring const & section, int index, Wstring const & key); // RA2: 0x00731AA0; one comma separated list, <faction><key>
+			bool Pick(int group, int kind, Wstring & name) const; // RA2: 0x00731BC0; the speech name of an ordinary line
+			bool Pick_Emphasis(int group, int kind, Wstring & name) const; // RA2: 0x00731CA0
+			bool Pick_List(int index, Wstring & name) const; // RA2: 0x00731D80
+			static bool __fastcall Pick(int faction, DynamicVectorClass<unsigned int> const & lines, Wstring & name); // RA2: 0x00731E60; a random line of a list, false for an empty one
+			static bool __fastcall Make_Name(int faction, int line, Wstring & name); // RA2: 0x00731F30; "WWD-Soviet<NN>" for faction 3, else "WWD_Allied<NN>"
+			static void __fastcall Parse_List(Wstring const & text, DynamicVectorClass<unsigned int> & lines); // RA2: 0x00731FC0
+			void Update(void); // RA2: 0x00732870; once the delay is over and nothing plays, drops the line said and plays the next
+			void Trim(void); // RA2: 0x00732960; drops the queued lines past the counted ones
+			void Stop(void); // RA2: 0x007329F0
 			void Say(int group, int kind, bool emphasis, bool counted, int delay); // RA2: 0x00732510
 			void Say_List(int index, bool counted, int delay); // RA2: 0x00732700; says one of the voice lists read from the INI (the startup list is 0)
 			bool Is_Speaking(void); // RA2: 0x00732A40
