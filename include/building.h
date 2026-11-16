@@ -366,7 +366,7 @@ class BuildingClass : public TechnoClass
 		char GateFrame;
 
 		int PrismStage; // RA2: +0x5C8
-		Coord PrismTargetCoords; // RA2: +0x5CC
+		CoordStruct PrismTargetCoords; // RA2: +0x5CC, a flat struct: Delayed_Fire_AI copies its three ints one by one
 		int DelayBeforeFiring; // RA2: +0x5D8
 
 		/*---------------------------------------------------------------------
@@ -586,7 +586,7 @@ class BuildingClass : public TechnoClass
 		bool Can_Be_Undeployed(void);
 		virtual int Apparent_Brightness(int brightness = 1000) const override;
 		virtual void Assign_Destination(AbstractClass * target, bool = true) override;
-		void Assign_Rally_Point(Cell const & cell);
+		void Assign_Rally_Point(Cell const & cell, bool announce); // RA2: 0x440140 announces the new rally point
 		virtual bool Enter_Idle_Mode(bool initial=false,  bool = true) override;
 		virtual void Radar_Track(void) override;
 		virtual void Radar_Untrack(void) override;

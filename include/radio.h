@@ -51,7 +51,7 @@ class RadioClass : public MissionClass
 {
 		typedef MissionClass BASECLASS;
 
-	private:
+	protected: // RA2: BuildingClass walks RadioLinks (Detach_All 0x44A080)
 
 		/*
 		**	This is a record of the last message received by this receiver.
