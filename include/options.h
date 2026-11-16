@@ -71,6 +71,7 @@ class OptionsClass {
 
 		void Setup_Dest_Net(void);
 		void Set(void);
+		void Fill_Movie_List(HWND list); // RA2: 0x005DA470, puts the intro and every unlocked campaign movie into a list box with the entries as item data
 
 		/*
 		**	This is actually the delay between game frames expressed as 1/60 of

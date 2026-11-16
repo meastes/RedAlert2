@@ -14,6 +14,7 @@
 class OwnerTalkClass
 {
 	public:
+		void Reset(void); // RA2: 0x0063F070, clears the connection state before a network session starts (Start_Network_Session)
 		unsigned char Mask_From_ID(int id);
 		char * Name_From_Index(int index); // RA2: 0x0063FB40, the name of the connection at an index (YR's name)
 		IPXAddressClass * Address_From_Name(char const * name); // RA2: 0x0063FA00, the address of the connection of that name (YR's name)

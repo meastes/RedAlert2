@@ -354,13 +354,13 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	for (int p = 0; p < 8; p++) { // RA2: RA2's form of SessionClass::SessionClass
 		PlayerPorts[p] = 0; // RA2: as above
 	}
-	unknown_3078 = false; // RA2: as above
-	unknown_306C = false; // RA2: as above
-	unknown_306E = 0; // RA2: as above
-	unknown_3070 = 0; // RA2: as above
+	RouterProbeActive = false; // RA2: as above
+	PortProbeDue = false; // RA2: as above
+	RouterProbePort = 0; // RA2: as above
+	RouterProbePort2 = 0; // RA2: as above
 	PortBase = 1250; // RA2: as above
 	ForcePortBase = 0; // RA2: as above
-	unknown_3018 = true; // RA2: as above
+	RotatePortBase = true; // RA2: as above
 	unknown_2F48 = false; // RA2: as above
 	unknown_301C = 0; // RA2: as above
 	memset(ManglerAddresses, 0, sizeof(ManglerAddresses)); // RA2: 0xB26CBC, the WOL mangler server addresses
@@ -373,14 +373,14 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	ViaPacketRouter = false; // RA2: as above
 	MasterPlayerID = -1;
 	memset(MasterPlayerName, 0, sizeof(MasterPlayerName));
-	unknown_308C = 0; // RA2: as above
-	unknown_3090 = true; // RA2: as above
-	unknown_3094 = -1; // RA2: as above
+	SlowestResponse = 0; // RA2: as above
+	UseRouter = true; // RA2: as above
+	LastTimingID = -1; // RA2: as above
 	unknown_3098 = false; // RA2: as above
-	unknown_309C = 20; // RA2: as above
-	unknown_30A0 = 0; // RA2: as above
-	unknown_30A4 = 0; // RA2: as above
-	unknown_30A8 = -1; // RA2: as above
+	RouterResponse = 20; // RA2: as above
+	ExitEventPending = 0; // RA2: as above
+	ExitEventFrame = 0; // RA2: as above
+	ExitEventPlayer = -1; // RA2: as above
 	PacketRouterPort = 0; // RA2: as above
 
 	SquadAlliances = false;
@@ -604,13 +604,13 @@ int SessionClass::Create_Connections(void)
     }
 
     for (int k = 0; k < 8; k++) { // RA2: as above
-        Session.unknown_304C[k] = TickCount; // RA2: as above
+        Session.PlayerLastTime[k] = TickCount; // RA2: as above
     }
 
 	//------------------------------------------------------------------------
 	// Loop through all entries in 'Players'
 	//------------------------------------------------------------------------
-    if (Type == GAME_INTERNET && unknown_3090) { // RA2: as above
+    if (Type == GAME_INTERNET && UseRouter) { // RA2: as above
         NetNumType net2; // RA2: as above
         NetNodeType node2; // RA2: as above
         net2[0] = 0; // RA2: as above
@@ -625,9 +625,9 @@ int SessionClass::Create_Connections(void)
         node2[5] = 0; // RA2: as above
         Session.unknown_2978.Set_Address(net2, node2, 0); // RA2: as above
         ViaPacketRouter = true; // RA2: as above
-        unknown_308C = 0; // RA2: as above
-        unknown_309C = 20; // RA2: as above
-        unknown_3094 = -1; // RA2: as above
+        SlowestResponse = 0; // RA2: as above
+        RouterResponse = 20; // RA2: as above
+        LastTimingID = -1; // RA2: as above
         Ipx.Create_Multicast_Connection(); // RA2: as above
         OwnerTalk.Build_Connection_List(); // RA2: as above
         if (Session.Am_I_Master(0)) { // RA2: as above

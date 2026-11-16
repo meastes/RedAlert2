@@ -2014,7 +2014,7 @@ static RetcodeType Process_Receive_Packet(ConnManClass *net,
 				} else {
 					if (timing->ID == PlayerPtr->HeapID) { // RA2: as above
 						unsigned long response = timing->ResponseTime; // RA2: as above
-						Session.unknown_309C = response; // RA2: as above
+						Session.RouterResponse = response; // RA2: as above
 						DebugString("My router response time = %d ms\n", response * 1000 / TIMER_SECOND); // RA2: as above
 						continue; // RA2: as above
 					}
@@ -2028,14 +2028,14 @@ static RetcodeType Process_Receive_Packet(ConnManClass *net,
 					if (most <= response) { // RA2: as above
 						most = response; // RA2: as above
 					}
-					if (timing->Report && Session.Am_I_Master() && Session.unknown_3094 != timing->ID) { // RA2: as above
+					if (timing->Report && Session.Am_I_Master() && Session.LastTimingID != timing->ID) { // RA2: as above
 						OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::FALLBACK_HOST, (int)timing->ID)); // RA2: as above
 					}
 				}
 			}
 		}
 		if (count && most) { // RA2: as above
-			Session.unknown_308C = most; // RA2: as above
+			Session.SlowestResponse = most; // RA2: as above
 		}
 	} else {
 
@@ -3393,18 +3393,18 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 	// RA2: the same for the EXIT event of a player who is leaving, so that it
 	// executes after everything he sent
 	//
-	if (Session.unknown_30A0 && Session.unknown_30A4 && Session.unknown_30A8 != -1) { // RA2: as above
+	if (Session.ExitEventPending && Session.ExitEventFrame && Session.ExitEventPlayer != -1) { // RA2: as above
 		for (j = 0; j < count; j++) { // RA2: as above
-			if (DoList[j].Type == EventClass::EXIT && DoList[j].ID == Session.unknown_30A8 && // RA2: as above
-				DoList[j].Frame > Session.unknown_30A0 && DoList[j].Frame < Session.unknown_30A4) { // RA2: as above
-				DebugString("DoList: Moving EXIT event from frame %d to frame %d\n", DoList[j].Frame, Session.unknown_30A4); // RA2: as above
-				DoList[j].Frame = Session.unknown_30A4; // RA2: as above
+			if (DoList[j].Type == EventClass::EXIT && DoList[j].ID == Session.ExitEventPlayer && // RA2: as above
+				DoList[j].Frame > Session.ExitEventPending && DoList[j].Frame < Session.ExitEventFrame) { // RA2: as above
+				DebugString("DoList: Moving EXIT event from frame %d to frame %d\n", DoList[j].Frame, Session.ExitEventFrame); // RA2: as above
+				DoList[j].Frame = Session.ExitEventFrame; // RA2: as above
 			}
 		}
-		if (Frame > Session.unknown_30A4) { // RA2: as above
-			Session.unknown_30A0 = 0; // RA2: as above
-			Session.unknown_30A4 = 0; // RA2: as above
-			Session.unknown_30A8 = -1; // RA2: as above
+		if (Frame > Session.ExitEventFrame) { // RA2: as above
+			Session.ExitEventPending = 0; // RA2: as above
+			Session.ExitEventFrame = 0; // RA2: as above
+			Session.ExitEventPlayer = -1; // RA2: as above
 		}
 	}
 
@@ -5241,7 +5241,7 @@ void __fastcall Calc_Frames_Behind(FrameSyncStruct *their, int index) // RA2: 0x
 	}
 	frame = their[index].frame; // RA2: as above
 	if (Session.ViaPacketRouter) { // RA2: as above
-		half_latency = Session.unknown_309C / 2; // RA2: as above
+		half_latency = Session.RouterResponse / 2; // RA2: as above
 		half_response = (unsigned int)their[index].response / 2; // RA2: as above
 		double ratio = (double)Session.DesiredFrameRate / Session.FrameSendRate; // RA2: as above
 		float rate = (float)ratio; // RA2: as above

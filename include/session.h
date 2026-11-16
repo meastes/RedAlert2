@@ -735,11 +735,11 @@ class SessionClass
 		unsigned short : 16;
 		IPXAddressClass unknown_2988;
 		IPXAddressClass unknown_2994[MAX_PLAYERS];
-		int unknown_29F4[MAX_PLAYERS];
-		int unknown_2A14[64][2];
-		int unknown_2C14[64][2];
-		int unknown_2E14;
-		unsigned short unknown_2E18[MAX_PLAYERS];
+		int WolPlayerState[MAX_PLAYERS]; // RA2: +0x299C, cleared by Select_Game before the Internet game dialogs; name from that use only
+		int PeerProbeData[64][2]; // RA2: +0x29BC, cleared by Start_Network_Session
+		int ConnectionResults[64][2]; // RA2: +0x2BBC, set to -1 by Start_Network_Session (YR: ConnectionResults)
+		int ConnectionResultCount; // RA2: +0x2DBC, cleared by Start_Network_Session
+		unsigned short PeerPorts[MAX_PLAYERS]; // RA2: +0x2DC0, cleared by Start_Network_Session
 		char unknown_2E28[MAX_PLAYERS][36];
 		bool unknown_2F48;
 		unsigned char unknown_2F49[0x23];
@@ -748,28 +748,28 @@ class SessionClass
 		int unknown_2FEC;
 		int PortBase;
 		int ForcePortBase;
-		int unknown_2FF8[MAX_PLAYERS];
-		bool unknown_3018;
+		int PlayerPortBase[MAX_PLAYERS]; // RA2: +0x2FA0, the port each player listens on (Address.Set_Port reads it)
+		bool RotatePortBase; // RA2: +0x2FC0, Start_Network_Session moves PortBase by 5 once when it is set
 		int unknown_301C;
 		wchar_t MasterPlayerName[MPLAYER_NAME_MAX + 1];
-		int unknown_304C[8];
-		bool unknown_306C;
+		int PlayerLastTime[8]; // RA2: +0x2FF4, set to the tick count when an Internet game starts (Select_Game)
+		bool PortProbeDue; // RA2: +0x3014, a port probe of the router is due (Conquer tests it, Start_Network_Session clears it)
 		unsigned char : 8;
-		unsigned short unknown_306E;
-		unsigned short unknown_3070;
+		unsigned short RouterProbePort; // RA2: +0x3016, cleared by Start_Network_Session
+		unsigned short RouterProbePort2; // RA2: +0x3018, cleared by Select_Game before the Internet game dialogs
 		unsigned short : 16;
 		int MasterPlayerID;
-		bool unknown_3078;
+		bool RouterProbeActive; // RA2: +0x3020, cleared by Start_Network_Session
 		unsigned short PlayerPorts[MAX_PLAYERS];
 		unsigned char unknown_308A[2];
-		int unknown_308C;
-		bool unknown_3090;
-		int unknown_3094;
+		int SlowestResponse; // RA2: +0x3034, the largest response time seen
+		bool UseRouter; // RA2: +0x3038, cleared by -NOROUTER (Parse_Command_Line); the Internet game tests it
+		int LastTimingID; // RA2: +0x303C, the id of the last timing report (-1 none)
 		bool unknown_3098;
-		unsigned int unknown_309C;
-		int unknown_30A0;
-		int unknown_30A4;
-		int unknown_30A8;
+		unsigned int RouterResponse; // RA2: +0x3044, the router response time (default 20), shown as "Rout resp"
+		int ExitEventPending; // RA2: +0x3048, an EXIT event waits to be moved to ExitEventFrame (Queue)
+		int ExitEventFrame; // RA2: +0x304C, the frame the EXIT event moves to
+		int ExitEventPlayer; // RA2: +0x3050, the player that exits (-1 none)
 
 		int TrapFrame;
 		RTTIType TrapObjType;

@@ -1291,7 +1291,7 @@ void Draw_Multiplayer_Debug(bool noframecheck) // RA2 0x005419E0: TibSun has no 
 		swprintf(buffer, L"Process : %d", Session.Players[0]->Player.ProcessTime); // RA2: as above
 		Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 352), Fetch_Scheme_By_Name("Grey"), 0, TextPrintType(0x19)); // RA2: as above
 
-		swprintf(buffer, L"Rout resp: %d", (unsigned)(Session.unknown_309C * 1000) / TIMER_SECOND); // RA2: as above
+		swprintf(buffer, L"Rout resp: %d", (unsigned)(Session.RouterResponse * 1000) / TIMER_SECOND); // RA2: as above
 		Fancy_Text_Print(buffer, *surface, surface->Get_Rect(), Point2D(0, 362), Fetch_Scheme_By_Name("Grey"), 0, TextPrintType(0x19)); // RA2: as above
 
 		swprintf(buffer, L"NFT : %d", NetFrameTimer); // RA2: as above
