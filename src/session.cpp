@@ -458,7 +458,7 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	ScenarioFileName[0] = 0; // RA2: as above
 	ScenarioFileLength = 0; // RA2: as above
 	ScenarioIsOfficial = false; // RA2: as above
-	unknown_8D4 = 0; // RA2: as above
+	ScenarioMaxPlayers = 0; // RA2: as above
 }
 
 void SessionClass::Load_Call_Wait_Strings(void) // RA2: RA2's signature

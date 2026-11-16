@@ -652,7 +652,7 @@ class SessionClass
 		char ScenarioDigest [32+2];
 		unsigned int ScenarioFileLength;
 		bool ScenarioIsOfficial;
-		int unknown_8D4;
+		int ScenarioMaxPlayers; // RA2: +0x884, how many players the scenario takes (the debug text of Is_Channel_Full names it Session.ScenarioMaxPlayers)
 		char ScenarioRequests[MAX_PLAYERS];
 		int  RequestCount;
 
@@ -708,7 +708,7 @@ class SessionClass
 		DynamicVectorClass <NodeNameType *> Games;
 		DynamicVectorClass <NodeNameType *> Players;
 
-		int unknown_2854;
+		int LocalSlot; // RA2: +0x27FC, the slot of the local player: Seat_First_Player (0x005C8CD0) sets it, Reset_Slots (0x005C8A90) clears it to -1
 		NodeNameType * Slots[8];
 		bool IsStartReminded;	// RA2: +0x2878, set while the host's start reminder stands (0x005C3C20 sets, 0x005C3C40 clears)
 

@@ -661,7 +661,7 @@ void Encode_Game_Options(char * out) // RA2: 0x0073CCB0, RA2's option text: seed
 	sprintf(out, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s,%s:", // RA2: as above
 			Seed, Options.GameSpeed, Session.Options.GameSpeed, Session.Options.Credits, Session.Options.UnitCount, // RA2: as above
 			Session.Options.ShortGame, Session.Options.SWAllowed, Session.Options.BuildOffAlly, Session.Options.MCVRedeploy, // RA2: as above
-			Session.Options.Goodies, Session.Options.MPModeIndex, name.get(), Session.unknown_8D4, Session.ScenarioIsOfficial, // RA2: as above
+			Session.Options.Goodies, Session.Options.MPModeIndex, name.get(), Session.ScenarioMaxPlayers, Session.ScenarioIsOfficial, // RA2: as above
 			Session.ScenarioFileLength, Session.ScenarioFileName, Session.ScenarioDigest); // RA2: as above
 
 	/*

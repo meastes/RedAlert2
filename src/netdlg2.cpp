@@ -150,7 +150,7 @@ void __fastcall Set_Slot_Names(wchar_t const * list); // RA2: 0x005C8DD0
 bool __fastcall Is_Host(void); // RA2: 0x005C86A0
 void __fastcall Enable_Start_Button(void); // RA2: 0x005C9700
 bool __fastcall Is_Color_Taken(int color); // RA2: 0x005C95D0
-void __fastcall Release_Slot_By_Address(IPXAddressClass const & address); // RA2: 0x005C91C0
+void __fastcall Release_Slot_By_Address(IPXAddressClass & address); // RA2: 0x005C91C0, the address is compared with IPXAddressClass::operator== (0x005235D0), which takes a non-const reference
 int __fastcall Assign_Slot(NodeNameType * node); // RA2: 0x005C9170
 bool __fastcall Net2DecodeGameopt(char const * options, char const * name); // RA2: 0x005C3FF0, returns true when the scenario changed (the executable ends with sete al on its same flag), TibSun's DecodePubGameopt returns bool too
 void __fastcall Handle_Start_Reminder(void); // RA2: 0x005C3C20, the host's start message reached the joiner
@@ -515,7 +515,7 @@ void Net2EncodeGameopt(char *out)
 	static char useroptions[512];
 
 	Wstring name = Session.Options.ScenarioDescription ? Wstring_FromWide(Session.Options.ScenarioDescription) : ""; // RA2: only the 7 bit characters of the map name are sent
-	int value = Session.unknown_8D4; // RA2: not recovered
+	int value = Session.ScenarioMaxPlayers; // RA2: not recovered
 	sprintf(out, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s,%s:", Seed, Options.GameSpeed, Session.Options.GameSpeed, Session.Options.Credits, Session.Options.UnitCount, // RA2: the older option string; as above
 		Session.Options.ShortGame, Session.Options.SWAllowed, Session.Options.BuildOffAlly, Session.Options.MCVRedeploy, Session.Options.Goodies, Session.Options.MPModeIndex, // RA2: as above
 		name.get(), value, Session.ScenarioIsOfficial, Session.ScenarioFileLength, Session.ScenarioFileName, Session.ScenarioDigest); // RA2: as above
@@ -2045,8 +2045,8 @@ bool Process_Global_Packet(GlobalPacketType * packet, IPXAddressClass * address)
 			answer.PlayerInfo.House = Session.Chosen_House(); // RA2: as above
 			answer.PlayerInfo.Color = Session.Chosen_Color(); // RA2: as above
 			answer.PlayerInfo.NameCRC = Compute_Name_CRC(Session.GameName); // RA2: as above
-			answer.PlayerInfo.unknown_24 = Session.unknown_2854; // RA2: as above
-			answer.PlayerInfo.Flag = Session.unknown_2854 == LobbyObserverSlot; // RA2: as above
+			answer.PlayerInfo.unknown_24 = Session.LocalSlot; // RA2: as above
+			answer.PlayerInfo.Flag = Session.LocalSlot == LobbyObserverSlot; // RA2: as above
 			if (Session.Players.Count() == 0) { // RA2: as above
 				return(true);
 			}
@@ -2619,7 +2619,7 @@ void Get_Join_Responses(void) // RA2: as above
 				if (Session.MPGameMode) { // RA2: as above
 					int rows = Session.MPGameMode->vt_entry_80(); // RA2: as above
 					if (rows != -1) { // RA2: as above
-						Session.unknown_8D4 = rows; // RA2: as above
+						Session.ScenarioMaxPlayers = rows; // RA2: as above
 					}
 				}
 				Send_Lobby_Options(true, false); // RA2: as above
@@ -2771,9 +2771,9 @@ LRESULT CALLBACK MPlayer_Guest_Dialog_Proc(HWND window, UINT message, WPARAM wpa
 		Fill_Side_Combos(window); // RA2: as above
 		Init_Color_Entries(); // RA2: as above
 		Fill_Color_Combos(window); // RA2: as above
-		Lock_Slots(window, Session.unknown_2854); // RA2: as above
-		Select_Player_Side(window, Session.unknown_2854); // RA2: as above
-		Select_Player_Color(window, Session.unknown_2854); // RA2: as above
+		Lock_Slots(window, Session.LocalSlot); // RA2: as above
+		Select_Player_Side(window, Session.LocalSlot); // RA2: as above
+		Select_Player_Color(window, Session.LocalSlot); // RA2: as above
 		EnableWindow(GetDlgItem(window, 0x59F), FALSE); // RA2: as above
 		LobbyDialogFlag = false; // RA2: as above
 		Net2SetAccept(NULL, 0); // RA2: as above
@@ -2781,7 +2781,7 @@ LRESULT CALLBACK MPlayer_Guest_Dialog_Proc(HWND window, UINT message, WPARAM wpa
 		Net2DisplayGameList();
 		Fill_Options_Dialog(window, 1); // RA2: as above
 		Set_Scenario_Info_From_Index(-1); // RA2: as above
-		Session.unknown_8D4 = 8; // RA2: as above
+		Session.ScenarioMaxPlayers = 8; // RA2: as above
 		return(0);
 	case 0x4E9: { // the tool tip text of a combo box item // RA2: as above
 		ToolTipTextRequest * request = (ToolTipTextRequest *)lparam; // RA2: as above

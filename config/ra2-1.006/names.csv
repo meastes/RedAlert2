@@ -4094,7 +4094,6 @@ address,symbol,evidence
 0x005C8CF0,?Get_Slot_Names@@YIXPAG@Z,"inferred: referenced by matched src/netdlg2.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x005C8DD0,?Set_Slot_Names@@YIXPBG@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C9170,?Assign_Slot@@YIHPAUNodeNameType@@@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x005C91C0,?Release_Slot_By_Address@@YIXABVIPXAddressClass@@@Z,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C9320,?Is_Real_Player_Entry@@YI_NPAUNodeNameType@@@Z,"inferred: referenced by matched src/wonline.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C9400,?Count_AI_Slots@@YIHXZ,"inferred: referenced by matched src/wonline.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005C9440,?Is_All_Slots_Filled@@YI_NXZ,"inferred: referenced by matched src/netdlg2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
