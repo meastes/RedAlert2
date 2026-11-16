@@ -7096,6 +7096,7 @@ LRESULT __stdcall New_Edit_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	WNDPROC previous = 0; // RA2: as above
 	BOOL inserted = FALSE; // RA2: the text was changed (zeroed at 0x5F22BD)
 	BOOL ime = FALSE; // RA2: the character came from the IME (zeroed at 0x5F22C1)
+	BOOL refresh = FALSE; // RA2: the control repaints itself (and its combo box)
 	if (message == 0x87) { // RA2: WM_GETDLGCODE answers DLGC_WANTALLKEYS (0x5F22B2)
 		return 4; // RA2: as above
 	} // RA2: as above
@@ -7163,16 +7164,16 @@ LRESULT __stdcall New_Edit_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			} // RA2: as above
 			return 0; // RA2: as above
 		} // RA2: as above
-		goto invalidate; // RA2: as above
+		refresh = TRUE; // RA2: the keys repaint the control (the exe shares this block with the 7, 8 and mouse cases)
 	} else { // RA2: as above
 		if (message == 7) { // RA2: as above
 			data->IsCaretHidden = 0; // RA2: as above
 			SetTimer(window, 0, 1000, 0); // RA2: as above
-			goto invalidate; // RA2: as above
+			refresh = TRUE; // RA2: as above
 		} // RA2: as above
 		if (message == 8) { // RA2: as above
 			KillTimer(window, 0); // RA2: as above
-			goto invalidate; // RA2: as above
+			refresh = TRUE; // RA2: as above
 		} // RA2: as above
 		if (message == 0x113) { // RA2: as above
 			data->IsCaretHidden ^= 1; // RA2: as above
@@ -7210,14 +7211,16 @@ LRESULT __stdcall New_Edit_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			return 1; // RA2: as above
 		} // RA2: as above
 		if (message == 0x101 || message == 0x104 || message == 0x105 || message == 0x106 || message == 0x107 || message == 0x201) { // RA2: as above
-invalidate: // RA2: as above
-			char class_name[32]; // RA2: as above
-			GetClassNameA(parent, class_name, 32); // RA2: as above
-			if (strcmp(class_name, "ComboBox") == 0) { // RA2: as above
-				InvalidateRect(parent, 0, 0); // RA2: as above
-			} // RA2: as above
-			InvalidateRect(window, 0, 0); // RA2: as above
+			refresh = TRUE; // RA2: as above
 		} // RA2: as above
+	} // RA2: as above
+	if (refresh) { // RA2: as above
+		char class_name[32]; // RA2: as above
+		GetClassNameA(parent, class_name, 32); // RA2: as above
+		if (strcmp(class_name, "ComboBox") == 0) { // RA2: as above
+			InvalidateRect(parent, 0, 0); // RA2: as above
+		} // RA2: as above
+		InvalidateRect(window, 0, 0); // RA2: as above
 	} // RA2: as above
 	unsigned short ch; // RA2: as above
 	if (message == 0x102) { // RA2: as above
@@ -7231,14 +7234,14 @@ invalidate: // RA2: as above
 			case 0x2E: // RA2: as above
 				if (data->Caret < (int)data->Buffer->length()) { // RA2: as above
 					data->Buffer->remove(data->Caret, 1); // RA2: as above
-					goto changed; // RA2: as above
+					inserted = TRUE; // RA2: as above
 				} // RA2: as above
 				break; // RA2: as above
 			case 8: // RA2: as above
 				if (data->Caret > 0) { // RA2: as above
 					data->Caret--; // RA2: as above
 					data->Buffer->remove(data->Caret, 1); // RA2: as above
-					goto changed; // RA2: as above
+					inserted = TRUE; // RA2: as above
 				} // RA2: as above
 				break; // RA2: as above
 			case 0x25: // RA2: as above
@@ -7260,35 +7263,35 @@ invalidate: // RA2: as above
 			default: // RA2: as above
 				return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
 			} // RA2: as above
-			goto notify; // RA2: as above
-		} // RA2: as above
-		if (message == 0x286) { // RA2: as above
-			ch = IME_Char_To_Wide(wparam, lparam); // RA2: as above
 		} else { // RA2: as above
-			if (message != 0x4D9) { // RA2: as above
+			if (message == 0x286) { // RA2: as above
+				ch = IME_Char_To_Wide(wparam, lparam); // RA2: as above
+			} else { // RA2: as above
+				if (message != 0x4D9) { // RA2: as above
+					return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
+				} // RA2: as above
+				ch = wparam; // RA2: as above
+			} // RA2: as above
+			ime = TRUE; // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	if (message != 0x100) { // RA2: as above
+		if (ch == 0) { // RA2: as above
+			if (!ime) { // RA2: as above
 				return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
 			} // RA2: as above
-			ch = wparam; // RA2: as above
+		} else { // RA2: as above
+			if ((!data->Excluded || !wcschr(data->Excluded, ch)) && (!data->MaxLength || (int)data->Buffer->length() < data->MaxLength) && ch > 0x1F && (!data->IsAsciiOnly || ch < 0x100)) { // RA2: as above
+				data->Buffer->insert(ch, data->Caret++); // RA2: as above
+				inserted = TRUE; // RA2: as above
+			} // RA2: as above
 		} // RA2: as above
-		ime = TRUE; // RA2: as above
 	} // RA2: as above
-	if (ch == 0) { // RA2: as above
-		if (!ime) { // RA2: as above
-			return CallWindowProcA(previous, window, message, wparam, lparam); // RA2: as above
-		} // RA2: as above
-	} else { // RA2: as above
-		if ((!data->Excluded || !wcschr(data->Excluded, ch)) && (!data->MaxLength || (int)data->Buffer->length() < data->MaxLength) && ch > 0x1F && (!data->IsAsciiOnly || ch < 0x100)) { // RA2: as above
-			data->Buffer->insert(ch, data->Caret++); // RA2: as above
-			changed: // RA2: as above
-			inserted = TRUE; // RA2: as above
-		} // RA2: as above
-		notify: // RA2: as above
-		if (inserted) { // RA2: as above
-			unsigned int id = GetWindowLongA(window, -12); // RA2: as above
-			SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x3000000, (LPARAM)window); // RA2: as above
-			SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x4000000, (LPARAM)window); // RA2: as above
-			return 0; // RA2: as above
-		} // RA2: as above
+	if (inserted) { // RA2: as above
+		unsigned int id = GetWindowLongA(window, -12); // RA2: as above
+		SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x3000000, (LPARAM)window); // RA2: as above
+		SendMessageA(parent, 0x111, (id & 0xFFFF) | 0x4000000, (LPARAM)window); // RA2: as above
+		return 0; // RA2: as above
 	} // RA2: as above
 	return 0; // RA2: as above
 } // RA2: as above
