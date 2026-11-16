@@ -11,7 +11,7 @@
  * disclaimers apply; see LICENSE.md.
  ******************************************************************************/
 
-// RA2: the first part of wonline.cpp (0x0073C040-0x0073FEE0): the lobby helpers, the chat text senders, the channel list requests, the idle callback, the reset of the globals, the lobby, game and user lists
+// RA2: the first part of wonline.cpp (0x0073C040-0x00741EA0): the lobby helpers, the chat text senders, the channel list requests, the idle callback, the reset of the globals, the lobby, game and user lists, the user list, the start of the chat services and the leave of a user; Shutdown_Chat, Get_WDT_State_Silent, Init_Wonline (0x00742080-0x007424C0) follow as functions placed by their addresses
 #include "always.h"
 
 #include "_keyboar.h"
@@ -45,6 +45,9 @@
 #include "wonline.h"
 #include "wstring.h"
 
+#include <atlbase.h> // RA2: the chat services are COM objects
+extern CComModule _Module; // RA2: required between atlbase.h and atlcom.h, defined with the rest of the file
+#include <atlcom.h>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -130,9 +133,9 @@ extern int g_LastChatListTime; // RA2: 0x00B2ABD0
 extern int g_LastGameListTime; // RA2: 0x00B2ABD4
 extern unsigned short const * g_Lobbies[8]; // RA2: 0x00B26C94, the eight lobby names, wide
 extern int WDT_TERRITORY_LOBBY_INDEXES[8]; // RA2: 0x00B26540, eight indexes
-extern int g_dwChatAdvise; // RA2: 0x00B2AC60
-extern int g_dwNetUtilAdvise; // RA2: 0x00B2AC64
-extern int g_dwDownloadAdvise; // RA2: 0x00B2AC68
+extern DWORD g_dwChatAdvise; // RA2: 0x00B2AC60
+extern DWORD g_dwNetUtilAdvise; // RA2: 0x00B2AC64
+extern DWORD g_dwDownloadAdvise; // RA2: 0x00B2AC68
 extern int g_SquadInfoRequests; // RA2: 0x00B2ABF4
 extern int g_RequestingOwnSquadInfo; // RA2: 0x00B2ABF8
 extern int g_OwnSquadID; // RA2: 0x00B2ABFC
@@ -180,6 +183,20 @@ char * Wide_To_Narrow(wchar_t const * text); // RA2: 0x006FA120, static buffer
 Wstring Wstring_FromWide(WideWstring const & text); // RA2: 0x007715D0, keeps the 7 bit characters
 Wstring Wstring_Narrow(WideWstring const & text); // RA2: 0x00771280, narrows each character of a wide string (the counterpart of Wstring_ToWide)
 void Draw_Player_List(int keep_selection, bool force); // RA2: 0x0073FEE0, one more argument than TibSun's
+#define OD_INSERTSTRINGW (WM_USER + 204) // RA2: 0x4CC, inserts the wide string of lParam at the row of wParam (-1 appends) and returns the new row (name guessed from its use)
+#define OD_SETTEXT (WM_USER + 180) // RA2: 0x4B4, sets the (narrow) text of a control of the dialog (name guessed from its use)
+#define APP_REG_KEY "SOFTWARE\\Westwood\\Red Alert 2" // RA2: the registry key of the game (the literal at 0x007E6AD8)
+void __fastcall Refresh_Slot_Settings(HWND dialog, bool force); // RA2: 0x005CA000, redraws the slot list of the game lobby
+void __fastcall Fill_Buddy_List(HWND dialog); // RA2: 0x00755180, fills the buddy dialog (0x116)
+void Char_To_Wide(wchar_t * wide, char const * narrow, int length); // RA2: 0x006FA0C0
+wchar_t * Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180
+extern int g_Col_Username; // RA2: 0x00B2A81C, the name column of the user list (lobby and game channels)
+extern int g_Col_Rank; // RA2: 0x00B292A4
+extern int g_Col_Chanop; // RA2: 0x00B2657C
+extern int g_Col_Gameinfo; // RA2: 0x00B2AB80
+extern int g_Col_House; // RA2: 0x00B292E0
+extern int g_Col_Accept; // RA2: 0x00B297B8
+extern int g_Col_GamePing; // RA2: 0x00B26958
 void Show_Wait_Window(unsigned int event, WideWstring const & text, bool block); // RA2: 0x0074D4D0, the wait dialog with a wide text
 void Reset_Wait_Events(void); // RA2: 0x00752930, resets every wait event
 BOOL CALLBACK WOL_Find_Page_Dialog_Proc(HWND win, UINT uMsg, WPARAM wParam, LPARAM lParam); // RA2: 0x007485D0
@@ -1663,6 +1680,799 @@ void Refresh_Game_List(void) // RA2: 0x0073F8F0, fills the game list of dialog 0
 	SendMessageA(list, OD_DISABLEPAINT, 0, 0);
 	InvalidateRect(list, NULL, false);
 	if (dialog == WS_Top_Window()) SetFocus(GetDlgItem(dialog, 0x540));
+}
+
+void Draw_Player_List(int keep_selection, bool force) // RA2: 0x0073FEE0, fills the user list of the lobby (0x113), of the buddy dialog (0x116) or of the game lobby's slot list (Refresh_Slot_Settings)
+{
+	HWND win = GameoptWindow(); // RA2: the game lobby shows its players in its own slot list, redrawn by 0x005CA000
+	HWND userwin; // RA2: as above
+	int i;
+	if (win) { // RA2: as above
+		Refresh_Slot_Settings(win, force); // RA2: as above
+		return;
+	}
+	if (WS_Find_Dialog(0x6B)) return; // RA2: as above
+	win = WS_Find_Dialog(0x116); // RA2: the buddy dialog (0x116) is filled first, TibSun has no such dialog
+	if (win) { // RA2: as above
+		Fill_Buddy_List(win); // RA2: as above
+	} else {
+		win = WS_Find_Dialog(0x113); // RA2: the lobby dialog is 0x113
+	}
+	userwin = GetDlgItem(win, 0x53E); // RA2: as above
+	if (!win || !userwin) return; // RA2: as above
+
+	Dictionary<WideWstring, bool> lbdict(Wstring_Hash); // RA2: as above
+	LBSaveSelections(userwin, lbdict);
+	int topindex = SendDlgItemMessageA(win, 0x53E, LB_GETTOPINDEX, 0, 0); // RA2: as above
+	SendDlgItemMessageA(win, 0x53E, OD_DISABLEPAINT, 0, 1); // RA2: as above
+	SendDlgItemMessageA(win, 0x53E, LB_RESETCONTENT, 0, 0); // RA2: as above
+
+	Wstring ladder_name;
+	Ladder ladder;
+	memset(&ladder, 0, sizeof(ladder));
+	OwnerDraw::CellData thecell;
+	Wstring const & nick = g_NickName; // RA2: the const toLower (0x0076EE70) is called on the nickname
+	Wstring local_name = nick.toLower(); // RA2: as above
+	wchar_t info[80]; // RA2: as above
+	wchar_t rank_string[80]; // RA2: as above
+	char count_text[20]; // RA2: as above
+	User user;
+	static wchar_t localestring[64]; // RA2: 0x00B29738
+
+	for (i = 0; i < g_UserList.length(); i++) {
+		g_UserList.get(user, i);
+		Wstring const user_name((char *)user.name); // RA2: the names are compared as lower case Wstrings
+		if (local_name == user_name.toLower()) { // RA2: as above
+			HWND hwnd = GetDlgItem(win, 0x555); // RA2: as above
+			if (hwnd) {
+				LONG style = GetWindowLongA(hwnd, GWL_STYLE); // RA2: as above
+				if (user.flags & 1) { // RA2: as above
+					style &= ~WS_DISABLED;
+				} else {
+					style |= WS_DISABLED;
+				}
+				SetWindowLongA(hwnd, GWL_STYLE, style); // RA2: as above
+				InvalidateRect(hwnd, NULL, 0);
+			}
+			hwnd = GetDlgItem(win, 0x587); // RA2: as above
+			if (hwnd) {
+				LONG style = GetWindowLongA(hwnd, GWL_STYLE); // RA2: as above
+				if (user.flags & 1) { // RA2: as above
+					style &= ~WS_DISABLED;
+				} else {
+					style |= WS_DISABLED;
+				}
+				SetWindowLongA(hwnd, GWL_STYLE, style); // RA2: as above
+				InvalidateRect(hwnd, NULL, 0);
+			}
+		}
+
+		if (g_CurrentChannel.type == 0) { // RA2: a chat channel
+			swprintf(info, L"%hs", user.name); // RA2: the row text is wide
+			int row = SendDlgItemMessageA(win, 0x53E, OD_INSERTSTRINGW, (WPARAM)-1, (LPARAM)info); // RA2: message 0x4CC inserts the wide text and returns the row
+			thecell.type = OwnerDraw::CellData::TEXT;
+			thecell.hint.set(StringTable::LoadString("TXT_UNRANKED", NULL, "D:\\Ra2\\wonline.cpp", 3096)); // RA2: as above
+			Char_To_Wide(info, (char *)user.name, -1); // RA2: the cell text is wide
+			thecell.string.set(info);
+			if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: as above
+				if (!(user.flags & 1)) { // RA2: as above
+					Wstring team_name = Wstring_Narrow(thecell.string.get()); // RA2: the team is looked up by the narrowed name
+					if (g_WDTTeams.contains(team_name)) { // RA2: as above
+						int color;
+						int * value = 0; // RA2: as above
+						if (g_WDTTeams.getPointer(team_name, &value) && value) color = *value; // RA2: as above
+						WideWstring converted_team(Narrow_To_Wide(team_name.get())); // RA2: as above
+						thecell.string = converted_team; // RA2: as above
+						thecell.color = PlayerColorTable[color];
+					} else {
+						thecell.color = ColorSystem;
+					}
+				} else {
+					thecell.color = ColorSystem;
+				}
+			} else {
+				thecell.color = ColorSystem;
+			}
+
+			ladder_name.set((char *)user.name);
+			ladder_name.toLower();
+			memset(localestring, 0, sizeof(localestring));
+			int locale = 0;
+			if (g_UserLocales.contains(ladder_name) && g_pChat) { // RA2: as above
+				int * value = 0; // RA2: as above
+				if (g_UserLocales.getPointer(ladder_name, &value) && value) locale = *value; // RA2: as above
+				if (locale) {
+					WideWstring locale_name = Get_Locale_Name(locale); // RA2: as above
+					swprintf(localestring, L"(%s)", locale_name.get()); // RA2: as above
+				}
+			}
+			if (g_ActiveLadder->getValue(ladder_name, ladder)) {
+				swprintf(rank_string, L"%s %d", StringTable::LoadString("TXT_RANK", NULL, "D:\\Ra2\\wonline.cpp", 3162), ladder.rung); // RA2: as above
+				thecell.hint.set(rank_string);
+			}
+			if (g_UserLocales.contains(ladder_name)) {
+				if (locale) thecell.hint.insert(L" ", 0); // RA2: as above
+				thecell.hint.insert(localestring, 0);
+			}
+			SendMessageA(GetDlgItem(win, 0x53E), LB_SETITEMDATA, row, i); // RA2: the row remembers its index in the user list
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Username, i), (LPARAM)&thecell); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::TEXT;
+			ladder_name.set((char *)user.name);
+			ladder_name.toLower();
+			rank_string[0] = 0;
+			if (strlen((char *)user.squadabbrev)) {
+				swprintf(rank_string, L"[%hs]", user.squadabbrev); // RA2: as above
+				wchar_t squad_name[200]; // RA2: as above
+				Char_To_Wide(squad_name, (char *)user.squadname, -1); // RA2: as above
+				thecell.hint.set(squad_name); // RA2: as above
+			} else if (g_ActiveLadder->getValue(ladder_name, ladder)) {
+				swprintf(rank_string, L"(%s %d)", StringTable::LoadString("TXT_RANK", NULL, "D:\\Ra2\\wonline.cpp", 3204), ladder.rung); // RA2: as above
+				thecell.hint.set(L""); // RA2: as above
+			}
+			thecell.string.set(rank_string);
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Rank, i), (LPARAM)&thecell); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::TEXT;
+			if (user.flags & 1) { // RA2: as above
+				thecell.type = OwnerDraw::CellData::SURFACE;
+				thecell.surf = SurfaceCache.GetSurface("woloper.pcx", false); // RA2: as above
+				thecell.hint.set(StringTable::LoadString("TXT_OPER", NULL, "D:\\Ra2\\wonline.cpp", 3216)); // RA2: as above
+			} else if (user.flags & 2) { // RA2: as above
+				thecell.type = OwnerDraw::CellData::SURFACE;
+				thecell.surf = SurfaceCache.GetSurface("wolvoice.pcx", false); // RA2: as above
+				thecell.hint.set(StringTable::LoadString("TXT_VOICE", NULL, "D:\\Ra2\\wonline.cpp", 3222)); // RA2: as above
+			} else {
+				thecell.string.set(L""); // RA2: as above
+				thecell.hint.set(L""); // RA2: as above
+			}
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Chanop, i), (LPARAM)&thecell); // RA2: as above
+		} else {
+			if (HouseTypes.Count() <= 1) return;
+			int slot_index;
+			{
+				Wstring lookup_name((char *)user.name); // RA2: as above
+				slot_index = Player_Name_To_Index(lookup_name); // RA2: as above
+			}
+			int house = 0; // RA2: as above
+			int star = 0; // RA2: as above
+			if (slot_index != -1) {
+				house = g_UserInfo[slot_index].house;
+				if (g_UserInfo[slot_index].accepted) star = 1;
+				if (slot_index == 0) {
+					g_UserInfo[slot_index].accepted = 1;
+					star = 2;
+				}
+			}
+			house = house > 0 ? house : 0; // RA2: nine countries (usai.pcx .. rusi.pcx) instead of GDI and Nod
+
+			ladder_name.set((char *)user.name);
+			ladder_name.toLower();
+			swprintf(info, L"%hs", user.name); // RA2: the row text is wide
+			for (int j = 0; j < (int)wcslen(info); j++) { // RA2: as above
+				info[j] = (wchar_t)tolower(info[j]); // RA2: as above
+			}
+			SendDlgItemMessageA(win, 0x53E, OD_INSERTSTRINGW, (WPARAM)-1, (LPARAM)info); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::PRIMARY;
+			thecell.color = PlayerColorTable[g_UserInfo[slot_index].color];
+			thecell.hint.set(StringTable::LoadString("TXT_UNRANKED", NULL, "D:\\Ra2\\wonline.cpp", 3297)); // RA2: as above
+			if (g_ActiveLadder->getValue(ladder_name, ladder)) {
+				swprintf(rank_string, L"%s %d", StringTable::LoadString("TXT_RANK", NULL, "D:\\Ra2\\wonline.cpp", 3300), ladder.rung); // RA2: as above
+				thecell.hint.set(rank_string);
+			}
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Username, i), (LPARAM)&thecell); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::TEXT;
+			if (strlen((char *)user.squadabbrev)) {
+				Char_To_Wide(info, (char *)user.squadname, -1); // RA2: as above
+				thecell.hint.set(info);
+				Char_To_Wide(info, (char *)user.squadabbrev, -1); // RA2: as above
+			} else {
+				if (g_ActiveLadder->getValue(ladder_name, ladder)) {
+					swprintf(info, L"(%s %d)", StringTable::LoadString("TXT_RANK", NULL, "D:\\Ra2\\wonline.cpp", 3319), ladder.rung); // RA2: as above
+					thecell.hint.set(L""); // RA2: as above
+				} else {
+					swprintf(info, L""); // RA2: as above
+					thecell.hint.set(L""); // RA2: as above
+				}
+			}
+			thecell.string.set(info);
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Gameinfo, i), (LPARAM)&thecell); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::SURFACE;
+			switch (house) { // RA2: the country icon and its side name (TXT_GDI for the first five, TXT_NOD for the rest)
+			case 0:
+				thecell.surf = SurfaceCache.GetSurface("usai.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_GDI", NULL, "D:\\Ra2\\wonline.cpp", 3355)); // RA2: as above
+				break;
+			case 1:
+				thecell.surf = SurfaceCache.GetSurface("japi.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_GDI", NULL, "D:\\Ra2\\wonline.cpp", 3359)); // RA2: as above
+				break;
+			case 2:
+				thecell.surf = SurfaceCache.GetSurface("frai.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_GDI", NULL, "D:\\Ra2\\wonline.cpp", 3363)); // RA2: as above
+				break;
+			case 3:
+				thecell.surf = SurfaceCache.GetSurface("geri.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_GDI", NULL, "D:\\Ra2\\wonline.cpp", 3367)); // RA2: as above
+				break;
+			case 4:
+				thecell.surf = SurfaceCache.GetSurface("gbri.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_GDI", NULL, "D:\\Ra2\\wonline.cpp", 3371)); // RA2: as above
+				break;
+			case 5:
+				thecell.surf = SurfaceCache.GetSurface("djbi.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_NOD", NULL, "D:\\Ra2\\wonline.cpp", 3375)); // RA2: as above
+				break;
+			case 6: // RA2: as above
+				thecell.surf = SurfaceCache.GetSurface("arbi.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_NOD", NULL, "D:\\Ra2\\wonline.cpp", 3379)); // RA2: as above
+				break;
+			case 7: // RA2: as above
+				thecell.surf = SurfaceCache.GetSurface("lati.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_NOD", NULL, "D:\\Ra2\\wonline.cpp", 3383)); // RA2: as above
+				break;
+			case 8: // RA2: as above
+				thecell.surf = SurfaceCache.GetSurface("rusi.pcx", false); // RA2: as above
+				swprintf(info, L"%s", StringTable::LoadString("TXT_NOD", NULL, "D:\\Ra2\\wonline.cpp", 3387)); // RA2: as above
+				break;
+			}
+			thecell.hint.set(info);
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_House, i), (LPARAM)&thecell); // RA2: as above
+
+			thecell.type = OwnerDraw::CellData::SURFACE;
+			if (star) {
+				if (star == 2) {
+					thecell.surf = SurfaceCache.GetSurface("wolhost.pcx", false); // RA2: as above
+				} else {
+					thecell.surf = SurfaceCache.GetSurface("wolacpt.pcx", false); // RA2: as above
+				}
+				thecell.hint.set(StringTable::LoadString("TXT_ACCEPTED", NULL, "D:\\Ra2\\wonline.cpp", 3401)); // RA2: as above
+			} else {
+				thecell.type = OwnerDraw::CellData::INVALID;
+				thecell.hint.set(L""); // RA2: as above
+			}
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_Accept, i), (LPARAM)&thecell); // RA2: as above
+
+			int average_ping = 0; // RA2: as above
+			g_pNetUtil->GetAvgPing(user.ipaddr, &average_ping);
+			if (average_ping < 0) average_ping = 0;
+			thecell.type = OwnerDraw::CellData::PING;
+			thecell.pingtime = average_ping;
+			wchar_t ping_text[200]; // RA2: as above
+			swprintf(ping_text, StringTable::LoadString("MSG:PingInfo", NULL, "D:\\Ra2\\wonline.cpp", 3417), average_ping); // RA2: as above
+			if (average_ping == 0) {
+				swprintf(ping_text, StringTable::LoadString("TXT_UNKNOWN_PING", NULL, "D:\\Ra2\\wonline.cpp", 3419)); // RA2: as above
+			}
+			thecell.hint.set(ping_text); // RA2: as above
+			Wstring const ping_name((char *)user.name); // RA2: as above
+			if (local_name == ping_name.toLower()) { // RA2: as above
+				thecell.type = OwnerDraw::CellData::INVALID;
+			}
+			SendDlgItemMessageA(win, 0x53E, OD_SETCELL, MAKEWPARAM(g_Col_GamePing, i), (LPARAM)&thecell); // RA2: as above
+		}
+	}
+
+	if (keep_selection == 0) LBRestoreSelections(userwin, lbdict);
+	int sel_count = SendDlgItemMessageA(win, 0x53E, LB_GETSELCOUNT, 0, 0); // RA2: as above
+	int user_count = g_UserList.length();
+	if (sel_count > 0) {
+		sprintf(count_text, "%d  (%d)", user_count, sel_count); // RA2: as above
+	} else {
+		sprintf(count_text, "%d", user_count); // RA2: as above
+	}
+	SendDlgItemMessageA(win, 0x60B, OD_SETTEXT, 0, (LPARAM)count_text); // RA2: message 0x4B4 sets the text of the count label
+	SendDlgItemMessageA(win, 0x53E, LB_SETTOPINDEX, (WPARAM)topindex, 0); // RA2: as above
+	SendDlgItemMessageA(win, 0x53E, OD_DISABLEPAINT, 0, 0); // RA2: as above
+	InvalidateRect(GetDlgItem(win, 0x53E), NULL, 0); // RA2: as above
+}
+
+
+// RA2: the event sinks of the chat, net utility and download services. Their handlers are defined with the rest of the file (they are not part of this part); the classes are declared here as the executable creates them in Startup_Chat (0x00741300): each is 32 bytes, the vtable pointer, the reference count and the critical section of CComObjectRoot
+class CChatEventSink : public CComObjectRoot, public IChatEvent // RA2: the sink the executable creates in Startup_Chat
+{
+	public:
+		CChatEventSink(void) {}
+		BEGIN_COM_MAP(CChatEventSink)
+		COM_INTERFACE_ENTRY(IChatEvent)
+		END_COM_MAP()
+		STDMETHOD(OnServerList)(HRESULT res, Server *servers); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUpdateList)(HRESULT res, Update *updates); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnServerError)(HRESULT res, LPCSTR ircmsg); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnConnection)(HRESULT res, LPCSTR motd); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnMessageOfTheDay)(HRESULT res, LPCSTR motd); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelList)(HRESULT res, Channel *channels); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelCreate)(HRESULT res, Channel *channel); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelJoin)(HRESULT res, Channel *channel, User *user); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelLeave)(HRESULT res, Channel *channel, User *user); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelTopic)(HRESULT res, Channel *channel, LPCSTR topic); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPrivateAction)(HRESULT res, User *user, LPCSTR action); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPublicAction)(HRESULT res, Channel *channel, User *user, LPCSTR action); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserList)(HRESULT res, Channel *channel, User *users); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPublicMessage)(HRESULT res, Channel *channel, User *user, LPCSTR message); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPrivateMessage)(HRESULT res, User *user, LPCSTR message); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnSystemMessage)(HRESULT res, LPCSTR message); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnNetStatus)(HRESULT res); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnLogout)(HRESULT status, User *user); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPrivateGameOptions)(HRESULT res, User *user, LPCSTR options); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPublicGameOptions)(HRESULT res, Channel *channel, User *user, LPCSTR options); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnGameStart)(HRESULT res, Channel *channel, User *users, int gameid); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserKick)(HRESULT res, Channel *channel, User *kicked, User *kicker); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserIP)(HRESULT res, User *user); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnFind)(HRESULT res, Channel *chan); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPageSend)(HRESULT res); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnPaged)(HRESULT res, User *user, LPCSTR message); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnServerBannedYou)(HRESULT res, time_t bannedTill); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserFlags)(HRESULT res, LPCSTR name, unsigned int flags, unsigned int mask); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnChannelBan)(HRESULT res, LPCSTR name, int banned); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnSquadInfo)(HRESULT res, unsigned long id, Squad *squad); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserLocale)(HRESULT res, User *users); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnUserTeam)(HRESULT res, User *users); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnSetLocale)(HRESULT res, Locale newlocale); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnSetTeam)(HRESULT res, int newteam); // RA2: a handler of the interface, defined with the rest of the file
+};
+
+class CNetUtilEventSink : public CComObjectRoot, public INetUtilEvent // RA2: the sink the executable creates in Startup_Chat
+{
+	public:
+		CNetUtilEventSink(void) {}
+		BEGIN_COM_MAP(CNetUtilEventSink)
+		COM_INTERFACE_ENTRY(INetUtilEvent)
+		END_COM_MAP()
+		STDMETHOD(OnPing)(HRESULT res, int time, unsigned long ip, int handle); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnLadderList)(HRESULT res, Ladder *list, int totalCount, long timeStamp, int keyRung); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnGameresSent)(HRESULT res); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnNewNick)(HRESULT res, LPCSTR message, LPCSTR nick, LPCSTR pass); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnAgeCheck)(HRESULT res, int years, int consent); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnWDTState)(HRESULT res, unsigned char *state, int length); // RA2: a handler of the interface, defined with the rest of the file
+};
+
+class CDownloadEventSink : public CComObjectRoot, public IDownloadEvent // RA2: the sink the executable creates in Startup_Chat
+{
+	public:
+		CDownloadEventSink(void) {}
+		BEGIN_COM_MAP(CDownloadEventSink)
+		COM_INTERFACE_ENTRY(IDownloadEvent)
+		END_COM_MAP()
+		STDMETHOD(OnEnd)(void); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnError)(int error); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnProgressUpdate)(int bytesread, int totalsize, int timetaken, int timeleft); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnQueryResume)(void); // RA2: a handler of the interface, defined with the rest of the file
+		STDMETHOD(OnStatusUpdate)(int status); // RA2: a handler of the interface, defined with the rest of the file
+};
+
+extern CComObject<CChatEventSink> * g_pChatSink; // RA2: 0x00B2A720
+extern CComObject<CNetUtilEventSink> * g_pNetUtilSink; // RA2: 0x00B26560
+extern CComObject<CDownloadEventSink> * g_pDownloadSink; // RA2: 0x00B28DE0
+
+void Redraw_Player_List(void) // RA2: 0x007412F0, Draw_Player_List with the default arguments (a jump to it)
+{
+	Draw_Player_List(0, false); // RA2: as above
+}
+
+extern CLSID const CLSID_Chat; // RA2: 0x007AF640, the class ids of the three services
+extern CLSID const CLSID_NetUtil; // RA2: 0x007AF660
+extern CLSID const CLSID_Download; // RA2: 0x007AF650
+extern IID const IID_IChat; // RA2: 0x007AF5A0, the interface ids
+extern IID const IID_IChatEvent; // RA2: 0x007AF5B0
+extern IID const IID_INetUtil; // RA2: 0x007AF5E0
+extern IID const IID_INetUtilEvent; // RA2: 0x007AF5F0
+extern IID const IID_IDownload; // RA2: 0x007AF5C0
+extern IID const IID_IDownloadEvent; // RA2: 0x007AF5D0
+
+int Startup_Chat(HINSTANCE hInstance) // RA2: 0x00741300, creates the chat, net utility and download services with their event sinks, checks the version of the chat API and tells it the registry key and the SKU; 1 when all is well, -2 when a service is missing or too old
+{
+	HRESULT hresult = NULL;
+	_Module.Init(NULL, hInstance);
+
+	g_pChat = NULL;
+	g_pNetUtil = NULL;
+	g_pDownload = NULL;
+	g_dwChatAdvise = 0;
+	g_dwNetUtilAdvise = 0;
+	g_dwDownloadAdvise = 0;
+
+	CoCreateInstance(CLSID_Chat, NULL, CLSCTX_INPROC_SERVER, IID_IChat, (void **)&g_pChat);
+	if (g_pChat) {
+		CComObject<CChatEventSink>::CreateInstance(&g_pChatSink);
+		hresult = AtlAdvise(g_pChat, g_pChatSink->GetUnknown(), IID_IChatEvent, &g_dwChatAdvise);
+	}
+	if ((g_pChat == NULL) || (hresult != S_OK)) {
+		ODMessageBox(StringTable::LoadString("TXT_APIMISSING", NULL, "D:\\Ra2\\wonline.cpp", 7881), 0, NULL, false); // RA2: as above
+		return(-2); // RA2: as above
+	}
+
+	CoCreateInstance(CLSID_NetUtil, NULL, CLSCTX_INPROC_SERVER, IID_INetUtil, (void **)&g_pNetUtil);
+	if (g_pNetUtil) {
+		CComObject<CNetUtilEventSink>::CreateInstance(&g_pNetUtilSink);
+		hresult = AtlAdvise(g_pNetUtil, g_pNetUtilSink->GetUnknown(), IID_INetUtilEvent, &g_dwNetUtilAdvise);
+	}
+	if ((g_pNetUtil == NULL) || (hresult != S_OK)) {
+		ODMessageBox(StringTable::LoadString("TXT_APIMISSING", NULL, "D:\\Ra2\\wonline.cpp", 7897), 0, NULL, false); // RA2: as above
+		return(-2); // RA2: as above
+	}
+
+	CoCreateInstance(CLSID_Download, NULL, CLSCTX_INPROC_SERVER, IID_IDownload, (void **)&g_pDownload);
+	if (g_pDownload) {
+		CComObject<CDownloadEventSink>::CreateInstance(&g_pDownloadSink);
+		hresult = AtlAdvise(g_pDownload, g_pDownloadSink->GetUnknown(), IID_IDownloadEvent, &g_dwDownloadAdvise);
+	}
+	if ((g_pDownload == NULL) || (hresult != S_OK)) {
+		ODMessageBox(StringTable::LoadString("TXT_APIMISSING", NULL, "D:\\Ra2\\wonline.cpp", 7913), 0, NULL, false); // RA2: as above
+		return(-2); // RA2: as above
+	}
+
+	unsigned long version;
+	g_pChat->GetVersion(&version);
+	if (version < 0x1000E) { // RA2: the API of RA2 is newer than TibSun's
+		ODMessageBox(StringTable::LoadString("TXT_APIWRONGVERSION", NULL, "D:\\Ra2\\wonline.cpp", 7925), 0, NULL, false); // RA2: as above
+		return(-2); // RA2: as above
+	}
+
+	g_pChat->SetAttributeValue("RegPath", APP_REG_KEY);
+
+	HKEY rKey;
+	char buf[256];
+	if (APP_REG_KEY != NULL && strlen(APP_REG_KEY)) {
+		strcpy(buf, APP_REG_KEY);
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, buf, 0, KEY_READ, &rKey) == ERROR_SUCCESS) {
+			DWORD type;
+			DWORD value;
+			DWORD valuesize = sizeof(value);
+			if (RegQueryValueEx(rKey, "SKU", NULL, &type, (LPBYTE)&value, &valuesize) == ERROR_SUCCESS) {
+				g_pChat->SetProductSKU(value);
+			}
+			RegCloseKey(rKey);
+		}
+	}
+
+	return(1); // RA2: as above
+}
+
+/// <summary>
+/// Determines the sort order of two channel users.
+/// Channel owners come first, then users with voice, then everyone else; equals are listed
+/// alphabetically. This is the order the user list box is kept in.
+/// </summary>
+/// <returns>Returns with a negative value if the u1 user sorts first, a positive value if
+/// the u2 one does, and zero if the two cannot be told apart.</returns>
+int Compare_Users(User * u1, User * u2) // RA2: 0x007416D0, the same as TibSun's
+{
+	User * users[2];
+	int value[2];
+	users[0] = u1;
+	users[1] = u2;
+	value[0] = 0;
+	value[1] = 0;
+
+	for (int i = 0; i < 2; i++) {
+		if (users[i]->flags & 1) value[i] += 4; // RA2: as above
+		if (users[i]->flags & 2) value[i] += 2; // RA2: as above
+	}
+	if (value[0] < value[1]) {
+		return(1);
+	} else if (value[0] > value[1]) {
+		return(-1);
+	}
+	return(stricmp((char *)u1->name, (char *)u2->name));
+}
+
+#include "multiplayer.h" // RA2: the game mode of the session, the handlers of the end of the game
+
+namespace OwnerDraw { BOOL __stdcall Set_Paint_Disabled(HWND window, LPARAM lparam); } // RA2: 0x005ECF40, defined in ownrdraw.cpp
+void __fastcall Set_Player_Ping(HWND dialog, int player, int ping); // RA2: 0x004D1060, defined in gdlgsupp.cpp
+void __fastcall Enable_Start_Button(void); // RA2: 0x005C9700, defined in netshare.cpp
+void __fastcall Release_Slot_By_Name(char const * name); // RA2: 0x005C9270, defined in netshare.cpp
+int Join_Selected_Lobby(bool join); // RA2: 0x00744930, defined later in the file
+void __fastcall Store_User_Ping(char const * name, int ping); // RA2: 0x0075B110, a user's ping (WOL), defined later in the file
+extern int g_PlayerPings[8]; // RA2: 0x00B292AC, the ping of each slot of the game lobby
+
+/// <summary>
+/// Handles a user leaving the current channel. If the departing user is ourselves, resets all
+/// local channel/session state and returns to the lobby (closing any open guest or game-options
+/// dialogs); otherwise removes the given user from our local user list and updates the
+/// game-options acceptance state before refreshing the user list display.
+/// </summary>
+/// <param name="user">The user who left the channel.</param>
+void Handle_User_Leave(User & user) // RA2: 0x00741750
+{
+	stricmp(g_NickName.get(), (char *)user.name); // RA2: the result is not used
+
+	if (g_CurrentChannel.type != 0) VocClass::PlayGlobal(Rule->PlayerLeft, 1.0f, 0x2000, 0); // RA2: as above
+
+	if (user.flags & 0x8000) { // RA2: as above
+		DebugString("Local user leaving channel\n"); // RA2: as above
+		if (WolOptionsLocked != 0) DebugString("Local user leaving channel after game start\n"); // RA2: as above
+		wchar_t name[64]; // RA2: as above
+		Char_To_Wide(name, (char *)g_CurrentChannel.name, -1); // RA2: the name is wide
+		if (strncmp((char *)g_CurrentChannel.name, "Lob_33_", 7) == 0) { // RA2: as above
+			int num = atol(((char *)g_CurrentChannel.name) + strlen("Lob_33_")); // RA2: as above
+			int num2 = num / 8; // RA2: as above
+			int num1 = num % 8; // RA2: as above
+			if (num2 == 0) {
+				swprintf(name, L"%s", g_Lobbies[num1]); // RA2: as above
+			} else {
+				swprintf(name, L"%s %d", g_Lobbies[num1], num2 + 1); // RA2: as above
+			}
+		}
+		if (Online_Session_State != 2 && Online_Session_State != 1) { // RA2: no message in a LAN or WDT game
+			Lobby_Chat_Printf(ColorSystem, StringTable::LoadString("TXT_YOULEFT", NULL, "D:\\Ra2\\wonline.cpp", 7993), name); // RA2: as above
+		}
+		g_ChannelCount = 0;
+		DebugString("Channel Leave \n"); // RA2: as above
+		memset(&g_CurrentChannel, 0, sizeof(Channel));
+		memset(g_UserInfo, 0, sizeof(ChannelUserInfo) * 16); // RA2: sixteen users
+		g_UserList.clear();
+		g_IsChannelCreator = 0;
+		HWND wait_dlg = WS_Find_Dialog(0xC4); // RA2: Close_Wait_Window inline, for the channel leave event
+		if (wait_dlg) { // RA2: as above
+			g_ActiveWaitFlags &= ~0x40; // RA2: as above
+			if (g_ActiveWaitFlags == 0) {
+				WS_Destroy_Dialog(wait_dlg, 0); // RA2: as above
+			}
+		}
+		HWND top = WS_Top_Window(); // RA2: as above
+		HWND control = GetDlgItem(top, 0x540); // RA2: as above
+		if (control) { // RA2: as above
+			SetFocus(control); // RA2: as above
+		}
+
+		++Session.Suspended; // RA2: a count that is raised while the dialogs are closed, +0x2824 of the session
+		Session.Options.ScenarioDescription[0] = 0;
+		Session.ScenarioFileLength = 0;
+		Session.ScenarioDigest[0] = 0;
+		HWND mainwin = WS_Find_Dialog(0x113); // RA2: as above
+		if (mainwin && g_PlayingNetGame) { // RA2: as above
+			ShowWindow(mainwin, SW_HIDE); // RA2: as above
+			OwnerDraw::Set_Paint_Disabled(mainwin, 1); // RA2: as above
+		}
+		HWND guest_dlg = WS_Find_Dialog(0xC9); // RA2: as above
+		if (guest_dlg) {
+			WS_Destroy_Dialog(guest_dlg, 2); // RA2: as above
+			ShowWindow(guest_dlg, SW_HIDE); // RA2: as above
+			OwnerDraw::Set_Paint_Disabled(guest_dlg, 1); // RA2: as above
+			if (Online_Session_State == 3) { // RA2: as above
+				if (g_PlayingNetGame) {
+					if (mainwin) {
+						ShowWindow(mainwin, SW_HIDE); // RA2: as above
+						OwnerDraw::Set_Paint_Disabled(mainwin, 1); // RA2: as above
+					}
+				} else {
+					Join_Selected_Lobby(false); // RA2: as above
+					if (mainwin) PostMessageA(mainwin, 0x593, 0, 0); // RA2: as above
+				}
+			} else if (Online_Session_State == 4) { // RA2: as above
+				DebugString("Setting g_JoinLobbyNow, Guest\n"); // RA2: as above
+				g_JoinLobbyNow = 1;
+			}
+		}
+		HWND gamewin = WS_Find_Dialog(0xC2); // RA2: as above
+		if (gamewin) {
+			WS_Destroy_Dialog(gamewin, 2); // RA2: as above
+			ShowWindow(gamewin, SW_HIDE); // RA2: as above
+			OwnerDraw::Set_Paint_Disabled(gamewin, 1); // RA2: as above
+			if (Online_Session_State == 3) { // RA2: as above
+				if (g_PlayingNetGame) {
+					if (mainwin) {
+						ShowWindow(mainwin, SW_HIDE); // RA2: as above
+						OwnerDraw::Set_Paint_Disabled(mainwin, 1); // RA2: as above
+					}
+				} else {
+					Join_Selected_Lobby(false); // RA2: as above
+					if (mainwin) PostMessageA(mainwin, 0x593, 0, 0); // RA2: as above
+				}
+			} else if (Online_Session_State == 4) { // RA2: as above
+				DebugString("Setting g_JoinLobbyNow, Host\n"); // RA2: as above
+			}
+		}
+		if (mainwin) {
+			if (!g_PlayingNetGame) { // RA2: as above
+				ShowWindow(mainwin, SW_SHOW);
+				OwnerDraw::Set_Paint_Disabled(mainwin, 0); // RA2: as above
+			}
+			Refresh_Game_List(); // RA2: the game list is redrawn, there is no channel list
+		}
+		--Session.Suspended; // RA2: as above
+		return;
+	}
+
+	if (WolOptionsLocked == 2) { // RA2: the game was started, nothing else to do for another player
+		DebugString("other player leaving channel after Game Started\n"); // RA2: as above
+		return;
+	}
+
+	if (&user) { // RA2: the slot of the leaving player shows no ping
+		for (int slot = 0; slot < 8; slot++) { // RA2: the pings of the slots go to the user list
+			if (Session.Slots[slot] && !strcmp(Wide_To_Narrow(Session.Slots[slot]->Name), (char *)user.name)) { // RA2: the player's slot gets no ping
+				HWND lobby = GameoptWindow(); // RA2: as above
+				if (lobby) Set_Player_Ping(lobby, slot, -1); // RA2: as above
+				break;
+			}
+		}
+	}
+
+	User temp;
+	for (int i = 0; i < g_UserList.length(); i++) {
+		g_UserList.get(temp, i);
+		if (stricmp((char *)temp.name, (char *)user.name) == 0) { // RA2: as above
+			g_UserList.remove(i);
+			if (g_CurrentChannel.type != 0) { // RA2: as above
+				memmove(g_UserInfo + i, g_UserInfo + i + 1, sizeof(ChannelUserInfo) * (15 - i)); // RA2: sixteen users
+				if (WolOptionsLocked != 2) { // RA2: as above
+					for (int * accepted = &g_UserInfo[1].accepted; accepted < &g_UserInfo[16].accepted; accepted += sizeof(ChannelUserInfo) / sizeof(int)) { // RA2: every user but the host loses the accept status
+						*accepted = 0;
+						EnableWindow(GetDlgItem(GameoptWindow(), 0x59F), 1); // RA2: as above
+					}
+					if (!g_IsChannelCreator) { // RA2: as above
+						HWND guest = WS_Find_Dialog(0xC9); // RA2: as above
+						Enable_Player_Combos(guest, true); // RA2: a guest gets the combos back
+					}
+					Enable_Start_Button(); // RA2: as above
+				}
+			}
+			if (i == 0 && g_CurrentChannel.type != 0 && g_IsChannelCreator == 0) { // RA2: as above
+				g_pChat->RequestChannelLeave();
+			}
+			break;
+		}
+	}
+
+	if (g_CurrentChannel.type != 0) { // RA2: as above
+		Release_Slot_By_Name((char *)user.name); // RA2: frees the slot of the player
+		for (int player = 0; player < Session.Players.Count(); player++) { // RA2: as above
+			if (stricmp(Wide_To_Narrow(Session.Players[player]->Name), (char *)user.name) == 0) { // RA2: the player is dropped from the list
+				NodeNameType * entry = Session.Players[player]; // RA2: as above
+				Session.Players.Delete_Index(player); // RA2: as above
+				Session.Remove_Player_Port(player); // RA2: as above
+				delete entry; // RA2: as above
+				break;
+			}
+		}
+		for (int slot = 0; slot < 8; slot++) { // RA2: the pings of the slots go to the user list
+			if (!Session.Slots[slot] || !Is_Real_Player_Entry(Session.Slots[slot])) g_PlayerPings[slot] = -1; // RA2: as above
+			char * slot_name = Wide_To_Narrow(Session.Slots[slot]->Name); // RA2: as above
+			Store_User_Ping(slot_name, g_PlayerPings[slot]); // RA2: as above
+		}
+		if (g_IsChannelCreator) { // RA2: as above
+			Enable_Start_Button(); // RA2: as above
+			Send_Player_List(); // RA2: as above
+			Send_Lobby_Options(true, true); // RA2: PumpGameopts(true, true)
+			if (WS_Top_Window_ID() == 0x6B) { // RA2: in the game list dialog the game mode of the selected row is told
+				HWND window = WS_Top_Window(); // RA2: as above
+				int index = SendDlgItemMessageA(window, 0x6EB, LB_GETCURSEL, 0, 0); // RA2: as above
+				if (index != -1) {
+					MultiplayerGameMode * mode = (MultiplayerGameMode *)SendDlgItemMessageA(window, 0x6EB, LB_GETITEMDATA, index, 0); // RA2: as above
+					if (mode) { // RA2: as above
+						mode->vt_entry_78(); // RA2: as above
+						Draw_Player_List(0, false); // RA2: as above
+						return;
+					}
+				}
+			} else if (Session.MPGameMode) { // RA2: as above
+				Session.MPGameMode->vt_entry_78(); // RA2: as above
+			}
+		}
+	}
+	Draw_Player_List(0, false); // RA2: as above
+}
+
+extern bool g_WOLInitialized; // RA2: 0x00B2AC81, set once the chat services are up, tested by Shutdown_Chat
+void __fastcall Free_Lobby_Entries(void); // RA2: 0x005C8950, defined in netshare.cpp
+
+/// <summary>
+/// Tears down the WOL COM interfaces: unadvises each event sink, releases the Chat, NetUtil,
+/// and Download interfaces, clears the global pointers, and terminates the ATL module.
+/// </summary>
+void Shutdown_Chat(void) // RA2: 0x00742080
+{
+	if (MultiplayerMapPreview) { // RA2: the preview of the map is dropped
+		delete MultiplayerMapPreview;
+		MultiplayerMapPreview = NULL;
+	}
+	HWND profile = WS_Find_Dialog(0x11E); // RA2: the profile dialog is closed first
+	if (profile) WS_Destroy_Dialog(profile, 0); // RA2: as above
+	if (g_WOLInitialized) { // RA2: only after Startup_Chat
+		Free_Lobby_Entries(); // RA2: the fixed lobby entries are dropped
+		if (g_pChat) {
+			AtlUnadvise(g_pChat, IID_IChatEvent, g_dwChatAdvise);
+			g_pChat->Release();
+		}
+		if (g_pNetUtil) {
+			AtlUnadvise(g_pNetUtil, IID_INetUtilEvent, g_dwNetUtilAdvise);
+			g_pNetUtil->Release();
+		}
+		if (g_pDownload) {
+			AtlUnadvise(g_pDownload, IID_IDownloadEvent, g_dwDownloadAdvise);
+			g_pDownload->Release();
+		}
+		g_pChat = NULL;
+		g_pNetUtil = NULL;
+		g_pDownload = NULL;
+		for (int i = 0; i < EV_COUNT; i++) {
+			CloseHandle(g_WaitEventHandles[i]);
+		}
+		_Module.Term();
+		g_WOLInitialized = false; // RA2: as above
+	}
+}
+
+extern char g_WDTHost[]; // RA2: 0x00B269AC, the host of the WDT server (Request_WDT_Server_List sets it)
+extern int g_WDTPort; // RA2: 0x00B299BC
+
+/// <summary>
+/// Requests the World Domination Tour state.
+/// This routine puts up no wait window of its own, which is what lets the wait callback
+/// poll the tour state in the background while the player is doing something else. The
+/// language code is refreshed from the installed product's SKU on the way through.
+/// </summary>
+/// <returns>Returns with true if a request was issued, or false if there is no NetUtil connection
+/// to issue it on.</returns>
+bool Get_WDT_State_Silent(void) // RA2: 0x00742270, returns a bool
+{
+	DWORD value = 0;
+
+	HKEY rKey;
+	char buf[256];
+	if (APP_REG_KEY != NULL && strlen(APP_REG_KEY)) {
+		strcpy(buf, APP_REG_KEY);
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, buf, 0, KEY_READ, &rKey) == ERROR_SUCCESS) {
+			DWORD type;
+			DWORD valuesize = sizeof(value);
+			RegQueryValueEx(rKey, "SKU", NULL, &type, (LPBYTE)&value, &valuesize);
+			RegCloseKey(rKey);
+		}
+	}
+
+	g_LanguageCode = value & 0xFF;
+	if (g_pChat != NULL) {
+		g_pChat->SetProductSKU(value);
+	}
+
+	if (g_pNetUtil != NULL) {
+		DebugString("Get_WDT_State_Silent: WDTHost is %s, port is %d\n", g_WDTHost, g_WDTPort);
+		g_pNetUtil->RequestWDTState(g_WDTHost, g_WDTPort, 3 /* RA2: everything, as WDT_REQ_STATE_EVERYTHING of wdtnet.h */); // RA2: 3 asks for everything (WDT_REQ_STATE_EVERYTHING of wdtnet.h, which this file does not include)
+		return(true); // RA2: as above
+	}
+	return(false); // RA2: as above
+}
+
+void __fastcall Init_Lobby_Entries(void); // RA2: 0x005C86E0, defined in netshare.cpp
+void __fastcall Clear_Slot_Lists(void); // RA2: 0x005C8A70, as above
+void __fastcall Reset_Slots(void); // RA2: 0x005C8A90, as above
+
+int Init_Wonline(void) // RA2: 0x00742390, not in TibSun: brings the chat services up once (the work Login_WOL did itself in TibSun), 1 when they already are, else the result of Startup_Chat
+{
+	if (g_WOLInitialized) return(1); // RA2: as above
+	g_WOLInitialized = true; // RA2: set before the services come up
+	Init_Lobby_Entries(); // RA2: the fixed lobby entries (open, closed, computers)
+	Clear_Slot_Lists(); // RA2: as above
+	Reset_Slots(); // RA2: as above
+
+	DWORD value = 0;
+	HKEY rKey;
+	char regkey[256];
+	if (APP_REG_KEY != NULL && strlen(APP_REG_KEY)) {
+		strcpy(regkey, APP_REG_KEY);
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, regkey, 0, KEY_READ, &rKey) == ERROR_SUCCESS) {
+			DWORD type;
+			DWORD valuesize = sizeof(value);
+			RegQueryValueEx(rKey, "SKU", NULL, &type, (LPBYTE)&value, &valuesize);
+			RegCloseKey(rKey);
+		}
+	}
+
+	value &= 0xFF; // RA2: as above
+	g_LanguageCode = value; // RA2: as above
+	g_GameSKU = value + 0x2100; // RA2: the SKU of Red Alert 2 plus the language
+
+	Reset_WOL_Globals();
+	g_IgnoreNetStatus = true;
+	for (int i = 0; i < EV_COUNT; i++) {
+		g_WaitEventHandles[i] = CreateEvent(NULL, FALSE, FALSE, NULL);
+	}
+	return(Startup_Chat(ProgramInstance)); // RA2: 1 on success, -2 when a service is missing
 }
 
 /// <summary>
