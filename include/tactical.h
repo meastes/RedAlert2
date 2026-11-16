@@ -172,6 +172,8 @@ class Tactical : public AbstractClass
 		void Unselect_All(void); // RA2
 		bool Unselect_Foreign_Object(void); // RA2
 		ObjectClass * Get_Selectable_Object(Point2D const & point);
+		int Selectable_Count(void) const; // RA2: 0x6AC7B0; how many objects drew themselves in the last render pass and can be clicked
+		ObjectClass * Selectable_Object(int index) const; // RA2: 0x6AC7C0; the object that drew itself at that place in the last render pass
 
 		bool Contains_Selectable_Buildings(Rect rect);
 		void Add_Buildings_To_Selectable(Rect rect);
