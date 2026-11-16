@@ -3859,7 +3859,7 @@ char const * DisplayClass::Help_Text(int id)
 	if (object != NULL) {
 		wchar_t const * text = object->Full_Name(); // RA2: as above
 		if (techno == NULL) { // RA2: as above
-			text = (wchar_t const *)(*this)[cell].Tiberium_Name(); // RA2: as above
+			text = (*this)[cell].Tiberium_Name(); // RA2: as above
 		}
 		return((char const *)text); // RA2: as above
 	}

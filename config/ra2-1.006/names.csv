@@ -1451,7 +1451,6 @@ address,symbol,evidence
 0x0047A120,?Can_Enter_Tunnel@CellClass@@QBE_NPBVFootClass@@@Z,"compiled from src/cell.cpp, matched; code at 23 addresses, placed by the gap"
 0x0047A130,?Get_Tunnel@CellClass@@QBEPAVTubeClass@@XZ,"compiled from src/cell.cpp, matched"
 0x0047A160,?Force_New_Slope_For_Occupiers@CellClass@@QBEXXZ,"compiled from src/cell.cpp, matched"
-0x0047A200,?Tiberium_Name@CellClass@@QBEPBDXZ,"inferred: referenced by matched src/display.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0047A220,?Tiberium_Type_Here@CellClass@@QBE?AW4TiberiumType@@XZ,"compiled from src/cell.cpp, matched"
 0x0047A230,?Tiberium_Value@CellClass@@QBEHXZ,"compiled from src/cell.cpp, matched"
 0x0047A270,?Is_Tile_Water@CellClass@@QBE_NXZ,"compiled from src/cell.cpp, matched"

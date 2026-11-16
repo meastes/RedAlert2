@@ -139,6 +139,17 @@
 #include "ramp.hh"
 #include "tube.hh"
 
+extern TheaterDataType const Theaters[THEATER_COUNT]; // RA2: the theater table (_theater.h); its RadarTerrainBrightness is the radar tile colour factor
+
+#include "goptions.h" // RA2: Options.DetailLevel is the detail level a light is tested against
+
+/*
+**	RA2: the nuke flash is the storm's lighting state (0x0051FC60 reads it).
+*/
+struct NukeFlash {
+	static bool IsFadingIn(void); // RA2: 0x0051FC60
+};
+
 
 
 /// <summary>
@@ -447,15 +458,13 @@ int CellClass::Preview_Cell_Color(unsigned char & unknown, bool terrainonly) con
  *=============================================================================================*/
 void CellClass::Cell_Color(RGBClass & lowcolor, RGBClass & highcolor) const
 {
-	static const float _arr1[] = { 1.0f, 0.8f };
-	static const float _arr2[] = { 1.6f, 1.1f };
-
 	/*
-	 * A terrain object (tree, etc.) overrides the cell color with its own radar color.
+	 * A terrain object (tree, etc.) paints the cell with one fixed colour.
 	 */
 	TerrainClass * tptr = Cell_Terrain();
 	if (tptr != NULL) {
-		highcolor = lowcolor = tptr->Class->RadarColor;
+		lowcolor = RGBClass(200, 200, 160); // RA2: a fixed colour, not the terrain type's RadarColor
+		highcolor = RGBClass(200, 200, 160); // RA2: as above
 		return;
 	}
 
@@ -470,18 +479,19 @@ void CellClass::Cell_Color(RGBClass & lowcolor, RGBClass & highcolor) const
 	IsometricTileTypeClass * itype = (ITType != ISOTILE_NONE) ? IsometricTileTypes[ITType] : IsometricTileTypes[TILE_CLEAR];
 
 	OverlayType overlay = Overlay;
-	if (overlay != OVERLAY_NONE && overlay != OVERLAY_LOWBRIDGE_27 && overlay != OVERLAY_LOWBRIDGE_28) {
+	if ((Overlay != OVERLAY_NONE && Overlay != OVERLAY_LOWBRIDGE_27 && Overlay != OVERLAY_LOWBRIDGE_28) || (Overlay != OVERLAY_NONE && Overlay != (OverlayType)(OVERLAY_LOWBRIDGE2_01 + 26) && Overlay != (OverlayType)(OVERLAY_LOWBRIDGE2_01 + 27))) { // RA2: the second pair of low bridge overlays is tested too
 		OverlayTypeClass * otype = OverlayTypes[overlay];
 
 		/*
 		 * Non-tiberium overlays draw with their own radar color.
 		 */
 		if (!otype->IsTiberium) {
-			if (overlay >= OVERLAY_LOWBRIDGE_01 && overlay <= OVERLAY_LOWBRIDGE_26) {
-				highcolor = lowcolor = OverlayTypes[overlay]->Get_Radar_Color(1);
+			if ((overlay >= OVERLAY_LOWBRIDGE_01 && overlay <= OVERLAY_LOWBRIDGE_26) || (overlay >= OVERLAY_LOWBRIDGE2_01 && overlay <= (OverlayType)(OVERLAY_LOWBRIDGE2_01 + 25))) { // RA2: a second run of low bridge overlays
+				lowcolor = OverlayTypes[overlay]->Get_Radar_Color(1); // RA2: as above
 			} else {
-				highcolor = lowcolor = OverlayTypes[overlay]->Get_Radar_Color(OverlayData);
+				lowcolor = OverlayTypes[overlay]->Get_Radar_Color(OverlayData); // RA2: as above
 			}
+			highcolor = lowcolor; // RA2: copied from lowcolor in a separate statement
 			return;
 		}
 
@@ -495,49 +505,28 @@ void CellClass::Cell_Color(RGBClass & lowcolor, RGBClass & highcolor) const
 		}
 
 		/*
-		 * Tiberium present in this cell. Pick the overlay shape for the tiberium type
-		 * (taking ramp/variety into account) and use its palette color. The high and
-		 * low colors are swapped for the second and third tiberium types and veinholes.
+		 * Any tiberium type here gives the one fixed tiberium colour.
 		 */
-		TiberiumType tib = Tiberium_Type_Here();
-		if (tib != TIBERIUM_NONE) {
-			TiberiumClass * tiberium = Tiberiums[tib];
-
-			int index;
-			if (Ramp != 0) {
-				index = tiberium->Variety + tiberium->Overlay->HeapID + tiberium->RampVariety / 4 * (Ramp - 1) + CellID.X * CellID.Y % (tiberium->RampVariety / 4);
-			} else {
-				index = tiberium->Overlay->HeapID + CellID.X * CellID.Y % tiberium->Variety;
-			}
-
-			ShapeSet * shape = (ShapeSet *)OverlayTypes[index]->Get_Image_Data();
-			RGBClass color = shape->Get_Color(OverlayData);
-
-			if ((Overlay >= OVERLAY_TIBERIUM2_01 && Overlay <= OVERLAY_TIBERIUM2_12) ||
-				(Overlay >= OVERLAY_TIBERIUM3_01 && Overlay <= OVERLAY_TIBERIUM3_12)) {
-				color = RGBClass(color.Get_Red(), color.Get_Blue(), color.Get_Green());
-			}
-
-			highcolor = lowcolor = color;
+		if (Which_Tiberium_Type(overlay) != TIBERIUM_NONE) { // RA2: no per-type overlay shape lookup
+			lowcolor = RGBClass(170, 170, 130); // RA2: a fixed colour
+			highcolor = RGBClass(170, 170, 130); // RA2: as above
 			return;
 		}
 	}
 
-	/*
-	 * No object or overlay color applies. Use the iso tile's stored low/high terrain
-	 * colors, scaled by theater and interpolated toward a brighter shade by cell height.
-	 */
 	int tile = 0;
 	if (ITType != ISOTILE_NONE) {
 		if (itype->NumTileTypesInSet > 1) {
 			if (itype->Is_Randomized(SubTile)) {
 				tile = IsBridgeDamaged;
 			} else {
-				tile = Clear_Icon(ITType, itype->NumTileTypesInSet);
+				int numtiles = itype->NumTileTypesInSet; // RA2: the tile count goes through a local
+				tile = Clear_Icon(ITType, numtiles); // RA2: as above
 			}
 		}
 	} else {
-		tile = Clear_Icon(TILE_CLEAR, itype->NumTileTypesInSet);
+		int numtiles = itype->NumTileTypesInSet; // RA2: as above
+		tile = Clear_Icon(TILE_CLEAR, numtiles); // RA2: as above
 	}
 
 	IsometricTileTypeClass * next = itype->Next_Tile_From_Set(tile);
@@ -545,26 +534,22 @@ void CellClass::Cell_Color(RGBClass & lowcolor, RGBClass & highcolor) const
 		next->Load_Tile_Image();
 	}
 
-	if (((IsoTileSet *)next->ImageData)->Fetch_Record_Pointer_Unsafe(SubTile) != NULL) {
-		IsoTileRecord const * record = ((IsoTileSet *)next->ImageData)->Fetch_Record_Pointer_Unsafe(SubTile);
+	IsoTileSet const * image = (IsoTileSet const *)next->ImageData; // RA2: the tile record is read once
+	if (image->Fetch_Record_Pointer_Unsafe(SubTile) != NULL) { // RA2: as above
+		IsoTileRecord const * record = image->Fetch_Record_Pointer_Unsafe(SubTile); // RA2: as above
 		RGBClass lowest(record->LowColor.Red, record->LowColor.Green, record->LowColor.Blue);
-		RGBClass highest(record->HighColor.Red, record->HighColor.Green, record->HighColor.Blue);
-
-		lowest = RGBClass(NoInitClass()).Set(lowest, _arr1[Scen->Theater]);
-		highest = RGBClass(NoInitClass()).Set(highest, _arr1[Scen->Theater]);
-
-		RGBClass lowres((NoInitClass()));
-		RGBClass hires((NoInitClass()));
-		lowres.Set(lowest, _arr2[Scen->Theater]);
-		hires.Set(highest, _arr2[Scen->Theater]);
-
-		lowcolor = RGBClass(NoInitClass()).Lerp(lowest, lowres, (double)Height / 12.0);
-		highcolor = RGBClass(NoInitClass()).Lerp(highest, hires, (double)Height / 12.0);
+		lowest = RGBClass(NoInitClass()).Set(lowest, Theaters[Scen->Theater].RadarTerrainBrightness); // RA2: one brightness factor per theater
+		int red = lowest.Get_Red() >> 1; // RA2: the colour is halved
+		int green = lowest.Get_Green() >> 1; // RA2: as above
+		int blue = lowest.Get_Blue() >> 1; // RA2: as above
+		lowcolor = RGBClass(red, green, blue); // RA2: as above
+		highcolor = RGBClass(red, green, blue); // RA2: as above
 	} else {
-		lowcolor = RGBClass(0, 0, 0);
-		highcolor = RGBClass(0, 0, 0);
+		lowcolor = RGBClass(60, 60, 60); // RA2: grey for a tile without a record
+		highcolor = RGBClass(60, 60, 60); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -1193,11 +1178,16 @@ void CellClass::Recalc_Attributes(int cell_height)
 	**	Check for wall effects.
 	*/
 	if (overlay != OVERLAY_NONE) {
-		Land = OverlayTypes[overlay]->Land;
-		if (Land == LAND_WALL || Land == LAND_RAILROAD || OverlayTypes[overlay]->IsNoUseTileLandType) {
+		OverlayTypeClass * otype = OverlayTypes[overlay]; // RA2: the overlay type is kept in a local
+		Land = otype->Land; // RA2: as above
+		if (Land == LAND_WALL || Land == LAND_RAILROAD || otype->IsNoUseTileLandType) { // RA2: as above
 			if (ITType != ISOTILE_NONE && ITType < IsometricTileTypes.Count()) {
 				IsometricTileTypeClass * itype = IsometricTileTypes[ITType];
 				Ramp = itype->Ramp_Type(SubTile);
+			}
+			if (Ramp != RAMP_NONE && otype->IsTiberium) { // RA2: tiberium on a ramp is removed here
+				Overlay = OVERLAY_NONE; // RA2: as above
+				OverlayData = 0; // RA2: as above
 			}
 			if (Rule->CliffBackImpassability != 0) {
 				if (Height + 4 <= Map[CellID + Cell(+0, -1)].Height
@@ -1211,6 +1201,7 @@ void CellClass::Recalc_Attributes(int cell_height)
 					}
 				}
 			}
+			Fixup_LAT(); // RA2: the lattice is fixed up for a wall or rail overlay before the passability
 			Recalc_Passability();
 			zone->Height = Height;
 			subzone->Height = Height;
@@ -1262,7 +1253,7 @@ void CellClass::Recalc_Attributes(int cell_height)
 		Ramp = itype->Ramp_Type(SubTile);
 		Fixup_LAT();
 		if (Overlay != OVERLAY_NONE) {
-			if (Tiberium_Type_Here() != TIBERIUM_NONE) {
+			if (Which_Tiberium_Type(Overlay) != TIBERIUM_NONE) { // RA2: the tiberium type of the overlay is asked directly
 				if (Ramp > RAMP_SOUTH) {
 					Land = itype->Land_Type(SubTile);;
 					Overlay = OVERLAY_NONE;
@@ -1279,29 +1270,21 @@ void CellClass::Recalc_Attributes(int cell_height)
 
 		if (Land == LAND_TUNNEL) {
 			if (Tube < TUBE_FIRST || Tube >= Tubes.Count()) {
-				int tile = ISOTILE_INVALID;
-				bool tunnel = false;
+				static FacingType _facings[5] = { FACING_E, FACING_S, FACING_W, FACING_N, FACING_NONE };
+				int tunnel_dir = -1; // RA2: the direction is taken straight from the tile's offset in its tunnel set
 
 				if (ITType >= IsometricTileTypeClass::Tunnels && ITType <= IsometricTileTypeClass::Tunnels + 3) {
-					tile = IsometricTileTypeClass::Tunnels;
-					tunnel = true;
+					tunnel_dir = ITType - IsometricTileTypeClass::Tunnels; // RA2: as above
 				} else if (ITType >= IsometricTileTypeClass::TrackTunnels && ITType <= IsometricTileTypeClass::TrackTunnels + 3) {
-					tile = IsometricTileTypeClass::TrackTunnels;
-					tunnel = true;
+					tunnel_dir = ITType - IsometricTileTypeClass::TrackTunnels; // RA2: as above
 				} else if (ITType >= IsometricTileTypeClass::DirtTunnels && ITType <= IsometricTileTypeClass::DirtTunnels + 3) {
-					tile = IsometricTileTypeClass::DirtTunnels;
-					tunnel = true;
+					tunnel_dir = ITType - IsometricTileTypeClass::DirtTunnels; // RA2: as above
 				} else if (ITType >= IsometricTileTypeClass::DirtTrackTunnels && ITType <= IsometricTileTypeClass::DirtTrackTunnels + 3) {
-					tile = IsometricTileTypeClass::DirtTrackTunnels;
-					tunnel = true;
+					tunnel_dir = ITType - IsometricTileTypeClass::DirtTrackTunnels; // RA2: as above
 				}
 
-				if (tunnel) {
-					static FacingType _facings[5] = { FACING_E, FACING_S, FACING_W, FACING_N, FACING_NONE };
-					int tunnel_dir = ITType - tile;
-					if (tunnel_dir != -1) {
-						new TubeClass(CellID, _facings[tunnel_dir]);
-					}
+				if (tunnel_dir != -1) { // RA2: as above
+					new TubeClass(CellID, _facings[tunnel_dir]);
 				}
 			}
 		}
@@ -1313,9 +1296,9 @@ void CellClass::Recalc_Attributes(int cell_height)
 		int width;
 		int height;
 		itype->Get_Tile_Pixel_Dimensions(SubTile, width, height);
-		Elevation = (height - CELL_PIXEL_H / 2) / (CELL_PIXEL_H / 4);
+		Elevation = (height - 30) / 15; // RA2: isometric tile pixel sizes (30 and 15), not TibSun's CELL_PIXEL_H
 		if (!IsAnimAttached && itype->Anim != ANIM_NONE && itype->AttachesTo == SubTile) {
-			Coord anim_coord = Coord(CellID, LEVEL_LEPTON_H * Height) + TacticalMap->Pixel_To_Coord_Absolute(itype->Offset);
+			Coord anim_coord = TacticalMap->Pixel_To_Coord_Absolute(itype->Offset) + Coord(CellID, LEVEL_LEPTON_H * Height); // RA2: the pixel offset is the left operand of the sum
 			AnimClass * anim = new AnimClass(AnimTypes[itype->Anim], anim_coord, 0, -1, ShapeFlags_Type(SHAPE_ZREAD | SHAPE_WIN_REL | SHAPE_CENTER), 0);
 			anim->Attach_To_Cell(itype->ZAdjust);
 			IsAnimAttached = true;
@@ -1324,8 +1307,9 @@ void CellClass::Recalc_Attributes(int cell_height)
 		if (itype->IsShadowCaster) {
 			const Cell * list = itype->Shadow_Caster_List();
 			if (list) {
+				Cell pos; // RA2: the position is declared outside the loop
 				while (*list != REFRESH_EOL && *list != CELL_NONE) {
-					Cell pos = CellID + *list;
+					pos = *list + CellID; // RA2: the list entry is added to the cell, not the cell to the entry
 					Map[pos].IsOvershadowed = true;
 					list++;
 				}
@@ -1363,6 +1347,7 @@ void CellClass::Recalc_Attributes(int cell_height)
 	zone->Passability = Passability;
 	subzone->Height = Height;
 }
+
 
 
 /// <summary>
@@ -1439,28 +1424,19 @@ static inline void Set_Bridge_Deck_Flags(CellClass & cell, bool state, bool east
 /// bridge down here.</param>
 void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 {
-	/*
-	 * Preload this deck cell's overlay frame for the bridge orientation. This is
-	 * immediately overwritten by the assignment below, so it is redundant.
-	 */
 	if (facing == FACING_N) {
 		OverlayData = OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
 		OverlayData = OVERLAYDATA_BRIDGE_NS_FULL1;
 	}
 
-	/*
-	 * This cell hosts the raised bridge deck piece: mark it as the deck, under the
-	 * bridge, traversable, drawn surface, and overshadowed. WasUnderBridge is the
-	 * inverse of IsUnderBridge so a destroyed span can be found and repaired later.
-	 */
 	IsBridgeDeck = state;
 	IsUnderBridge = state;
 	IsBridgeTraversable = state;
 	IsBridgeSurface = state;
 	IsOvershadowed = state;
 	WasUnderBridge = !state;
-	IsBridgeEastWest = (facing == FACING_N);
+	IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: the conditional form of the comparison
 	if (state) {
 		OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1469,19 +1445,14 @@ void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(CellID);
 
-	/*
-	 * One cell across the deck (a single step in the `facing` direction): under the
-	 * deck, part of the walkable surface, and traversable. Every cell other than the
-	 * deck cell points its BridgeDeckCell back at this deck.
-	 */
-	CellClass * across1 = &Adjacent_Cell(facing);
+	CellClass *across1 = &Adjacent_Cell(facing); // RA2: across1 is the first cell in the facing direction
 	across1->BridgeDeckCell = state ? this : NULL;
 	across1->IsUnderBridge = state;
 	across1->IsBridgeTraversable = state;
 	across1->IsBridgeSurface = state;
 	across1->IsOvershadowed = state;
 	across1->WasUnderBridge = !state;
-	across1->IsBridgeEastWest = (facing == FACING_N);
+	across1->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		across1->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1490,19 +1461,14 @@ void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(across1->CellID);
 
-	/*
-	 * Two cells across -- the far edge of the under-bridge strip. Under the deck and
-	 * part of the surface, but deliberately NOT traversable: a unit cannot step off
-	 * the far edge of the deck here.
-	 */
-	CellClass * across2 = &across1->Adjacent_Cell(facing);
+	CellClass *across2 = (CellClass *)&((CellClass const *)across1)->Adjacent_Cell(facing); // RA2: this step goes through the const overload
 	across2->BridgeDeckCell = state ? this : NULL;
 	across2->IsUnderBridge = state;
 	across2->IsBridgeTraversable = false;
 	across2->IsBridgeSurface = state;
 	across2->IsOvershadowed = state;
 	across2->WasUnderBridge = !state;
-	across2->IsBridgeEastWest = (facing == FACING_N);
+	across2->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		across2->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1511,27 +1477,17 @@ void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(across2->CellID);
 
-	/*
-	 * Three cells across -- only the raised deck surface reaches this far. The surface
-	 * strip is the under-bridge strip shifted one cell along `facing` (the deck is
-	 * drawn lifted), so this edge is surface-only.
-	 */
-	CellClass * across3 = &across2->Adjacent_Cell(facing);
+	CellClass *across3 = &across2->Adjacent_Cell(facing); // RA2: as above
 	across3->IsBridgeSurface = state;
 
-	/*
-	 * One cell across the deck on the opposite side (a step against `facing`): under
-	 * the deck and traversable (the approach cell where a unit steps onto the bridge),
-	 * but not part of the drawn surface.
-	 */
-	CellClass * back = &Adjacent_Cell(Facing_Sub(facing, FACING_180));
+	CellClass *back = (CellClass *)&((CellClass const *)this)->Adjacent_Cell(Facing_Sub(facing, FACING_180)); // RA2: the const overload again, opposite facing
 	back->BridgeDeckCell = state ? this : NULL;
 	back->IsUnderBridge = state;
 	back->IsBridgeTraversable = state;
 	back->WasUnderBridge = !state;
 	back->IsBridgeSurface = false;
 	back->IsOvershadowed = state;
-	back->IsBridgeEastWest = (facing == FACING_N);
+	back->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		back->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1540,19 +1496,13 @@ void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(back->CellID);
 
-	/*
-	 * A north-south bridge (FACING_W) reaches one cell further across on the opposite
-	 * side than an east-west bridge does: its isometric footprint overshadows a second
-	 * cell beyond `back`. Flag that cell as overshadowed and link it to this deck. It is
-	 * shadow-only -- not under the bridge, not surface, not traversable. An east-west
-	 * bridge (FACING_N) does not reach this far and has no equivalent cell.
-	 */
 	if (facing == FACING_W) {
-		CellClass * back2 = &back->Adjacent_Cell(FACING_E);
+		CellClass *back2 = &back->Adjacent_Cell(FACING_E); // RA2: as above
 		back2->BridgeDeckCell = state ? this : NULL;
 		back2->IsOvershadowed = state;
 	}
 }
+
 
 
 /// <summary>
@@ -1567,28 +1517,19 @@ void CellClass::Set_Under_Bridge(FacingType facing, bool state)
 /// bridge down here.</param>
 void CellClass::Set_Under_Rail_Bridge(FacingType facing, bool state)
 {
-	/*
-	 * Preload this deck cell's overlay frame for the bridge orientation. This is
-	 * immediately overwritten by the assignment below, so it is redundant.
-	 */
 	if (facing == FACING_N) {
 		OverlayData = OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
 		OverlayData = OVERLAYDATA_BRIDGE_NS_FULL1;
 	}
 
-	/*
-	 * This cell hosts the raised bridge deck piece: mark it as the deck, under the
-	 * bridge, traversable, drawn surface, and overshadowed. WasUnderBridge is the
-	 * inverse of IsUnderBridge so a destroyed span can be found and repaired later.
-	 */
 	IsBridgeDeck = state;
 	IsUnderBridge = state;
 	IsBridgeTraversable = state;
 	IsBridgeSurface = state;
 	IsOvershadowed = state;
 	WasUnderBridge = !state;
-	IsBridgeEastWest = (facing == FACING_N);
+	IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: the conditional form of the comparison
 	if (state) {
 		OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1597,19 +1538,14 @@ void CellClass::Set_Under_Rail_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(CellID);
 
-	/*
-	 * One cell across the deck (a single step in the `facing` direction): under the
-	 * deck, part of the walkable surface, and traversable. Every cell other than the
-	 * deck cell points its BridgeDeckCell back at this deck.
-	 */
-	CellClass * across1 = &Adjacent_Cell(facing);
+	CellClass *across1 = &Adjacent_Cell(facing); // RA2: across1 is the first cell in the facing direction
 	across1->BridgeDeckCell = state ? this : NULL;
 	across1->IsUnderBridge = state;
 	across1->IsBridgeTraversable = state;
 	across1->IsBridgeSurface = state;
 	across1->IsOvershadowed = state;
 	across1->WasUnderBridge = !state;
-	across1->IsBridgeEastWest = (facing == FACING_N);
+	across1->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		across1->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1618,19 +1554,14 @@ void CellClass::Set_Under_Rail_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(across1->CellID);
 
-	/*
-	 * Two cells across -- the far edge of the under-bridge strip. Under the deck and
-	 * part of the surface, but deliberately NOT traversable: a unit cannot step off
-	 * the far edge of the deck here.
-	 */
-	CellClass * across2 = &across1->Adjacent_Cell(facing);
+	CellClass *across2 = (CellClass *)&((CellClass const *)across1)->Adjacent_Cell(facing); // RA2: this step goes through the const overload
 	across2->BridgeDeckCell = state ? this : NULL;
 	across2->IsUnderBridge = state;
 	across2->IsBridgeTraversable = false;
 	across2->IsBridgeSurface = state;
 	across2->IsOvershadowed = state;
 	across2->WasUnderBridge = !state;
-	across2->IsBridgeEastWest = (facing == FACING_N);
+	across2->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		across2->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1639,27 +1570,17 @@ void CellClass::Set_Under_Rail_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(across2->CellID);
 
-	/*
-	 * Three cells across -- only the raised deck surface reaches this far. The surface
-	 * strip is the under-bridge strip shifted one cell along `facing` (the deck is
-	 * drawn lifted), so this edge is surface-only.
-	 */
-	CellClass * across3 = &across2->Adjacent_Cell(facing);
+	CellClass *across3 = &across2->Adjacent_Cell(facing); // RA2: as above
 	across3->IsBridgeSurface = state;
 
-	/*
-	 * One cell across the deck on the opposite side (a step against `facing`): under
-	 * the deck and traversable (the approach cell where a unit steps onto the bridge),
-	 * but not part of the drawn surface.
-	 */
-	CellClass * back = &Adjacent_Cell(Facing_Sub(facing, FACING_180));
+	CellClass *back = (CellClass *)&((CellClass const *)this)->Adjacent_Cell(Facing_Sub(facing, FACING_180)); // RA2: the const overload again, opposite facing
 	back->BridgeDeckCell = state ? this : NULL;
 	back->IsUnderBridge = state;
 	back->IsBridgeTraversable = state;
 	back->WasUnderBridge = !state;
 	back->IsBridgeSurface = false;
 	back->IsOvershadowed = state;
-	back->IsBridgeEastWest = (facing == FACING_N);
+	back->IsBridgeEastWest = (facing == FACING_N) ? true : false; // RA2: as above // RA2: the conditional form of the comparison
 	if (state) {
 		back->OverlayData = (facing != FACING_N) ? OVERLAYDATA_BRIDGE_NS_FULL1 : OVERLAYDATA_BRIDGE_EW_FULL1;
 	} else {
@@ -1668,19 +1589,13 @@ void CellClass::Set_Under_Rail_Bridge(FacingType facing, bool state)
 	}
 	Map.Radar_Background(back->CellID);
 
-	/*
-	 * A north-south bridge (FACING_W) reaches one cell further across on the opposite
-	 * side than an east-west bridge does: its isometric footprint overshadows a second
-	 * cell beyond `back`. Flag that cell as overshadowed and link it to this deck. It is
-	 * shadow-only -- not under the bridge, not surface, not traversable. An east-west
-	 * bridge (FACING_N) does not reach this far and has no equivalent cell.
-	 */
 	if (facing == FACING_W) {
-		CellClass * back2 = &back->Adjacent_Cell(FACING_E);
+		CellClass *back2 = &back->Adjacent_Cell(FACING_E); // RA2: as above
 		back2->BridgeDeckCell = state ? this : NULL;
 		back2->IsOvershadowed = state;
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2110,35 +2025,39 @@ void CellClass::Draw_Fog_Shape(Point2D const & drawpoint, Rect const & cliprect,
 /// <param name="cliprect">The clipping rectangle to draw within.</param>
 void CellClass::Draw_Overlay_Shadow(Point2D const & xpoint, Rect const & cliprect)
 {
-	int yoffset = LEVEL_PIXEL_H_1 * Height;
+	int yoffset = Height * 15; // RA2: the literal 15 pixels per level
+	OverlayTypeClass * otype = OverlayTypes[Overlay]; // RA2: the overlay type is kept for the crate and rubble tests
+	ShapeSet const * shape = (ShapeSet const *)otype->Get_Image_Data();
 
-	ShapeSet *shape = (ShapeSet *)OverlayTypes[Overlay]->Get_Image_Data();
-
-	Point2D point = Overlay_Draw_Offset();
-
-	point = point + xpoint;
+	Point2D point = xpoint + Overlay_Draw_Offset(); // RA2: the draw offset is added to the point
 	point -= cliprect.Top_Left();
 
 	if (IsBridgeDeck) {
 		if (OverlayData >= OVERLAYDATA_BRIDGE_NS_FULL1 && OverlayData <= OVERLAYDATA_BRIDGE_NS_END2) {
-			point += Point2D(-(ISO_TILE_PIXEL_W / 4), ISO_TILE_PIXEL_H / 4);
+			point.X -= ISO_TILE_PIXEL_W / 4; // RA2: as above
+			point.Y += ISO_TILE_PIXEL_H / 4; // RA2: as above
 		}
 	}
 	if (Drawer == NULL) {
 		Init_Drawer();
 	}
-	Draw_Shape(
-		*LogicalSurface,
-		*Drawer,
-		shape,
-		OverlayData + shape->Get_Count() / 2,
-		point,
-		cliprect,
-		ShapeFlags_Type(SHAPE_ZWRITE|SHAPE_WIN_REL|SHAPE_CENTER|SHAPE_DARKEN),
-		0,
-		-2 - yoffset
-		);
+
+	unsigned char frame = OverlayData; // RA2: the frame is a byte; a crate uses frame 0
+	if (otype->IsCrate) { // RA2: as above
+		frame = 0; // RA2: as above
+	} else if (otype->IsRubble) { // RA2: a rubble overlay draws the rubble building's shadow and nothing else
+		if (Rubble != NULL) { // RA2: as above
+			ShapeSet const * rubbleshape; // RA2: as above
+			int rubbleframe; // RA2: as above
+			if (Rubble->Get_Rubble_Shadow(&rubbleshape, &rubbleframe)) { // RA2: as above
+				Draw_Shape(*LogicalSurface, *Drawer, rubbleshape, rubbleframe, point, cliprect, (ShapeFlags_Type)(SHAPE_DARKEN | SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, 1000); // RA2: as above
+			}
+		}
+		return; // RA2: as above
+	}
+	Draw_Shape(*LogicalSurface, *Drawer, shape, frame + shape->Get_Count() / 2, point, cliprect, (ShapeFlags_Type)(SHAPE_DARKEN | SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, 1000); // RA2: darkening flags, ZWRITE, intensity 1000
 }
+
 
 
 /// <summary>
@@ -2157,17 +2076,15 @@ void CellClass::Draw_Overlay(Point2D const & xpoint, Rect const & cliprect)
 
 	OverlayTypeClass * otype = OverlayTypes[Overlay];
 
-	ShapeSet const * shape = (ShapeSet const *)otype->Get_Image_Data();
-
-	Point2D point = Overlay_Draw_Offset();
-
-	point = point + xpoint;
-	int yoffset = LEVEL_PIXEL_H_1 * (Height + (IsBridgeDeck ? BRIDGE_CELL_HEIGHT : 0));
+	Point2D point = Overlay_Draw_Offset() + xpoint; // RA2: the offset is added to the point in one expression
+	int yoffset = 15 * (Height + (IsBridgeDeck ? BRIDGE_CELL_HEIGHT : 0)); // RA2: the literal 15 pixels per level
 	point -= cliprect.Top_Left();
 
 	if (Drawer == NULL) {
 		Init_Drawer();
 	}
+
+	ShapeSet const * shape = (ShapeSet const *)otype->Get_Image_Data(); // RA2: fetched after the drawer is set up
 
 	if (IsBridgeDeck) {
 		if (LastBridgeDrawFrame != Frame || LastBridgeDrawRedraws != Map.Redraws || LastBridgeDrawRect != cliprect) {
@@ -2199,8 +2116,7 @@ void CellClass::Draw_Overlay(Point2D const & xpoint, Rect const & cliprect)
 			return;
 		}
 
-		TiberiumClass * tiberium = Tiberiums[tibtype];
-		ColorScheme * scheme = ColorSchemes[tiberium->Color];
+		TiberiumClass * tiberium = Tiberiums[tibtype]; // RA2: the tiberium colour scheme is no longer fetched
 
 		OverlayTypeClass * overlaytodisplay = NULL;
 		if (Ramp != RAMP_NONE) {
@@ -2212,27 +2128,40 @@ void CellClass::Draw_Overlay(Point2D const & xpoint, Rect const & cliprect)
 		ShapeSet const * tibshape = (ShapeSet const *)overlaytodisplay->Get_Image_Data();
 
 		if (Ramp != RAMP_NONE) {
-			Draw_Shape(*LogicalSurface, *scheme->Converter, tibshape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, NORMAL_LIGHT, SlopeZShapes[Ramp - 1]);
+			Draw_Shape(*LogicalSurface, *TerrainDrawer, tibshape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, NORMAL_LIGHT, SlopeZShapes[Ramp - 1]); // RA2: the terrain drawer converts tiberium
 		} else {
-			Draw_Shape(*LogicalSurface, *scheme->Converter, tibshape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, NORMAL_LIGHT);
+			Draw_Shape(*LogicalSurface, *TerrainDrawer, tibshape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, NORMAL_LIGHT); // RA2: as above
 		}
 	} else if (otype->IsWall) {
 		Draw_Shape(*LogicalSurface, *ColorSchemes[PlayerPtr->Scheme]->Converter, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_90DEG, Brightness);
 	} else if (otype->HeapID == OVERLAY_VEINS) {
-		ConvertClass *drawer = ColorSchemes[PlayerPtr->Scheme]->Converter;
 		if (Ramp != RAMP_NONE) {
-			Draw_Shape(*LogicalSurface, *drawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, TileBrightness, SlopeZShapes[Ramp - 1], 0, Point2D(CELL_PIXEL_W, -2));
+			Draw_Shape(*LogicalSurface, *TerrainDrawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, TileBrightness, SlopeZShapes[Ramp - 1], 0, Point2D(ISO_TILE_PIXEL_W / 2, -2)); // RA2: the veins' z offset is 30, half an isometric tile (TibSun's CELL_PIXEL_W is 24 here)
 		} else {
-			Draw_Shape(*LogicalSurface, *drawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, TileBrightness);
+			Draw_Shape(*LogicalSurface, *TerrainDrawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, -2 - yoffset, ZGRAD_GROUND, TileBrightness); // RA2: the veins use the terrain drawer too
 		}
 	} else {
-		int offsetY = (otype->IsDrawFlat) ? 0 : CELL_PIXEL_W / -2;
+		bool flat = otype->IsDrawFlat; // RA2: the flat flag is read once
+		int offsetY = flat ? 0 : ISO_TILE_PIXEL_H / -2; // RA2: -15, half an isometric tile
 		if (otype->IsARock) {
 			offsetY = 0;
 		}
-		Draw_Shape(*LogicalSurface, *Drawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, offsetY - yoffset - 2, otype->IsDrawFlat ? ZGRAD_GROUND : ZGRAD_90DEG, TileBrightness);
+		if (otype->IsCrate) { // RA2: a crate always shows frame 0
+			Draw_Shape(*LogicalSurface, *Drawer, shape, 0, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, offsetY - yoffset - 2, flat ? ZGRAD_GROUND : ZGRAD_90DEG, TileBrightness); // RA2: as above
+		} else if (otype->IsRubble) { // RA2: a rubble overlay draws the rubble building's shape
+			if (Rubble != NULL) { // RA2: as above
+				ShapeSet const * image; // RA2: as above
+				int frame; // RA2: as above
+				if (Rubble->Get_Rubble_Shape(&image, &frame)) { // RA2: as above
+					Draw_Shape(*LogicalSurface, *Drawer, image, frame, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, offsetY - yoffset - 2, flat ? ZGRAD_GROUND : ZGRAD_90DEG, TileBrightness); // RA2: as above
+				}
+			}
+		} else {
+			Draw_Shape(*LogicalSurface, *Drawer, shape, OverlayData, point, cliprect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ALPHA | SHAPE_ZWRITE), 0, offsetY - yoffset - 2, flat ? ZGRAD_GROUND : ZGRAD_90DEG, TileBrightness); // RA2: as above
+		}
 	}
 }
+
 
 
 /// <summary>
@@ -2245,45 +2174,56 @@ void CellClass::Draw_Overlay(Point2D const & xpoint, Rect const & cliprect)
 /// returned if the cell has no overlay.</returns>
 Rect CellClass::Overlay_Render_Rect(void) const
 {
-	if (Overlay == OVERLAY_NONE) {
-		return(Rect(0, 0, 0, 0));
-	}
+	if (Overlay != OVERLAY_NONE) { // RA2: the whole body is nested; the empty rectangle is the single fall-out
+		int frame = OverlayData; // RA2: the frame can be replaced by a rubble frame or the crate frame 0
+		OverlayTypeClass const * overlay = OverlayTypes[Overlay];
+		ShapeSet const * image = NULL;
 
-	ShapeSet const * image = NULL;
-	OverlayTypeClass const * overlay = OverlayTypes[Overlay];
-
-	if (overlay->IsTiberium) {
-		TiberiumType tib = Tiberium_Type_Here();
-		if (tib != TIBERIUM_NONE) {
-			TiberiumClass * tiberium = Tiberiums[tib];
-			OverlayTypeClass const * tib_overlay = NULL;
-			if (Ramp != 0) {
-				tib_overlay = OverlayTypes[tiberium->Overlay->HeapID + tiberium->Variety + tiberium->RampVariety / 4 * (Ramp - 1) + CellID.X * CellID.Y % (tiberium->RampVariety / 4)];
-			} else {
-				tib_overlay = OverlayTypes[tiberium->Overlay->HeapID + CellID.X * CellID.Y % tiberium->Variety];
+		if (overlay->IsTiberium) {
+			TiberiumType tib = Tiberium_Type_Here();
+			if (tib != TIBERIUM_NONE) {
+				TiberiumClass * tiberium = Tiberiums[tib];
+				OverlayTypeClass const * tib_overlay = NULL;
+				if (Ramp != 0) {
+					tib_overlay = OverlayTypes[tiberium->Overlay->HeapID + tiberium->Variety + tiberium->RampVariety / 4 * (Ramp - 1) + CellID.X * CellID.Y % (tiberium->RampVariety / 4)];
+				} else {
+					tib_overlay = OverlayTypes[tiberium->Overlay->HeapID + CellID.X * CellID.Y % tiberium->Variety];
+				}
+				image = (ShapeSet const *)tib_overlay->Get_Image_Data();
 			}
-			image = (ShapeSet const *)tib_overlay->Get_Image_Data();
+		} else if (overlay->IsRubble) { // RA2: a rubble overlay takes the shape of the rubble building type
+			image = NULL; // RA2: as above
+		if (Rubble != NULL) { // RA2: as above
+				Rubble->Get_Rubble_Shape(&image, &frame); // RA2: as above
+			}
+		} else {
+			image = (ShapeSet const *)overlay->Get_Image_Data();
 		}
-	} else {
-		image = (ShapeSet const *)overlay->Get_Image_Data();
+
+		Point2D point;
+		TacticalMap->Coord_To_Pixel(Coord_Whole(CellID), point);
+
+		point += Overlay_Draw_Offset();
+		point.X -= ISO_TILE_PIXEL_W / 2;
+
+		if (image == NULL) {
+			return(Rect(0, 0, 0, 0));
+		}
+
+		if (overlay->IsCrate) { // RA2: a crate always shows frame 0
+			frame = 0; // RA2: as above
+		}
+
+		int width = image->Get_Width() / 2;
+		int height = image->Get_Height() / 2;
+		Point2D rect_point = point;
+		rect_point -= Point2D(width, height);
+		return(image->Get_Rect(frame) + rect_point); // RA2: the chosen frame
 	}
 
-	Point2D point;
-	TacticalMap->Coord_To_Pixel(Coord_Whole(CellID), point);
-
-	point += Overlay_Draw_Offset();
-	point.X -= ISO_TILE_PIXEL_W / 2;
-
-	if (image == NULL) {
-		return(Rect(0, 0, 0, 0));
-	}
-
-	int width = image->Get_Width() / 2;
-	int height = image->Get_Height() / 2;
-	Point2D rect_point = point;
-	rect_point -= Point2D(width, height);
-	return(image->Get_Rect(OverlayData) + rect_point);
+	return(Rect(0, 0, 0, 0));
 }
+
 
 
 /// <summary>
@@ -2295,17 +2235,22 @@ Rect CellClass::Overlay_Render_Rect(void) const
 /// returned if the cell has no overlay artwork.</returns>
 Rect CellClass::Overlay_Shadow_Render_Rect(void) const
 {
-	ShapeSet const * image = NULL;
-
-	if (Overlay != OVERLAY_NONE) {
-		image = (ShapeSet const *)OverlayTypes[Overlay]->Get_Image_Data();
+	if (Overlay == OVERLAY_NONE) { // RA2: no overlay, no shadow rectangle
+		return(Rect(0, 0, 0, 0));
 	}
+
+	OverlayTypeClass const * overlay = OverlayTypes[Overlay]; // RA2: as above
+	ShapeSet const * image = (ShapeSet const *)overlay->Get_Image_Data(); // RA2: as above
 
 	if (!image) {
 		return(Rect(0, 0, 0, 0));
 	}
 
-	int frame = OverlayData + image->Get_Count() / 2;
+	unsigned char frame = OverlayData; // RA2: a crate's shadow is that of frame 0, kept in a byte
+	if (overlay->IsCrate) { // RA2: as above
+		frame = 0; // RA2: as above
+	}
+	int shadow = frame + image->Get_Count() / 2; // RA2: as above
 
 	Point2D point;
 	TacticalMap->Coord_To_Pixel(Coord_Whole(CellID), point);
@@ -2319,8 +2264,9 @@ Rect CellClass::Overlay_Shadow_Render_Rect(void) const
 		}
 	}
 
-	return(image->Get_Rect(frame) + (point - Point2D(image->Get_Width() / 2, image->Get_Height() / 2)));
+	return(image->Get_Rect(shadow) + (point - Point2D(image->Get_Width() / 2, image->Get_Height() / 2))); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2333,9 +2279,9 @@ Rect CellClass::Overlay_Shadow_Render_Rect(void) const
 Rect CellClass::Cell_Render_Rect(void) const
 {
 	Point2D point;
-	TacticalMap->Coord_To_Pixel(Coord_Whole(CellID), point);
+	TacticalMap->Coord_To_Pixel(Coord_Whole(CellID), point); // RA2: the cell's centre coordinate
 	point.X += ISO_TILE_PIXEL_W / -2;
-	point.Y += TacticalRect.Y - LEVEL_PIXEL_H * Height;
+	point.Y += TacticalRect.Y - 15 * Height; // RA2: the literal 15 pixels per level (lea x3, lea x5), not the LEVEL_PIXEL_H constant
 
 	Rect rect;
 	rect.X = point.X;
@@ -2369,6 +2315,7 @@ Rect CellClass::Cell_Render_Rect(void) const
 	}
 
 }
+
 
 
 /// <summary>
@@ -2522,43 +2469,31 @@ void CellClass::Draw_Shadow_Cast(Point2D const & point, Rect const & cliprect)
 void CellClass::Draw_It(Point2D const & xdrawpoint, Rect const & cliprect, bool objects) const
 {
 	if (!objects) {
-		BStart(BENCH_CELL);
+		IsometricTileTypeClass * ittype = NULL;
+		int	icon = 0;
+		int subtile = 0;
 
 		if (Drawer == NULL) {
 			((CellClass *)this)->Init_Drawer(NULL);
 		}
 
-		IsometricTileTypeClass * ittype = NULL;
-		int	icon = 0;		// The icon number to use from the template set.
-		int subtile = 0;
-
-		/*
-		**	Fetch a pointer to the template type associated with this cell.
-		*/
 		Fetch_Icon(ittype, subtile, &icon, true);
 
-		CellCount++;
+		CellCount++; // RA2: counter at 0xA35F28 incremented per drawn cell
 
 		Point2D drawpoint = xdrawpoint;
-		drawpoint.Y -= LEVEL_PIXEL_H_1 * Height;
+		drawpoint.Y -= Height * 3 * 5; // RA2: the executable multiplies lea*3 then lea*5 (15 pixels per level, not the LEVEL_PIXEL_H_1 global)
 
-		/*
-		**	This is the underlying terrain icon.
-		*/
 		if (ittype->Get_Image_Data()) {
 			ittype->Draw_Tile(Drawer, subtile, *LogicalSurface, drawpoint.X, drawpoint.Y + TacticalRect.Y, cliprect, Height, TileBrightness, true, icon, false, false, false, 0);
 		}
 
-		/*
-		**	Redraw any smudge.
-		*/
 		if (Smudge != SMUDGE_NONE) {
 			SmudgeTypes[Smudge]->Draw_It(drawpoint + Point2D(ISO_TILE_PIXEL_W / 2, TacticalRect.Y) - cliprect.TopLeft, cliprect, SmudgeData, LEVEL_LEPTON_H * Height, CellID);
 		}
-
-		BEnd(BENCH_CELL);
 	}
 }
+
 
 
 /// <summary>
@@ -2783,7 +2718,6 @@ int CellClass::Reduce_Tiberium(int levels)
 	dirty.Y -= TacticalRect.Y;
 
 	TiberiumType tibtype = Tiberium_Type_Here();
-	int reducer = levels;
 
 	if (levels > 0 && tibtype != TIBERIUM_NONE) {
 		TiberiumClass * tiberium = Tiberiums[tibtype];
@@ -2792,17 +2726,11 @@ int CellClass::Reduce_Tiberium(int levels)
 		}
 		if (OverlayData+1 > levels) {
 			OverlayData -= levels;
-			reducer = levels;
 		} else {
-			PassabilityType passability = Passability;
+			levels = OverlayData; // RA2: the cell gives up what it had: the amount is returned in the parameter itself
 			Overlay = OVERLAY_NONE;
-			reducer = OverlayData;
 			OverlayData = 0;
-			Recalc_Attributes();
-			if (passability != Passability) {
-				Map.Update_Cell_Zone(CellID);
-				Map.Update_Cell_Subzones(CellID);
-			}
+			Recalc_Attributes(); // RA2: no passability comparison and no zone update afterwards
 			Map.Flag_Background_Update(CellID);
 			tiberium->Clear_Spread_State(CellID);
 			for (int facing = FACING_FIRST; facing < FACING_COUNT; facing++) {
@@ -2813,10 +2741,11 @@ int CellClass::Reduce_Tiberium(int levels)
 			}
 		}
 		TacticalMap->Register_Dirty_Area(dirty);
-		return(reducer);
+		return(levels); // RA2: the parameter holds the amount actually removed
 	}
 	return(0);
 }
+
 
 
 /***********************************************************************************************
@@ -4636,15 +4565,15 @@ void CellClass::Init_Light(int & intensity, int & ambient, int & brightness, int
 
 		for (int i = 0; i < LightSources.Count(); i++) {
 			LightSourceClass * light = LightSources[i];
-			if (light->Is_Enabled()) {
+			if (light->Is_Enabled() && Options.DetailLevel >= light->DetailLevel) { // RA2: a light is skipped when its detail level exceeds the option's
 				Coord cc = Cell_Coord();
-				unsigned int visibility = light->Visibility;
 				unsigned int dx = cc.X - ((Coord)light->Position).X;
+				unsigned int visibility = light->Visibility; // RA2: as above
 				unsigned int dy = cc.Y - ((Coord)light->Position).Y;
 				if (dx * dx + dy * dy <= visibility * visibility) {
-					dx = cc.X - ((Coord)light->Position).X;
-					dy = cc.Y - ((Coord)light->Position).Y;
-					unsigned int dist = Point2D(dx, dy).Length();
+					double fdx = (int)(cc.X - ((Coord)light->Position).X); // RA2: the distance is taken through a double square root
+					double fdy = (int)(cc.Y - ((Coord)light->Position).Y); // RA2: as above
+					unsigned int dist = (int)fastmath::sqrt(fdx * fdx + fdy * fdy); // RA2: fastmath::sqrt (0x4BA410), called out of line
 					if (dist <= visibility) {
 						int num = (NORMAL_LIGHT * visibility - NORMAL_LIGHT * dist) / visibility;
 						ambient += (num * light->Intensity) / NORMAL_LIGHT;
@@ -4662,19 +4591,21 @@ void CellClass::Init_Light(int & intensity, int & ambient, int & brightness, int
 		if (IonStormClass::Is_Ion_Storm_Active()) {
 			brightness += Height * Scen->IonLevelLight - Scen->IonGroundLight;
 			alt_brightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->IonLevelLight - Scen->IonGroundLight;
+		} else if (NukeFlash::IsFadingIn()) { // RA2: a nuke flash lights the cell with the scenario's nuke values
+			brightness += Height * Scen->NukeLevelLight - Scen->NukeGroundLight; // RA2: as above
+			alt_brightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->NukeLevelLight - Scen->NukeGroundLight; // RA2: as above
 		} else {
 			brightness += Height * Scen->LevelLight - Scen->GroundLight;
 			alt_brightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->LevelLight - Scen->GroundLight;
 		}
 
+		brightness = MIN(brightness, 2000); // RA2: the brightness is capped before the tile brightness is taken from it
 		tile_brightness = brightness;
 
 		Adjust_Tile_RGB(intensity, tile_brightness, red_tint, green_tint, blue_tint);
 
 		alt_brightness = (alt_brightness * intensity) >> 16;
-
-		brightness = MIN(brightness, 2000);
-		alt_brightness = MIN(alt_brightness, 2000);
+		alt_brightness = MIN(alt_brightness, 2000); // RA2: as above
 
 		brightness = MAX(brightness, 0);
 		tile_brightness = MAX(tile_brightness, 0);
@@ -4693,6 +4624,7 @@ void CellClass::Init_Light(int & intensity, int & ambient, int & brightness, int
 }
 
 
+
 /// <summary>
 /// Recomputes this cell's lighting from the current scenario conditions.
 /// This routine is called when the ambient light changes -- an ion storm rolling in, or a
@@ -4707,6 +4639,9 @@ void CellClass::Recalc_Light(void)
 	if (IonStormClass::Is_Ion_Storm_Active()) {
 		Brightness += Height * Scen->IonLevelLight - Scen->IonGroundLight;
 		AltBrightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->IonLevelLight - Scen->IonGroundLight;
+	} else if (NukeFlash::IsFadingIn()) { // RA2: a fading-in nuke flash lights the cell with the scenario's nuke values
+		Brightness += Height * Scen->NukeLevelLight - Scen->NukeGroundLight; // RA2: as above
+		AltBrightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->NukeLevelLight - Scen->NukeGroundLight; // RA2: as above
 	} else {
 		Brightness += Height * Scen->LevelLight - Scen->GroundLight;
 		AltBrightness += (Height + BRIDGE_CELL_HEIGHT) * Scen->LevelLight - Scen->GroundLight;
@@ -4723,6 +4658,7 @@ void CellClass::Recalc_Light(void)
 	TileBrightness = MAX(TileBrightness, 0);
 	AltBrightness = MAX(AltBrightness, 0);
 }
+
 
 
 /// <summary>
@@ -4948,16 +4884,17 @@ void CellClass::Force_New_Slope_For_Occupiers(void) const
 /// Fetches the name of the tiberium associated with this cell.
 /// </summary>
 /// <returns>Returns with the tiberium's name, or NULL if there is no tiberium here.</returns>
-char const * CellClass::Tiberium_Name(void) const
+wchar_t const * CellClass::Tiberium_Name(void) const // RA2: returns the type's UIName (wchar_t const *), not the narrow GivenName
 {
-	TiberiumType tib = Tiberium_Type_Here();
+	TiberiumType tib = Which_Tiberium_Type(Overlay); // RA2: the type of the overlay is asked directly
 
 	if (tib != TIBERIUM_NONE) {
-		return(Tiberiums[tib]->GivenName);
+		return(Tiberiums[tib]->UIName); // RA2: UIName at +0x60
 	}
 
 	return(NULL);
 }
+
 
 
 /// <summary>
