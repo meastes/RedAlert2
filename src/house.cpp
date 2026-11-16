@@ -2392,7 +2392,7 @@ void HouseClass::Make_Ally(HousesType house)
 /// also lay this house's structures bare to them.
 /// </summary>
 /// <param name="house">The house to make an ally of this house.</param>
-void HouseClass::Make_Ally(HouseClass * house)
+void HouseClass::Make_Ally(HouseClass * house, bool announce) // RA2: the executable's form has the second argument (not used by TibSun's body)
 {
 	if (Is_Allowed_To_Ally(house)) {
 

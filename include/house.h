@@ -833,7 +833,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		Cell Threat_Target_Cell(int quarry); // RA2: 0x4F6A80; the cell of the greatest threat (by the quarry) a team leader of the house sees
 		bool Add_Wall_Nodes(int node); // RA2: 0x4F5D30; the nearest base node before this one whose building wants walls gets a ring of wall nodes after it
 		void Flag_To_End(void);
-		void Make_Ally(HouseClass * house);
+		void Make_Ally(HouseClass * house, bool announce = false); // RA2: 0x004E5660 takes a second argument, whether the alliance is announced (MPCooperative passes false)
 		void Make_Ally(HousesType house);
 		void Make_Ally(ObjectClass * object);
 		void Make_Enemy(HouseClass * house);

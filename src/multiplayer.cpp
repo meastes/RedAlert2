@@ -23,6 +23,7 @@
 #include "multiplayer.h" // RA2: the includes this file needs
 #include "mpsiege.h" // RA2: the includes this file needs
 #include "mpfreeforall.h" // RA2: the includes this file needs
+#include "mpcoop.h" // RA2: the real MPCooperative class (this file only constructs it)
 #include "ccini.h" // RA2: the includes this file needs
 #include "ccfile.h" // RA2: the includes this file needs
 #include "stringtable.h" // RA2: the includes this file needs
@@ -66,12 +67,6 @@ class UnholyAlliance : public MultiplayerGameMode // RA2: constructed at 0x005AC
 {
 	public:
 		UnholyAlliance(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex); // RA2: as above
-};
-
-class MPCooperative : public MultiplayerGameMode // RA2: constructed at 0x005A2960; as above
-{
-	public:
-		MPCooperative(WideWstring const & title, WideWstring const & tooltip, Wstring const & inifile, Wstring const & mapfilter, bool aiallowed, int modeindex); // RA2: as above
 };
 
 extern int LobbyObserverSlot; // RA2: 0x007E6D90 (netdlg2.cpp), the lobby slot of the observer

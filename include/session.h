@@ -455,6 +455,7 @@ class MultiMission
 		DiskID On_Which_CD(void) const;
 
 	friend class SessionClass;
+	friend class MPCooperative; // RA2: vt_entry_94 reads MaxPlayers of the next map (0x005A5720)
 
 	private:
 		wchar_t ScenarioDescription[DESCRIP_MAX];

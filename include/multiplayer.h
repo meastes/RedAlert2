@@ -89,7 +89,7 @@ class MultiplayerGameMode
 		virtual bool vt_entry_58(void) { return(true); }
 		virtual int RandomHumanCountryIndex(void);
 		virtual int RandomAICountryIndex(void);
-		virtual void vt_entry_64(unsigned a, char const * text) {} // RA2: Net2DecodeGameopt passes the digit after C and the rest of the text
+		virtual void vt_entry_64(unsigned a, char * text) {} // RA2: Net2DecodeGameopt passes the digit after C and the rest of the text; MPCooperative splits it with strtok, so it is not const
 		virtual bool UnfixAlliances(void);
 		virtual bool StartingPositionsToHouseBaseCells(char unused);
 		virtual bool vt_entry_70(void);
@@ -99,11 +99,11 @@ class MultiplayerGameMode
 		virtual int vt_entry_80(void) { return(-1); }
 		virtual void vt_entry_84(void) {}
 		virtual void vt_entry_88(bool won) {} // RA2: slot 34; takes whether the player won (Process_Game_End pushes the flag as it is)
-		virtual void vt_entry_8C(unsigned a) {}
+		virtual void vt_entry_8C(bool a) {} // RA2: a bool (MPCooperative::vt_entry_8C tests a byte)
 		virtual bool vt_entry_90(void) { return(false); }
 		virtual void vt_entry_94(void) {}
 		virtual void vt_entry_98(void) {}
-		virtual bool vt_entry_9C(DynamicVectorClass<int> list, int a, int b) { return(false); }
+		virtual bool vt_entry_9C(DynamicVectorClass<int> list, int * result) { return(false); } // RA2: the list and a place for the result (MPCooperative::vt_entry_9C ends with ret 28)
 		virtual bool vt_entry_A0(void) { return(true); }
 		virtual void CreateMPTeams(DynamicVectorClass<MultiplayerTeam *> * teams);
 		virtual Cell * AssignStartingPositionsToHouse(Cell * result, int house, DynamicVectorClass<Cell> * coords, unsigned char * satisfied);
