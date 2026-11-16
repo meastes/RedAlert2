@@ -6822,7 +6822,6 @@ address,symbol,evidence
 0x00715EF0,?Set_Speech_Volume@@YIXH@Z,"compiled from src/vox.cpp, matched"
 0x00715F10,?Aux_Stream_Init@@YIHXZ,"compiled from src/vox.cpp, matched"
 0x00715F80,?Aux_Stream_Shutdown@@YIXXZ,"compiled from src/vox.cpp, matched"
-0x00715FB0,?Play_Taunt@@YIHH@Z,"compiled from src/vox.cpp, matched"
 0x007160D0,?Aux_Stream_Stop@@YIXXZ,"compiled from src/vox.cpp, matched; code at 4 addresses, placed by the gap"
 0x007160E0,??0VoxClass@@QAE@PBD@Z,"compiled from src/vox.cpp, matched"
 0x00716190,??1VoxClass@@QAE@XZ,"compiled from src/vox.cpp, matched; code at 6 addresses, placed by the gap"

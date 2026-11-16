@@ -83,7 +83,7 @@ void __fastcall Speech_Stop(bool clear); // RA2: 0x00715DE0; stops the speech pl
 void __fastcall Speech_Cancel(int index); // RA2: 0x00715E80; drops the waiting speeches of the VoxClass at an index
 int Aux_Stream_Init(void); // RA2: 0x00715F10; makes the taunt stream. Returns int, so the names.csv row ?Aux_Stream_Init@@YIXXZ is stale
 void Aux_Stream_Shutdown(void); // RA2: 0x00715F80
-int __fastcall Play_Taunt(int taunt); // RA2: 0x00715FB0; low four bits the taunt (1 to 8), the next four the side
+int __fastcall Play_Taunt(char taunt); // RA2: 0x00715FB0; low four bits the taunt (1 to 8), the next four the side
 void __fastcall Aux_Stream_Stop(void); // RA2: 0x007160D0
 void Speech_Free_All(void); // RA2: 0x00716590; stops the speech and deletes every VoxClass
 char * __fastcall Vox_Name(int index); // RA2: 0x00716720; the name of the VoxClass at an index, "none" for -1 or out of range; no caller

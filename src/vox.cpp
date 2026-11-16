@@ -399,7 +399,7 @@ void Aux_Stream_Shutdown(void) // RA2: 0x00715F80; stops and destroys the taunt 
 	}
 }
 
-int __fastcall Play_Taunt(int taunt) // RA2: 0x00715FB0; plays taunt 1 to 8 (low four bits) of a side (next four bits) from the taunts folder on the taunt stream
+int __fastcall Play_Taunt(char taunt) // RA2: 0x00715FB0; plays taunt 1 to 8 (low four bits) of a side (next four bits) from the taunts folder on the taunt stream
 {
 	char name[20]; // RA2: as above
 	if (AuxStream == 0 || AuxStreamHold != 0) { // RA2: as above
