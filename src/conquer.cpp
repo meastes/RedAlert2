@@ -74,8 +74,10 @@
 #include "_surface.h"
 #include "_tactica.h"
 #include "_theater.h"
+#include "_timer.h"	// RA2: needed by the functions below
 #include "_tooltip.h"
 #include "_wsproto.h"
+#include "beacon.h"	// RA2: needed by the functions below
 #include "cctooltip.h"
 #include "data.h"
 #include "dbgprint.h"
@@ -100,22 +102,27 @@
 #include "netshare.h"
 #include "nulldlg.h"
 #include "nullmgr.h"
+#include "ownertalk.h"	// RA2: needed by the functions below
 #include "progress.h"
 #include "queue.h"
+#include "restate.h"	// RA2: needed by the functions below
 #include "rules.h"
 #include "scenario.h"
 #include "setpal.h"
 #include "sidebar.h"
 #include "sounddlg.h"
 #include "stats.h"
+#include "stringtable.h" // RA2: the includes this file needs
+#include "movies.h"	// RA2: needed by the functions below
 #include "surface.h"
 #include "tactical.h"
 #include "theme.h"
 #include "voc.h"
 #include "vox.h"
-#include "wolapi\wolapi.h"
+#include "wolapi.h"  // RA2: main has the WOL API headers flat in include/
 #include "wonline.h"
 #include "wsproto.h"
+#include "wspudp.h"	// RA2: needed by the functions below
 
 #include "special.hh"
 
@@ -135,7 +142,6 @@
 *****************************************/
 bool Main_Loop(void);
 void Message_Input(KeyNumType &input);
-bool Map_Edit_Loop(void);
 
 void Print_MP_Stats(void);
 
@@ -145,33 +151,46 @@ void Print_MP_Stats(void);
 extern int TeamEvent;
 extern int TeamNumber;
 
-
-void conquer_noop(void)
-{
-
+extern int ObserverMode;	// RA2: 0x00A72C68, nonzero for an observer
+extern void * PacketLater;	// RA2: 0x00ABD530, cleared when an internet game starts
+extern bool ConnectionLost;	// RA2: 0x00ABD500 (defined in queue.cpp)
+extern char const * LayerName[LAYER_COUNT];	// RA2: 0x007D38C8, the layer names Layer_From_Name and Name_From_Layer read
+extern int ProbeDelay;	// RA2: 0x007D333C, 1200 ticks between two port probes
+void __fastcall Reload_Art_Set(void);	// RA2: 0x006F31B0 (txtlabel2.cpp), frees and loads again the art the end of a game replaced
+void __fastcall Diplomacy_Dialog(MouseClass * map);	// RA2: 0x00634A00 (radar.cpp), shows the diplomacy dialog (resource 115) and redraws the map; a member of RadarClass once radar.cpp lands (a declaration in radar.h would unmatch base.cpp)
+void __fastcall Register_Game_Start_Time(void);	// RA2: 0x0069A130, notes when the game started; the sibling of Register_Game_End_Time in internet.h (a declaration there would risk unmatching other files)
+void Options_Menu_Dialog(void);	// RA2: 0x004DD7D0, the options menu that Ingame_Menu_Dialog opens (dialog 181, 3002 or 255 by game type)
+void Set_Type_Select_Mode(unsigned mode);	// RA2: 0x006F6780 (uicmnds.cpp), the select-by-type mode; 0 leaves it
+extern bool g_ConnectionLost;	// RA2: 0x00B2ABDA (wonline.cpp), the online connection is gone
+void Audio_Service(void);	// RA2: 0x00406EA0 (audio.cpp), the sound callback, theme and speech in one routine
+void Queue_Ipx_Clear(void);	// RA2: 0x00623280 (queue.cpp)
+void Stamp_Their_Timing(int index);	// RA2: 0x00623300 (queue.cpp)
+char * Wide_To_Narrow(wchar_t const * text);	// RA2: 0x006FA120 (wonline.cpp), the narrow text in a static buffer
+wchar_t * Narrow_To_Wide(char const * narrow);	// RA2: 0x006FA180 (wonline.cpp)
+unsigned int __fastcall Compute_Name_CRC(wchar_t const * name);	// RA2: 0x005BBA50, the wide form of netdlg.h's
+namespace OwnerDraw { // RA2: as above
+	char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count);	// RA2: 0x006FA0F0
 }
 
+enum { // RA2: SpecialDialogType has no enumerator for dialog 9
+	SDLG_RESTATE = 9	// RA2: dialog 9 restates the mission (0x0063B090)
+};
 
-#if NEVER
-/***********************************************************************************************
- * Special_Dialog -- Handles the special options dialog.                                       *
- *                                                                                             *
- *    This dialog is used when setting the special game options. It does not appear in the     *
- *    final version of the game.                                                               *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   09/21/1995 JLB : Created.                                                                 *
- *=============================================================================================*/
-void Special_Dialog(void)
+/*
+**	RA2: the global packet commands IPX_Call_Back handles that the enumeration lacks.
+*/
+enum { // RA2: NetCommandType lacks these four global packet commands
+	NET_PLACE_BEACON = 32,	// RA2: a player placed a beacon
+	NET_REMOVE_BEACON = 33,	// RA2: a player removed a beacon
+	NET_BEACON_TEXT = 34,	// RA2: a player typed the text of a beacon
+	NET_TAUNT = 29	// RA2: a player sent a taunt
+};
+
+static inline bool Same_Name(NodeNameType * a, NodeNameType * b)	// RA2: the inline compare of two lobby names (case insensitive, as narrow text)
 {
+	char * name = Wide_To_Narrow(a->Name); // RA2: the lobby names are wide; they are compared as narrow text
+	return(stricmp(name, Wide_To_Narrow(b->Name)) == 0); // RA2: as above
 }
-#endif
 
 
 /// <summary>
@@ -200,22 +219,29 @@ void Ingame_Menu_Dialog(void)
 		}
 
 		Pause_Scenario();
-
+		MouseCursor->Release_Mouse();	// RA2: the mouse is released and shown until its state is clear, then the dialogs run
+		while (MouseCursor->Get_Mouse_State()) {	// RA2: as above
+			MouseCursor->Show_Mouse();	// RA2: as above
+		}
 
 		while (SpecialDialog != SDLG_NONE) {
 			switch (SpecialDialog) {
-				#if 0
-				case SDLG_SPECIAL:
-					Map.Help_Text(TXT_NONE);
-					Map.Override_Mouse_Shape(MOUSE_NORMAL, false);
-					Special_Dialog();
-					Map.Revert_Mouse_Shape();
-					SpecialDialog = SDLG_NONE;
+				case SDLG_RESTATE:	// RA2: dialog 9 restates the mission (0x0063B090)
+					Restate_Mission(Scen); // RA2: as above
+					if (SpecialDialog == SDLG_RESTATE) { // RA2: as above
+						SpecialDialog = SDLG_NONE;
+					}
 					break;
-				#endif
+
+				case SDLG_SPECIAL:	// RA2: dialog 8 is the diplomacy dialog of the map (0x00634A00)
+					Diplomacy_Dialog(&Map); // RA2: as above
+					if (SpecialDialog == SDLG_SPECIAL) { // RA2: as above
+						SpecialDialog = SDLG_NONE;
+					}
+					break;
 
 				case SDLG_OPTIONS:
-					Game_Options_Dialog();
+					Options_Menu_Dialog();	// RA2: 0x004DD7D0, the options menu (Game_Options_Dialog at 0x004DDF20 is the abort menu below)
 					if (SpecialDialog != SDLG_OPTIONS) {
 						break;
 					}
@@ -241,25 +267,22 @@ void Ingame_Menu_Dialog(void)
 					break;
 
 				case SDLG_ABORT:
-					switch (Abort_Dialog()) {
+					switch (Game_Options_Dialog()) {	// RA2: the abort menu returns 2 (leave), 3 (leave and destruct), 4 (destruct) or 5 (restart)
 
-						/// cancel
-						case 1:
-							Queue_Exit();
-							SpecialDialog = SDLG_NONE;
-							break;
-
-						case 2:
-							break;
-
-						// abort
 						case 3:
-							if (Session.Type == GAME_NORMAL) {
-								PlayerRestarts = true;
-							} else {
-								OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));
-								_special_dialog_flag = false;
-							}
+							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));	// RA2: queues the event inline, then leaves like case 2
+							_special_dialog_flag = false;
+						case 2:
+							Queue_Exit();
+							break;
+
+						case 4: // RA2: the abort menu's third answer queues the destruct event without leaving
+							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));	// RA2: as above
+							_special_dialog_flag = false;
+							break;
+
+						case 5: // RA2: its fourth answer restarts the mission
+							PlayerRestarts = true;
 							break;
 
 					}
@@ -267,13 +290,11 @@ void Ingame_Menu_Dialog(void)
 					break;
 
 				case SDLG_SURRENDER:
-					if (!PlayerPtr->IsDefeated && !PlayerPtr->IsToWin && !PlayerPtr->IsToLose && !PlayerPtr->IsToDie && Surrender_Dialog(TXT_SURRENDER)) {
-						if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
-							PlayerPtr->Flag_To_Lose();
-						} else {
-							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));
-							_special_dialog_flag = false;
-						}
+					if (ObserverMode) {	// RA2: an observer just leaves
+						Queue_Exit();
+					} else if (!PlayerPtr->IsDefeated && !PlayerPtr->IsToWin && !PlayerPtr->IsToLose && !PlayerPtr->IsToDie && Surrender_Dialog(StringTable::LoadString("TXT_SURRENDER", NULL, "D:\\Ra2\\Conquer.CPP", 487))) {	// RA2: the text is a string table entry, line 487 of the source
+						OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::DESTRUCT));	// RA2: no Flag_To_Lose branch for single player
+						_special_dialog_flag = false;
 					}
 					SpecialDialog = SDLG_NONE;
 					break;
@@ -287,6 +308,13 @@ void Ingame_Menu_Dialog(void)
 					break;
 			}
 		}
+
+		UpdateWindow(MainWindow);	// RA2: after the dialogs the window is redrawn, input is locked again if the scenario wants it, and the mouse is taken back
+		if (Scen->IsInputLocked) {	// RA2: as above
+			MouseCursor->Hide_Mouse();	// RA2: as above
+		}
+		MouseCursor->Capture_Mouse();	// RA2: as above
+		Session.Resume();	// RA2: as above
 
 		Resume_Scenario();
 	}
@@ -327,12 +355,16 @@ void Main_Game(int argc, char * argv[])
 	int ret = Init_Game(argc, argv);
 	if (ret) {
 		if (ret < 0) {
+			char text[5120];	// RA2: the message text and caption are converted to ANSI into buffers of 5120 and 2048 bytes
+			char caption[2048];	// RA2: as above
 			MSGBOXPARAMS params;
+			WideCharToMultiByte(CP_ACP, 0, StringTable::LoadString("TXT_INITGAME_FAILED", NULL, "D:\\Ra2\\Conquer.CPP", 562), -1, text, sizeof(text), NULL, NULL);	// RA2: the text is a string table entry, line 562 of the source
+			WideCharToMultiByte(CP_ACP, 0, StringTable::LoadString("TXT_SHORT_TITLE", NULL, "D:\\Ra2\\Conquer.CPP", 563), -1, caption, sizeof(caption), NULL, NULL);	// RA2: as above, line 563
 			params.cbSize = sizeof(MSGBOXPARAMS);
 			params.hwndOwner = MainWindow;
 			params.hInstance = ProgramInstance;
-			params.lpszText = Fetch_String(TXT_INITGAME_FAILED);
-			params.lpszCaption = Fetch_String(TXT_SHORT_TITLE);
+			params.lpszText = text;	// RA2: the text points at the converted buffer
+			params.lpszCaption = caption;	// RA2: as above
 			params.dwStyle = (MB_OK | MB_ICONSTOP | MB_SETFOREGROUND | MB_TOPMOST);
 			params.lpszIcon = NULL;
 			params.dwContextHelpId = NULL;
@@ -377,7 +409,7 @@ ret_addr:
 		**	Only show the mouse if we're not playing back a recording.
 		*/
 		if (Session.Play) {
-			Hide_Mouse();
+			MouseCursor->Hide_Mouse();	// RA2: virtual call on MouseCursor, not the Hide_Mouse helper
 			TeamEvent = 0;
 			TeamNumber = 0;
 		}
@@ -393,48 +425,20 @@ ret_addr:
 			ToolTips->Activate(Options.ToolTips);
 		}
 
-		IgnoreInput = Scen->IsInputLocked;
-		if (!Scen->IsInputLocked) {
-			Show_Mouse();
-		}
+		IgnoreInput = Scen->IsInputLocked;	// RA2: no Show_Mouse after it
 
 		SpecialDialog = SDLG_NONE;
 		_special_dialog_flag = true;
+		Session.Resume();	// RA2: the session resumes before the game loop starts
 
-#ifdef _DEBUG
 		/*
-		**	Scenario-editor version of main-loop processing
+		**	Call the game's main loop
 		*/
-		for (;;) {
-			/*
-			**	Non-scenario-editor-mode: call the game's main loop
-			*/
-			if (!Debug_Map) {
-				if (Main_Loop()) {
+		for (;;) {	// RA2: no editor loop; the loop ends when the game is over, which Process_Game_End decides
+			if (Main_Loop()) {	// RA2: as above
+				if (Process_Game_End()) {	// RA2: as above
 					break;
 				}
-
-				Ingame_Menu_Dialog();
-			} else {
-
-				/*
-				**	Scenario-editor-mode: call the editor's main loop
-				*/
-				if (Map_Edit_Loop()) {
-					break;
-				}
-			}
-		}
-#else
-		/*
-		**	Non-editor version of main-loop processing
-		*/
-		for (;;) {
-			/*
-			**	Call the game's main loop
-			*/
-			if (Main_Loop()) {
-				break;
 			}
 
 			/*
@@ -443,14 +447,12 @@ ret_addr:
 			**	Main_Loop(), allowing the game to run in the background.
 			*/
 			Ingame_Menu_Dialog();
+			if (Process_Game_End()) {	// RA2: the end of the game is also checked after the dialog
+				break;
+			}
 		}
-#endif
-		Stop_Ingame_Movie();
-
-		if (ToolTips != NULL) {
-			ToolTips->Activate(false);
-		}
-		Hide_Mouse();
+		Reload_Art_Set();	// RA2: replaces Stop_Ingame_Movie, the tooltip deactivation and Hide_Mouse
+		Session.Leave_Game();	// RA2: as above
 		ScenarioActive = false;
 		TacticalActive = false;
 
@@ -491,6 +493,12 @@ ret_addr:
 			}
 		}
 
+		if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET || Session.Type == GAME_NULL_MODEM || Session.Type == GAME_MODEM) {	// RA2: the chat settings are written for every networked game
+			if (!Session.Play) {	// RA2: as above
+				Session.Write_Chat_Settings();	// RA2: as above
+			}
+		}
+
 		/*
 		**	If we're playing back, the mouse will be hidden; show it.
 		**	Also, set all variables back to normal, to return to the main menu.
@@ -498,7 +506,7 @@ ret_addr:
 		if (Session.Play) {
 			Session.Type = GAME_NORMAL;
 			Session.Play = 0;
-			Show_Mouse();
+			MouseCursor->Show_Mouse();	// RA2: virtual call on MouseCursor
 		}
 	}
 
@@ -519,7 +527,7 @@ ret_addr:
 /// picks up the loading progress the other player reports so that the progress bar can
 /// follow along.
 /// </summary>
-static void Serial_Call_Back(void)
+void Serial_Call_Back(void)	// RA2: not static; RA2 keeps an out-of-line copy before Call_Back, which inlines the same text
 {
 	int packetlen;
 	SerialPacketType packet;
@@ -561,10 +569,12 @@ void Call_Back(void)
 	/*
 	**	Music and speech maintenance
 	*/
-	if (Audio_Available() && GameInFocus == true) {
-		Audio.Sound_Callback();
-		Theme.AI();
-		Speak_AI();
+	Audio_Service();	// RA2: one audio routine replaces the focus test, the sound callback, the theme and the speech
+	if (IngameVQ.Count() > 0) {	// RA2: the movie playing in the game gets its waiting call
+		MovieHandle * movie = IngameVQ[0];	// RA2: as above
+		if (movie != NULL) {	// RA2: as above
+			movie->Waiting();	// RA2: as above
+		}
 	}
 
 	/*
@@ -586,7 +596,7 @@ void Call_Back(void)
 	 */
 	if (Session.Type == GAME_INTERNET) {
 		static int _last_pump_time = 0;
-		if (time(0) != _last_pump_time) {
+		if (!g_ConnectionLost && time(0) != _last_pump_time) {	// RA2: the pump also stops once the connection is lost
 			if (g_pChat != NULL && !g_SuspendChatPump) {
 				g_pChat->PumpMessages();
 			}
@@ -620,6 +630,8 @@ bool MapGen_Call_Back(void)
 /// </summary>
 void IPX_Call_Back(void)
 {
+	static CDTimerClass<SystemTimerClass> _probe_timer(ProbeDelay); // RA2: a static timer paces the port probes of an internet game (restarted with ProbeDelay)
+
 	Windows_Message_Handler();
 
 	Ipx.Service();
@@ -628,17 +640,123 @@ void IPX_Call_Back(void)
 	**	Read packets only if the game is "closed", so we don't steal global
 	**	messages from the connection dialogs.
 	*/
+	if (Session.Type == GAME_INTERNET && !Session.NetOpen) { // RA2: an internet game first sends NET_PORT_PROBE packets to the other players when the timer ran out or a probe is due
+		if ((_probe_timer == 0 || Session.PortProbeDue) && Session.Players.Count()) { // RA2: as above
+			Windows_Message_Handler();
+			Ipx.Service();
+			if (Ipx.Global_Num_Send() == 0) { // RA2: as above
+				GlobalPacketType packet; // RA2: as above
+				memset(&packet, 0, 0x5b); // RA2: as above
+				packet.Command = NET_PORT_PROBE; // RA2: as above
+				OwnerDraw::WideToCharString(packet.Name, Session.Players[0]->Name, -1); // RA2: as above
+				Queue_Ipx_Clear(); // RA2: as above
+				DebugString("Sending NET_PORT_PROBE packets in Call_Back\n"); // RA2: as above
+
+				for (int i = 1; i < Session.Players.Count(); i++) { // RA2: as above
+					unsigned short port = Session.PlayerPorts[i]; // RA2: as above
+					if (port) { // RA2: as above
+						DebugString("Sending to %s\n", Wide_To_Narrow(Session.Players[i]->Name)); // RA2: as above
+						Ipx.Send_Global_Message(&packet, 0x5b, 0, &Session.Players[i]->Address, port, 0); // RA2: as above
+						Windows_Message_Handler();
+						Ipx.Service();
+
+						for (int index = 0; index < 8; index++) { // RA2: as above
+							if (Same_Name(Session.Slots[index], Session.Players[i])) { // RA2: as above
+								if (TickCount - Session.PlayerLastTime[index] > 2400) { // RA2: as above
+									DebugString("No PORT_PROBE from %s in the last 40 seconds\n", Wide_To_Narrow(Session.Players[i]->Name)); // RA2: as above
+									if (Session.Players[i]->Slot.Port != port && Session.Players[i]->Slot.Port >= 0x400) { // RA2: as above
+										DebugString("Sending to %s on mangled port from pserver\n", Wide_To_Narrow(Session.Players[i]->Name)); // RA2: as above
+										Ipx.Send_Global_Message(&packet, 0x5b, 0, &Session.Players[i]->Address, Session.Players[i]->Slot.Port, 0); // RA2: as above
+									}
+								}
+								break;
+							}
+						}
+					}
+				}
+
+				CDTimerClass<SystemTimerClass> timer(120); // RA2: as above
+				while (Ipx.Global_Num_Send() > 0 && timer > 0) { // RA2: as above
+					Windows_Message_Handler();
+					Ipx.Service();
+				}
+
+				_probe_timer = ProbeDelay; // RA2: as above
+				Session.PortProbeDue = false; // RA2: as above
+				Ipx.Set_Global_Routed(); // RA2: as above
+			}
+		}
+	}
+
 	if (!Session.NetOpen) {
-		while (Ipx.Get_Global_Message (&Session.GPacket, &Session.GPacketlen, &Session.GAddress, &Session.GProductID)) {
+		while (Ipx.Get_Global_Message(&Session.GPacket, &Session.GPacketlen, &Session.GAddress, &Session.GProductID)) { // RA2: the same loop, written without the space before the arguments
 
-			if (Session.GProductID == IPXGlobalConnClass::COMMAND_AND_CONQUER2) {
+			if (Session.GProductID == IPXGlobalConnClass::COMMAND_AND_CONQUER3) { // RA2: RA2's product id is 0xAA03
 
-				switch (Session.GPacket.Command)
-				{
+				switch (Session.GPacket.Command) { // RA2: the brace is on the same line
 
 					case NET_PROPOSE_KICK:
 					{
 						Kick_Packet_Received(Session.GPacket, Session.GAddress);
+						break;
+					}
+
+					case NET_IM_STILL_HERE: // RA2: a keep-alive packet of a router connection (0x27) stamps that connection's timing
+					{
+						if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) { // RA2: as above
+							for (int i = 0; i < Ipx.Num_Connections(); i++) {
+								if (Ipx.Connection_ID(i) == Session.GPacket.Chat.ID) { // RA2: as above
+									DebugString("Got NET_IM_STILL_HERE packet from %s.\n", Wide_To_Narrow(Ipx.Connection_Name(Session.GPacket.Chat.ID))); // RA2: as above
+									Stamp_Their_Timing(i); // RA2: as above
+									break;
+								}
+							}
+						}
+						break;
+					}
+
+					case NET_PORT_PROBE: // RA2: as above
+					{
+						DebugString("Got NET_PORT_PROBE packet from %s - port = %d\n", Session.GPacket.Name, Session.GAddress.Get_Port()); // RA2: as above
+						for (int i = 0; i < Session.Players.Count(); i++) {
+							if (Session.Players[i]->Address.Is_Same_Node(Session.GAddress) && stricmp(Wide_To_Narrow(Session.Players[i]->Name), Session.GPacket.Name) == 0) { // RA2: as above
+								for (int index = 0; index < 8; index++) { // RA2: as above
+									if (Same_Name(Session.Slots[index], Session.Players[i])) { // RA2: as above
+										Session.PlayerLastTime[index] = TickCount; // RA2: as above
+										break;
+									}
+								}
+								unsigned short port = Session.GAddress.Get_Port(); // RA2: as above
+								if (port != Session.Players[i]->Address.Get_Port() || port != Session.PlayerPorts[i]) { // RA2: as above
+									DebugString("Strange port number in PORT_PROBE packet\n"); // RA2: as above
+									int old = Session.PlayerPorts[i]; // RA2: as above
+									if (port == 0) { // RA2: as above
+										port = 1234; // RA2: as above
+									}
+									Session.PlayerPorts[i] = port; // RA2: as above
+									Session.Players[i]->Address.Set_Port(port); // RA2: as above
+									DebugString("Adjusting port number for player %s from %d to %d\n", Session.GPacket.Name, old, port); // RA2: as above
+								}
+							}
+						}
+						break;
+					}
+
+					case NET_PLACE_BEACON: // RA2: as above
+					{
+						BeaconManager.Place_Beacon(Session.GPacket.Beacon.House, Coord(Session.GPacket.Beacon.X, Session.GPacket.Beacon.Y, Session.GPacket.Beacon.Z), Session.GPacket.Beacon.ID); // RA2: as above
+						break;
+					}
+
+					case NET_REMOVE_BEACON: // RA2: as above
+					{
+						BeaconManager.Remove_Beacon(Session.GPacket.Beacon.House, Session.GPacket.Beacon.ID); // RA2: as above
+						break;
+					}
+
+					case NET_BEACON_TEXT: // RA2: as above
+					{
+						BeaconManager.EditBeaconMessage(Session.GPacket.BeaconText.Text, Session.GPacket.BeaconText.House, Session.GPacket.BeaconText.ID, false); // RA2: as above
 						break;
 					}
 
@@ -663,6 +781,20 @@ void IPX_Call_Back(void)
 					/*
 					**	Process a message from another user.
 					*/
+					case NET_PORT_UNREACHABLE: // RA2: a peer's packets did not arrive (0x2F); the UDP transport learns the peer's address
+					{
+						DebugString("Got NET_PORT_UNREACHABLE message from %s\n", Session.GPacket.Name); // RA2: as above
+						if (Session.Type == GAME_INTERNET && PacketTransport != NULL) { // RA2: as above
+							NetNumType net;
+							NetNodeType node;
+							unsigned short port; // RA2: as above
+							IPXAddressClass * address = OwnerTalk.Address_From_Name(Session.GPacket.Name); // RA2: as above
+							address->Get_Address(net, node, &port); // RA2: as above
+							((UDPInterfaceClass *)PacketTransport)->Add_Peer(node, port); // RA2: as above
+						}
+						break;
+					}
+
 					case NET_MESSAGE:
 					{
 						bool msg_ok = false;
@@ -674,27 +806,26 @@ void IPX_Call_Back(void)
 						if (!Session.NetProtect) {
 							msg_ok = true;
 						} else {
-							if (Session.GPacket.Message.NameCRC ==
-								Compute_Name_CRC(Session.GameName)) {
+							if (Session.GPacket.Message.NameCRC == Compute_Name_CRC(Session.GameName)) { // RA2: the game name is wide, so the wide CRC is used
 								msg_ok = true;
 							} else {
 								msg_ok = false;
 							}
 						}
+						if (msg_ok && Session.ViaPacketRouter) { // RA2: behind the packet router a message only counts for the players in its recipient mask
+							msg_ok = (Session.GPacket.Message.Recipients & OwnerTalk.Mask_From_ID(Session.Players[0]->Player.ID)) != 0; // RA2: as above
+						}
 
 						if (msg_ok) {
-							if (!Session.Messages.Concat_Message(Session.GPacket.Name,
+							wchar_t * name = Narrow_To_Wide(Session.GPacket.Name); // RA2: the sender's name is converted to wide text
+							Session.Messages.Add_Message(name, // RA2: as above
 								Session.GPacket.Message.Color,
-								Session.GPacket.Message.Buf, int(Rule->MessageDelay * TICKS_PER_MINUTE))) {
-								Session.Messages.Add_Message (Session.GPacket.Name,
-									Session.GPacket.Message.Color,
-									Session.GPacket.Message.Buf,
-									Session.Color_Index_To_Scheme(Session.GPacket.Message.Color),
-									(TextPrintType)(TPF_6PT_GRAD | TPF_USE_GRAD_PAL | TPF_FULLSHADOW),
-									int(Rule->MessageDelay * TICKS_PER_MINUTE));
+								(wchar_t *)Session.GPacket.Message.Buf, // RA2: the message text is wide
+								Session.Color_Index_To_Scheme(Session.GPacket.Message.Color),
+								(TextPrintType)(TPF_6PT_GRAD | TPF_USE_GRAD_PAL | TPF_FULLSHADOW),
+								int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: Add_Message takes the single player flag; no Concat_Message try first
 
-								Sound_Effect(Rule->IncomingMessage);
-							}
+							VocClass::PlayGlobal(Rule->IncomingMessage, 1.0f, 0x2000, NULL); // RA2: the message sound plays through VocClass::PlayGlobal
 
 							/*
 							**	Tell the map to do a partial update (just to force the messages
@@ -705,17 +836,40 @@ void IPX_Call_Back(void)
 							/*
 							**	Save this message in our last-message buffer
 							*/
-							strcpy(Session.LastMessage, Session.GPacket.Message.Buf);
+							wcscpy(Session.LastMessage, (wchar_t *)Session.GPacket.Message.Buf); // RA2: the last message is wide text
+						}
+						break;
+					}
+
+					case NET_TAUNT: // RA2: as above
+					{
+						bool msg_ok = false;
+						if (!Session.NetProtect) {
+							msg_ok = true;
+						} else {
+							if (Session.GPacket.Taunt.NameCRC == Compute_Name_CRC(Session.GameName)) { // RA2: as above
+								msg_ok = true;
+							} else {
+								msg_ok = false;
+							}
+						}
+						if (msg_ok && Session.ViaPacketRouter) { // RA2: as above
+							msg_ok = (Session.GPacket.Taunt.Recipients & OwnerTalk.Mask_From_ID(Session.Players[0]->Player.ID)) != 0; // RA2: as above
+						}
+						if (msg_ok) {
+							if ((Session.LANTaunts && Session.Type == GAME_IPX) || (Session.WOLTaunts && Session.Type == GAME_INTERNET)) { // RA2: as above
+								Play_Taunt(Session.GPacket.Taunt.ID); // RA2: as above
+							}
 						}
 						break;
 					}
 
 					case NET_PROGRESS_REPORT:
 					{
+						DebugString("Processing NET_PROGRESS_REPORT\n"); // RA2: the report is logged, then matched to its player by node address and name
 						for (int i = 0; i < Session.Players.Count(); i++) {
-							if (Session.Players[i]->Address == Session.GAddress) {
-								DebugString("Received progress message - %d%% from %s\n", Session.GPacket.Progress.Percent, Session.Players[i]->Name);
-								Progress.Set_Progress_Percent(i, Session.GPacket.Progress.Percent);
+							if (Session.Players[i]->Address.Is_Same_Node(Session.GAddress) && stricmp(Wide_To_Narrow(Session.Players[i]->Name), Session.GPacket.Name) == 0) { // RA2: the sender is found by node address and name, not by address alone
+								Progress.Set_Progress_Percent(i, Session.GPacket.Progress.Percent, Point2D(-1, -1)); // RA2: as above
 								break;
 							}
 						}
@@ -733,10 +887,8 @@ void IPX_Call_Back(void)
 					}
 
 					default:
-					{
 						Process_Global_Packet(&Session.GPacket, &Session.GAddress);
 						break;
-					}
 				}
 			}
 
@@ -1169,6 +1321,8 @@ void Unselect_All(void)
 	while (CurrentObject.Count()) {
 		CurrentObject[0]->Unselect();
 	}
+	Set_Type_Select_Mode(0);	// RA2: also leaves the select-by-type mode
+	BeaconManager.Clear_Selection();	// RA2: and stops editing the selected beacon
 }
 
 
@@ -1479,6 +1633,40 @@ char const * Name_From_Speed(SpeedType speed)
 
 
 /// <summary>
+/// Converts an ASCII name into a LayerType.
+/// This routine is used when processing the layer specified in an INI file.
+/// </summary>
+/// <param name="name">Pointer to the ASCII name to convert.</param>
+/// <returns>Returns with the layer type that matches the name. LAYER_NONE is returned if
+/// there is no match.</returns>
+LayerType Layer_From_Name(char const * name) // RA2: TibSun has no layer names; same shape as Speed_From_Name, table at 0x007D38C8
+{
+	if (name != NULL) {	// RA2: the loop only runs for a non-NULL name
+		for (LayerType layer = LAYER_FIRST; layer < LAYER_COUNT; layer++) {	// RA2: five layers, walked through the table at 0x007D38C8
+			if (stricmp(LayerName[layer], name) == 0) return(layer); // RA2: as above
+		}
+	}
+	return(LAYER_NONE); // RA2: as above
+}
+
+
+/// <summary>
+/// Converts a layer type into its ASCII name.
+/// This routine is used when writing a layer back out to an INI file.
+/// </summary>
+/// <param name="layer">The layer type to fetch the name of.</param>
+/// <returns>Returns with a pointer to the name of the layer type. An illegal layer type
+/// fetches the "<none>" name instead.</returns>
+char const * Name_From_Layer(LayerType layer) // RA2: same shape as Name_From_Speed over the layer table
+{
+	if ((unsigned)layer < LAYER_COUNT) {	// RA2: unsigned compare against 5
+		return(LayerName[layer]); // RA2: as above
+	}
+	return("<none>");
+}
+
+
+/// <summary>
 /// Writes the multiplayer connection statistics out to a text file.
 /// Use this routine to dump the round trip times, resends, stalls, and packet loss that
 /// were recorded for each player. Only an internet game is reported upon.
@@ -1512,11 +1700,8 @@ void Print_MP_Stats(void)
 					continue;
 				}
 
-				NetNumType net;
-				NetNodeType node;
-				stats.Address.Get_Address(net, node);
 				fprintf(file, "\nName: %s\n", stats.Name);
-				fprintf(file, "Address: %d.%d.%d.%d\n", node[0], node[1], node[2], node[3]);
+				fprintf(file, "Address: %s\n", stats.Address.As_String(0));	// RA2: the address prints as text
 				fprintf(file, "Max avg round trip: %d\n", stats.MaxAvgRoundTrip);
 				fprintf(file, "Max round trip: %d\n", stats.MaxRoundTrip);
 				fprintf(file, "Resends: %d\n", stats.Resends);

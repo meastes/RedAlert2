@@ -22,6 +22,6 @@ enum TheaterType {
 	THEATER_TEMPERATE,
 	THEATER_SNOW,
 
-	THEATER_COUNT,
+	THEATER_COUNT=3,	// RA2: the table at 0x0079AB68 (Theater_From_Name walks it) holds temperate, snow and urban; in place, a new enumerator would unmatch vein.cpp
 	THEATER_FIRST=0
 };
