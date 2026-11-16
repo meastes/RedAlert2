@@ -1087,7 +1087,7 @@ void Fill_In_Data(void)
 				TiberiumClass const * tib = Tiberiums[0];
 
 				while (money > tib->CreditValue && hptr->Available_Storage() > 0) {
-					hptr->Harvested(1, TiberiumType(0));
+					hptr->Give_Tiberium(1, 0); // RA2: as above
 					money -= tib->CreditValue;
 				}
 			}

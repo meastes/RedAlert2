@@ -795,8 +795,8 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		static void Computer_Paranoid(void);
 		bool Is_Allowed_To_Ally(HouseClass * house) const;
 		void Super_Weapon_Handler(void);
-		int * Factory_Counter(RTTIType rtti);
-		int Factory_Count(RTTIType rtti) const;
+		int * Factory_Counter(RTTIType rtti, bool naval = false); // RA2: 0x4EAB10; ships are counted apart (NumShipyards)
+		int Factory_Count(RTTIType rtti, bool naval = false) const; // RA2: 0x4EB980; as above
 		DiffType Assign_Handicap(DiffType handicap);
 		AbstractClass * Find_Juicy_Target(Coord const & coord) const;
 		static int Build_Category(RTTIType type, int id); // RA2: 0x4EB550; the build category (5: defenses) of a building type, else 0
@@ -836,7 +836,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		void Make_Ally(HouseClass * house, bool announce = false); // RA2: 0x004E5660 takes a second argument, whether the alliance is announced (MPCooperative passes false)
 		void Make_Ally(HousesType house);
 		void Make_Ally(ObjectClass * object);
-		void Make_Enemy(HouseClass * house);
+		void Make_Enemy(HouseClass * house, bool announce = false); // RA2: 0x4E5A70 takes the announce flag as Make_Ally does
 		void Make_Enemy(HousesType house);
 		void Make_Enemy(ObjectClass * object);
 		bool Is_Ally(HousesType house) const;
@@ -914,7 +914,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		BuildingTypeClass const * Suggest_New_Building(void) const;
 		void Recalc_Center(void);
 		bool Does_Enemy_Building_Exist(StructType) const;
-		void Harvested(int tiberium, TiberiumType slot);
+		float Give_Tiberium(float amount, int slot); // RA2: 0x4E5100, was TibSun's Harvested(int, TiberiumType); returns the amount
 		BuildingClass * Emptiest_Storage_Building(void); // RA2: 0x4E5160; the house's building with the most room for tiberium
 		void Harvested_Weed(int weed, int slot);
 		void Spend_Money(int money);

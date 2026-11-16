@@ -177,6 +177,10 @@
 #include "scheme.h"
 #include "session.h"
 #include "sun.h"
+#include "capmgr.h" // RA2: CaptureManagerClass::OriginalOwner for Blowup_All
+#include "temporal.h" // RA2: TemporalClass::JustLetGo for Blowup_All
+#include "side.h" // RA2: SideClass::From_Name for the civilian side test of Is_Allowed_To_Ally
+#include "stringtable.h" // RA2: StringTable::LoadString for the end-game captions
 #include "super.h"
 #include "suprtype.h"
 #include "surface.h"
@@ -200,6 +204,8 @@
 
 #include "color.hh"
 #include "strategy.hh"
+
+extern HouseClass * ObserverHouse; // RA2: 0x00A72D28, the house of the observer (the player with team -1), as stats.cpp declares it
 
 ThreatType __fastcall Quarry_To_Threat(int quarry); // RA2: 0x6220E0, a script quarry as a threat type
 
@@ -2002,14 +2008,18 @@ void HouseClass::Attacked(BuildingClass * source)
 {
 	if (source != NULL && source->Considered_Vehicle()) return;
 
-	if (SpeakAttackDelay == 0) {
-		if (Is_Player_Control()) {
-			Submit_Radar_Event(RADAREVENT_BASE_ATTACKED, source->Center_Coord().As_Cell());
-			Speak(VOX_BASE_UNDER_ATTACK);
-			SpeakAttackDelay = Options.Normalize_Delay(int(TICKS_PER_MINUTE * Rule->SpeakDelay));
-		} else if (Is_Ally(PlayerPtr) && (Session.Type == GAME_NORMAL || !source->House->Class->IsMultiplayPassive)) {
-			Speak(VOX_ALLY_ATTACK);
-			SpeakAttackDelay = Options.Normalize_Delay(int(TICKS_PER_MINUTE * Rule->SpeakDelay));
+	bool is_player = Is_Player_Control(); // RA2: both tests are made first
+	bool is_ally = PlayerPtr != NULL && PlayerPtr != this && Is_Ally(PlayerPtr) && (Session.Type == GAME_NORMAL || !source->House->Class->IsMultiplayPassive); // RA2: as above
+
+	if (is_player) { // RA2: no SpeakAttackDelay; the radar event decides whether EVA speaks
+		if (Submit_Radar_Event(RADAREVENT_BASE_ATTACKED, source->Center_Coord().As_Cell())) { // RA2: only a radar event that was accepted is announced
+			Queue_Speech("EVA_OurBaseIsUnderAttack", -1, -1); // RA2: EVA speaks by name, then the alarm sound plays
+			VocClass::PlayGlobal(Rule->BaseUnderAttackSound, 1.0f, 0x2000); // RA2: as above
+		}
+	} else if (is_ally) { // RA2: as above
+		if (Submit_Radar_Event(RadarEventType(16), source->Center_Coord().As_Cell())) { // RA2: the radar event of an attacked ally is 16
+			Queue_Speech("EVA_OurAllyIsUnderAttack", -1, -1); // RA2: as above
+			VocClass::PlayGlobal(Rule->BaseUnderAttackSound, 1.0f, 0x2000); // RA2: as above
 		}
 	}
 
@@ -2021,6 +2031,8 @@ void HouseClass::Attacked(BuildingClass * source)
 		HouseTags[index]->Spring(TEVENT_ATTACKED);
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -2040,36 +2052,13 @@ void HouseClass::Attacked(BuildingClass * source)
  * HISTORY:                                                                                    *
  *   01/25/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-void HouseClass::Harvested(int tiberium, TiberiumType slot)
+float HouseClass::Give_Tiberium(float amount, int slot) // RA2: 0x4E5100, was TibSun's Harvested(int, TiberiumType); the credits are paid out at once, the storage is not filled
 {
-	PointTotal += tiberium * 5;
-
-	if (Session.Type != GAME_NORMAL && !IsHuman) {
-		Credits += tiberium * Tiberiums[slot]->CreditValue;
-	} else {
-		int oldcap = Capacity;
-		int oldtib = Tiberium.Get_Total_Amount();
-
-		if (tiberium + Tiberium.Get_Total_Amount() > Capacity) {
-			tiberium = Capacity - Tiberium.Get_Total_Amount();
-		}
-
-		for (int index = 0; index < Buildings.Count(); index++) {
-			BuildingClass * b = Buildings[index];
-			if (b && b->IsDown && b->House == this) {
-				if (b->Class->Capacity > 0) {
-					while (tiberium > 0 && b->Class->Capacity > b->Storage.Get_Total_Amount()) {
-						b->Storage.Increase_Amount(1, slot);
-						Tiberium.Increase_Amount(1, slot);
-						tiberium--;
-					}
-				}
-			}
-		}
-
-		Silo_Redraw_Check(oldtib, oldcap);
-	}
+	PointTotal = (int)(amount * 5.0f + PointTotal); // RA2: the score counts five points a unit, as a float
+	Credits = (int)(Tiberiums[slot]->CreditValue * Class->IncomeMult * amount + Credits); // RA2: the house type's income multiplier scales the credits
+	return(amount); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2353,13 +2342,13 @@ bool HouseClass::Is_Ally(ObjectClass const * object) const
 /// <returns>bool; Is the target friendly toward this house?</returns>
 bool HouseClass::Is_Ally(AbstractClass const * target) const
 {
-	ObjectClass const * object = dynamic_cast<ObjectClass const *>(target);
-	if (object) {
-		return(Is_Ally(object));
+	if (target != NULL && (target->AbstractFlags & 2)) { // RA2: only objects (flag 2) have an owner; the flag replaces dynamic_cast
+		return(Is_Ally(((ObjectClass const *)target)->Owner_HouseClass())); // RA2: as above
 	}
 
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -2499,9 +2488,12 @@ void HouseClass::Make_Enemy(HousesType house)
 /// out of it as well.
 /// </summary>
 /// <param name="house">The house to make an enemy of this house.</param>
-void HouseClass::Make_Enemy(HouseClass * house)
+void HouseClass::Make_Enemy(HouseClass * house, bool announce) // RA2: 0x4E5A70, takes the announce flag (not used by TibSun's body)
 {
+	bool broken = false; // RA2: set when the alliance was broken in both directions; the announcement needs it
+
 	if (Session.Type == GAME_NORMAL || (!house->Class->IsMultiplayPassive && !Class->IsMultiplayPassive)) {
+		Map.Update_Technos_Visibility(false, false); // RA2: the visibility of every techno is refreshed before and after (Reveal_Technos at the end)
 		Add_Anger(1, house);
 
 		if (house != NULL && Is_Ally(house)) {
@@ -2518,6 +2510,7 @@ void HouseClass::Make_Enemy(HouseClass * house)
 			*/
 			if (house->Is_Ally(this)) {
 				house->Allies &= ~(1L << HeapID);
+				broken = true; // RA2: as above
 
 				if (ScenarioInit) {
 					Control.Allies &= ~(1L << HeapID);
@@ -2527,18 +2520,19 @@ void HouseClass::Make_Enemy(HouseClass * house)
 			}
 
 			if (Session.Type != GAME_NORMAL && !ScenarioInit && IsHuman) {
-				char buffer[80];
-
-				wsprintf(buffer, Fetch_String(TXT_AT_WAR), (char const *)IniName, (char const *)house->IniName);
-// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
+				wchar_t buffer[80]; // RA2: the message is a wide string
+				swprintf(buffer, StringTable::LoadString("TXT_AT_WAR", 0, "D:\\Ra2\\House.CPP", 3272), UIName, house->UIName); // RA2: both house names are the wide UI names
+				Session.Messages.Add_Message(NULL, 0, buffer, Class->Scheme, TextPrintType(0x4046), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: as above
 				Map.Flag_To_Redraw();
-				if (Is_Player_Control()) {
-					Speak(VOX_ALLIANCE_BROKEN);
+				if (announce && broken && (Is_Player_Control() || house->Is_Player_Control())) { // RA2: EVA announces the broken alliance when it concerns a player's house; part of the message block
+					Queue_Speech("EVA_AllianceBroken", -1, -1); // RA2: as above
 				}
 			}
 		}
+		Map.Reveal_Technos(false, false); // RA2: as above
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -2875,15 +2869,15 @@ void HouseClass::Special_Weapon_AI(SuperWeaponType id)
 	BuildingClass * bestptr = NULL;
 	int best = -1;
 
-	for (int index = 0; index < Buildings.Count(); index++) {
-		BuildingClass * b = Buildings[index];
+	for (int index = 0; index < ::Buildings.Count(); index++) { // RA2: as below, the global building heap
+		BuildingClass * b = ::Buildings[index]; // RA2: the loop reads the global building heap, not HouseClass::Buildings
 
 		/*
 		**	If the building is valid, not in limbo, not in the process of
 		**	being destroyed and not our ally, then we can consider it.
 		*/
 		if (b != NULL && !b->IsInLimbo && b->Strength && !Is_Ally(b)) {
-			if (Percent_Chance(90) && (b->Value() > best || best == -1)) {
+			if (Random_Pick(0, 99) < 90 && (b->Value() > best || best == -1)) { // RA2: a Random_Pick(0, 99) below 90, not Percent_Chance
 				best = b->Value();
 				bestptr = b;
 			}
@@ -2895,6 +2889,7 @@ void HouseClass::Special_Weapon_AI(SuperWeaponType id)
 		Place_Special_Blast(id, cell);
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3076,19 +3071,22 @@ bool HouseClass::Place_Object(RTTIType type, Cell const & cell)
 /// <param name="product">The object that just rolled off the production line.</param>
 void HouseClass::Just_Built(TechnoClass * product)
 {
+	int sound = -1; // RA2: the creation sound of the product, played at its location below
 	IsBuiltSomething = true;
 
-	TechnoTypeClass const * ttype = product->TClass;
+	TechnoTypeClass const * ttype = product->Techno_Type_Class(); // RA2: the type through the virtual accessor
 
 	switch (product->Fetch_RTTI()) {
 		case RTTI_UNIT:
 			JustBuiltUnit = (UnitType)ttype->Fetch_Heap_ID();
 			PUQuantity.Increment(ttype->Fetch_Heap_ID());
+			sound = Rule->CreateUnitSound; // RA2: the default sound of the kind
 			break;
 
 		case RTTI_INFANTRY:
 			JustBuiltInfantry = (InfantryType)ttype->Fetch_Heap_ID();
 			PIQuantity.Increment(ttype->Fetch_Heap_ID());
+			sound = Rule->CreateInfantrySound; // RA2: as above
 			break;
 
 		case RTTI_BUILDING:
@@ -3099,10 +3097,19 @@ void HouseClass::Just_Built(TechnoClass * product)
 		case RTTI_AIRCRAFT:
 			JustBuiltAircraft = (AircraftType)ttype->Fetch_Heap_ID();
 			PAQuantity.Increment(ttype->Fetch_Heap_ID());
+			sound = Rule->CreateAircraftSound; // RA2: as above
 			break;
+	}
+	if (ttype->CreateSound != -1) { // RA2: the type's own sound wins
+		sound = ttype->CreateSound; // RA2: as above
+	}
+	if (sound != -1) { // RA2: as above
+		Coord coord = product->Position; // RA2: as above
+		VocClass::PlayAt(sound, coord); // RA2: as above
 	}
 	IsRecalcNeeded = true;
 }
+
 
 
 /***********************************************************************************************
@@ -3135,6 +3142,10 @@ bool HouseClass::Manual_Place(BuildingClass * builder,  BuildingClass * object)
 
 		Map.Repair_Mode_Control(0);
 		Map.Sell_Mode_Control(0);
+		Map.IsPowerMode = false; // RA2: placing also leaves power, waypoint, beacon and targetting mode
+		Map.IsWaypointMode = false; // RA2: as above
+		Map.IsBeaconMode = false; // RA2: as above
+		Map.IsTargettingMode = (SuperWeaponType)-1; // RA2: as above
 
 		Map.PendingObject = object->Class;
 		Map.PendingObjectPtr = object;
@@ -3147,6 +3158,7 @@ bool HouseClass::Manual_Place(BuildingClass * builder,  BuildingClass * object)
 	}
 	return(false);
 }
+
 
 
 /***************************************************************************
@@ -3380,9 +3392,8 @@ bool HouseClass::Flag_Remove(AbstractClass * target, bool set_home)
 		/*
 		**	Remove the flag from a unit
 		*/
-		UnitClass * object = target->As_UnitClass();
-		if (object) {
-			rc = object->Flag_Remove();
+		if (target->Fetch_RTTI() == RTTI_UNIT) { // RA2: tested by Fetch_RTTI, not As_UnitClass
+			rc = ((UnitClass *)target)->Flag_Remove(); // RA2: as above
 			if (rc && FlagLocation == target) {
 				FlagLocation = NULL;
 			}
@@ -3415,6 +3426,7 @@ bool HouseClass::Flag_Remove(AbstractClass * target, bool set_home)
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -3713,101 +3725,25 @@ void HouseClass::MPlayer_Defeated(void)
  *=========================================================================*/
 void HouseClass::Blowup_All(void)
 {
-	int i;
-	int damage;
-	UnitClass * uptr;
-	InfantryClass * iptr;
-	BuildingClass * bptr;
-	int count;
-
-	/*
-	**	Find everything owned by this house & blast it with a huge amount of damage
-	**	at zero range.  Do units before infantry, so the units' drivers are killed
-	**	too.  Using Explosion_Damage is like dropping a big bomb right on the
-	**	object; it will also damage anything around it.
-	*/
-	for (i = 0; i < ::Units.Count(); i++) {
-		if (::Units[i]->House == this && !::Units[i]->IsInLimbo) {
-			uptr = ::Units[i];
-
-			/*
-			**	Some units can't be killed with one shot, so keep damaging them until
-			**	they're gone.  The unit will destroy itself, and put an infantry in
-			**	its place.  When the unit destroys itself, decrement 'i' since
-			**	its pointer will be removed from the active pointer list.
-			*/
-			count = 0;
-			while (::Units[i]==uptr && uptr->Strength) {
-				damage = uptr->Strength;
-				uptr->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true);
-				count++;
-				if (count > 5 && uptr->IsActive) {
-					delete uptr;
-					break;
-				}
+	int index = 0; // RA2: one pass over every techno (no units/infantry/buildings lists)
+	TechnoClass * last = NULL; // RA2: as above
+	int damage; // RA2: as above
+	while (index < Technos.Count()) { // RA2: as above
+		TechnoClass * techno = Technos[index]; // RA2: as above
+		HouseClass * owner = techno->MindControlledBy != NULL ? techno->MindControlledBy->CaptureManager->OriginalOwner : techno->House; // RA2: a mind controlled techno belongs to its original owner
+		if (owner == this && techno != last) { // RA2: as above
+			damage = techno->Strength; // RA2: as above
+			if (techno->TemporalTargetingMe != NULL) { // RA2: a temporal warp on it is released first
+				techno->TemporalTargetingMe->JustLetGo(); // RA2: as above
 			}
-			i--;
-		}
-	}
-
-	/*
-	**	Destroy all aircraft owned by this house.
-	*/
-	for (i = 0; i < ::Aircraft.Count(); i++) {
-		if (::Aircraft[i]->House == this && !::Aircraft[i]->IsInLimbo) {
-			AircraftClass * aptr = ::Aircraft[i];
-
-			damage = aptr->Strength;
-			aptr->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true);
-			if (!aptr->IsActive) {
-				i--;
-			}
-		}
-	}
-
-	/*
-	**	Buildings don't delete themselves when they die; they shake the screen
-	**	and begin a countdown, so don't decrement 'i' when it's destroyed.
-	*/
-	for (i = 0; i < Buildings.Count(); i++) {
-		if (Buildings[i]->House == this && !Buildings[i]->IsInLimbo) {
-			bptr = Buildings[i];
-
-			count = 0;
-			while (Buildings[i]==bptr && bptr->Strength) {
-				damage = bptr->Strength;
-				bptr->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true);
-				count++;
-				if (count > 5) {
-					delete bptr;
-					break;
-				}
-			}
-		}
-	}
-
-	/*
-	**	Infantry don't delete themselves when they die; they go into a death-
-	**	animation sequence, so there's no need to decrement 'i' when they die.
-	*/
-	for (i = 0; i < Infantry.Count(); i++) {
-		if (Infantry[i]->House == this && !Infantry[i]->IsInLimbo) {
-			iptr = Infantry[i];
-
-			count = 0;
-			while (Infantry[i]==iptr && iptr->Strength) {
-				damage = iptr->Strength;
-				iptr->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true);
-
-				count++;
-				if (count > 5) {
-					delete iptr;
-					break;
-				}
-			}
+			techno->Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, true); // RA2: a forced blow with the extra flag set
+			last = techno; // RA2: as above
+		} else {
+			index++; // RA2: as above
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3863,19 +3799,23 @@ bool HouseClass::Flag_To_Win(bool silent)
 			}
 			DebugString("Frame %d, BorrowedTime == %d\n", Frame, (int)BorrowedTime);
 		}
-		if (Session.Type == GAME_NORMAL && Is_Player_Control()) {
-			Lock_Scenario_Input();
-// RA2: no Set_Caption_Text (the text is a wide string and a frame)
-			Speak(VOX_ACCOMPLISHED);
-			Map.Flag_To_Redraw();
+		if (Session.Type == GAME_NORMAL) { // RA2: the player test sits inside the game type test
+			if (Is_Player_Control()) { // RA2: as above
+				Lock_Scenario_Input(); // RA2: as above
+				TacticalMap->Set_Caption_Text(StringTable::LoadString("TXT_SCENARIO_WON", 0, "D:\\Ra2\\House.CPP", 5304), 0); // RA2: the caption is a string table text and a GRFXTXT frame
+				Queue_Speech("EVA_MissionAccomplished", -1, -1); // RA2: EVA speaks by name through Queue_Speech
+				Map.Flag_To_Redraw(); // RA2: as above
+			}
 		} else if (Is_Player_Control()) {
-// RA2: no Set_Caption_Text (the text is a wide string and a frame)
-			Speak(VOX_YOU_ARE_VICTORIOUS);
-			Map.Flag_To_Redraw();
+			TacticalMap->Set_Caption_Text(StringTable::LoadString("TXT_VICTORIOUS", 0, "D:\\Ra2\\House.CPP", 5307), 2); // RA2: as above
+			Queue_Speech("EVA_YouAreVictorious", -1, -1); // RA2: as above
+			Map.Flag_To_Redraw(); // RA2: as above
 		}
 	}
 	return(IsToWin);
 }
+
+
 
 
 /***********************************************************************************************
@@ -3907,19 +3847,25 @@ bool HouseClass::Flag_To_Lose(bool silent)
 			}
 			DebugString("Frame %d, BorrowedTime == %d\n", Frame, (int)BorrowedTime);
 		}
-		if (Session.Type == GAME_NORMAL && Is_Player_Control()) {
-			Lock_Scenario_Input();
-// RA2: no Set_Caption_Text (the text is a wide string and a frame)
-			Speak(VOX_FAIL);
-			Map.Flag_To_Redraw();
+		if (Session.Type == GAME_NORMAL) { // RA2: the player test sits inside the game type test
+			if (Is_Player_Control()) { // RA2: as above
+				Lock_Scenario_Input(); // RA2: as above
+				TacticalMap->Set_Caption_Text(StringTable::LoadString("TXT_SCENARIO_LOST", 0, "D:\\Ra2\\House.CPP", 5359), 1); // RA2: the caption is a string table text and a GRFXTXT frame
+				Queue_Speech("EVA_MissionFailed", -1, -1); // RA2: EVA speaks by name through Queue_Speech
+				Map.Flag_To_Redraw(); // RA2: as above
+			}
 		} else if (Is_Player_Control()) {
-// RA2: no Set_Caption_Text (the text is a wide string and a frame)
-			Speak(VOX_YOU_HAVE_LOST);
-			Map.Flag_To_Redraw();
+			TacticalMap->Set_Caption_Text(StringTable::LoadString("TXT_LOST", 0, "D:\\Ra2\\House.CPP", 5362), 3); // RA2: as above
+			if (PlayerPtr != ObserverHouse) { // RA2: an observer is not told that the game is lost
+				Queue_Speech("EVA_YouHaveLost", -1, -1); // RA2: as above
+			}
+			Map.Flag_To_Redraw(); // RA2: as above
 		}
 	}
 	return(IsToLose);
 }
+
+
 
 
 /// <summary>
@@ -4033,7 +3979,7 @@ void HouseClass::Sell_Wall(Cell const & cell, bool quiet)
 					if (btype != NULL && !btype->IsUnsellable) {
 
 						if (PlayerPtr == this && !quiet) {
-							Sound_Effect(Rule->SellSound);
+							VocClass::PlayGlobal(Rule->SellSound, 1.0f, 0x2000); // RA2: the sound plays centred (panning 0x2000), no Sound_Effect
 						}
 
 						btype->Cost_Of(this);
@@ -4043,6 +3989,7 @@ void HouseClass::Sell_Wall(Cell const & cell, bool quiet)
 						Map[cell].Recalc_Attributes();
 						Map[cell].Wall_Update();
 						Map.Radar_Background(cell);
+						TechnoClass::Remove_Target(&Map[cell]); // RA2: targets on the cell are dropped (0x6D7C80)
 						Map.Update_Cell_Zone(cell);
 						Map.Update_Cell_Subzones(cell);
 					}
@@ -4051,6 +3998,7 @@ void HouseClass::Sell_Wall(Cell const & cell, bool quiet)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -4189,10 +4137,11 @@ void HouseClass::Recalc_Center(void)
 		int count = 0;
 		int index;
 
-		for (index = 0; index < Buildings.Count(); index++) {
+		int buildings = Buildings.Count(); // RA2: the count is read once for each loop
+		for (index = 0; index < buildings; index++) { // RA2: as above
 			BuildingClass const * b = Buildings[index];
 
-			if (b != NULL && !b->IsInLimbo && b->House == this && b->Strength > 0) {
+			if (b != NULL && !b->IsInLimbo && b->Strength > 0) { // RA2: no owner test, the house array holds only its own buildings
 
 				/*
 				**	Give more "weight" to buildings that cost more. The presumption is that cheap
@@ -4218,7 +4167,8 @@ void HouseClass::Recalc_Center(void)
 		if (count > 0) {
 			x /= count;
 			y /= count;
-			Center = Coord(x, y);
+			Center = Coord(x, y, 0); // RA2: the height is given
+			Center = Map.Nearby_Location(Center.As_Cell(), SPEED_FOOT, -1, MZONE_NORMAL, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false).As_Coord(); // RA2: the center is moved to the nearest free cell
 		}
 
 		/*
@@ -4229,10 +4179,11 @@ void HouseClass::Recalc_Center(void)
 		if (count > 1) {
 			int radius = 0;
 
-			for (index = 0; index < Buildings.Count(); index++) {
+			buildings = Buildings.Count(); // RA2: as above
+			for (index = 0; index < buildings; index++) { // RA2: as above
 				BuildingClass const * b = Buildings[index];
 
-				if (b != NULL && !b->IsInLimbo && (HouseClass *)b->House == this && b->Strength > 0) {
+				if (b != NULL && !b->IsInLimbo && b->Strength > 0) { // RA2: as above
 					radius += Distance(Center, b->Center_Coord());
 				}
 			}
@@ -4241,10 +4192,11 @@ void HouseClass::Recalc_Center(void)
 			/*
 			**	Determine the relative strength of each base defense zone.
 			*/
-			for (index = 0; index < Buildings.Count(); index++) {
+			buildings = Buildings.Count(); // RA2: as above
+			for (index = 0; index < buildings; index++) { // RA2: as above
 				BuildingClass const * b = Buildings[index];
 
-				if (b != NULL && !b->IsInLimbo && (HouseClass *)b->House == this && b->Strength > 0) {
+				if (b != NULL && !b->IsInLimbo && b->Strength > 0) { // RA2: as above
 					ZoneType z = Which_Zone(b);
 
 					if (z != ZONE_NONE) {
@@ -4260,6 +4212,8 @@ void HouseClass::Recalc_Center(void)
 		}
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -5339,11 +5293,14 @@ void HouseClass::Tracking_Add(TechnoClass const * techno)
  * HISTORY:                                                                                    *
  *   07/30/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
-int * HouseClass::Factory_Counter(RTTIType rtti)
+int * HouseClass::Factory_Counter(RTTIType rtti, bool naval) // RA2: 0x4EAB10, takes whether the unit is a ship
 {
 	switch (rtti) {
 		case RTTI_UNITTYPE:
 		case RTTI_UNIT:
+			if (naval) { // RA2: ships are counted apart (the shipyards)
+				return(&NumShipyards); // RA2: as above
+			}
 			return(&UnitFactories);
 
 		case RTTI_AIRCRAFTTYPE:
@@ -5365,6 +5322,7 @@ int * HouseClass::Factory_Counter(RTTIType rtti)
 }
 
 
+
 /***********************************************************************************************
  * HouseClass::Active_Remove -- Remove this object from active duty for this house.            *
  *                                                                                             *
@@ -5382,13 +5340,15 @@ int * HouseClass::Factory_Counter(RTTIType rtti)
  *=============================================================================================*/
 void HouseClass::Active_Remove(TechnoClass const * techno)
 {
-	if (techno->RTTI == RTTI_BUILDING) {
-		int * fptr = Factory_Counter(((BuildingClass *)techno)->Class->ToBuild);
+	if (techno->Fetch_RTTI() == RTTI_BUILDING) { // RA2: asks the virtual Fetch_RTTI
+		TechnoTypeClass const * type = techno->Techno_Type_Class(); // RA2: the type tells whether the factory is a shipyard
+		int * fptr = Factory_Counter(((BuildingClass *)techno)->Class->ToBuild, type != NULL && type->Naval); // RA2: as above
 		if (fptr != NULL) {
 			*fptr = *fptr - 1;
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -5408,13 +5368,15 @@ void HouseClass::Active_Remove(TechnoClass const * techno)
  *=============================================================================================*/
 void HouseClass::Active_Add(TechnoClass const * techno)
 {
-	if (techno->RTTI == RTTI_BUILDING) {
-		int * fptr = Factory_Counter(((BuildingClass *)techno)->Class->ToBuild);
+	if (techno->Fetch_RTTI() == RTTI_BUILDING) { // RA2: asks the virtual Fetch_RTTI
+		TechnoTypeClass const * type = techno->Techno_Type_Class(); // RA2: the type tells whether the factory is a shipyard
+		int * fptr = Factory_Counter(((BuildingClass *)techno)->Class->ToBuild, type != NULL && type->Naval); // RA2: as above
 		if (fptr != NULL) {
 			*fptr = *fptr + 1;
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -5655,20 +5617,6 @@ int HouseClass::Build_Category(RTTIType type, int id) // RA2: 0x4EB550; not in T
 
 
 
-/// <summary>
-/// Fetches the factory that makes an object of the given kind.
-/// </summary>
-/// <param name="rtti">The kind of object.</param>
-/// <param name="naval">Whether the object is a naval one.</param>
-/// <param name="category">The build category of the object (5 is the defense category).</param>
-/// <returns>Returns with the factory, or NULL if there is none.</returns>
-/// <summary>
-/// Fetches the factory that makes an object of the given kind.
-/// </summary>
-/// <param name="rtti">The kind of object.</param>
-/// <param name="naval">Whether the object is a naval one.</param>
-/// <param name="category">The build category of the object (5 is the defense category).</param>
-/// <returns>Returns with the factory, or NULL if there is none.</returns>
 /// <summary>
 /// Fetches the factory that makes an object of the given kind.
 /// </summary>
@@ -5968,14 +5916,15 @@ void HouseClass::Set_Factory(RTTIType rtti, FactoryClass * factory)
  * HISTORY:                                                                                    *
  *   07/30/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
-int HouseClass::Factory_Count(RTTIType rtti) const
+int HouseClass::Factory_Count(RTTIType rtti, bool naval) const // RA2: 0x4EB980, takes whether the unit is a ship
 {
-	int const * ptr = ((HouseClass *)this)->Factory_Counter(rtti);
+	int const * ptr = ((HouseClass *)this)->Factory_Counter(rtti, naval); // RA2: as above
 	if (ptr != NULL) {
 		return(*ptr);
 	}
 	return(0);
 }
+
 
 
 /// <summary>
@@ -6265,6 +6214,10 @@ bool HouseClass::Is_Allowed_To_Ally(HouseClass * house) const
 		}
 	}
 
+	if (house->Class->Side == SideClass::From_Name("Civilian") && Session.Type != GAME_NORMAL) { // RA2: outside the campaign nobody allies with the civilians
+		return(false); // RA2: as above
+	}
+
 	/*
 	**	If the scenario is being set up, then alliances are always
 	**	allowed. No further checking is required.
@@ -6306,6 +6259,7 @@ bool HouseClass::Is_Allowed_To_Ally(HouseClass * house) const
 
 	return(true);
 }
+
 
 
 /***********************************************************************************************
@@ -6859,6 +6813,8 @@ void HouseClass::Tracking_Active_Remove(TechnoClass * techno, bool bycapture)
 {
 	TechnoTypeClass const * ttype;
 
+	Map.Notice_Object_Change(techno); // RA2: the sidebar is told first (SidebarClass::Notice_Object_Change, 0x67C150)
+
 	switch (techno->Fetch_RTTI()) {
 		case RTTI_BUILDING:
 			ttype = techno->TClass;
@@ -6874,7 +6830,7 @@ void HouseClass::Tracking_Active_Remove(TechnoClass * techno, bool bycapture)
 					int i = storage->First_Used_Slot();
 					while (i != -1) {
 						int amount = storage->Decrease_Amount(0x7FFFFFFF, i);
-						Harvested(amount, TiberiumType(i));
+						Give_Tiberium(amount, i); // RA2: as above
 						i = storage->First_Used_Slot();
 					}
 				} else {
@@ -6899,6 +6855,7 @@ void HouseClass::Tracking_Active_Remove(TechnoClass * techno, bool bycapture)
 			break;
 	}
 }
+
 
 
 /// <summary>
@@ -7413,8 +7370,8 @@ void HouseClass::Activate_Firestorm(void)
 	if (!FirestormDefenseActivated) {
 		DynamicVectorClass<Cell> cells;
 		FirestormDefenseActivated = true;
-		for (int i = Buildings.Count() - 1; i >= 0; i--) {
-			BuildingClass * b = Buildings[i];
+		for (int i = ::Buildings.Count() - 1; i >= 0; i--) { // RA2: as below
+			BuildingClass * b = ::Buildings[i]; // RA2: the loop reads the global building heap, not HouseClass::Buildings
 			if (b->Class->IsFirestormWall && b->House == this) {
 				b->Update_FS_Wall_State();
 				cells.Add(b->Center_Coord().As_Cell());
@@ -7424,6 +7381,7 @@ void HouseClass::Activate_Firestorm(void)
 		Map.Recalc_Cells_In_List(cells);
 	}
 }
+
 
 
 /// <summary>
@@ -7437,20 +7395,18 @@ void HouseClass::Deactivate_Firestorm(void)
 	if (FirestormDefenseActivated) {
 		FirestormDefenseActivated = false;
 		DynamicVectorClass<Cell> cells;
-		for (int i = Buildings.Count() - 1; i >= 0; i--) {
-			BuildingClass * b = Buildings[i];
+		for (int i = ::Buildings.Count() - 1; i >= 0; i--) { // RA2: as below
+			BuildingClass * b = ::Buildings[i]; // RA2: the loop reads the global building heap, not HouseClass::Buildings
 			if (b->Class->IsFirestormWall && b->House == this) {
 				b->Update_FS_Wall_State();
 				cells.Add(b->Center_Coord().As_Cell());
 			}
 		}
 		Map.Zone_Reset();
-		Map.Recalc_Cells_In_List(cells);
-		if (Is_Player_Control()) {
-			Speak(VOX_FIRESTORM_DEFENSE_OFFLINE);
-		}
+		Map.Recalc_Cells_In_List(cells); // RA2: no EVA line (Speak) when the firestorm goes offline
 	}
 }
+
 
 
 /// <summary>

@@ -5077,7 +5077,7 @@ int BuildingClass::Do_MISSION_DECONSTRUCTION(void)
 					int i = storage->First_Used_Slot();
 					while (i != -1) {
 						int amount = storage->Decrease_Amount(storage->Get_Amount(i), i);
-						House->Harvested(amount, TiberiumType(i));
+						House->Give_Tiberium(amount, i); // RA2: Give_Tiberium takes the amount and the index
 						i = storage->First_Used_Slot();
 					}
 

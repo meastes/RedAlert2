@@ -2911,7 +2911,7 @@ int UnitClass::Do_MISSION_UNLOAD(void)
 								if (Class->IsToVeinHarvest) {
 									House->Harvested_Weed(amount, slot);
 								} else {
-									House->Harvested(amount, (TiberiumType)slot);
+									House->Give_Tiberium(amount, slot); // RA2: as above
 								}
 								Set_Stage(0);
 							}
