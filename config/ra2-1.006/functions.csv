@@ -5497,7 +5497,7 @@ address,size,evidence
 0x006202C0,256,"code of src/progress.cpp, matched"
 0x006203C0,16,"code of src/progress.cpp, matched: too short for the match rule"
 0x006203D0,16,"code of src/progress.cpp, matched: too short for the match rule"
-0x006203E0,,"inferred: target of the call at 0x0065C91B in matched src/scenario.cpp; size not known"
+0x006203E0,16,"code of src/progress.cpp, matched: its code occurs at 4 addresses; placed by the gap the other functions of the file leave"
 0x006203F0,32,"code of src/progress.cpp, matched"
 0x00620410,,"inferred: target of the call at 0x0061EFCE in matched src/progress.cpp; size not known"
 0x00620600,384,"code of src/psystype.cpp, matched"
