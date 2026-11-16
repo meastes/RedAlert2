@@ -642,7 +642,7 @@ double MapRegionClass::Get_Angle_Score(const Cell & cell1, const Cell & cell2, d
 /// <param name="cptr">The cell to grow the region out from.</param>
 /// <returns>Returns with the region created. NULL is returned when the patch was
 /// dissolved rather than kept.</returns>
-MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
+MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr) // RA2: RA2's form (0x56E100): green-LAT ground counts as water-like and the wipes call Clear_Region_Cells; near miss, the exe calls TPoint2D::operator+ out of line
 {
 	int i;
 	int region_id = MapRegionClass::TotalCount;
@@ -651,7 +651,7 @@ MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
 	cells.Set_Growth_Step(50000);
 	cells.Add(cptr->Fetch_CellID());
 
-	bool has_water = cptr->Is_Tile_With_Water() || cptr->Is_Tile_Swamp();
+	bool has_water = cptr->Is_Tile_With_Water() || cptr->Is_Tile_Clear_To_Green_LAT(); // RA2: as above
 	int cell_height = cptr->Height;
 	int processed_count = 0;
 
@@ -670,7 +670,7 @@ MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
 				if (ndata.RegionID == -1 && ndata.SpreadID != region_id) {
 					ndata.SpreadID = region_id;
 					if (Map[ncell].Height == cell_height) {
-						int n_has_water = Map[ncell].Is_Tile_With_Water() || Map[ncell].Is_Tile_Swamp();
+						int n_has_water = Map[ncell].Is_Tile_With_Water() || Map[ncell].Is_Tile_Clear_To_Green_LAT(); // RA2: as above
 						if (!(has_water ^ n_has_water)) {
 							cells.Add(ncell);
 						}
@@ -696,17 +696,7 @@ MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
 					if (Map[ncell].Height != Map[region_cell].Height && !Map[ncell].Is_Tile_With_Water()) {
 						int height = Map[ncell].Height;
 
-						Map.Reset_Iterator();
-						for (CellClass *iter = Map.Iterate(); iter; iter = Map.Iterate()) {
-							CellData & idata = MapRegionClass::Get_Cell_Data(iter->Fetch_CellID());
-							if (idata.RegionID == 0) {
-								idata.RegionID = -1;
-								idata.CanExpand = false;
-								iter->ITType = ISOTILE_CLEAR;
-								iter->SubTile = 0;
-								iter->Height = (height == -1) ? RandomMapGen.CellHeight : height;
-							}
-						}
+						RandomMapGen.Clear_Region_Cells(0, -1, height, 0); // RA2: as above
 
 						reset_done = true;
 						break;
@@ -727,19 +717,7 @@ MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
 				int id = CellData::Get_Region(side_cell);
 				int height = Map[side_cell].Height;
 
-				Map.Reset_Iterator();
-				CellClass *iter = Map.Iterate();
-				while (iter != NULL) {
-					CellData & idata = MapRegionClass::Get_Cell_Data(iter->Fetch_CellID());
-					if (idata.RegionID == region_id) {
-						idata.RegionID = id;
-						idata.CanExpand = false;
-						iter->ITType = ISOTILE_CLEAR;
-						iter->SubTile = 0;
-						iter->Height = (height == -1) ? RandomMapGen.CellHeight : height;
-					}
-					iter = Map.Iterate();
-				}
+				RandomMapGen.Clear_Region_Cells(region_id, id, height, 0); // RA2: as above
 
 				reset_done = true;
 			}
@@ -757,6 +735,7 @@ MapRegionClass *MapRegionClass::Create_Region_From_Cell(CellClass *cptr)
 	region->Recount_Cells();
 	return(region);
 }
+
 
 
 /// <summary>
@@ -1331,7 +1310,7 @@ DynamicVectorClass<Cell> *MapRegionClass::Build_Border_Cell_List2(void)
 /// </summary>
 /// <param name="rings">How far out to grow, in rings.</param>
 /// <returns>bool; Did the region grow without running into a neighbor?</returns>
-bool MapRegionClass::Grow(int rings)
+bool MapRegionClass::Grow(int rings) // RA2: RA2's form of Grow (0x570040); near miss (the inlined Adjacent_Cell sum is scheduled differently)
 {
 	DynamicVectorClass<Cell> * cells = Build_Border_Cell_List();
 
@@ -1341,12 +1320,12 @@ bool MapRegionClass::Grow(int rings)
 
 		for (int j = 0; j < cells->Count(); j++) {
 			for (FacingType dir = FACING_FIRST; dir < FACING_COUNT; dir++) {
-				Cell ncell = Adjacent_Cell((*cells)[j], dir);
+				Cell ncell = Adjacent_Cell(Cell((*cells)[j]), dir); // RA2: as above
 				if (My_In_Radar(ncell)) {
 					if (Map[ncell].Height == CellHeight) {
 						MapRegionClass::CellData & data = MapRegionClass::Get_Cell_Data(ncell);
 						int id = data.RegionID;
-						if (id == -1 && Map[ncell].Is_Tile_Clear()) {
+						if (id == -1 && (Map[ncell].Is_Tile_Clear() || Map[ncell].Is_Tile_Clear_To_Green_LAT())) { // RA2: green-LAT-clear ground is claimable too
 							ncells->Add(ncell);
 							data.RegionID = ID;
 							Map[ncell].Height = CellHeight;
@@ -1367,6 +1346,7 @@ bool MapRegionClass::Grow(int rings)
 	delete cells;
 	return(true);
 }
+
 
 
 /// <summary>
@@ -1612,7 +1592,7 @@ void MapRegionClass::Build_Neighbor_Regions(void)
 /// <param name="region1">First region to connect.</param>
 /// <param name="region2">Second region to connect.</param>
 /// <returns>bool; Was a bridge placed?</returns>
-bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRegionClass * region2)
+bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass *region1,MapRegionClass *region2) // RA2: RA2's form of the bridge connector (0x570BC0)
 {
 	int id1 = region1->ID;
 	int id2 = region2->ID;
@@ -1620,7 +1600,7 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 	int tries = 0;
 	bool result = false;
 
-	do {
+	for (; tries < 200; tries++) { // RA2: as above
 		if (result) {
 			break;
 		}
@@ -1628,24 +1608,20 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 		Cell cell = Pick_Random_Cell();
 
 		Rect rect1(cell.X - 1, cell.Y, 3, 1);
-		Rect rect2(rect1.X, rect1.Y, 3, 1);
+		Rect rect2=rect1; // RA2: as above
 		Rect rect4(cell.X, cell.Y - 1, 1, 3);
-		Rect rect3(rect4.X, rect4.Y, 1, 3);
+		Rect rect3=rect4; // RA2: as above
 
 		bool allow_rect3 = true;
 		bool allow_rect1 = true;
 
 		while (!MapGeneratorClass::Can_Place_Paved_Road(rect1, false, false)) {
-			Cell cell1;
-			Cell cell2;
-			cell1.X = rect1.X;
-			cell2.X = rect1.X + 2;
 			rect1.Y--;
-			cell1.Y = rect1.Y;
-			cell2.Y = rect1.Y;
+			Cell cell1(rect1.X, rect1.Y); // RA2: as above
+			Cell cell2(rect1.X + 2, rect1.Y); // RA2: as above
 			CellClass * cptr1 = &Map[cell1];
 			CellClass * cptr2 = &Map[cell2];
-			if (!Map.In_Local_Radar(cell1) || !Map.In_Local_Radar(cell2) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) {
+			if (!Map.In_Local_Radar(cell1,true) || !Map.In_Local_Radar(cell2,true) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) { // RA2: as above
 				allow_rect1 = false;
 				break;
 			}
@@ -1654,16 +1630,12 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 		if (allow_rect1) {
 			if (MapGeneratorClass::Can_Place_Paved_Road(Rect(rect1.X, rect1.Y - 3, 3, 3), false, false)) {
 				while (!MapGeneratorClass::Can_Place_Paved_Road(rect2, false, false)) {
-					Cell cell1;
-					Cell cell2;
-					cell1.X = rect2.X;
-					cell2.X = rect2.X + 2;
 					rect2.Y++;
-					cell1.Y = rect2.Y;
-					cell2.Y = rect2.Y;
+					Cell cell1(rect2.X, rect2.Y); // RA2: as above
+					Cell cell2(rect2.X + 2, rect2.Y); // RA2: as above
 					CellClass * cptr1 = &Map[cell1];
 					CellClass * cptr2 = &Map[cell2];
-					if (!Map.In_Local_Radar(cell1) || !Map.In_Local_Radar(cell2) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) {
+					if (!Map.In_Local_Radar(cell1,true) || !Map.In_Local_Radar(cell2,true) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) { // RA2: as above
 						allow_rect1 = false;
 						break;
 					}
@@ -1680,16 +1652,12 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 		}
 
 		while (!MapGeneratorClass::Can_Place_Paved_Road(rect3, false, false)) {
-			Cell cell1;
-			Cell cell2;
-			cell1.Y = rect3.Y;
-			cell2.Y = rect3.Y + 2;
 			rect3.X--;
-			cell1.X = rect3.X;
-			cell2.X = rect3.X;
+			Cell cell1(rect3.X, rect3.Y); // RA2: as above
+			Cell cell2(rect3.X, rect3.Y + 2); // RA2: as above
 			CellClass * cptr1 = &Map[cell1];
 			CellClass * cptr2 = &Map[cell2];
-			if (!Map.In_Local_Radar(cell1) || !Map.In_Local_Radar(cell2) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) {
+			if (!Map.In_Local_Radar(cell1,true) || !Map.In_Local_Radar(cell2,true) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) { // RA2: as above
 				allow_rect3 = false;
 				break;
 			}
@@ -1698,16 +1666,12 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 		if (allow_rect3) {
 			if (MapGeneratorClass::Can_Place_Paved_Road(Rect(rect3.X - 3, rect3.Y, 3, 3), false, false)) {
 				while (!MapGeneratorClass::Can_Place_Paved_Road(rect4, false, false)) {
-					Cell cell1;
-					Cell cell2;
-					cell1.Y = rect4.Y;
-					cell2.Y = rect4.Y + 2;
 					rect4.X++;
-					cell1.X = rect4.X;
-					cell2.X = rect4.X;
+					Cell cell1(rect4.X, rect4.Y); // RA2: as above
+					Cell cell2(rect4.X, rect4.Y + 2); // RA2: as above
 					CellClass * cptr1 = &Map[cell1];
 					CellClass * cptr2 = &Map[cell2];
-					if (!Map.In_Local_Radar(cell1) || !Map.In_Local_Radar(cell2) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) {
+					if (!Map.In_Local_Radar(cell1,true) || !Map.In_Local_Radar(cell2,true) || cptr1->Is_Tile_Cliff() || cptr2->Is_Tile_Cliff()) { // RA2: as above
 						allow_rect3 = false;
 						break;
 					}
@@ -1732,24 +1696,14 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 
 		if (allow_rect1) {
 			len1 = abs(rect2.Y - rect1.Y);
-			if (RMGCellData != NULL) {
-				region_a = MapRegionClass::Get_Cell_Data(Cell(rect1.X, rect1.Y)).RegionID;
-				region_b = MapRegionClass::Get_Cell_Data(Cell(rect2.X, rect2.Y)).RegionID;
-			} else {
-				region_a = -1;
-				region_b = -1;
-			}
+			region_a = CellData::Get_Region(Cell(rect1.X, rect1.Y)); // RA2: as above
+			region_b = CellData::Get_Region(Cell(rect2.X, rect2.Y)); // RA2: as above
 		}
 
 		if (allow_rect3) {
 			len2 = abs(rect4.X - rect3.X);
-			if (RMGCellData == NULL) {
-				region_c = -1;
-				region_d = -1;
-			} else {
-				region_c = MapRegionClass::Get_Cell_Data(Cell(rect4.X, rect4.Y)).RegionID;
-				region_d = MapRegionClass::Get_Cell_Data(Cell(rect3.X, rect3.Y)).RegionID;
-			}
+			region_c = CellData::Get_Region(Cell(rect4.X, rect4.Y)); // RA2: as above
+			region_d = CellData::Get_Region(Cell(rect3.X, rect3.Y)); // RA2: as above
 		}
 
 		if (allow_rect1) {
@@ -1759,16 +1713,15 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 		}
 
 		if (allow_rect3) {
-			if (region_c == id1 && region_d == id2 || region_c == id2 && region_d == id1) {
-				if (allow_rect1) {
-					if (len1 < len2) {
-						allow_rect3 = false;
-					} else {
-						allow_rect1 = false;
-					}
-				}
-			} else {
+			if ((region_c != id1 || region_d != id2) && (region_c != id2 || region_d != id1)) { // RA2: as above
 				allow_rect3 = false;
+			}
+			if (allow_rect3 && allow_rect1) { // RA2: as above
+				if (len1 < len2) {
+					allow_rect3 = false;
+				} else {
+					allow_rect1 = false;
+				}
 			}
 		}
 
@@ -1781,45 +1734,45 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 			bridge = Rect(rect1.X, rect1.Y, 3, rect2.Y - rect1.Y + 1);
 		}
 
-		if (bridge.Is_Valid()) {
-			if (allow_rect3) {
-				if (Is_Bridge_Allowed(bridge)) {
-					for (int y = bridge.Y; y < bridge.Y + bridge.Height; y++) {
-						for (int x = bridge.X; x < bridge.X + bridge.Width; x++) {
-							if (x == bridge.X) {
-								Map[Cell(x, y)].Overlay = OVERLAY_LOWBRIDGE_21;
-							} else if (x == bridge.X + bridge.Width - 1) {
-								Map[Cell(x, y)].Overlay = OVERLAY_LOWBRIDGE_19;
-							} else {
-								Map[Cell(x, y)].Overlay = (OverlayType)(OVERLAY_LOWBRIDGE_01 + (x % 4));
-							}
-							Map[Cell(x, y)].OverlayData = y - bridge.Y;
+		if (bridge.Is_Valid() && allow_rect3) { // RA2: as above
+			if (Is_Bridge_Allowed(bridge)) {
+				for (int y = bridge.Y; y < bridge.Y + bridge.Height; y++) {
+					for (int x = bridge.X; x < bridge.X + bridge.Width; x++) {
+						if (x == bridge.X) {
+							Map[Cell(x, y)].Overlay = OVERLAY_LOWBRIDGE_21;
+						} else if (x == bridge.X + bridge.Width - 1) {
+							Map[Cell(x, y)].Overlay = OVERLAY_LOWBRIDGE_19;
+						} else {
+							Map[Cell(x, y)].Overlay = (OverlayType)(OVERLAY_LOWBRIDGE_01 + (x % 4));
 						}
+						Map[Cell(x, y)].OverlayData = y - bridge.Y;
 					}
-
-					if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X + bridge.Width, bridge.Y - 2, 6, 6), false) && Pick_Random_UInt(0, 1)) {
-						MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 10), Cell(bridge.X + bridge.Width, bridge.Y));
-					} else {
-						MapGeneratorClass::Place_Tile(IsometricTileTypeClass::PavedRoadEnds, Cell(bridge.X + bridge.Width, bridge.Y));
-					}
-
-					if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 6, bridge.Y - 2, 6, 6), false) && Pick_Random_UInt(0, 1)) {
-						MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 9), Cell(bridge.X - 4, bridge.Y));
-					} else {
-						MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoadEnds + 2), Cell(bridge.X - 1, bridge.Y));
-					}
-
-					if (!Place_Bridge_Hut(Rect(bridge.X, bridge.Y - 1, 2, 5))) {
-						Place_Bridge_Hut(Rect(bridge.X - 1, bridge.Y - 2, 3, 7));
-					}
-
-					if (!Place_Bridge_Hut(Rect(bridge.X + bridge.Width - 2, bridge.Y - 1, 2, 5))) {
-						Place_Bridge_Hut(Rect(bridge.X + bridge.Width - 2, bridge.Y - 2, 3, 7));
-					}
-
-					result = true;
 				}
-			} else if (bridge.Height > 0 && allow_rect1 && Is_Bridge_Allowed(bridge)) {
+
+				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X + bridge.Width, bridge.Y - 2, 6, 6), false) && Pick_Random_UInt(0,1)) { // RA2: as above
+					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 10), Cell(bridge.X + bridge.Width, bridge.Y));
+				} else {
+					MapGeneratorClass::Place_Tile(IsometricTileTypeClass::PavedRoadEnds, Cell(bridge.X + bridge.Width, bridge.Y));
+				}
+
+				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 6, bridge.Y - 2, 6, 6), false) && Pick_Random_UInt(0,1)) { // RA2: as above
+					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 9), Cell(bridge.X - 4, bridge.Y));
+				} else {
+					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoadEnds + 2), Cell(bridge.X - 1, bridge.Y));
+				}
+
+				if (!Place_Bridge_Hut(Rect(bridge.X, bridge.Y - 1, 2, 5))) {
+					Place_Bridge_Hut(Rect(bridge.X - 1, bridge.Y - 2, 3, 7));
+				}
+
+				if (!Place_Bridge_Hut(Rect(bridge.X + bridge.Width - 2, bridge.Y - 1, 2, 5))) {
+					Place_Bridge_Hut(Rect(bridge.X + bridge.Width - 2, bridge.Y - 2, 3, 7));
+				}
+
+				result = true;
+			}
+		} else if (bridge.Is_Valid()) { // RA2: as above
+			if (allow_rect1 && Is_Bridge_Allowed(bridge)) { // RA2: as above
 				for (int y = bridge.Y; y < bridge.Y + bridge.Height; y++) {
 					for (int x = bridge.X; x < bridge.X + bridge.Width; x++) {
 						if (y == bridge.Y) {
@@ -1833,13 +1786,13 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 					}
 				}
 
-				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 2, bridge.Y - 6, 7, 6), false) && Pick_Random_UInt(0, 1)) {
+				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 2, bridge.Y - 6, 7, 6), false) && Pick_Random_UInt(0,1)) { // RA2: as above
 					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 13), Cell(bridge.X, bridge.Y - 4));
 				} else {
 					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoadEnds + 1), Cell(bridge.X, bridge.Y - 1));
 				}
 
-				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 2, bridge.Y + bridge.Height, 7, 6), false) && Pick_Random_UInt(0, 1)) {
+				if (MapGeneratorClass::Can_Place_Paved_Road_End(Rect(bridge.X - 2, bridge.Y + bridge.Height, 7, 6), false) && Pick_Random_UInt(0,1)) { // RA2: as above
 					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoads + 12), Cell(bridge.X, bridge.Y + bridge.Height));
 				} else {
 					MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::PavedRoadEnds + 3), Cell(bridge.X, bridge.Y + bridge.Height));
@@ -1857,10 +1810,11 @@ bool MapRegionClass::Connect_Regions_With_Bridge(MapRegionClass * region1, MapRe
 			}
 		}
 
-	} while (++tries < 200);
+	}
 
 	return(result);
 }
+
 
 
 /// <summary>
@@ -1966,7 +1920,7 @@ void MapRegionClass::Make_Region_Connections(void)
 				while (total < target && tries < 100) {
 					Cell cell = (*cells)[Pick_Random_UInt(0, cells->Count() - 1)];
 					if (Map.In_Local_Radar(cell)) {
-						total += region2->Connect_Regions_With_Ramp(cell, id2, (tries > 50)) ? 1 : 0;
+						total += region2->Connect_Regions_With_Ramp(cell, id2, (float)tries * 0.01f) ? 1 : 0; // RA2: the third argument is a float density rising by 0.01 per try (0x7A5DF0), not a flag after 50 tries
 					}
 					tries++;
 				}
@@ -1981,6 +1935,7 @@ void MapRegionClass::Make_Region_Connections(void)
 }
 
 
+
 /// <summary>
 /// Carves a ramp joining this region to a lower neighbor.
 /// This routine is called by the region connector for each candidate cell along the
@@ -1993,200 +1948,117 @@ void MapRegionClass::Make_Region_Connections(void)
 /// <param name="region_id">The region on the far side of the height change.</param>
 /// <param name="allow_fallback">Should default ramp placements be tried if nothing suits?</param>
 /// <returns>bool; Was a ramp carved?</returns>
-bool MapRegionClass::Connect_Regions_With_Ramp(Cell const & cell, int region_id, bool allow_fallback)
+bool MapRegionClass::Connect_Regions_With_Ramp(Cell const &cell,int region_id, float density) // RA2: RA2's form of the ramp connector (0x572270): a float density, the neighbor mask as a bit set, do/while(0) with break once a ramp is built
 {
-	bool valid = true;
-	unsigned mask = Build_Neighbor_Region_Mask(cell, valid, region_id);
-	if (!valid) {
-		return(false);
+	bool valid=true; // RA2: as above
+	unsigned mask=Build_Neighbor_Region_Mask(cell,valid,region_id,density); // RA2: as above
+	if(!valid)return(false); // RA2: as above
+	bool result=false; // RA2: as above
+	if(mask==(MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_E | MG_FACINGF_SE | MG_FACINGF_S | MG_FACINGF_SW | MG_FACINGF_W | MG_FACINGF_NW))return(false); // RA2: as above
+	do {
+	Cell first,second; // RA2: as above
+	if((mask & (MG_FACINGF_N | MG_FACINGF_E))==(MG_FACINGF_N | MG_FACINGF_E) && (mask & (MG_FACINGF_S | MG_FACINGF_SW | MG_FACINGF_W))==0) { // RA2: as above
+		first.X=cell.X-1;first.Y=cell.Y-5; // RA2: as above
+		second.X=cell.X+5;second.Y=cell.Y+1; // RA2: as above
+		if(mask & MG_FACINGF_NW)++first.Y; // RA2: as above
+		if(mask & MG_FACINGF_SE)--second.X; // RA2: as above
+		result=Build_Corner_Ramp_SW(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
 	}
-
-	bool result = false;
-
-	if (mask == (MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_E | MG_FACINGF_SE | MG_FACINGF_S | MG_FACINGF_SW | MG_FACINGF_W | MG_FACINGF_NW)) {
-		return(false);
+	if((mask & (MG_FACINGF_E | MG_FACINGF_S))==(MG_FACINGF_E | MG_FACINGF_S) && (mask & (MG_FACINGF_NE | MG_FACINGF_SW))==0) { // RA2: as above
+		first.X=cell.X+5;first.Y=cell.Y-1; // RA2: as above
+		second.X=cell.X-1;second.Y=cell.Y+5; // RA2: as above
+		if(mask & MG_FACINGF_SW)--second.Y; // RA2: as above
+		if(mask & MG_FACINGF_NE)--first.X; // RA2: as above
+		result=Build_Corner_Ramp_NW(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
 	}
-
-	{
-		Cell c1;
-		Cell c2;
-
-		/*
-		 * Try each of the four corner ramp orientations that matches the
-		 * neighbor mask, then the four straight ramp orientations.
-		 */
-		if ((mask & (MG_FACINGF_N | MG_FACINGF_E)) == (MG_FACINGF_N | MG_FACINGF_E)
-			&& (mask & (MG_FACINGF_S | MG_FACINGF_SW | MG_FACINGF_W)) == 0) {
-			c1.X = cell.X - 1;
-			c1.Y = cell.Y - 5;
-			c2.X = cell.X + 5;
-			c2.Y = cell.Y + 1;
-			if ((mask & MG_FACINGF_NW) != 0) {
-				++c1.Y;
-			}
-			if ((mask & MG_FACINGF_SE) != 0) {
-				--c2.X;
-			}
-			result = Build_Corner_Ramp_SW(c1, c2, region_id);
+	if((mask & (MG_FACINGF_S | MG_FACINGF_W))==(MG_FACINGF_S | MG_FACINGF_W) && (mask & (MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_E))==0) { // RA2: as above
+		first.X=cell.X+1;first.Y=cell.Y+5; // RA2: as above
+		second.X=cell.X-5;second.Y=cell.Y-1; // RA2: as above
+		if(mask & MG_FACINGF_NW)--second.X; // RA2: as above
+		if(mask & MG_FACINGF_SE)--first.Y; // RA2: as above
+		result=Build_Corner_Ramp_NE(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
+	}
+	if((mask & (MG_FACINGF_N | MG_FACINGF_W))==(MG_FACINGF_N | MG_FACINGF_W) && (mask & (MG_FACINGF_E | MG_FACINGF_SE | MG_FACINGF_S))==0) { // RA2: as above
+		first.X=cell.X-5;first.Y=cell.Y+1; // RA2: as above
+		second.X=cell.X+1;second.Y=cell.Y-5; // RA2: as above
+		if(mask & MG_FACINGF_NE)++second.Y; // RA2: as above
+		if(mask & MG_FACINGF_SW)++first.X; // RA2: as above
+		result=Build_Corner_Ramp_NE(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
+	}
+	if((mask & (MG_FACINGF_SW | MG_FACINGF_W | MG_FACINGF_NW))==0 && (mask & (MG_FACINGF_N | MG_FACINGF_S))!=0) { // RA2: as above
+		first.X=cell.X-1;first.Y=cell.Y-4; // RA2: as above
+		second.X=first.X;second.Y=cell.Y+4; // RA2: as above
+		if(mask & MG_FACINGF_N) {++first.Y;++second.Y;} // RA2: as above
+		if(mask & MG_FACINGF_S) {--second.Y;--first.Y;} // RA2: as above
+		first.X+=(short)Pick_Random_UInt(0,1); // RA2: as above
+		second.X+=(short)Pick_Random_UInt(0,1); // RA2: as above
+		result=Build_West_Ramp(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
+	}
+	if((mask & (MG_FACINGF_NE | MG_FACINGF_E | MG_FACINGF_SE))==0 && (mask & (MG_FACINGF_N | MG_FACINGF_S))!=0) { // RA2: as above
+		first.X=cell.X+1;first.Y=cell.Y+4; // RA2: as above
+		second.X=first.X;second.Y=cell.Y-4; // RA2: as above
+		if(mask & MG_FACINGF_N) {++second.Y;++first.Y;} // RA2: as above
+		if(mask & MG_FACINGF_S) {--first.Y;--second.Y;} // RA2: as above
+		first.X+=(short)Pick_Random_UInt(0,1)-1; // RA2: as above
+		second.X+=(short)Pick_Random_UInt(0,1)-1; // RA2: as above
+		result=Build_East_Ramp(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
+	}
+	if((mask & (MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_NW))==0 && (mask & (MG_FACINGF_E | MG_FACINGF_W))!=0) { // RA2: as above
+		first.X=cell.X+4;first.Y=cell.Y-1; // RA2: as above
+		second.X=cell.X-4;second.Y=first.Y; // RA2: as above
+		if(mask & MG_FACINGF_W) {++second.X;++first.X;} // RA2: as above
+		if(mask & MG_FACINGF_E) {--first.X;--second.X;} // RA2: as above
+		first.Y+=(short)Pick_Random_UInt(0,1); // RA2: as above
+		second.Y+=(short)Pick_Random_UInt(0,1); // RA2: as above
+		result=Build_North_Ramp(first,second,region_id); // RA2: as above
+		if(result)break; // RA2: as above
+	}
+	if((mask & (MG_FACINGF_SE | MG_FACINGF_S | MG_FACINGF_SW))==0 && (mask & (MG_FACINGF_E | MG_FACINGF_W))!=0) { // RA2: as above
+		first.X=cell.X-4;first.Y=cell.Y+1; // RA2: as above
+		second.X=cell.X+4;second.Y=first.Y; // RA2: as above
+		if(mask & MG_FACINGF_W) {++first.X;++second.X;} // RA2: as above
+		if(mask & MG_FACINGF_E) {--second.X;--first.X;} // RA2: as above
+		first.Y+=(short)Pick_Random_UInt(0,1)-1; // RA2: as above
+		second.Y+=(short)Pick_Random_UInt(0,1)-1; // RA2: as above
+		result=Build_South_Ramp(first,second,region_id); // RA2: as above
+	}
+	} while(0); // RA2: as above
+	if(density>0.5f && !result) { // RA2: as above
+		Cell first,second; // RA2: as above
+		if((mask & MG_FACINGF_S)==0) { // RA2: as above
+			first.X=cell.X-4;first.Y=cell.Y+1; // RA2: as above
+			second.X=cell.X+4;second.Y=cell.Y+1; // RA2: as above
+			result=Build_South_Ramp(first,second,region_id); // RA2: as above
+			if(result)return result; // RA2: as above
 		}
-
-		if (!result && (mask & (MG_FACINGF_E | MG_FACINGF_S)) == (MG_FACINGF_E | MG_FACINGF_S)
-			&& (mask & (MG_FACINGF_NE | MG_FACINGF_SW)) == 0) {
-			c1.X = cell.X + 5;
-			c1.Y = cell.Y - 1;
-			c2.X = cell.X - 1;
-			c2.Y = cell.Y + 5;
-			if ((mask & MG_FACINGF_SW) != 0) {
-				--c2.Y;
-			}
-			if ((mask & MG_FACINGF_NE) != 0) {
-				--c1.X;
-			}
-			result = Build_Corner_Ramp_NW(c1, c2, region_id);
+		if((mask & MG_FACINGF_E)==0) { // RA2: as above
+			first.X=cell.X+1;first.Y=cell.Y+4; // RA2: as above
+			second.X=cell.X+1;second.Y=cell.Y-4; // RA2: as above
+			result=Build_East_Ramp(first,second,region_id); // RA2: as above
+			if(result)return result; // RA2: as above
 		}
-
-		if (!result && (mask & (MG_FACINGF_S | MG_FACINGF_W)) == (MG_FACINGF_S | MG_FACINGF_W)
-			&& (mask & (MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_E)) == 0) {
-			c1.X = cell.X + 1;
-			c1.Y = cell.Y + 5;
-			c2.X = cell.X - 5;
-			c2.Y = cell.Y - 1;
-			if ((mask & MG_FACINGF_NW) != 0) {
-				--c2.X;
-			}
-			if ((mask & MG_FACINGF_SE) != 0) {
-				--c1.Y;
-			}
-			result = Build_Corner_Ramp_NE(c1, c2, region_id);
+		if((mask & MG_FACINGF_S)==0) { // RA2: as above
+			first.X=cell.X+4;first.Y=cell.Y-1; // RA2: as above
+			second.X=cell.X-4;second.Y=cell.Y-1; // RA2: as above
+			result=Build_North_Ramp(first,second,region_id); // RA2: as above
+			if(result)return result; // RA2: as above
 		}
-
-		if (!result && (mask & (MG_FACINGF_N | MG_FACINGF_W)) == (MG_FACINGF_N | MG_FACINGF_W)
-			&& (mask & (MG_FACINGF_E | MG_FACINGF_SE | MG_FACINGF_S)) == 0) {
-			c1.X = cell.X - 5;
-			c1.Y = cell.Y + 1;
-			c2.X = cell.X + 1;
-			c2.Y = cell.Y - 5;
-			if ((mask & MG_FACINGF_NE) != 0) {
-				++c2.Y;
-			}
-			if ((mask & MG_FACINGF_SW) != 0) {
-				++c1.X;
-			}
-			result = Build_Corner_Ramp_NE(c1, c2, region_id);
-		}
-
-		if (!result && (mask & (MG_FACINGF_SW | MG_FACINGF_W | MG_FACINGF_NW)) == 0
-			&& (mask & (MG_FACINGF_N | MG_FACINGF_S)) != 0) {
-			c1.X = cell.X - 1;
-			c1.Y = cell.Y - 4;
-			c2.X = c1.X;
-			c2.Y = cell.Y + 4;
-			if ((mask & MG_FACINGF_N) != 0) {
-				++c1.Y;
-				++c2.Y;
-			}
-			if ((mask & MG_FACINGF_S) != 0) {
-				--c2.Y;
-				--c1.Y;
-			}
-
-			c1.X += Pick_Random_UInt(0, 1);
-			c2.X += Pick_Random_UInt(0, 1);
-
-			result = Build_West_Ramp(c1, c2, region_id);
-		}
-
-		if (!result && (mask & (MG_FACINGF_NE | MG_FACINGF_E | MG_FACINGF_SE)) == 0
-			&& (mask & (MG_FACINGF_N | MG_FACINGF_S)) != 0) {
-			c1.X = cell.X + 1;
-			c1.Y = cell.Y + 4;
-			c2.X = c1.X;
-			c2.Y = cell.Y - 4;
-			if ((mask & MG_FACINGF_N) != 0) {
-				++c2.Y;
-				++c1.Y;
-			}
-			if ((mask & MG_FACINGF_S) != 0) {
-				--c1.Y;
-				--c2.Y;
-			}
-
-			c1.X += Pick_Random_UInt(0, 1) - 1;
-			c2.X += Pick_Random_UInt(0, 1) - 1;
-
-			result = Build_East_Ramp(c1, c2, region_id);
-		}
-
-		if (!result && (mask & (MG_FACINGF_N | MG_FACINGF_NE | MG_FACINGF_NW)) == 0
-			&& (mask & (MG_FACINGF_E | MG_FACINGF_W)) != 0) {
-			c1.X = cell.X + 4;
-			c1.Y = cell.Y - 1;
-			c2.X = cell.X - 4;
-			c2.Y = c1.Y;
-			if ((mask & MG_FACINGF_W) != 0) {
-				++c2.X;
-				++c1.X;
-			}
-			if ((mask & MG_FACINGF_E) != 0) {
-				--c1.X;
-				--c2.X;
-			}
-
-			c1.Y += Pick_Random_UInt(0, 1);
-			c2.Y += Pick_Random_UInt(0, 1);
-
-			result = Build_North_Ramp(c1, c2, region_id);
-		}
-
-		if (!result && (mask & (MG_FACINGF_SE | MG_FACINGF_S | MG_FACINGF_SW)) == 0
-			&& (mask & (MG_FACINGF_E | MG_FACINGF_W)) != 0) {
-			c1.X = cell.X - 4;
-			c1.Y = cell.Y + 1;
-			c2.X = cell.X + 4;
-			c2.Y = c1.Y;
-			if ((mask & MG_FACINGF_W) != 0) {
-				++c1.X;
-				++c2.X;
-			}
-			if ((mask & MG_FACINGF_E) != 0) {
-				--c2.X;
-				--c1.X;
-			}
-
-			c1.Y += Pick_Random_UInt(0, 1) - 1;
-			c2.Y += Pick_Random_UInt(0, 1) - 1;
-
-			result = Build_South_Ramp(c1, c2, region_id);
-		}
-
-		/*
-		 * If nothing fit the mask, optionally force a default straight ramp
-		 * in whatever direction isn't blocked by a diagonal neighbor.
-		 */
-		if (allow_fallback) {
-			if (!result) {
-
-				if ((mask & MG_FACINGF_S) == 0) {
-					result = Build_South_Ramp(Cell(cell.X - 4, cell.Y + 1), Cell(cell.X + 4, cell.Y + 1), region_id);
-				}
-
-				if (!result && (mask & MG_FACINGF_E) == 0) {
-					result = Build_East_Ramp(Cell(cell.X + 1, cell.Y + 4), Cell(cell.X + 1, cell.Y - 4), region_id);
-				}
-
-				if (!result && (mask & MG_FACINGF_S) == 0) {
-					result = Build_North_Ramp(Cell(cell.X + 4, cell.Y - 1), Cell(cell.X - 4, cell.Y - 1), region_id);
-				}
-
-				if (!result && (mask & MG_FACINGF_W) == 0) {
-					return(Build_West_Ramp(Cell(cell.X - 1, cell.Y - 4), Cell(cell.X - 1, cell.Y + 4), region_id));
-				}
-			}
+		if((mask & MG_FACINGF_W)==0) { // RA2: as above
+			first.X=cell.X-1;first.Y=cell.Y-4; // RA2: as above
+			second.X=cell.X-1;second.Y=cell.Y+4; // RA2: as above
+			result=Build_West_Ramp(first,second,region_id); // RA2: as above
+			if(result)return result; // RA2: as above
 		}
 	}
-
-	return(result);
+	return result; // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2200,13 +2072,16 @@ bool MapRegionClass::Connect_Regions_With_Ramp(Cell const & cell, int region_id,
 /// <param name="valid">Cleared when the site is unsuitable for a ramp.</param>
 /// <returns>Returns with a mask of the facings in which the region continues, or zero
 /// if the site was refused.</returns>
-unsigned MapRegionClass::Build_Neighbor_Region_Mask(Cell const & cell, bool & valid, int unknown)
+unsigned MapRegionClass::Build_Neighbor_Region_Mask(Cell const & cell, bool & valid, int unknown, float density) // RA2: a fourth parameter, the density scaling the required cell count
 {
+	static const double _count_minimum = 5.0; // RA2: static constants (0x7A5C10, 0x7A5C18), not folded literals
+	static const double _count_maximum = 15.0; // RA2: as above
+	int required = (int)((_count_maximum - _count_minimum) * (1.0f - density) + _count_minimum); // RA2: the bounds are static constants, not folded literals; the required count scales with the density
 	Cell c = (cell - Cell(2, 2));
 	int ox = c.X;
 	int oy = c.Y;
 
-	if (!MapGeneratorClass::Region_Cell_Count_At_Least(Rect(ox, oy, 5, 5), ID, unknown, 6)) {
+	if (!MapGeneratorClass::Region_Cell_Count_At_Least(Rect(ox, oy, 5, 5), ID, unknown, required)) { // RA2: the computed count instead of 6
 		valid = false;
 		return(0);
 	}
@@ -2215,7 +2090,7 @@ unsigned MapRegionClass::Build_Neighbor_Region_Mask(Cell const & cell, bool & va
 	for (int y = 0; y < 3; y++) {
 		for (int x = 0; x < 3; x++) {
 			if (y != 1 || x != 1) {
-				if (MapGeneratorClass::Region_Cell_Count_At_Least(Rect(ox + 5 * (x - 1), oy + 5 * (y - 1), 5, 5), ID, unknown, 6)) {
+				if (MapGeneratorClass::Region_Cell_Count_At_Least(Rect(ox + 5 * (x - 1), oy + 5 * (y - 1), 5, 5), ID, unknown, required)) { // RA2: as above
 					/// One bit per neighboring direction, clockwise from the northeast, laid out
 					/// as a 3x3 grid so that it can be indexed by the offsets of the scan below.
 					static int _facing_bits[3][3] = {
@@ -2231,6 +2106,7 @@ unsigned MapRegionClass::Build_Neighbor_Region_Mask(Cell const & cell, bool & va
 
 	return(mask);
 }
+
 
 
 /// <summary>
@@ -2331,120 +2207,64 @@ bool MapRegionClass::Build_South_Ramp(Cell const & cell1, Cell const & cell2, in
 /// <param name="cell2">Top endpoint of the ramp.</param>
 /// <param name="region_id">The region whose height the leveled ground adopts.</param>
 /// <returns>bool; Was the ramp carved?</returns>
-bool MapRegionClass::Build_East_Ramp(Cell const & cell1, Cell const & cell2, int region_id)
+bool MapRegionClass::Build_East_Ramp(Cell const &first,Cell const &second,int lowRegion) // RA2: RA2's form of the east ramp (0x573040), with the ramp height and shape tables of 0x7E0A64 / 0x7E0A78
 {
-	/*
-	 * Compute a bounding rect around the ramp area and validate it.
-	 */
-	int x_max = MAX(cell1.X, cell2.X);
-	int x_min = MIN(cell1.X, cell2.X);
-
-	Rect rect;
-	rect.X      = x_min - 3;
-	rect.Y      = cell2.Y - 4;
-	rect.Height = cell1.Y - cell2.Y + 9;
-	rect.Width  = x_max - x_min + 11;
-
-	if (!Is_Ramp_Area_Clear(rect, region_id)) {
+	static int RampHeights[] = {3, 2, 1, 0, 0}; // RA2: the table at 0x7E0A28
+	static int RampShapes[] = {10, 14, 14, 14, 6, 11, 15, 15, 15, 7}; // RA2: the table at 0x7E0A3C
+	Rect area((first.X<second.X?first.X:second.X)-3,second.Y-4,(first.X>second.X?first.X:second.X)-(first.X<second.X?first.X:second.X)+11,first.Y-second.Y+9); // RA2: as above
+	if(!Is_Ramp_Area_Clear(area,lowRegion)) { // RA2: as above
 		return(false);
 	}
-
-	/*
-	 * The ramp body drifts sideways as it runs; reject if the drift is too
-	 * large to fit within the vertical span.
-	 */
-	int dx = cell2.X - cell1.X;
-	int dy = cell1.Y - cell2.Y;
-	int abs_dx = abs(dx);
-	if (abs_dx > dy - 5) {
+	int drift=second.X-first.X; // RA2: as above
+	int span=abs(drift); // RA2: as above
+	int height=first.Y-second.Y; // RA2: as above
+	if(span>height-5) { // RA2: as above
 		return(false);
 	}
-
-	int half = (dy + 1) / 2 + 2;
-
-	/*
-	 * Level the top and bottom halves on either side of the ramp, the far
-	 * side to the target region's height and the near side to ours.
-	 */
-	Flatten_Area(Rect(cell1.X + 1, cell1.Y - (dy + 1) / 2, 7, half + 3), region_id);
-	Flatten_Area(Rect(cell2.X + 1, rect.Y, 7, half + 2), region_id);
-	Flatten_Area(Rect(rect.X + 2, cell1.Y - (dy + 1) / 2, cell1.X - rect.X - 1, (dy + 1) / 2 + 1));
-	Flatten_Area(Rect(rect.X + 2, cell2.Y, cell2.X - rect.X - 1, (dy + 1) / 2));
-
-	/*
-	 * Place the two slope set pieces at the ramp ends.
-	 */
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 2), cell1 - Cell(0, 2), region_id, CellHeight);
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 3), cell2, region_id, CellHeight);
-
-	/*
-	 * Carve the diagonal jog that absorbs the horizontal drift between the two
-	 * endpoints. A random pick decides whether the jog sits at the near or the
-	 * far end of the ramp; the straight remainder is offset accordingly.
-	 */
-	Cell cell;
-	Cell tail(0, 0);
-
-	if (dx != 0) {
-		int rsel = Pick_Random_UInt(0, 1);
-
-		int right = dx > 0;
-		Cell bias((dx >= 0) - 1, 0);
-
-		if (rsel == 1) {
-			tail.X = dx;
-			tail.Y = -abs_dx;
+	int half=(height+1)/2+2; // RA2: as above
+	Flatten_Area(Rect(first.X+1,first.Y-half+2,7,half+3),lowRegion); // RA2: as above
+	Flatten_Area(Rect(second.X+1,area.Y,7,half+2),lowRegion); // RA2: as above
+	Flatten_Area(Rect(area.X+2,first.Y-half+2,first.X-area.X-1,half-1)); // RA2: as above
+	Flatten_Area(Rect(area.X+2,second.Y,second.X-area.X-1,half-2)); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 2),first-Cell(0,2),lowRegion,CellHeight); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 3),second,lowRegion,CellHeight); // RA2: as above
+	Cell tail(0,0); // RA2: as above
+	if(drift!=0) { // RA2: as above
+		int pick=Pick_Random_UInt(0,1); // RA2: as above
+		int down=drift>0; // RA2: as above
+		Cell bias(drift<0?-1:0,0); // RA2: as above
+		if(pick==1) { // RA2: as above
+			tail+=Cell(drift,-span); // RA2: as above
 		} else {
-			bias = Cell((dx >= 0) - 1, -(short)(cell1.Y - abs_dx - cell2.Y - 5));
+			bias-=Cell(0,first.Y-(short)span-second.Y-5); // RA2: as above
 		}
-
-		int forward = 0;
-		if (abs_dx > 0) {
-			int backward = 0;
-			do {
-				static int _heights[] = {3, 2, 1, 0, 0};
-				static int _ramps[] = {10, 14, 14, 14, 6, 11, 15, 15, 15, 7};
-
-				for (int row = 0; row < 5; row++) {
-					int add_x = right ? forward : backward;
-
-					Cell pos = Cell(cell1.X, cell1.Y - 3) + Cell(row, -forward) + bias;
-					cell = Cell(pos.X + add_x, pos.Y);
-
-					CellClass * cellptr = &Map[cell];
-
-					unsigned char height = (unsigned char)_heights[row];
-					cellptr->Height = CellHeight + height - 4;
-
-					unsigned char ramp = (unsigned char)_ramps[5 * right + row];
-					cellptr->Ramp = ramp;
-					cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + ramp - 1);
-					cellptr->SubTile = 0;
-				}
-
-				forward++;
-				backward--;
-			} while (forward < abs_dx);
+		for(int forward=0;forward<span;forward++) { // RA2: as above
+			for(int row=0;row<5;row++) { // RA2: as above
+				short offset=down?forward:-forward; // RA2: as above
+				Cell position=Cell(first.X,first.Y-3)+Cell(row,-forward)+bias; // RA2: as above
+				position=Cell(position.X+offset,position.Y); // RA2: as above
+				CellClass &target=Map[position]; // RA2: as above
+				target.Height=(char)(RampHeights[row] + CellHeight - 4); // RA2: as above
+				target.Ramp=(unsigned char)RampShapes[5*down+row]; // RA2: as above
+				target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + target.Ramp - 1); // RA2: as above
+				target.SubTile=0; // RA2: as above
+			}
 		}
 	}
-
-	/*
-	 * Extend the straight ramp over whatever vertical span the jog didn't use.
-	 */
-	for (int y = 0; y < cell1.Y - cell2.Y - abs_dx - 5; y++) {
-		for (int i = 0; i < 4; i++) {
-			cell = Cell(cell1.X, cell1.Y - 3) + Cell(i, -y) + tail;
-			CellData::Set_Region(cell, region_id);
-			CellClass * cellptr = &Map[cell];
-			cellptr->Height = CellHeight - i - 1;
-			cellptr->Ramp = 3;
-			cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 2);
-			cellptr->SubTile = 0;
+	for(int column=0;column<first.Y-second.Y-span-5;column++) { // RA2: as above
+		for(int row=0;row<4;row++) { // RA2: as above
+			Cell position=Cell(first.X,first.Y-3)+Cell(row,-column)+tail; // RA2: as above
+			CellData::Set_Region(position,lowRegion); // RA2: as above
+			CellClass &target=Map[position]; // RA2: as above
+			target.Height=(char)(CellHeight-(char)row-1); // RA2: as above
+			target.Ramp=3; // RA2: as above
+			target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 2u); // RA2: as above
+			target.SubTile=0; // RA2: as above
 		}
 	}
-
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2457,115 +2277,67 @@ bool MapRegionClass::Build_East_Ramp(Cell const & cell1, Cell const & cell2, int
 /// <param name="cell2">West endpoint of the ramp.</param>
 /// <param name="region_id">The region whose height the leveled ground adopts.</param>
 /// <returns>bool; Was the ramp carved?</returns>
-bool MapRegionClass::Build_North_Ramp(Cell const & cell1, Cell const & cell2, int region_id)
+bool MapRegionClass::Build_North_Ramp(Cell const &first,Cell const &second,int lowRegion) // RA2: RA2's form of the north ramp (0x573680); near miss, 341 bytes differ from offset 1026 (register choice of the inlined Cell sum)
 {
-	/*
-	 * Compute a bounding rect around the ramp area and validate it.
-	 */
-	Rect rect(cell2.X - 4, MIN(cell1.Y, cell2.Y) - 7, cell1.X - cell2.X + 8, MAX(cell1.Y, cell2.Y) - MIN(cell1.Y, cell2.Y) + 11);
-	if (!Is_Ramp_Area_Clear(rect, region_id)) {
+	static int RampHeights[] = {3, 2, 1, 0, 0}; // RA2: the table at 0x7E0A64
+	static int RampShapes[] = {10, 14, 14, 14, 6, 9, 13, 13, 13, 5}; // RA2: the table at 0x7E0A78
+	Rect area(second.X-4,(first.Y<second.Y?first.Y:second.Y)-7,first.X-second.X+8,(first.Y>second.Y?first.Y:second.Y)-(first.Y<second.Y?first.Y:second.Y)+11); // RA2: as above
+	if(!Is_Ramp_Area_Clear(area,lowRegion)) { // RA2: as above
 		return(false);
 	}
-
-	/*
-	 * The ramp body drifts sideways as it runs; reject if the drift is too
-	 * large to fit within the horizontal span.
-	 */
-	int dy = cell2.Y - cell1.Y;
-	int dx = cell1.X - cell2.X;
-	int abs_dy = abs(dy);
-	if (abs_dy > dx - 5) {
+	int drift=second.Y-first.Y; // RA2: as above
+	int span=abs(drift); // RA2: as above
+	int width=first.X-second.X; // RA2: as above
+	if(span>width-5) { // RA2: as above
 		return(false);
 	}
-
-	int half = (dx + 1) / 2 + 3;
-
-	/*
-	 * Level the left and right halves on either side of the ramp, the far
-	 * side to the target region's height and the near side to ours.
-	 */
-	Flatten_Area(Rect(rect.X, rect.Y, half + 2, cell2.Y - rect.Y), region_id);
-	Flatten_Area(Rect(cell1.X - half + 2, rect.Y, half + 3, cell1.Y - rect.Y), region_id);
-	Flatten_Area(Rect(cell2.X, cell2.Y, half - 2, rect.Height + rect.Y - cell2.Y - 2));
-	Flatten_Area(Rect(cell1.X - half + 2, cell1.Y, half - 1, rect.Height + rect.Y - cell1.Y - 2));
-
-	/*
-	 * Place the three slope set pieces at the ramp ends.
-	 */
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 4), cell2 - Cell(0, 3), region_id, CellHeight);
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 5), cell1 - Cell(2, 3), region_id, CellHeight);
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 6), cell1 - Cell(1, 1), region_id, CellHeight);
-
-	/*
-	 * Carve the diagonal jog that absorbs the vertical drift between the two
-	 * endpoints. A random pick decides whether the jog sits at the near or the
-	 * far end of the ramp; the straight remainder is offset accordingly.
-	 */
-	Cell cell;
-	Cell tail(0, 0);
-
-	if (dy != 0) {
-		int rsel = Pick_Random_UInt(0, 1);
-
+	int half=(width+1)/2+3; // RA2: as above
+	Flatten_Area(Rect(area.X,area.Y,half+2,second.Y-area.Y),lowRegion); // RA2: as above
+	Flatten_Area(Rect(first.X-half+2,area.Y,half+3,first.Y-area.Y),lowRegion); // RA2: as above
+	Flatten_Area(Rect(second.X,second.Y,half-2,area.Y+area.Height-second.Y-2)); // RA2: as above
+	Flatten_Area(Rect(first.X-half+2,first.Y,half-1,area.Y+area.Height-first.Y-2)); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 4),second-Cell(0,3),lowRegion,CellHeight); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 5),first-Cell(2,3),lowRegion,CellHeight); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 6),first-Cell(1,1),lowRegion,CellHeight); // RA2: as above
+	Cell tail(0,0); // RA2: as above
+	if(drift!=0) { // RA2: as above
+		int pick=Pick_Random_UInt(0,1); // RA2: as above
 		Cell bias;
-		bias.X = 0;
-		int down = dy > 0;
-		bias.Y = dy < 0;
-
-		if (rsel == 1) {
-			tail.X = abs_dy;
-			tail.Y = -dy;
+		bias.X=0; // RA2: as above
+		int down=drift>0; // RA2: as above
+		bias.Y=drift<0; // RA2: as above
+		if(pick==1) { // RA2: as above
+			tail+=Cell(span,-drift); // RA2: as above
 		} else {
-			bias.X = cell1.X - abs_dy - cell2.X - 5;
+			bias.X=(first-Cell(span,0)).X-second.X-5; // RA2: as above
 		}
-
-		int forward = 0;
-		if (abs_dy > 0) {
-			int backward = 0;
-			do {
-				static int _heights[] = {3, 2, 1, 0, 0};
-				static int _ramps[] = {10, 14, 14, 14, 6, 9, 13, 13, 13, 5};
-
-				for (int row = 0; row < 5; row++) {
-					int add_y = down ? backward : forward;
-
-					Cell pos = Cell(cell2.X + 3, cell2.Y) + Cell(forward, -row) + bias;
-					cell = Cell(pos.X, pos.Y + add_y);
-
-					CellClass * cellptr = &Map[cell];
-
-					unsigned char height = (unsigned char)_heights[row];
-					cellptr->Height = CellHeight + height - 4;
-
-					unsigned char ramp = (unsigned char)_ramps[5 * down + row];
-					cellptr->Ramp = ramp;
-					cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + ramp - 1);
-					cellptr->SubTile = 0;
-				}
-
-				forward++;
-				backward--;
-			} while (forward < abs_dy);
+		for(int forward=0;forward<span;forward++) { // RA2: as above
+			for(int row=0;row<5;row++) { // RA2: as above
+				short offset=down?-forward:forward; // RA2: as above
+				Cell position=Cell(second.X+3,second.Y)+Cell(forward,-row)+bias; // RA2: as above
+				position=Cell(position.X,position.Y+offset); // RA2: as above
+				CellClass &target=Map[position]; // RA2: as above
+				target.Height=(char)(RampHeights[row] + CellHeight - 4); // RA2: as above
+				target.Ramp=(unsigned char)RampShapes[5*down+row]; // RA2: as above
+				target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + target.Ramp - 1); // RA2: as above
+				target.SubTile=0; // RA2: as above
+			}
 		}
 	}
-
-	/*
-	 * Extend the straight ramp over whatever horizontal span the jog didn't use.
-	 */
-	for (int x = 0; x < cell1.X - cell2.X - abs_dy - 5; x++) {
-		for (int i = 0; i < 4; i++) {
-			cell = Cell(cell2.X + 3, cell2.Y) + Cell(x, -i) + tail;
-			CellData::Set_Region(cell, region_id);
-			CellClass * cellptr = &Map[cell];
-			cellptr->Height = CellHeight - i - 1;
-			cellptr->Ramp = 2;
-			cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 1);
-			cellptr->SubTile = 0;
+	for(int column=0;column<first.X-second.X-span-5;column++) { // RA2: as above
+		for(int row=0;row<4;row++) { // RA2: as above
+			Cell position=Cell(second.X+3,second.Y)+Cell(column,-row)+tail; // RA2: as above
+			CellData::Set_Region(position,lowRegion); // RA2: as above
+			CellClass &target=Map[position]; // RA2: as above
+			target.Height=(char)(CellHeight-(char)row-1); // RA2: as above
+			target.Ramp=2; // RA2: as above
+			target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 1u); // RA2: as above
+			target.SubTile=0; // RA2: as above
 		}
 	}
-
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2580,121 +2352,64 @@ bool MapRegionClass::Build_North_Ramp(Cell const & cell1, Cell const & cell2, in
 /// <param name="region_id">The region on the low side, whose height the leveled ground
 /// takes.</param>
 /// <returns>bool; Was the ramp carved?</returns>
-bool MapRegionClass::Build_West_Ramp(Cell const & cell1, Cell const & cell2, int region_id)
+bool MapRegionClass::Build_West_Ramp(Cell const &first,Cell const &second,int lowRegion) // RA2: RA2's form of the west ramp (0x573D40)
 {
-	/*
-	 * Compute a bounding rect around the ramp area and validate it.
-	 */
-	int x_max = MAX(cell1.X, cell2.X);
-	int x_min = MIN(cell1.X, cell2.X);
-
-	Rect rect;
-	rect.X      = x_min - 7;
-	rect.Y      = cell1.Y - 4;
-	rect.Height = cell2.Y - cell1.Y + 9;
-	rect.Width  = x_max - x_min + 11;
-
-	if (!Is_Ramp_Area_Clear(rect, region_id)) {
+	static int RampHeights[] = {3, 2, 1, 0, 0}; // RA2: the table at 0x7E0AA0
+	static int RampShapes[] = {9, 13, 13, 13, 5, 12, 16, 16, 16, 8}; // RA2: the table at 0x7E0AB4
+	Rect area((first.X<second.X?first.X:second.X)-7,first.Y-4,(first.X>second.X?first.X:second.X)-(first.X<second.X?first.X:second.X)+11,second.Y-first.Y+9); // RA2: as above
+	if(!Is_Ramp_Area_Clear(area,lowRegion)) { // RA2: as above
 		return(false);
 	}
-
-	/*
-	 * The ramp body drifts sideways as it runs; reject if the drift is too
-	 * large to fit within the vertical span.
-	 */
-	int dx = cell2.X - cell1.X;
-	int dy = cell2.Y - cell1.Y;
-	int abs_dx = abs(dx);
-	if (abs_dx > dy - 5) {
+	int drift=second.X-first.X; // RA2: as above
+	int span=abs(drift); // RA2: as above
+	if(span>second.Y-first.Y-5) { // RA2: as above
 		return(false);
 	}
-
-	int half = (dy + 1) / 2 + 2;
-
-	/*
-	 * Level the top and bottom halves on either side of the ramp, the far
-	 * side to the target region's height and the near side to ours.
-	 */
-	Flatten_Area(Rect(rect.X, rect.Y, cell1.X - rect.X, half + 2), region_id);
-	Flatten_Area(Rect(rect.X, cell2.Y - half + 3, cell2.X - rect.X, half + 2), region_id);
-	Flatten_Area(Rect(cell1.X, cell1.Y, rect.X + rect.Width - cell1.X - 1, half - 1));
-	Flatten_Area(Rect(cell2.X, cell2.Y - half + 3, rect.X + rect.Width - cell2.X - 1, half - 2));
-
-	/*
-	 * Place the three slope set pieces at the ramp ends.
-	 */
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 7), cell1 - Cell(3, 0), region_id, CellHeight);
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 8), cell2 - Cell(3, 2), region_id, CellHeight);
-	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 9), cell2 - Cell(1, 1), region_id, CellHeight);
-
-	/*
-	 * Carve the diagonal jog that absorbs the horizontal drift between the two
-	 * endpoints. A random pick decides whether the jog sits at the near or the
-	 * far end of the ramp; the straight remainder is offset accordingly.
-	 */
-	Cell cell;
-	Cell tail(0, 0);
-
-	if (dx != 0) {
-		int rsel = Pick_Random_UInt(0, 1);
-
-		int right = dx > 0;
-		Cell bias(dx > 0, 0);
-
-		if (rsel == 1) {
-			tail.X = dx;
-			tail.Y = abs_dx;
+	int half=(second.Y-first.Y+1)/2+2; // RA2: as above
+	Flatten_Area(Rect(area.X,area.Y,first.X-area.X,half+2),lowRegion); // RA2: as above
+	Flatten_Area(Rect(area.X,second.Y-half+3,second.X-area.X,half+2),lowRegion); // RA2: as above
+	Flatten_Area(Rect(first.X,first.Y,area.X+area.Width-first.X-1,half-1)); // RA2: as above
+	Flatten_Area(Rect(second.X,second.Y-half+3,area.X+area.Width-second.X-1,half-2)); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 7),first-Cell(3,0),lowRegion,CellHeight); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 8),second-Cell(3,2),lowRegion,CellHeight); // RA2: as above
+	MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 9),second-Cell(1,1),lowRegion,CellHeight); // RA2: as above
+	Cell tail(0,0); // RA2: as above
+	if(drift!=0) { // RA2: as above
+		int pick=Pick_Random_UInt(0,1); // RA2: as above
+		int down=drift>0; // RA2: as above
+		Cell bias(drift>0,0); // RA2: as above
+		if(pick==1) { // RA2: as above
+			tail+=Cell(drift,span); // RA2: as above
 		} else {
-			bias.Y = cell2.Y - abs_dx - cell1.Y - 5;
+			bias+=Cell(0,second.Y-(short)span-first.Y-5); // RA2: as above
 		}
-
-		int forward = 0;
-		if (abs_dx > 0) {
-			int backward = 0;
-			do {
-				static int _heights[] = {3, 2, 1, 0, 0};
-				static int _ramps[] = {9, 13, 13, 13, 5, 12, 16, 16, 16, 8};
-
-				for (int row = 0; row < 5; row++) {
-					int add_x = right ? forward : backward;
-
-					Cell pos = Cell(cell1.X, cell1.Y + 3) + Cell(-row, forward) + bias;
-					cell = Cell(pos.X + add_x, pos.Y);
-
-					CellClass * cellptr = &Map[cell];
-
-					unsigned char height = (unsigned char)_heights[row];
-					cellptr->Height = CellHeight + height - 4;
-
-					unsigned char ramp = (unsigned char)_ramps[5 * right + row];
-					cellptr->Ramp = ramp;
-					cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + ramp - 1);
-					cellptr->SubTile = 0;
-				}
-
-				forward++;
-				backward--;
-			} while (forward < abs_dx);
+		for(int forward=0;forward<span;forward++) { // RA2: as above
+			for(int row=0;row<5;row++) { // RA2: as above
+				short offset=down?forward:-forward; // RA2: as above
+				Cell position=Cell(first.X,first.Y+3)+Cell(-row,forward)+bias; // RA2: as above
+				position=Cell(position.X+offset,position.Y); // RA2: as above
+				CellClass &target=Map[position]; // RA2: as above
+				target.Height=(char)(RampHeights[row] + CellHeight - 4); // RA2: as above
+				target.Ramp=(unsigned char)RampShapes[5*down+row]; // RA2: as above
+				target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + target.Ramp - 1); // RA2: as above
+				target.SubTile=0; // RA2: as above
+			}
 		}
 	}
-
-	/*
-	 * Extend the straight ramp over whatever vertical span the jog didn't use.
-	 */
-	for (int y = 0; y < cell2.Y - cell1.Y - abs_dx - 5; y++) {
-		for (int i = 0; i < 4; i++) {
-			cell = Cell(cell1.X, cell1.Y + 3) + Cell(-i, y) + tail;
-			CellData::Set_Region(cell, region_id);
-			CellClass * cellptr = &Map[cell];
-			cellptr->Height = CellHeight - i - 1;
-			cellptr->Ramp = 1;
-			cellptr->ITType = IsometricTileTypeClass::RampStart;
-			cellptr->SubTile = 0;
+	for(int column=0;column<second.Y-first.Y-span-5;column++) { // RA2: as above
+		for(int row=0;row<4;row++) { // RA2: as above
+			Cell position=Cell(first.X,first.Y+3)+Cell(-row,column)+tail; // RA2: as above
+			CellData::Set_Region(position,lowRegion); // RA2: as above
+			CellClass &target=Map[position]; // RA2: as above
+			target.Height=(char)(CellHeight-(char)row-1); // RA2: as above
+			target.Ramp=1; // RA2: as above
+			target.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart); // RA2: as above
+			target.SubTile=0; // RA2: as above
 		}
 	}
-
 	return(true);
 }
+
 
 
 /// <summary>
@@ -2773,58 +2488,54 @@ bool MapRegionClass::Build_Corner_Ramp_SE(Cell const & cell1, Cell const & cell2
 /// <param name="region_id">The region on the low side, whose height the leveled ground
 /// takes.</param>
 /// <returns>bool; Was the corner ramp carved?</returns>
-bool MapRegionClass::Build_Corner_Ramp_NE(Cell const & cell1, Cell const & cell2, int region_id)
+bool MapRegionClass::Build_Corner_Ramp_NE(Cell const &first,Cell const &second,int region) // RA2: RA2's form of the NE corner ramp (0x574930)
 {
-	int dx = cell1.X - cell2.X;
-	if (dx >= 3) {
-		int dy = cell1.Y - cell2.Y;
-		if (dy >= 3) {
-			Rect rect(cell2.X - 2, cell2.Y - 7, dx + 10, dy + 10);
-			if (Is_Ramp_Area_Clear(rect, region_id)) {
-
-				Flatten_Area(Rect(rect.X, rect.Y, rect.Width, 7), region_id);
-				Flatten_Area(Rect(cell1.X + 1, rect.Y, 7, rect.Height), region_id);
-				Flatten_Area(Rect(cell2.X, cell2.Y, 1, 2));
-				Flatten_Area(Rect(cell1.X - 1, cell1.Y, 2, 1));
-				Flatten_Area(Rect(cell2.X + 1, cell2.Y + 1, cell1.X - cell2.X - 1, cell1.Y - cell2.Y - 1));
-
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 2), Cell(cell1.X, cell1.Y - 2), region_id, CellHeight);
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 4), Cell(cell2.X, cell2.Y - 3), region_id, CellHeight);
-
-				for (int i = 0; i < 4; ++i) {
-					CellClass * cptr = &Map[Cell(cell1.X + i, cell2.Y - i)];
-					cptr->Height = CellHeight - (char)i - 1;
-					cptr->Ramp = 6;
-					cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 5);
-					cptr->SubTile = 0;
+	int dx=first.X-second.X; // RA2: as above
+	if(dx>=3) { // RA2: as above
+		int dy=first.Y-second.Y; // RA2: as above
+		if(dy>=3) { // RA2: as above
+			int top=second.Y-7; // RA2: as above
+			Rect area(second.X-2,top,dx+10,first.Y-second.Y+10); // RA2: as above
+			if(Is_Ramp_Area_Clear(area,region)) { // RA2: as above
+				Flatten_Area(Rect(area.X,area.Y,area.Width,7),region); // RA2: as above
+				Flatten_Area(Rect(first.X+1,area.Y,7,area.Height),region); // RA2: as above
+				Flatten_Area(Rect(second.X,second.Y,1,2)); // RA2: as above
+				Flatten_Area(Rect(first.X-1,first.Y,2,1)); // RA2: as above
+				Flatten_Area(Rect(second.X+1,second.Y+1,first.X-second.X-1,first.Y-second.Y-1)); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 2),first-Cell(0,2),region,CellHeight); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 4),second-Cell(0,3),region,CellHeight); // RA2: as above
+				for(int corner=0;corner<4;++corner) { // RA2: as above
+					CellClass &cell=Map[Cell(first.X+corner,second.Y-corner)]; // RA2: as above
+					cell.Height=(char)(CellHeight-(char)corner-1); // RA2: as above
+					cell.Ramp=6; // RA2: as above
+					cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 5); // RA2: as above
+					cell.SubTile=0; // RA2: as above
 				}
-
-				for (int j = 0; j < 4; ++j) {
-					for (int k = 0; k < cell1.Y - cell2.Y + j - 3; ++k) {
-						CellClass * cptr = &Map[Cell(cell1.X + j, cell1.Y - k - 3)];
-						cptr->Height = CellHeight - (char)j - 1;
-						cptr->Ramp = 3;
-						cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 2);
-						cptr->SubTile = 0;
+				for(int east=0;east<4;++east) { // RA2: as above
+					for(int y=0;y<first.Y-second.Y+east-3;++y) { // RA2: as above
+						CellClass &cell=Map[Cell(first.X+east,first.Y-y-3)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)east-1); // RA2: as above
+						cell.Ramp=3; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 2); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
-				for (int m = 0; m < 4; ++m) {
-					for (int n = 0; n < cell1.X - cell2.X + m - 3; ++n) {
-						CellClass * cptr = &Map[Cell(cell2.X + n + 3, cell2.Y - m)];
-						cptr->Height = CellHeight - (char)m - 1;
-						cptr->Ramp = 2;
-						cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 1);
-						cptr->SubTile = 0;
+				for(int north=0;north<4;++north) { // RA2: as above
+					for(int x=0;x<first.X-second.X+north-3;++x) { // RA2: as above
+						CellClass &cell=Map[Cell(second.X+x+3,second.Y-north)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)north-1); // RA2: as above
+						cell.Ramp=2; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 1); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
 				return(true);
 			}
 		}
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -2838,60 +2549,55 @@ bool MapRegionClass::Build_Corner_Ramp_NE(Cell const & cell1, Cell const & cell2
 /// <param name="region_id">The region on the low side, whose height the leveled ground
 /// takes.</param>
 /// <returns>bool; Was the corner ramp carved?</returns>
-bool MapRegionClass::Build_Corner_Ramp_NW(Cell const & cell2, Cell const & cell1, int region_id)
+bool MapRegionClass::Build_Corner_Ramp_NW(Cell const &first,Cell const &second,int region) // RA2: RA2's form of the NW corner ramp (0x574E50): one Rect per flattened strip, the slope pieces and the three tile loops
 {
-	int dx = cell2.X - cell1.X;
-	if (dx >= 3) {
-		int dy = cell1.Y - cell2.Y;
-		if (dy >= 3) {
-			Rect rect(cell1.X - 7, cell2.Y - 7, dx + 10, dy + 10);
-			if (Is_Ramp_Area_Clear(rect, region_id)) {
-
-				Flatten_Area(Rect(rect.X, rect.Y, rect.Width, 7), region_id);
-				Flatten_Area(Rect(rect.X, rect.Y, 7, rect.Height), region_id);
-				Flatten_Area(Rect(cell2.X, cell2.Y, 1, 2));
-				Flatten_Area(Rect(cell1.X, cell1.Y, 2, 1));
-				Flatten_Area(Rect(cell1.X + 1, cell2.Y + 1, cell2.X - cell1.X - 1, cell1.Y - cell2.Y - 1));
-
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 5), cell2 - Cell(2, 3), region_id, CellHeight);
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 6), cell2 - Cell(1, 1), region_id, CellHeight);
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 8), cell1 - Cell(3, 2), region_id, CellHeight);
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 9), cell1 - Cell(1, 1), region_id, CellHeight);
-
-				for (int i = 0; i < 4; ++i) {
-					CellClass * cptr = &Map[Cell(cell1.X - i, cell2.Y - i)];
-					cptr->Height = CellHeight - (char)i - 1;
-					cptr->Ramp = 5;
-					cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 4);
-					cptr->SubTile = 0;
+	int dx=first.X-second.X; // RA2: as above
+	if(dx>=3) { // RA2: as above
+		int dy=second.Y-first.Y; // RA2: as above
+		if(dy>=3) { // RA2: as above
+			Rect area(second.X-7,first.Y-7,dx+10,dy+10); // RA2: as above
+			if(Is_Ramp_Area_Clear(area,region)) { // RA2: as above
+				Flatten_Area(Rect(area.X,area.Y,area.Width,7),region); // RA2: as above
+				Flatten_Area(Rect(area.X,area.Y,7,area.Height),region); // RA2: as above
+				Flatten_Area(Rect(first.X,first.Y,1,2)); // RA2: as above
+				Flatten_Area(Rect(second.X,second.Y,2,1)); // RA2: as above
+				Flatten_Area(Rect(second.X+1,first.Y+1,first.X-second.X-1,second.Y-first.Y-1)); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 5),first-Cell(2,3),region,CellHeight); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 6),first-Cell(1,1),region,CellHeight); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 8),second-Cell(3,2),region,CellHeight); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 9),second-Cell(1,1),region,CellHeight); // RA2: as above
+				for(int corner=0;corner<4;++corner) { // RA2: as above
+					CellClass &cell=Map[Cell(second.X-corner,first.Y-corner)]; // RA2: as above
+					cell.Height=(char)(CellHeight-(char)corner-1); // RA2: as above
+					cell.Ramp=5; // RA2: as above
+					cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 4); // RA2: as above
+					cell.SubTile=0; // RA2: as above
 				}
-
-				for (int j = 0; j < 4; ++j) {
-					for (int k = 0; k < cell2.X - cell1.X + j - 3; ++k) {
-						CellClass * cptr = &Map[cell2 - Cell(k + 3, j)];
-						cptr->Height = CellHeight - (char)j - 1;
-						cptr->Ramp = 2;
-						cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 1);
-						cptr->SubTile = 0;
+				for(int north=0;north<4;++north) { // RA2: as above
+					for(int x=0;x<first.X-second.X+north-3;++x) { // RA2: as above
+						CellClass &cell=Map[Cell(first.X-x-3,first.Y-north)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)north-1); // RA2: as above
+						cell.Ramp=2; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 1); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
-				for (int m = 0; m < 4; ++m) {
-					for (int n = 0; n < cell1.Y - cell2.Y + m - 3; ++n) {
-						CellClass * cptr = &Map[cell1 - Cell(m, n + 3)];
-						cptr->Height = CellHeight - (char)m - 1;
-						cptr->Ramp = 1;
-						cptr->ITType = IsometricTileTypeClass::RampStart;
-						cptr->SubTile = 0;
+				for(int west=0;west<4;++west) { // RA2: as above
+					for(int y=0;y<second.Y-first.Y+west-3;++y) { // RA2: as above
+						CellClass &cell=Map[Cell(second.X-west,second.Y-y-3)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)west-1); // RA2: as above
+						cell.Ramp=1; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
 				return(true);
 			}
 		}
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -2905,57 +2611,54 @@ bool MapRegionClass::Build_Corner_Ramp_NW(Cell const & cell2, Cell const & cell1
 /// <param name="region_id">The region on the low side, whose height the leveled ground
 /// takes.</param>
 /// <returns>bool; Was the corner ramp carved?</returns>
-bool MapRegionClass::Build_Corner_Ramp_SW(Cell const & cell1, Cell const & cell2, int region_id)
+bool MapRegionClass::Build_Corner_Ramp_SW(Cell const &first,Cell const &second,int region) // RA2: RA2's form of the SW corner ramp (0x5753F0)
 {
-	int dx = cell2.X - cell1.X;
-	if (dx >= 3) {
-		int dy = cell2.Y - cell1.Y;
-		if (dy >= 3) {
-			Rect rect(cell1.X - 7, cell1.Y - 4, dx + 10, dy + 10);
-			if (Is_Ramp_Area_Clear(rect, region_id)) {
-				Flatten_Area(Rect(rect.X, rect.Y, 7, rect.Height), region_id);
-				Flatten_Area(Rect(rect.X, cell2.Y + 1, rect.Width, 7), region_id);
-				Flatten_Area(Rect(cell1.X, cell1.Y, 2, 1));
-				Flatten_Area(Rect(cell2.X, cell2.Y - 1, 1, 2));
-				Flatten_Area(Rect(cell1.X + 1, cell1.Y + 1, cell2.X - cell1.X - 1, cell2.Y - cell1.Y - 1));
-
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 7), Cell(cell1.X - 3, cell1.Y), region_id, CellHeight);
-				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 1), Cell(cell2.X - 2, cell2.Y), region_id, CellHeight);
-
-				for (int i = 0; i < 4; ++i) {
-					CellClass * cptr = &Map[Cell(cell1.X - i, cell2.Y + i)];
-					cptr->Height = CellHeight - (char)i - 1;
-					cptr->Ramp = 8;
-					cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 7);
-					cptr->SubTile = 0;
+	int dx=second.X-first.X; // RA2: as above
+	if(dx>=3) { // RA2: as above
+		int dy=second.Y-first.Y; // RA2: as above
+		if(dy>=3) { // RA2: as above
+			int top=first.Y-4; // RA2: as above
+			Rect area(first.X-7,top,dx+10,second.Y-first.Y+10); // RA2: as above
+			if(Is_Ramp_Area_Clear(area,region)) { // RA2: as above
+				Flatten_Area(Rect(area.X,area.Y,7,area.Height),region); // RA2: as above
+				Flatten_Area(Rect(area.X,second.Y+1,area.Width,7),region); // RA2: as above
+				Flatten_Area(Rect(first.X,first.Y,2,1)); // RA2: as above
+				Flatten_Area(Rect(second.X,second.Y-1,1,2)); // RA2: as above
+				Flatten_Area(Rect(first.X+1,first.Y+1,second.X-first.X-1,second.Y-first.Y-1)); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 7),first-Cell(3,0),region,CellHeight); // RA2: as above
+				MapGeneratorClass::Place_Tile((IsometricTileType)(IsometricTileTypeClass::SlopeSetPieces + 1),second-Cell(2,0),region,CellHeight); // RA2: as above
+				for(int corner=0;corner<4;++corner) { // RA2: as above
+					CellClass &cell=Map[Cell(first.X-corner,second.Y+corner)]; // RA2: as above
+					cell.Height=(char)(CellHeight-(char)corner-1); // RA2: as above
+					cell.Ramp=8; // RA2: as above
+					cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 7); // RA2: as above
+					cell.SubTile=0; // RA2: as above
 				}
-
-				for (int j = 0; j < 4; ++j) {
-					for (int k = 0; k < cell2.Y - cell1.Y + j - 3; ++k) {
-						CellClass * cptr = &Map[Cell(cell1.X - j, cell1.Y + k + 3)];
-						cptr->Height = CellHeight - (char)j - 1;
-						cptr->Ramp = 1;
-						cptr->ITType = IsometricTileTypeClass::RampStart;
-						cptr->SubTile = 0;
+				for(int west=0;west<4;++west) { // RA2: as above
+					for(int y=0;y<second.Y-first.Y+west-3;++y) { // RA2: as above
+						CellClass &cell=Map[Cell(first.X-west,first.Y+y+3)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)west-1); // RA2: as above
+						cell.Ramp=1; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
-				for (int m = 0; m < 4; ++m) {
-					for (int n = 0; n < cell2.X - cell1.X + m - 3; ++n) {
-						CellClass * cptr = &Map[Cell(cell2.X - n - 3, cell2.Y + m)];
-						cptr->Height = CellHeight - (char)m - 1;
-						cptr->Ramp = 4;
-						cptr->ITType = (IsometricTileType)(IsometricTileTypeClass::RampStart + 3);
-						cptr->SubTile = 0;
+				for(int south=0;south<4;++south) { // RA2: as above
+					for(int x=0;x<second.X-first.X+south-3;++x) { // RA2: as above
+						CellClass &cell=Map[Cell(second.X-x-3,second.Y+south)]; // RA2: as above
+						cell.Height=(char)(CellHeight-(char)south-1); // RA2: as above
+						cell.Ramp=4; // RA2: as above
+						cell.ITType=(IsometricTileType)((unsigned)IsometricTileTypeClass::RampStart + 3); // RA2: as above
+						cell.SubTile=0; // RA2: as above
 					}
 				}
-
 				return(true);
 			}
 		}
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -3026,14 +2729,16 @@ void MapRegionClass::Flatten_Area(Rect const & rect)
 {
 	for (int y = rect.Y; y < rect.Y + rect.Height; y++) {
 		for (int x = rect.X; x < rect.X + rect.Width; x++) {
-			Cell cell(x, y);
-			if (My_In_Radar(cell)) {
-				CellData::Set_Region(cell, ID);
-				Map[cell].Height = CellHeight;
+			Cell const position(x, y); // RA2: a const Cell named position, and the cell reference in a local, as RA2's form; needed for the inlined copies in the ramp builders
+			if (My_In_Radar(position)) { // RA2: as above
+				CellData::Set_Region(position, ID); // RA2: as above
+				CellClass & target = Map[position]; // RA2: as above
+				target.Height = CellHeight; // RA2: as above
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -5570,59 +5275,67 @@ void MapGeneratorClass::Partition_Rect(DynamicVectorClass<Rect> & rects, int cou
 /// RA2: lays the land down as one chunk per player plus a few spare ones, each grown from the middle of its share
 /// of the map.
 /// </summary>
-void MapGeneratorClass::Seed_Land_Type0(void)
+void MapGeneratorClass::Seed_Land_Type0(void) // RA2: RA2's form of Seed_Land_Type0 (0x57C4F0); near miss, 8 bytes differ (an integer shift is scheduled before the 0.45 addition)
 {
-	WorkingRegionID = 1;
-	DynamicVectorClass<Rect> regions;
+	WorkingRegionID = 1; // RA2: as above
+	DynamicVectorClass<Rect> regions; // RA2: as above
 
-	unsigned int range = MAX(2U, (unsigned int)SeedData.NumPlayers / 2);
-	unsigned int selected;
+	unsigned int range = 2 > SeedData.NumPlayers / 2 ? 2 : SeedData.NumPlayers / 2; // RA2: a signed compare and quotient, not MAX of unsigned values
+	double span = (double)range; // RA2: converted once before the loop
+	unsigned int selected; // RA2: as above
 	do {
-		selected = (unsigned int)(RMG_RANDOM_DOUBLE2(range) + 1.0);
-	} while (selected > range);
+		selected = (unsigned int)(((unsigned int)RMGRandom() * span) * (1.0 / UINT_MAX) + 1.0); // RA2: as above
+	} while (selected > range); // RA2: as above
 
-	Partition_Rect(regions, SeedData.NumPlayers + selected, Map.LocalRect);
+	Rect area = Map.LocalRect; // RA2: the rectangle is copied to a local first
+	Partition_Rect(regions, SeedData.NumPlayers + selected, area); // RA2: as above
 
 	Map.Reset_Iterator();
-	CellClass * cptr = Map.Iterate();
-	while (cptr != NULL) {
-		MapRegionClass::Get_Cell_Data(cptr->Fetch_CellID()).SpreadID = 0;
-		cptr = Map.Iterate();
+	for (CellClass * cptr = Map.Iterate(); cptr != NULL; cptr = Map.Iterate()) { // RA2: as above
+		Cell position = cptr->CellID; // RA2: indexes the cell data directly instead of calling Get_Cell_Data
+		RMGCellData[position.Y * MapCellStride + position.X].SpreadID = 0; // RA2: as above
 	}
 
-	while (regions.Count() > 0) {
-		Rect region = regions[0];
-		int count = (int)((RMG_RANDOM_DOUBLE2(0.05) + 0.45) * (region.Width * region.Height * 2));
-		Point2D center(region.Width / 2 + region.Height / 2 + region.X + 1 + region.Y,
-					   region.Height / 2 - region.Width / 2 - region.X + Map.PlayRect.Width + region.Y);
-		int result = 0;
-		for (int attempt = 0; attempt < 10 && result == 0; attempt++) {
-			result = Spread_Land(count, region, center, true, Cell(center.X, center.Y), 0.25, false);
-			if (result == 0) {
-				WorkingRegionID++;
+	while (regions.Count() > 0) { // RA2: as above
+		Rect region = regions[0]; // RA2: as above
+		int count = (int)((RMG_RANDOM_DOUBLE2(0.05) + 0.45) * (region.Width * region.Height * 2)); // RA2: as above
+		Point2D center; // RA2: assigned member by member
+		center.X = region.Width / 2 + region.Height / 2 + region.Y + region.X + 1; // RA2: as above
+		center.Y = region.Height / 2 - region.Width / 2 - region.X + Map.PlayRect.Width + region.Y; // RA2: as above
+		int attempt = 0;
+		int result = 0; // RA2: as above
+		while (!result && attempt < 10) { // RA2: a while loop
+			result = Spread_Land(count, region, center, true, Cell(center.X, center.Y), 0.25, false); // RA2: as above
+			if (!result) {
+				++WorkingRegionID; // RA2: as above
 			}
+			++attempt; // RA2: as above
 		}
-		regions.Delete_Index(0);
+		regions.Delete_Index(0); // RA2: as above
 	}
 }
+
 
 
 /// <summary>
 /// RA2: lays the land down as one mass grown from the middle of the map until the water setting's share of land is
 /// met.
 /// </summary>
-void MapGeneratorClass::Seed_Land_Type1(void)
+void MapGeneratorClass::Seed_Land_Type1(void) // RA2: RA2's form of Seed_Land_Type1 (0x57C780): the land fraction bounds and chunk size are static constants
 {
-	WorkingRegionID = 1;
-	int total = Map_Cell_Count();
+	static const double _land_minimum = 0.45; // RA2: static constants (0x7A5C58, 0x7A5C60, 0x7A5C68), not folded literals
+	static const double _land_maximum = 0.5; // RA2: as above
+	static const double _land_chunk = 0.03; // RA2: as above
+	WorkingRegionID = 1; // RA2: as above
+	int total = Map_Cell_Count(); // RA2: as above
 	int placed = 0;
 	int tries = 0;
-	double current = 0.0;
-	double target = (1.0 - SeedData.WaterAmount * 0.01) * (0.5 - 0.45) + 0.45;
-	int maximum = (int)((double)total * 0.03 * target);
-	Point2D origin(Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2 + 1,
-				   Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2);
-	Point2D seed = origin;
+	double current = 0.0; // RA2: as above
+	double target = (1.0 - SeedData.WaterAmount * 0.01) * (_land_maximum - _land_minimum) + _land_minimum; // RA2: the bounds are static constants, not folded literals (0x7A5C60 / 0x7A5C58)
+	int maximum = (int)((double)total * _land_chunk * target); // RA2: a static constant instead of the literal
+	Point2D origin(Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2 + 1, // RA2: as above
+				   Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2); // RA2: as above
+	Point2D seed = origin; // RA2: as above
 
 	Map.Reset_Iterator();
 	CellClass * cptr = Map.Iterate();
@@ -5631,47 +5344,51 @@ void MapGeneratorClass::Seed_Land_Type1(void)
 		cptr = Map.Iterate();
 	}
 
-	Rect bounds = Map.LocalRect;
-	bounds.X++;
-	bounds.Y++;
-	bounds.Width -= 2;
-	bounds.Height -= 2;
-	while (current < target && tries < 100) {
-		int size = (int)((target - current) * (double)total);
-		size = MIN(size, maximum);
-		current = (double)(placed += Spread_Land(size, bounds, seed, true, Cell(origin.X, origin.Y), 0.75, true)) / (double)total;
+	Rect bounds = Map.LocalRect; // RA2: as above
+	bounds.X++; // RA2: as above
+	bounds.Y++; // RA2: as above
+	bounds.Width -= 2; // RA2: as above
+	bounds.Height -= 2; // RA2: as above
+	while (current < target && tries < 100) { // RA2: as above
+		int size = (int)((target - current) * (double)total); // RA2: as above
+		size = MIN(size, maximum); // RA2: as above
+		current = (double)(placed += Spread_Land(size, bounds, seed, true, Cell(origin.X, origin.Y), 0.75, true)) / (double)total; // RA2: as above
 		tries++;
 
-		int nearest = 50000;
-		Cell closest(0, 0);
+		int nearest = 50000; // RA2: as above
+		Cell closest(0, 0); // RA2: as above
 		Map.Reset_Iterator();
 		cptr = Map.Iterate();
 		while (cptr != NULL) {
-			if (MapRegionClass::Get_Cell_Data(cptr->CellID).SpreadID == 0) {
-				int distance = abs(cptr->CellID.X - origin.X) + abs(cptr->CellID.Y - origin.Y);
-				if (distance < nearest) {
-					nearest = distance;
-					closest = cptr->CellID;
+			if (MapRegionClass::Get_Cell_Data(cptr->CellID).SpreadID == 0) { // RA2: as above
+				int distance = abs(cptr->CellID.X - origin.X) + abs(cptr->CellID.Y - origin.Y); // RA2: as above
+				if (distance < nearest) { // RA2: as above
+					nearest = distance; // RA2: as above
+					closest = cptr->CellID; // RA2: as above
 				}
 			}
 			cptr = Map.Iterate();
 		}
-		seed = Point2D(closest.X, closest.Y);
+		seed = Point2D(closest.X, closest.Y); // RA2: as above
 	}
 }
+
 
 
 /// <summary>
 /// RA2: lays the land down as two masses, one in each half of the map, each grown until its half has the water
 /// setting's share of land.
 /// </summary>
-void MapGeneratorClass::Seed_Land_Type2(void)
+void MapGeneratorClass::Seed_Land_Type2(void) // RA2: RA2's form of Seed_Land_Type2 (0x57C9E0): the land fraction bounds and chunk size are static constants
 {
-	WorkingRegionID = 1;
-	int total = Map_Cell_Count();
+	static const double _land_minimum = 0.15; // RA2: static constants (0x7A5C78, 0x7A5C80, 0x7A5C88), not folded literals
+	static const double _land_maximum = 0.2; // RA2: as above
+	static const double _land_chunk = 0.06; // RA2: as above
+	WorkingRegionID = 1; // RA2: as above
+	int total = Map_Cell_Count(); // RA2: as above
 	int tries = 0;
-	double target = (1.0 - SeedData.WaterAmount * 0.01) * (0.2 - 0.15) + 0.15;
-	int maximum = (int)((double)total * 0.06 * target);
+	double target = (1.0 - SeedData.WaterAmount * 0.01) * (_land_maximum - _land_minimum) + _land_minimum; // RA2: the bounds are static constants, not folded literals (0x7A5C80 / 0x7A5C78)
+	int maximum = (int)((double)total * _land_chunk * target); // RA2: a static constant instead of the literal
 
 	Map.Reset_Iterator();
 	CellClass * cptr = Map.Iterate();
@@ -5680,68 +5397,69 @@ void MapGeneratorClass::Seed_Land_Type2(void)
 		cptr = Map.Iterate();
 	}
 
-	Rect halves[2];
-	if (Random_Fraction() < 0.5) {
-		halves[0] = Rect(Map.LocalRect.X, Map.LocalRect.Y, Map.LocalRect.Width / 2 - 1, Map.LocalRect.Height);
-		halves[1] = Rect(Map.LocalRect.X + Map.LocalRect.Width / 2 + 1, Map.LocalRect.Y, Map.LocalRect.Width / 2 - 1, Map.LocalRect.Height);
+	Rect halves[2]; // RA2: as above
+	if (Random_Fraction() < 0.5) { // RA2: as above
+		halves[0] = Rect(Map.LocalRect.X, Map.LocalRect.Y, Map.LocalRect.Width / 2 - 1, Map.LocalRect.Height); // RA2: as above
+		halves[1] = Rect(Map.LocalRect.X + Map.LocalRect.Width / 2 + 1, Map.LocalRect.Y, Map.LocalRect.Width / 2 - 1, Map.LocalRect.Height); // RA2: as above
 	} else {
-		halves[0] = Rect(Map.LocalRect.X, Map.LocalRect.Y, Map.LocalRect.Width, Map.LocalRect.Height / 2 - 1);
-		halves[1] = Rect(Map.LocalRect.X, Map.LocalRect.Y + Map.LocalRect.Height / 2 + 1, Map.LocalRect.Width, Map.LocalRect.Height / 2 - 1);
+		halves[0] = Rect(Map.LocalRect.X, Map.LocalRect.Y, Map.LocalRect.Width, Map.LocalRect.Height / 2 - 1); // RA2: as above
+		halves[1] = Rect(Map.LocalRect.X, Map.LocalRect.Y + Map.LocalRect.Height / 2 + 1, Map.LocalRect.Width, Map.LocalRect.Height / 2 - 1); // RA2: as above
 	}
 
-	for (int half = 0; half < 2; half++) {
+	for (int half = 0; half < 2; half++) { // RA2: as above
 		int placed = 0;
-		double current = 0.0;
-		Rect bounds = halves[half];
-		Point2D origin(bounds.X + bounds.Width / 2 + bounds.Height / 2 + bounds.Y + 1,
-					   bounds.Y + Map.PlayRect.Width + bounds.Height / 2 - bounds.Width / 2 - bounds.X);
-		Point2D seed = origin;
-		double x_scale;
-		double y_scale;
-		if (bounds.Height > bounds.Width) {
-			x_scale = (double)bounds.Height / (double)bounds.Width * 1.2;
-			y_scale = 1.0;
+		double current = 0.0; // RA2: as above
+		Rect bounds = halves[half]; // RA2: as above
+		Point2D origin(bounds.X + bounds.Width / 2 + bounds.Height / 2 + bounds.Y + 1, // RA2: as above
+					   bounds.Y + Map.PlayRect.Width + bounds.Height / 2 - bounds.Width / 2 - bounds.X); // RA2: as above
+		Point2D seed = origin; // RA2: as above
+		double x_scale; // RA2: as above
+		double y_scale; // RA2: as above
+		if (bounds.Height > bounds.Width) { // RA2: as above
+			x_scale = (double)bounds.Height / (double)bounds.Width * 1.2; // RA2: as above
+			y_scale = 1.0; // RA2: as above
 		} else {
-			x_scale = 1.0;
-			y_scale = (double)bounds.Width / (double)bounds.Height * 1.2;
+			x_scale = 1.0; // RA2: as above
+			y_scale = (double)bounds.Width / (double)bounds.Height * 1.2; // RA2: as above
 		}
-		double half_width = (double)bounds.Width * 0.5;
-		double inverse_x = 1.0 / (half_width * half_width);
-		double half_height = (double)bounds.Height * 0.5;
-		double inverse_y = 1.0 / (half_height * half_height);
+		double half_width = (double)bounds.Width * 0.5; // RA2: as above
+		double inverse_x = 1.0 / (half_width * half_width); // RA2: as above
+		double half_height = (double)bounds.Height * 0.5; // RA2: as above
+		double inverse_y = 1.0 / (half_height * half_height); // RA2: as above
 
-		while (current < target && tries < 100) {
-			int size = (int)((target - current) * (double)total);
-			size = MIN(size, maximum);
-			current = (double)(placed += Spread_Land(size, bounds, seed, true, Cell(origin.X, origin.Y), 0.75, true)) / (double)total;
+		while (current < target && tries < 100) { // RA2: as above
+			int size = (int)((target - current) * (double)total); // RA2: as above
+			size = MIN(size, maximum); // RA2: as above
+			current = (double)(placed += Spread_Land(size, bounds, seed, true, Cell(origin.X, origin.Y), 0.75, true)) / (double)total; // RA2: as above
 			tries++;
 
-			int nearest = 50000;
-			Cell closest(0, 0);
-			int count = MapCellStride * MapCellStride;
-			int minimum_diagonal = bounds.X * 2 - Map.PlayRect.Width + 1;
-			int maximum_diagonal = minimum_diagonal + bounds.Width * 2 + 2;
-			int minimum_sum = Map.PlayRect.Width + bounds.Y * 2 + 1;
-			int maximum_sum = minimum_sum + bounds.Height * 2 + 2;
-			for (int index = 0; index < count; index++) {
-				MapRegionClass::CellData & data = MapRegionClass::Get_Cell_Data(index);
-				Cell const & candidate = data.CellID;
-				int sum = candidate.X + candidate.Y;
-				int diagonal = candidate.X - candidate.Y;
-				if (sum >= minimum_sum && sum <= maximum_sum && diagonal >= minimum_diagonal && diagonal <= maximum_diagonal && data.SpreadID == 0 && Cell_In_Generation_Shape(candidate, bounds, true, inverse_x, inverse_y)) {
-					double dy = (double)abs(candidate.Y - origin.Y) * y_scale;
-					double dx = (double)abs(candidate.X - origin.X) * x_scale;
-					int distance = (int)(dy + dx);
-					if (distance < nearest) {
-						nearest = distance;
-						closest = candidate;
+			int nearest = 50000; // RA2: as above
+			Cell closest(0, 0); // RA2: as above
+			int count = MapCellStride * MapCellStride; // RA2: as above
+			int minimum_diagonal = bounds.X * 2 - Map.PlayRect.Width + 1; // RA2: as above
+			int maximum_diagonal = minimum_diagonal + bounds.Width * 2 + 2; // RA2: as above
+			int minimum_sum = Map.PlayRect.Width + bounds.Y * 2 + 1; // RA2: as above
+			int maximum_sum = minimum_sum + bounds.Height * 2 + 2; // RA2: as above
+			for (int index = 0; index < count; index++) { // RA2: as above
+				MapRegionClass::CellData & data = MapRegionClass::Get_Cell_Data(index); // RA2: as above
+				Cell const & candidate = data.CellID; // RA2: as above
+				int sum = candidate.X + candidate.Y; // RA2: as above
+				int diagonal = candidate.X - candidate.Y; // RA2: as above
+				if (sum >= minimum_sum && sum <= maximum_sum && diagonal >= minimum_diagonal && diagonal <= maximum_diagonal && data.SpreadID == 0 && Cell_In_Generation_Shape(candidate, bounds, true, inverse_x, inverse_y)) { // RA2: as above
+					double dy = (double)abs(candidate.Y - origin.Y) * y_scale; // RA2: as above
+					double dx = (double)abs(candidate.X - origin.X) * x_scale; // RA2: as above
+					int distance = (int)(dy + dx); // RA2: as above
+					if (distance < nearest) { // RA2: as above
+						nearest = distance; // RA2: as above
+						closest = candidate; // RA2: as above
 					}
 				}
 			}
-			seed = Point2D(closest.X, closest.Y);
+			seed = Point2D(closest.X, closest.Y); // RA2: as above
 		}
 	}
 }
+
 
 
 void MapGeneratorClass::Green_Shores(void) // RA2: not in TibSun, at 0x57CEB0
@@ -6179,7 +5897,7 @@ static inline int Double_Area(int width, int height)
 /// <param name="new_id">The region that is to inherit the wiped cells.</param>
 /// <param name="cell_height">The height to flatten the cells to, or -1 to use the
 /// generator's own working height.</param>
-void MapGeneratorClass::Clear_Region_Cells(int id, int new_id, int cell_height)
+void MapGeneratorClass::Clear_Region_Cells(int id, int new_id, int cell_height, int tile) // RA2: a fourth parameter, the tile type the wiped cells receive (the executable's callers pass it)
 {
 	Map.Reset_Iterator();
 	CellClass *cptr = Map.Iterate();
@@ -6188,13 +5906,14 @@ void MapGeneratorClass::Clear_Region_Cells(int id, int new_id, int cell_height)
 		if (data.RegionID == id) {
 			data.RegionID = new_id;
 			data.CanExpand = false;
-			cptr->ITType = ISOTILE_CLEAR;
+			cptr->ITType = (IsometricTileType)tile; // RA2: the tile parameter instead of ISOTILE_CLEAR
 			cptr->SubTile = 0;
 			cptr->Height = cell_height == -1 ? CellHeight : cell_height;
 		}
 		cptr = Map.Iterate();
 	}
 }
+
 
 
 /// <summary>
@@ -6207,24 +5926,11 @@ void MapGeneratorClass::Clear_Region_Cells(int id, int new_id, int cell_height)
 /// <param name="cell">The cell to grow the lake from, or Cell(0,0) to let the routine choose
 /// one.</param>
 /// <returns>bool; Was a lake of usable size seeded?</returns>
-bool MapGeneratorClass::Seed_Lake(const Cell & cell)
+bool MapGeneratorClass::Seed_Lake(const Cell & cell) // RA2: RA2's form of Seed_Lake (0x57E100); near miss, the inlined Get_Spread_Score is scheduled differently
 {
 	bool success = true;
 
-	float ratios[BIOME_COUNT] = {
-		0.40f,
-		0.35f,
-		0.35f,
-		0.10f,
-		0.30f,
-	};
-
-	int water_value = SeedData.WaterAmount;
-	if (water_value != 0) {
-		water_value = (int)(ratios[SeedData.Biome] * (double)LocalWidth * (double)LocalHeight * (double)water_value * 0.02 + 100.0);
-	}
-
-	int spread_limit = water_value - SeededWaterAmount;
+	int spread_limit = Get_Target_Water_Amount() - SeededWaterAmount; // RA2: the target comes from Get_Target_Water_Amount
 	if (spread_limit <= 75) {
 		return(false);
 	}
@@ -6233,10 +5939,9 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 	PriorityQueueClass<CellNode> *queue = new PriorityQueueClass<CellNode>(MAX((2 * spread_limit) + 2, 100));
 
 	Map.Reset_Iterator();
-	CellClass *iter = Map.Iterate();
-	while (iter != NULL) {
-		Set_Cell_Data_Spread(iter->Fetch_CellID(), 0);
-		iter = Map.Iterate();
+	for (CellClass *iter = Map.Iterate(); iter; iter = Map.Iterate()) { // RA2: indexes the cell data directly
+		Cell position = iter->CellID; // RA2: as above
+		RMGCellData[position.Y * MapCellStride + position.X].SpreadID = 0; // RA2: as above
 	}
 
 	int grid_size = MapCellStride * MapCellStride;
@@ -6250,11 +5955,11 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 		Clear_Region_Border(0, 2, -2);
 
 		for (i = 0; i < grid_size; i++) {
-			MapRegionClass::CellData &data = MapRegionClass::Get_Cell_Data(i);
-			if (data.RegionID == 0 || data.RegionID == WorkingRegionID) {
+			int stored_region = MapRegionClass::Get_Cell_Data(i).RegionID; // RA2: the region is read into a local first
+			if (stored_region == 0 || stored_region == WorkingRegionID) { // RA2: as above
 				MapRegionClass::Get_Cell_Data(i).Interior = true;
-			} else if (data.RegionID == -2) {
-				data.RegionID = 0;
+			} else if (stored_region == -2) { // RA2: as above
+				MapRegionClass::Get_Cell_Data(i).RegionID = 0; // RA2: as above
 			}
 		}
 	} else {
@@ -6266,17 +5971,19 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 	int tries = 0;
 	Cell seed_cell;
 	if (cell == Cell(0, 0)) {
-		while (true) {
-			unsigned int x = Pick_Random_UInt(0, Map.PlayRect.Width - 1);
-			unsigned int y = Pick_Random_UInt(0, Map.PlayRect.Height - 1);
+		for (;;) { // RA2: as above
+			int x = Pick_Random_UInt(0, Map.PlayRect.Width - 1); // RA2: as above
+			int y = Pick_Random_UInt(0, Map.PlayRect.Height - 1); // RA2: as above
 
-			seed_cell = Cell(1, Map.PlayRect.Width) + Cell(x, -x) + Cell(y, y);
+			Cell first_offset = Cell(1, (short)Map.PlayRect.Width) + Cell((short)x, (short)(0u - (unsigned)x)); // RA2: explicit short conversions, in two steps
+			seed_cell = first_offset + Cell((short)y, (short)y); // RA2: as above
 
 			if (++tries >= 200) {
 				return(false);
 			}
 
-			if (MapRegionClass::CellData::Get_Region(seed_cell) == 0 && Map[seed_cell].Is_Tile_Clear() && MapRegionClass::Get_Cell_Data(seed_cell).Interior) {
+			int region = MapRegionClass::CellData::Get_Region(seed_cell); // RA2: kept in a local
+			if (region == 0 && Map[seed_cell].Is_Tile_Clear() && RMGCellData[seed_cell.Y * MapCellStride + seed_cell.X].Interior) { // RA2: indexes the cell data directly
 				if (tries < 200) {
 					break;
 				}
@@ -6293,82 +6000,63 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 	if (spread_limit >= 76) {
 		max_spread = spread_limit;
 	}
-	double scale = (double)(spread_limit / 6);
 	double mean = (double)(spread_limit / 3);
-	int spread_count = (int)Sample_Truncated_Normal(mean, scale, 75.0, (double)max_spread);
+	int spread_count = (int)Sample_Truncated_Normal_Inline(mean, (double)(spread_limit / 6), 75.0, (double)max_spread); // RA2: the scale is evaluated in the call
 
 	queue->Clear();
 
 	int marker_index = 1;
 	nodes[0].Element = seed_cell;
 	nodes[0].Score = 0.0f;
-	Set_Cell_Data_Spread(seed_cell, WorkingRegionID);
+	RMGCellData[seed_cell.Y * MapCellStride + seed_cell.X].SpreadID = WorkingRegionID; // RA2: indexes the cell data directly
 	queue->Insert(nodes[0]);
 
-	DynamicVectorClass<Cell> cells;
-	cells.Set_Growth_Step(2000);
-
 	CellNode *node = queue->Extract_Min();
-	if (spread_count > 0) {
-		do {
-			if (node == NULL) {
-				break;
-			}
-			if (!success) {
-				break;
-			}
+	while (seeded_count < spread_count) { // RA2: no tile randomization and no cell list
+		if (node == NULL || !success) { // RA2: as above
+			break;
+		}
 
-			Set_Cell_Data_Region(node->Element, WorkingRegionID);
+		MapRegionClass::CellData::Set_Region(node->Element, WorkingRegionID); // RA2: the casual set region call
 
-			CellClass *cellptr = &Map[node->Element];
-			int tile_index = Pick_Random_UInt(0, 5);
-			cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index);
+		CellClass *cellptr = &Map[node->Element];
+		cellptr->ITType = IsometricTileTypeClass::WaterSet; // RA2: always the first water tile
+		cellptr->SubTile = 0; // RA2: as above
 
-			int subtile = Pick_Random_UInt(0, 3);
-			cellptr->SubTile = subtile;
-
-			cells.Add(cellptr->CellID);
-
-			CellNode *newnode = &nodes[marker_index];
-			for (FacingType dir = FACING_FIRST; dir < FACING_COUNT; dir = FacingType(dir + FACING_90)) {
-				Cell newcell = Adjacent_Cell(node->Element, dir);
-				if (My_In_Radar(newcell)) {
-					MapRegionClass::CellData &data = MapRegionClass::Get_Cell_Data(newcell);
-					if (data.RegionID || data.SpreadID == WorkingRegionID || !Map[newcell].Is_Tile_Clear() || !data.Interior) {
-						if (data.RegionID && data.RegionID != WorkingRegionID) {
-							success = false;
-						}
-					} else {
-						newnode->Element = newcell;
-						newnode->Score = Get_Spread_Score(seed_cell, newcell, seeded_count);
-						Set_Cell_Data_Spread(newcell, WorkingRegionID);
-						marker_index++;
-						queue->Insert(*newnode++);
-					}
+		int facing = 0; // RA2: as above
+		CellNode *newnode = nodes + marker_index; // RA2: as above
+		for (; facing < 8; facing += 2) { // RA2: as above
+			Cell newcell = Adjacent_Cell(node->Element, (FacingType)facing); // RA2: as above
+			if (My_In_Radar(newcell)) {
+				MapRegionClass::CellData &data = RMGCellData[newcell.Y * MapCellStride + newcell.X]; // RA2: as above
+				if (data.RegionID == 0 && data.SpreadID != WorkingRegionID && Map[newcell].Is_Tile_Clear() && data.Interior) { // RA2: as above
+					newnode->Element = newcell;
+					newnode->Score = (float)Get_Spread_Score(seed_cell, newcell, seeded_count); // RA2: as above
+					data.SpreadID = WorkingRegionID;
+					marker_index++;
+					queue->Insert(*newnode++);
+				} else if (data.RegionID != 0 && data.RegionID != WorkingRegionID) { // RA2: as above
+					success = false;
 				}
 			}
+		}
 
-			seeded_count++;
-			node = queue->Extract_Min();
-		} while (seeded_count < spread_count);
+		seeded_count++;
+		node = queue->Extract_Min();
 	}
 
 	CellNode *remaining = queue->Extract_Min();
-	while (remaining != NULL) {
+	while (remaining) { // RA2: as above
 		if (!success) {
 			break;
 		}
 
 		CellClass *cellptr = &Map[remaining->Element];
-		MapRegionClass::CellData &data = MapRegionClass::Get_Cell_Data(remaining->Element);
-		if (!data.RegionID && cellptr->Is_Tile_Clear() && data.Interior) {
-			int tile_index = Pick_Random_UInt(0, 5);
-			cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index);
-
-			int subtile = Pick_Random_UInt(0, 3);
-			cellptr->SubTile = subtile;
-
-			Set_Cell_Data_Region(remaining->Element, WorkingRegionID);
+		MapRegionClass::CellData &data = RMGCellData[remaining->Element.Y * MapCellStride + remaining->Element.X]; // RA2: as above
+		if (data.RegionID == 0 && cellptr->Is_Tile_Clear() && data.Interior) { // RA2: as above
+			cellptr->ITType = IsometricTileTypeClass::WaterSet; // RA2: as above
+			cellptr->SubTile = 0;
+			data.RegionID = WorkingRegionID;
 		} else {
 			success = false;
 		}
@@ -6383,20 +6071,23 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 		} else {
 			success = true;
 			if (cell == Cell(0, 0)) {
-				success = Map.Build_All_Shores(WorkingRegionID);
+				success = Map.Build_All_Shores(WorkingRegionID, false); // RA2: the two-argument form
 			}
-			if (success && cell == Cell(0, 0)) {
-				success = Grow_Region(WorkingRegionID, 1, Rect(0, 0, MAP_CELL_W, MAP_CELL_H), 0, 0);
-				if (success) {
-					if (SeedData.Biome == BIOME_MUTATED) {
-						int swamp_count = Pick_Random_UInt(0, 2);
+		}
+	}
 
-						for (int i = 0; i < swamp_count; i++) {
-							Generate_Swamp(cells, seeded_count, nodes, queue);
-						}
-					}
+	if (success && cell == Cell(0, 0)) {
+		success = Grow_Region(WorkingRegionID, 1, Rect(0, 0, 512, 512), 0, 0); // RA2: as above
+		if (success) {
+			int region = WorkingRegionID;
+			Map.Reset_Iterator();
+			for (CellClass *iter = Map.Iterate(); iter; iter = Map.Iterate()) {
+				int index = MapRegionClass::CellData::Get_Region(iter->CellID); // RA2: as above
+				if (index == region && (iter->ITType == 0 || iter->ITType == (IsometricTileType)0xffff)) { // RA2: as above
+					iter->ITType = IsometricTileTypeClass::GreenTile; // RA2: as above
 				}
 			}
+			success = true;
 		}
 	}
 
@@ -6405,13 +6096,13 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell)
 
 	if (success) {
 		SeededWaterAmount += seeded_count;
-		cells.Clear();
 		return(true);
 	}
 
-	Clear_Region_Cells(WorkingRegionID, 0, -1);
+	Clear_Region_Cells(WorkingRegionID, 0, -1, 0); // RA2: the fourth argument
 	return(false);
 }
+
 
 
 /// <summary>
@@ -6714,10 +6405,10 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 		return(true);
 	}
 
-	Clear_Region_Cells(WorkingRegionID, 0, -1);
+	Clear_Region_Cells(WorkingRegionID, 0, -1, ISOTILE_CLEAR); // RA2: the fourth argument
 
 	if (waterfall_count > 0) {
-		Clear_Region_Cells(WorkingRegionID - 1, 0, -1);
+		Clear_Region_Cells(WorkingRegionID - 1, 0, -1, ISOTILE_CLEAR); // RA2: as above
 	}
 
 	return(false);
@@ -11199,7 +10890,7 @@ bool MapGeneratorClass::Seed_Arctic_Lake(const Cell & cell)
 		return(true);
 	}
 
-	Clear_Region_Cells(WorkingRegionID, 0, -1);
+	Clear_Region_Cells(WorkingRegionID, 0, -1, ISOTILE_CLEAR); // RA2: the fourth argument
 	return(false);
 }
 
@@ -11435,7 +11126,7 @@ bool MapGeneratorClass::Seed_Arctic_River(const Cell & cell, double start_angle)
 		return(true);
 	}
 
-	Clear_Region_Cells(WorkingRegionID, 0, -1);
+	Clear_Region_Cells(WorkingRegionID, 0, -1, ISOTILE_CLEAR); // RA2: the fourth argument
 	return(false);
 }
 

@@ -220,12 +220,12 @@ public:
 		 */
 		void Build_Neighbor_Regions(void);
 		void Make_Region_Connections(void);
-		unsigned Build_Neighbor_Region_Mask(Cell const & cell, bool & valid, int unknown);
+		unsigned Build_Neighbor_Region_Mask(Cell const & cell, bool & valid, int unknown, float density); // RA2: fourth parameter, the density
 		bool Connect_Regions_With_Bridge(MapRegionClass * region1, MapRegionClass * region2);
 		bool Is_Bridge_Allowed(Rect const & rect) const;
 		bool Place_Bridge_Hut(Rect const & rect) const;
 		void Place_Neutral_Tech_Building(void); // RA2: 0x576CD0
-		bool Connect_Regions_With_Ramp(Cell const & cell, int region_id, bool allow_fallback);
+		bool Connect_Regions_With_Ramp(Cell const & cell, int region_id, float density); // RA2: the third parameter is a float density (0..1)
 		bool Build_South_Ramp(Cell const & cell1, Cell const & cell2, int region_id);
 		bool Build_East_Ramp(Cell const & cell1, Cell const & cell2, int region_id);
 		bool Build_North_Ramp(Cell const & cell1, Cell const & cell2, int region_id);
@@ -510,7 +510,7 @@ class MapGeneratorClass
 		bool Expand_All_High_Ground(void);
 		bool Grow_Region(int id, int rings, Rect rect, char set_height, char height);
 		bool Clear_Region_Border(int id, int rings, int new_id);
-		void Clear_Region_Cells(int id, int new_id, int cell_height);
+		void Clear_Region_Cells(int id, int new_id, int cell_height, int tile); // RA2: fourth parameter, the tile type the wiped cells receive
 		DynamicVectorClass<Cell> *Build_Region_Border_Cell_List(int id);
 		static bool Region_Cell_Count_At_Least(Rect const & rect, int region_id, int, int count);
 		void Set_Height_Of_ID(int id, char cell_height);
