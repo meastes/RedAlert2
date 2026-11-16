@@ -1663,7 +1663,7 @@ void Refresh_Game_List(void) // RA2: 0x0073F8F0, fills the game list of dialog 0
 
 		if (channel.latency == -1) {
 			cell.type = OwnerDraw::CellData::TEXT;
-			cell.string.set((unsigned short *)L"??");
+			cell.string.set((unsigned short *)L"???");
 		} else {
 			cell.pingtime = channel.latency;
 			cell.type = OwnerDraw::CellData::PING;
@@ -1783,7 +1783,7 @@ void Draw_Player_List(int keep_selection, bool force) // RA2: 0x0073FEE0, fills 
 				if (g_UserLocales.getPointer(ladder_name, &value) && value) locale = *value; // RA2: as above
 				if (locale) {
 					WideWstring locale_name = Get_Locale_Name(locale); // RA2: as above
-					swprintf(localestring, L"(%s)", locale_name.get()); // RA2: as above
+					swprintf(localestring, L"(%hs)", locale_name.get()); // RA2: as above
 				}
 			}
 			if (g_ActiveLadder->getValue(ladder_name, ladder)) {

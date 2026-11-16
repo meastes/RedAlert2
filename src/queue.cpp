@@ -5074,7 +5074,7 @@ void __fastcall Write_Sync_File(int index, EventClass *event) // RA2: 0x0062DBA0
 			SyncObject *o = objects;
 			for (i = 0; i < state->Counts[0]; i++) {
 				if (o->Owner == house) {
-					fprintf(file, "COORD:%x   Facing:%d   CurrentMission:%d   Type:%d(%s)   Tgt:%s(%d) Speed:%d NavCom:%s(%d)\n",
+					fprintf(file, "COORD:%x   Facing:%d   Mission:%d   Type:%d(%s)   Tgt:%s(%d) Speed:%d NavCom:%s(%d)\n",
 						o->Coord, o->Facing, o->CurrentMission, o->Type, o->TypeName, o->Target, o->TargetID, o->Speed, o->NavCom, o->NavComID);
 				}
 				o++;
@@ -5088,7 +5088,7 @@ void __fastcall Write_Sync_File(int index, EventClass *event) // RA2: 0x0062DBA0
 			SyncObject *o = objects;
 			for (i = 0; i < state->Counts[1]; i++) {
 				if (o->Owner == house) {
-					fprintf(file, "COORD:%x   Facing:%d   Facing2:%d   CurrentMission:%d   Type:%d(%s)   Tgt:%s(%d)  NavCom:%s(%d)   TrkNum:%d TrkInd:%d SpdAc:%d\n",
+					fprintf(file, "COORD:%x   Facing:%d   Facing2:%d   Mission:%d   Type:%d(%s)   Tgt:%s(%d)  NavCom:%s(%d)   TrkNum:%d TrkInd:%d SpdAc:%d\n",
 						o->Coord, o->Facing, o->Facing2, o->CurrentMission, o->Type, o->TypeName, o->Target, o->TargetID, o->NavCom, o->NavComID, o->TrackNumber, o->TrackIndex, o->SpeedAccum);
 				}
 				o++;
@@ -5102,7 +5102,7 @@ void __fastcall Write_Sync_File(int index, EventClass *event) // RA2: 0x0062DBA0
 			SyncObject *o = objects;
 			for (i = 0; i < state->Counts[2]; i++) {
 				if (o->Owner == house) {
-					fprintf(file, "COORD:%x   Facing:%d   CurrentMission:%d   Type:%d(%s)   Tgt:%s(%d)  NavCom:%s(%d)\n",
+					fprintf(file, "COORD:%x   Facing:%d   Mission:%d   Type:%d(%s)   Tgt:%s(%d)  NavCom:%s(%d)\n",
 						o->Coord, o->Facing, o->CurrentMission, o->Type, o->TypeName, o->Target, o->TargetID, o->NavCom, o->NavComID);
 				}
 				o++;
@@ -5116,7 +5116,7 @@ void __fastcall Write_Sync_File(int index, EventClass *event) // RA2: 0x0062DBA0
 			SyncObject *o = objects;
 			for (i = 0; i < state->Counts[3]; i++) {
 				if (o->Owner == house) {
-					fprintf(file, "COORD:%x   Facing:%d   CurrentMission:%d   Type:%d(%s)   Tgt:%s(%d)\n",
+					fprintf(file, "COORD:%x   Facing:%d   Mission:%d   Type:%d(%s)   Tgt:%s(%d)\n",
 						o->Coord, o->Facing, o->CurrentMission, o->Type, o->TypeName, o->Target, o->TargetID);
 				}
 				o++;
