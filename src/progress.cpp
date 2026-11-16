@@ -623,6 +623,15 @@ void ProgressScreenClass::Clear_Dialog(void)
 
 
 /// <summary>
+/// RA2: sets the notice sink that is told of the progress (0x6203E0).
+/// </summary>
+void ProgressScreenClass::Unknown_Virtual_0(int callback)
+{
+	Callback = (INoticeSink *)callback;
+}
+
+
+/// <summary>
 /// RA2: past the last player, the job itself; else that player's share of the job (0x6203F0).
 /// </summary>
 double ProgressScreenClass::Get_Current_Progress(int index) const

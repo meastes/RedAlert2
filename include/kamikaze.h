@@ -14,6 +14,7 @@ class KamikazeClass
 {
 	public:
 		void Remove(AbstractClass * target);
+		void Clear(void); // RA2: 0x005319E0, drops every tracked kamikaze
 };
 
 extern KamikazeClass Kamikazes;

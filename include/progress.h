@@ -28,7 +28,7 @@ class ProgressScreenClass : public INoticeSource // RA2: INoticeSource
 		ProgressScreenClass(void);
 		~ProgressScreenClass(void);
 
-		virtual void Unknown_Virtual_0(int callback) override {Callback = (INoticeSink *)callback;} // RA2: sets Callback (0x6203E0)
+		virtual void Unknown_Virtual_0(int callback) override; // RA2: sets Callback (0x6203E0); defined in progress.cpp, Read_Scenario calls it out of line
 
 		void Initialize(double progress, char count, HWND dialog = NULL); // RA2: 0x61ED80, a dialog window instead of a flag
 		void End(void);
