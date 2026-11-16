@@ -33,6 +33,7 @@
 #include "language\language.h"
 #include "netshare.h"
 #include "ownrdraw.h"
+#include "playerprofile.h" // RA2: the profile of the player (wolpersonainformation.cpp)
 #include "scenario.h"
 #include "srfcache.h" // RA2: the images of the game list
 #include "session.h"
@@ -98,11 +99,6 @@ extern int WolOptionsLocked; // RA2: 0x00B2AC40, as in netshare.cpp (2 once the 
 extern bool g_StartGameReceived; // RA2: 0x00B2AC45, the start of the game was announced, Start_Game_Now runs it
 extern bool g_StartGameRunning; // RA2: 0x00B2AC44, Start_Game_Now is running (it sets it first and clears it at its end)
 void Start_Game_Now(void); // RA2: 0x0074F300, the executable's own debug text names it so
-class PlayerProfile : public rc_object // RA2: the profile of the player, only its loader is used here
-{
-	public:
-		static rc_ptr<PlayerProfile> Load_Default(void); // RA2: 0x00738670
-};
 extern rc_ptr<PlayerProfile> g_PlayerProfile; // RA2: 0x00B28CC0, set by Reset_WOL_Globals
 extern ArrayList<Channel> g_UserChannels; // RA2: 0x00B26C88
 extern ArrayList<Channel> g_GameChannelList; // RA2: 0x00B29990
