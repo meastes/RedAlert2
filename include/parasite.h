@@ -45,13 +45,13 @@ class ParasiteClass : public AbstractClass
 		virtual void Compute_CRC(CRCEngine & crc) const override;
 		virtual void AI(void) override;
 
-		void FUN_00629530(void);
-		void FUN_00629710(void);
-		Coord FUN_0062AC30(void);
-		bool UpdateGrapple(void);
-		void UpdateSquid(void);
-		void ExitUnit(void);
-		bool CanInfect(FootClass * victim) const;
-		void TryInfect(FootClass * target);
-		bool CanExistOnVictimCell(void) const;
+		void Clear_Grapple(void); // RA2: 0x006064C0; drops the grapple animation and resets the grapple state
+		void Reset_Grapple_Counters(void); // RA2: 0x006066A0; restarts the grapple animation at its first frame
+		Coord Get_Exit_Coord(void); // RA2: 0x00607C30; where the owner comes out when the victim goes away
+		bool UpdateGrapple(void); // RA2: 0x006066B0
+		void UpdateSquid(void); // RA2: 0x00606780; one frame of a squid holding a ship
+		void ExitUnit(void); // RA2: 0x00607440; the owner leaves the victim
+		bool CanInfect(FootClass * victim) const; // RA2: 0x006078F0
+		void TryInfect(FootClass * target); // RA2: 0x00607980
+		bool CanExistOnVictimCell(void) const; // RA2: 0x00607BA0; no caller (ExitUnit and Get_Exit_Coord expand the same test), the executable keeps the copy
 };
