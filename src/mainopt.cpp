@@ -35,18 +35,196 @@
 #include "surface.h"
 #include "wspipx.h"
 #include "wwmouse.h"
+#include "_rules.h" // RA2: ConfigINI
+#include "firewall.h" // RA2: FirewallHelperClass
+#include "options.h" // RA2: OptionsClass
+#include "session.h" // RA2: Session.SendDelay and PortNumberOverride
+#include "stringtable.h" // RA2: StringTable::LoadString
+#include "techno.h" // RA2: TechnoClass::Set_Action_Lines
+#include "theme.h" // RA2: Theme
+#include "windlg.h" // RA2: WS_Top_Window and WS_Next_Lower_Dialog
 
 #include "color.hh"
 
 
+
+/*
+**	RA2: the original path of this file, passed with each string table lookup (see stringtable.h).
+*/
+#define RA2_SOURCE "D:\\Ra2\\MainOpt.cpp" // RA2: the path the executable passes with each lookup
+
+enum {
+	IDC_TRY_MODE_OK = 1473, // RA2: 0x5C1, the button of the trial and confirmation dialogs that accepts
+	IDC_TRY_MODE_CANCEL = 1738, // RA2: 0x6CA, the button that declines
+	IDC_SHOW_HIDDEN = 1540, // RA2: 0x604, the show hidden check box
+	IDC_OPTMAIN_OK = 1670, // RA2: 0x686, the button that closes the main options dialog
+	IDC_OPTMAIN_RESOLUTION = 1773, // RA2: 0x6ED, the resolution combo box
+	IDC_IPX_PORT = 1495, // RA2: 0x5D7, the source port edit box
+	IDC_IPX_FIREWALL = 1890 // RA2: 0x762, the firewall check box
+};
+
+/*
+**	RA2: owner draw dialog messages the executable sends (names guessed from their use).
+*/
+#define OD_SETTEXT (WM_USER + 180) // RA2: 0x4B4, sets the text of a control
+#define OD_GETTEXT (WM_USER + 181) // RA2: 0x4B5, reads the text of a control
+#define OD_FINDSTRING (WM_USER + 184) // RA2: 0x4B8, finds a string in a combo box
+#define OD_ADDSTRING (WM_USER + 188) // RA2: 0x4BC, adds a string to a combo box
+#define OD_ADDITEM (WM_USER + 194) // RA2: 0x4C2, adds an item to a combo box
+#define OD_REFRESH_IPX (WM_USER + 100) // RA2: 0x464, sent to the network dialog after the card is chosen
+#define OD_TABFOCUS (WM_USER + 219) // RA2: 0x4DB, moves the focus to the next tab stop
+
+struct ModeSize { // RA2: one entry of the list EnumDisplayModes returns (width, height; a zero width ends it)
+	int Width; // RA2: as above
+	int Height; // RA2: as above
+};
+
+extern FirewallHelperClass FirewallHelper; // RA2: 0x00A71B18 (firewall.cpp)
+extern int __fastcall AudioDeviceAvailable(void); // RA2: 0x00406F30, whether the audio library opened a device
+extern int SidebarWidth; // RA2: 0x007ADD80
+void Relayout_Interface_Art(int width, int height); // RA2: 0x006F33B0 (txtlabel2.cpp)
+void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0 (init.cpp)
+void Resize_Dialog_To_Screen(HWND dialog, Point2D * old_size); // RA2: 0x005E9F00 (ownrdraw.cpp)
+extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30
+extern bool __fastcall Focus_Next_Tab_Item(long lparam, bool flag); // RA2: 0x005DEF80
+
+BOOL CALLBACK Mode_Prompt_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: as above
+bool Mode_Prompt_Dialog(void); // RA2: as above
+void Apply_Game_Settings(HWND window); // RA2: as above
 BOOL CALLBACK Main_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 BOOL CALLBACK IPX_Options_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
-BOOL CALLBACK Display_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+BOOL CALLBACK Test_Display_Mode_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 bool Change_Display_Mode(int width, int height);
 bool Test_Display_Mode_Dialog(int width, int height);
-BOOL CALLBACK Test_Display_Mode_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 
-GameOptionsClass TempOptions;
+OptionsClass TempOptions; // RA2: the copy of Options taken before the options dialog opens (0x00A6EC38), a plain OptionsClass; its initializer is the jump at 0x00542150
+
+
+/*
+**	RA2: the labels the options sliders show (0x007DFD80, 0x007DFD8C, 0x007DFD98) and the list positions the dialogs remember.
+*/
+static char const * DetailLabels[3] = {"TXT_LOW", "TXT_MEDIUM", "TXT_HIGH"}; // RA2: 0x007DFD80, the detail slider labels
+static char const * DifficultyLabels[3] = {"TXT_EASY", "TXT_NORMAL", "TXT_HARD"}; // RA2: 0x007DFD8C, the difficulty slider labels
+static char const * ScrollLabels[7] = {"TXT_SLOWEST", "TXT_SLOWER", "TXT_SLOW", "TXT_MEDIUM", "TXT_FAST", "TXT_FASTER", "TXT_FASTEST"}; // RA2: 0x007DFD98, the scroll rate slider labels
+static int InitialResolution = -1; // RA2: 0x007DFDB4, the resolution combo selection when the dialog opened
+static bool OptionsReady; // RA2: 0x00A6ED0C, the controls are filled, the sliders ignore scrolling until then
+static ModeSize * ResolutionModes; // RA2: 0x00A6ED10, the mode list of the resolution combo box
+static int CurrentNetCard = -1; // RA2: 0x007DFDB8, the network card combo selection
+
+
+/// <summary>
+/// Handles the dialog that announces a display mode trial.
+/// This routine shows the warning text and reports the button the player pressed.
+/// </summary>
+BOOL CALLBACK Mode_Prompt_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x00542160, the dialog that announces a mode trial, not in TibSun
+{
+	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
+	if (rc == 0) {
+		int * result = (int *)GetWindowLong(window, DWL_USER);
+		switch (message) {
+			case OD_SUBCLASSED: { // RA2: as above
+				wchar_t const * text = StringTable::LoadString("TXT_ABOUT_TO_TRY_MODE", NULL, RA2_SOURCE, 162); // RA2: as above
+				HWND item = GetDlgItem(window, IDC_CONFIRM_MODE_TEXT); // RA2: as above
+				SendMessage(item, OD_SETTEXTW, 0, (LPARAM)text); // RA2: as above
+				break;
+			}
+
+			case WM_COMMAND:
+				switch (LOWORD(wparam)) {
+					case IDC_TRY_MODE_OK: // RA2: as above
+						*result = 1;
+						break;
+
+					case IDC_TRY_MODE_CANCEL: // RA2: as above
+						*result = 2;
+						break;
+				}
+				break;
+		}
+		return(0);
+	}
+	return(rc);
+}
+
+
+/// <summary>
+/// Warns the player that a display mode is about to be tried.
+/// </summary>
+/// <returns>bool; Did the player accept?</returns>
+bool Mode_Prompt_Dialog(void) // RA2: 0x00542210, not in TibSun; the executable has no caller of its own copy because Main_Options_Dialog_Proc expands it
+{
+	int rc = -1;
+
+	HWND dialog = OwnerDraw::Begin_Dialog(IDD_OPT_CONFIRM_MODE, Mode_Prompt_Dialog_Proc); // RA2: as above
+	if (dialog) {
+		SetWindowLong(dialog, DWL_USER, (LONG)&rc);
+		OwnerDraw::Display_Dialog(dialog);
+		while (rc < 0 && !OwnerDraw::Dialog_Message_Handler()) Title_Screen_Restore(); // RA2: as above
+		OwnerDraw::End_Dialog(dialog);
+	}
+	return(rc == 1); // RA2: as above
+}
+
+
+/// <summary>
+/// Takes the settings of the main options dialog over into the game options.
+/// </summary>
+void Apply_Game_Settings(HWND window) // RA2: 0x00542280, not in TibSun
+{
+	HWND control = GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER); // RA2: as above
+	if (control) { // RA2: as above
+		int detail = SendMessage(control, TBM_GETPOS, 0, 0) ? 2 : 0; // RA2: as above
+		if (Options.DetailLevel != detail) { // RA2: as above
+			Options.DetailLevel = detail; // RA2: as above
+			Map.Reinit_Cell_Drawers(); // RA2: as above
+		}
+	}
+
+	control = GetDlgItem(window, IDC_DIFFICULTY_SLIDER); // RA2: as above
+	if (control) { // RA2: as above
+		Options.Difficulty = SendMessage(control, TBM_GETPOS, 0, 0); // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_TARGET_LINES); // RA2: as above
+	if (control) { // RA2: as above
+		Options.ActionLines = SendMessage(control, BM_GETCHECK, 0, 0) == 1; // RA2: as above
+		TechnoClass::Set_Action_Lines(Options.ActionLines); // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_SHOW_HIDDEN); // RA2: as above
+	if (control) { // RA2: as above
+		Options.IsShowHidden = SendMessage(control, BM_GETCHECK, 0, 0) == 1; // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_TOOLTIPS); // RA2: as above
+	if (control) { // RA2: as above
+		Options.ToolTips = SendMessage(control, BM_GETCHECK, 0, 0) == 1; // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER); // RA2: as above
+	if (control) { // RA2: as above
+		Options.ScrollRate = 6 - SendMessage(control, TBM_GETPOS, 0, 0); // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_MUSIC_VOLUME); // RA2: as above
+	if (control) { // RA2: as above
+		Options.Set_Score_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), false); // RA2: as above
+		if (Options.ScoreVolume == 0.0f) { // RA2: as above
+			Theme.Queue_Song(Theme.What_Is_Playing()); // RA2: as above
+			Theme.Stop(); // RA2: as above
+		}
+	}
+
+	control = GetDlgItem(window, IDC_SOUND_VOLUME); // RA2: as above
+	if (control) { // RA2: as above
+		Options.Set_Sound_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), false); // RA2: as above
+	}
+
+	control = GetDlgItem(window, IDC_VOICE_VOLUME); // RA2: as above
+	if (control) { // RA2: as above
+		Options.Set_Voice_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), false); // RA2: as above
+	}
+}
 
 
 /// <summary>
@@ -56,7 +234,7 @@ GameOptionsClass TempOptions;
 /// offered as a trial first, and the settings are written out when the player leaves.
 /// </summary>
 /// <remarks>Game logic is suspended for the duration of this routine.</remarks>
-void Main_Options_Dialog(void)
+void Main_Options_Dialog(void) // RA2: 0x00542460, the executable has the main dialog, the network settings and the keyboard dialog only; the sound, display and game settings dialogs are pages of the main dialog
 {
 	bool old_game_active = GameActive;
 	GameActive = false;
@@ -69,12 +247,11 @@ void Main_Options_Dialog(void)
 
 	while (true) {
 		do {
+			TempOptions = Options;
 			main_rc = -1;
 			main_handle = OwnerDraw::Begin_Dialog(IDD_OPT_MAIN, Main_Options_Dialog_Proc);
 		} while (main_handle == 0);
 		SetWindowLong(main_handle, DWL_USER, (LONG)&main_rc);
-
-		OwnerDraw::Move_Dialog(main_handle, -1, (HiddenSurface->Get_Height() - 400) / 2 + 147);
 		OwnerDraw::Display_Dialog(main_handle);
 
 		while (main_rc < 0) {
@@ -84,59 +261,13 @@ void Main_Options_Dialog(void)
 			Title_Screen_Restore();
 		}
 
+		Apply_Game_Settings(main_handle); // RA2: as above
 		OwnerDraw::End_Dialog(main_handle);
 
 		switch (main_rc) {
-			case IDC_OPTMAIN_SOUND:
-				SoundControlsClass().Dialog();
-				break;
-
-			case IDC_OPTMAIN_DISPLAY: {
-				while (true) {
-					do {
-						TempOptions = Options;
-						in_rc = -1;
-						in_handle = OwnerDraw::Begin_Dialog(IDD_OPT_DISPLAY, Display_Options_Dialog_Proc);
-					} while (in_handle == 0);
-					SetWindowLong(in_handle, DWL_USER, (LONG)&in_rc);
-					OwnerDraw::Display_Dialog(in_handle);
-
-					while (in_rc < 0) {
-						if (OwnerDraw::Dialog_Message_Handler() == true) {
-							break;
-						}
-						Title_Screen_Restore();
-					}
-
-					OwnerDraw::End_Dialog(in_handle);
-
-					if (in_rc != 1) {
-						break;
-					}
-					if (TempOptions.ScreenWidth == Options.ScreenWidth && TempOptions.ScreenHeight == Options.ScreenHeight) {
-						break;
-					}
-
-					if (Debug_IngameModeChange) {
-						Options.ScreenWidth = TempOptions.ScreenWidth;
-						Options.ScreenHeight = TempOptions.ScreenHeight;
-					} else {
-						if (WWMessageBox().Process(TXT_ABOUT_TO_TRY_MODE, TXT_OK, TXT_CANCEL) == 0) {
-							if (!Test_Display_Mode_Dialog(TempOptions.ScreenWidth, TempOptions.ScreenHeight)) {
-								continue;
-							}
-							Options.ScreenWidth = TempOptions.ScreenWidth;
-							Options.ScreenHeight = TempOptions.ScreenHeight;
-						}
-					}
-
-					break;
-				}
-			}
-			break;
-
 			case IDC_OPTMAIN_NETWORK: {
 				in_rc = -1;
+				Session.Read_MultiPlayer_Settings(); // RA2: as above
 				in_handle = OwnerDraw::Begin_Dialog(IDD_OPT_IPX, IPX_Options_Proc);
 				if (in_handle) {
 					SetWindowLong(in_handle, DWL_USER, (LONG)&in_rc);
@@ -158,10 +289,6 @@ void Main_Options_Dialog(void)
 				Options.Hotkey_Dialog();
 				break;
 
-			case IDC_OPTMAIN_GAME_SETTINGS:
-				GameControlsClass().Dialog();
-				break;
-
 			default:
 				Options.Save_Settings();
 				GameActive = old_game_active;
@@ -177,31 +304,209 @@ void Main_Options_Dialog(void)
 /// that it can bring up the appropriate sub dialog. The sound button is disabled when there
 /// is no audio hardware to talk to.
 /// </summary>
-BOOL CALLBACK Main_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+BOOL CALLBACK Main_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x00542590, 1994 bytes; this body compiles to 1984 and differs in the layout of the slider label code, so it is excepted
 {
-	int *result;
-	HWND handle;
-
 	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-	if (rc == 0) {
-		result = (int *)GetWindowLong(window, DWL_USER);
-		switch (message) {
-
-			case WM_COMMAND:
-				*result = LOWORD(wparam);
-				break;
-
-			case WM_INITDIALOG:
-				handle = GetDlgItem(window, IDC_OPTMAIN_SOUND);
-				if (handle) {
-					EnableWindow(handle, Audio_Available());
-				}
-				break;
-
-		}
-		return(0);
+	if (rc != 0) { // RA2: as above
+		return(rc);
 	}
-	return(rc);
+
+	int * result = (int *)GetWindowLong(window, DWL_USER);
+	HWND control = (HWND)lparam; // RA2: as above
+	switch (message) {
+		case WM_COMMAND:
+			switch (LOWORD(wparam)) {
+				case IDC_OPTMAIN_NETWORK: // RA2: as above
+				case IDC_OPTMAIN_KEYBOARD:
+					delete [] ResolutionModes; // RA2: as above
+					ResolutionModes = NULL; // RA2: as above
+					*result = LOWORD(wparam);
+					break;
+
+				case IDC_OPTMAIN_OK: // RA2: as above
+					if (HIWORD(wparam) == 0) { // RA2: as above
+						delete [] ResolutionModes; // RA2: as above
+						ResolutionModes = NULL; // RA2: as above
+						*(int *)GetWindowLong(window, DWL_USER) = IDC_OPTMAIN_MAINMENU;
+					}
+					break;
+
+				case IDC_OPTMAIN_RESOLUTION: // RA2: as above
+					if (HIWORD(wparam) == CBN_SELCHANGE) { // RA2: as above
+						Center_Window_Within_Window(window, MainWindow);
+						HWND combo = GetDlgItem(window, IDC_OPTMAIN_RESOLUTION); // RA2: as above
+						if (combo == NULL) { // RA2: as above
+							return(0);
+						}
+						int item = ComboBox_GetCurSel(combo); // RA2: as above
+						int mode = ComboBox_GetItemData(combo, item); // RA2: as above
+						TempOptions.ScreenWidth = ResolutionModes[mode].Width; // RA2: as above
+						TempOptions.ScreenHeight = ResolutionModes[mode].Height; // RA2: as above
+						if (TempOptions.ScreenWidth == Options.ScreenWidth && TempOptions.ScreenHeight == Options.ScreenHeight) {
+							return(0);
+						}
+						if (Mode_Prompt_Dialog()) { // RA2: as above
+							if (Debug_IngameModeChange) {
+								Options.ScreenWidth = TempOptions.ScreenWidth;
+								Options.ScreenHeight = TempOptions.ScreenHeight;
+								return(0);
+							}
+							if (Test_Display_Mode_Dialog(TempOptions.ScreenWidth, TempOptions.ScreenHeight)) { // RA2: as above
+								Options.ScreenWidth = TempOptions.ScreenWidth;
+								Options.ScreenHeight = TempOptions.ScreenHeight;
+								Relayout_Interface_Art(TempOptions.ScreenWidth, TempOptions.ScreenHeight); // RA2: as above
+								Darken_Surface(NULL, true); // RA2: as above
+								return(0);
+							}
+							ComboBox_SetCurSel(combo, InitialResolution); // RA2: as above
+							return(0);
+						}
+						ComboBox_SetCurSel(combo, InitialResolution); // RA2: as above
+						return(0);
+					}
+					break;
+			}
+			return(0);
+
+		case WM_DESTROY: // RA2: as above
+			if (ResolutionModes) { // RA2: as above
+				delete [] ResolutionModes; // RA2: as above
+				ResolutionModes = NULL; // RA2: as above
+			}
+			return(0);
+
+		case WM_HSCROLL: { // RA2: as above
+			if (LOWORD(wparam) != TB_THUMBTRACK) { // RA2: as above
+				return(0);
+			}
+			int position = HIWORD(wparam); // RA2: as above
+			char const * name; // RA2: as above
+			HWND text; // RA2: as above
+			if (control == GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER)) { // RA2: as above
+				int index = position; // RA2: as above
+				if (position) { // RA2: as above
+					index = 2; // RA2: as above
+				}
+				name = DetailLabels[index]; // RA2: as above
+				text = GetDlgItem(window, IDC_DETAIL_LEVEL_LABEL); // RA2: as above
+			} else if (control == GetDlgItem(window, IDC_DIFFICULTY_SLIDER)) { // RA2: as above
+				name = DifficultyLabels[position]; // RA2: as above
+				text = GetDlgItem(window, IDC_DIFFICULTY_LABEL); // RA2: as above
+			} else if (control == GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER)) { // RA2: as above
+				name = ScrollLabels[position]; // RA2: as above
+				text = GetDlgItem(window, IDC_SCROLL_SPEED_LABEL); // RA2: as above
+			} else {
+				if (!OptionsReady) { // RA2: as above
+					return(0);
+				}
+				if (control == GetDlgItem(window, IDC_MUSIC_VOLUME)) { // RA2: as above
+					Options.Set_Score_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), true); // RA2: as above
+				} else if (control == GetDlgItem(window, IDC_SOUND_VOLUME)) { // RA2: as above
+					Options.Set_Sound_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), true); // RA2: as above
+				} else if (control == GetDlgItem(window, IDC_VOICE_VOLUME)) { // RA2: as above
+					Options.Set_Voice_Volume((float)(SendMessage(control, TBM_GETPOS, 0, 0) * 0.1), true); // RA2: as above
+				}
+				return(0);
+			}
+			if (text) { // RA2: as above
+				SendMessage(text, OD_SETTEXTW, 0, (LPARAM)StringTable::LoadString(name, NULL, RA2_SOURCE, 550)); // RA2: as above
+			}
+			return(0);
+		}
+
+		case OD_SUBCLASSED: { // RA2: as above
+			OptionsReady = false; // RA2: as above
+			HWND slider = GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 1)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, Options.DetailLevel != 0); // RA2: as above
+			}
+
+			HWND combo = GetDlgItem(window, IDC_OPTMAIN_RESOLUTION); // RA2: as above
+			if (Options.AllowHiResModes) {
+				ResolutionModes = (ModeSize *)EnumDisplayModes(640, 480, 4096, 4096, 16); // RA2: as above
+			} else {
+				ResolutionModes = (ModeSize *)EnumDisplayModes(640, 480, 1024, 768, 16); // RA2: as above
+			}
+			int * modes = (int *)ResolutionModes; // RA2: as above
+			int item_index = 0;
+			int selected = -1; // RA2: as above
+			int count = 0; // RA2: as above
+			if (modes != NULL) {
+				while (*modes != 0) {
+					int width = *modes++;
+					int height = *modes++;
+					if (Options.AllowHiResModes || width == 640 || width == 800 || width == 1024) { // RA2: as above
+						if (width == TempOptions.ScreenWidth && height == TempOptions.ScreenHeight) {
+							selected = count; // RA2: as above
+						}
+						char buffer[64];
+						sprintf(buffer, "%d x %d x 16", width, height);
+						int item = ComboBox_AddString(combo, buffer); // RA2: as above
+						ComboBox_SetItemData(combo, item, item_index); // RA2: as above
+						count++; // RA2: as above
+					}
+					item_index++;
+				}
+			}
+			ComboBox_SetCurSel(combo, selected); // RA2: as above
+			InitialResolution = selected; // RA2: as above
+
+			slider = GetDlgItem(window, IDC_DIFFICULTY_SLIDER); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 2)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, Options.Difficulty); // RA2: as above
+			}
+
+			HWND box = GetDlgItem(window, IDC_TARGET_LINES); // RA2: as above
+			if (box) { // RA2: as above
+				SendMessage(box, BM_SETCHECK, Options.ActionLines != 0, 0); // RA2: as above
+			}
+			box = GetDlgItem(window, IDC_SHOW_HIDDEN); // RA2: as above
+			if (box) { // RA2: as above
+				SendMessage(box, BM_SETCHECK, Options.IsShowHidden != 0, 0); // RA2: as above
+			}
+			box = GetDlgItem(window, IDC_TOOLTIPS); // RA2: as above
+			if (box) { // RA2: as above
+				SendMessage(box, BM_SETCHECK, Options.ToolTips != 0, 0); // RA2: as above
+			}
+
+			slider = GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 6)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, 6 - Options.ScrollRate); // RA2: as above
+			}
+
+			int sound = AudioDeviceAvailable(); // RA2: as above
+			slider = GetDlgItem(window, IDC_MUSIC_VOLUME); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKSILENT, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 10)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, (int)(Options.ScoreVolume * 10.0 + 0.5)); // RA2: as above
+				EnableWindow(slider, sound); // RA2: as above
+			}
+			slider = GetDlgItem(window, IDC_SOUND_VOLUME); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKSILENT, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 10)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, (int)(Options.SoundVolume * 10.0 + 0.5)); // RA2: as above
+				EnableWindow(slider, sound); // RA2: as above
+			}
+			slider = GetDlgItem(window, IDC_VOICE_VOLUME); // RA2: as above
+			if (slider) { // RA2: as above
+				SendMessage(slider, OD_TRACKSILENT, 0, 0); // RA2: as above
+				SendMessage(slider, TBM_SETRANGE, TRUE, MAKELONG(0, 10)); // RA2: as above
+				SendMessage(slider, TBM_SETPOS, TRUE, (int)(Options.VoiceVolume * 10.0 + 0.5)); // RA2: as above
+				EnableWindow(slider, sound); // RA2: as above
+			}
+			OptionsReady = true; // RA2: as above
+			return(0);
+		}
+	}
+	return(0);
 }
 
 
@@ -211,143 +516,164 @@ BOOL CALLBACK Main_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam,
 /// the player choose one, along with the socket number and destination network to use. The
 /// socket and destination network are validated before the options are accepted.
 /// </summary>
-BOOL CALLBACK IPX_Options_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+BOOL CALLBACK IPX_Options_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x00542D60, TibSun's IPX_Options_Proc with the firewall settings
 {
-	static int _current_ipx = -1;
-
-	HWND handle;
-	int i;
-	bool inited;
-	int *result;
-	char socket_string[16];
-	char addr_string[32];
-	char addr_str[64];
-
 	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-
-	if (rc == 0) {
-		result = (int *)GetWindowLong(window, DWL_USER);
-
-		switch (message) {
-			case WM_INITDIALOG: {
-				HWND combobox = GetDlgItem(window, IDC_IPX_NETCARD);
-
-				inited = false;
-				if (PacketTransport == NULL) {
-					PacketTransport = new IPXInterfaceClass;
-					PacketTransport->Init();
-					inited = true;
-				}
-
-				if (PacketTransport != NULL) {
-					DebugString("Creating IPX Interface\n");
-					IPXInterfaceClass *ipxi = (IPXInterfaceClass *)PacketTransport;
-					for ( i = 0; ipxi->Get_Network_Card_Address_As_String(i, addr_str, sizeof(addr_str)); ++i )
-					{
-						DebugString("Got address for network card %d\n", i);
-						DebugString("Address is %s\n", addr_str);
-						if (ComboBox_FindString(combobox, 0, addr_str) != -1) {
-							break;
-						}
-						ComboBox_AddString(combobox, addr_str);
-					}
-				}
-
-				if (inited) {
-					delete PacketTransport;
-					PacketTransport = NULL;
-				}
-
-				if (ComboBox_GetCount(combobox) == 0) {
-					ComboBox_AddString(combobox, Fetch_String(TXT_NO_BOUND_NET_CARD));
-				}
-				int netcard = Options.NetCard;
-				if (netcard < 0 || netcard >= ComboBox_GetCount(combobox)) {
-					netcard = 0;
-				}
-				ComboBox_SetCurSel(combobox, netcard);
-
-
-				_current_ipx = -1;
-				handle = GetDlgItem(window, IDC_IPX_SOCKET);
-				if (Options.Socket != 0xFFFF) {
-					sprintf(socket_string, "%d", Options.Socket);
-					Edit_SetText(handle, socket_string);
-				}
-				Edit_LimitText(handle, 5);
-				handle = GetDlgItem(window, IDC_IPX_DESTNET);
-				if (strlen(Options.DestNet)) {
-					Edit_SetText(handle, Options.DestNet);
-				}
-				Edit_LimitText(handle, 11);
-				return(0);
-			}
-
-			case WM_COMMAND: {
-				switch (LOWORD(wparam)) {
-					case IDOK:
-						handle = GetDlgItem(window, IDC_IPX_SOCKET);
-						GetWindowText(handle, socket_string, sizeof(socket_string));
-						unsigned short socket;
-						if ( strlen(socket_string) )
-						{
-							socket = atoi(socket_string);
-							if (strlen(socket_string) > 5 || socket > 16383) {
-								WWMessageBox().Process(TXT_INVALID_SOCKET, TXT_OK);
-								return(0);
-							}
-						} else {
-							socket = -1;
-						}
-						handle = GetDlgItem(window, IDC_IPX_DESTNET);
-						GetWindowText(handle, addr_string, sizeof(addr_string));
-						strncpy(addr_str, addr_string, sizeof(addr_string));
-
-						if (strlen(addr_string)) {
-							int i = 0;
-							char *octet = strtok(addr_string, ".");
-							int net[4];
-							net[0] = -1;
-							net[1] = -1;
-							net[2] = -1;
-							net[3] = -1;
-							if (octet != NULL) {
-								while (octet) {
-									sscanf(octet, "%x", &net[i]);
-									i++;
-									octet = strtok(NULL, ".");
-								}
-							}
-							if ((unsigned char)net[0] != net[0] || (unsigned char)net[1] != net[1] || (unsigned char)net[2] != net[2] || (unsigned char)net[3] != net[3]) {
-								WWMessageBox().Process(TXT_DESTNET_ADDR_ERROR, TXT_OK);
-								return(0);
-							}
-						}
-
-						handle = GetDlgItem(window, IDC_IPX_NETCARD);
-						Options.NetCard = ComboBox_GetCurSel(handle);
-						Options.Socket = socket;
-						strcpy(Options.DestNet, addr_str);
-						break;
-
-					case IDCANCEL:
-						break;
-
-					case IDC_IPX_NETCARD:
-						handle = GetDlgItem(window, IDC_IPX_NETCARD);
-						_current_ipx = ComboBox_GetCurSel(handle);
-						return(0);
-
-					default:
-						return(0);
-				}
-				*result = 2;
-			}
-		}
-		rc = 0;
+	if (rc) { // RA2: as above
+		return(rc);
 	}
 
-	return(rc);
+	int * result = (int *)GetWindowLong(window, DWL_USER);
+	char text[16]; // RA2: as above
+	char address[64]; // RA2: as above
+	switch (message) {
+		case OD_SUBCLASSED: { // RA2: as above
+			HWND cards = GetDlgItem(window, IDC_IPX_NETCARD); // RA2: as above
+			bool temporary = false; // RA2: as above
+			if (PacketTransport == NULL) {
+				PacketTransport = new IPXInterfaceClass;
+				PacketTransport->Init();
+				temporary = true; // RA2: as above
+			}
+			if (PacketTransport != NULL) {
+				DebugString("Creating IPX Interface\n");
+				IPXInterfaceClass * transport = (IPXInterfaceClass *)PacketTransport; // RA2: as above
+				for (int card = 0; card < 20; card++) { // RA2: as above
+					if (transport->Get_Network_Card_Address_As_String(card, address, sizeof(address))) { // RA2: as above
+						DebugString("Got address for network card %d\n", card); // RA2: as above
+						DebugString("Address is %s\n", address); // RA2: as above
+						if (SendMessage(cards, OD_FINDSTRING, 0, (LPARAM)address) == -1) { // RA2: as above
+							SendMessage(cards, OD_ADDSTRING, 0, (LPARAM)address); // RA2: as above
+						}
+					}
+				}
+			}
+			if (temporary) { // RA2: as above
+				delete PacketTransport;
+				PacketTransport = NULL;
+			}
+			if (SendMessage(cards, CB_GETCOUNT, 0, 0) == 0) { // RA2: as above
+				SendMessage(cards, OD_ADDITEM, 0, (LPARAM)StringTable::LoadString("TXT_NO_BOUND_NET_CARD", NULL, RA2_SOURCE, 886)); // RA2: as above
+			}
+			int selected = Options.NetCard; // RA2: as above
+			if (selected < 0 || selected >= SendMessage(cards, CB_GETCOUNT, 0, 0)) { // RA2: as above
+				selected = 0; // RA2: as above
+			}
+			SendMessage(cards, CB_SETCURSEL, selected, 0); // RA2: as above
+			SendMessage(window, OD_REFRESH_IPX, 0, 0); // RA2: as above
+			CurrentNetCard = -1; // RA2: as above
+			HWND socket = GetDlgItem(window, IDC_IPX_SOCKET); // RA2: as above
+			if (Options.Socket != 0xFFFF) {
+				sprintf(text, "%d", Options.Socket); // RA2: as above
+				SendMessage(socket, OD_SETTEXT, 0, (LPARAM)text); // RA2: as above
+			}
+			SendMessage(socket, EM_LIMITTEXT, 5, 0); // RA2: as above
+			HWND destination = GetDlgItem(window, IDC_IPX_DESTNET); // RA2: as above
+			if (strlen(Options.DestNet)) {
+				SendMessage(destination, OD_SETTEXT, 0, (LPARAM)Options.DestNet); // RA2: as above
+			}
+			SendMessage(destination, EM_LIMITTEXT, 11, 0); // RA2: as above
+			if (Session.SendDelay) { // RA2: as above
+				SendDlgItemMessage(window, IDC_IPX_FIREWALL, BM_SETCHECK, 1, 0); // RA2: as above
+			} else {
+				SendDlgItemMessage(window, IDC_IPX_FIREWALL, BM_SETCHECK, 0, 0); // RA2: as above
+			}
+			HWND port = GetDlgItem(window, IDC_IPX_PORT); // RA2: as above
+			if (port != (HWND)-1 && Session.PortNumberOverride != 0) { // RA2: as above
+				sprintf(text, "%d", Session.PortNumberOverride); // RA2: as above
+				SendMessage(port, OD_SETTEXT, 0, (LPARAM)text); // RA2: as above
+			}
+		}
+		break;
+
+		case WM_COMMAND:
+			switch (LOWORD(wparam)) {
+				case IDOK: {
+					HWND socket_control = GetDlgItem(window, IDC_IPX_SOCKET); // RA2: as above
+					SendMessage(socket_control, OD_GETTEXT, 16, (LPARAM)text); // RA2: as above
+					unsigned short socket;
+					if (strlen(text)) { // RA2: as above
+						socket = (unsigned short)atoi(text); // RA2: as above
+						if (strlen(text) > 5 || socket > 16383) { // RA2: as above
+							WWMessageBox(L" ").Process(StringTable::LoadString("TXT_INVALID_SOCKET", NULL, RA2_SOURCE, 975), StringTable::LoadString("TXT_OK", NULL, RA2_SOURCE, 975), NULL, NULL, false); // RA2: as above
+							return(0);
+						}
+					} else {
+						socket = 0xFFFF; // RA2: as above
+					}
+					char destination[32]; // RA2: as above
+					char saved_destination[32]; // RA2: as above
+					HWND destination_control = GetDlgItem(window, IDC_IPX_DESTNET); // RA2: as above
+					SendMessage(destination_control, OD_GETTEXT, 32, (LPARAM)destination); // RA2: as above
+					strncpy(saved_destination, destination, 32); // RA2: as above
+					if (strlen(destination)) { // RA2: as above
+						char * token = strtok(destination, "."); // RA2: as above
+						int network[4] = {-1, -1, -1, -1}; // RA2: as above
+						if (token) { // RA2: as above
+							int * part = network; // RA2: as above
+							do {
+								sscanf(token, "%x", part); // RA2: as above
+								part++; // RA2: as above
+								token = strtok(NULL, "."); // RA2: as above
+							} while (token); // RA2: as above
+						}
+						if ((network[0] & 255) != network[0] || (network[1] & 255) != network[1] || // RA2: as above
+							(network[2] & 255) != network[2] || (network[3] & 255) != network[3]) { // RA2: as above
+							WWMessageBox(L" ").Process(StringTable::LoadString("TXT_DESTNET_ADDR_ERROR", NULL, RA2_SOURCE, 1009), StringTable::LoadString("TXT_OK", NULL, RA2_SOURCE, 1009), NULL, NULL, false); // RA2: as above
+							return(0);
+						}
+					}
+					HWND card_control = GetDlgItem(window, IDC_IPX_NETCARD); // RA2: as above
+					Options.NetCard = SendMessage(card_control, CB_GETCURSEL, 0, 0); // RA2: as above
+					Options.Socket = socket;
+					strcpy(Options.DestNet, saved_destination); // RA2: as above
+					HWND port_control = GetDlgItem(window, IDC_IPX_PORT); // RA2: as above
+					char port_text[32]; // RA2: as above
+					memset(port_text, 0, sizeof(port_text)); // RA2: as above
+					SendMessage(port_control, OD_GETTEXT, 8, (LPARAM)port_text); // RA2: as above
+					strncpy(address, port_text, 32); // RA2: as above
+					int port = atoi(address); // RA2: as above
+					if (port > 65535) { // RA2: as above
+						WWMessageBox(L" ").Process(StringTable::LoadString("TXT_PORT_NUMBER_ERROR", NULL, RA2_SOURCE, 1050), StringTable::LoadString("TXT_OK", NULL, RA2_SOURCE, 1050), NULL, NULL, false); // RA2: as above
+						return(0);
+					}
+					if (SendDlgItemMessage(window, IDC_IPX_FIREWALL, BM_GETCHECK, 0, 0) == 1) { // RA2: as above
+						if (!Session.SendDelay) { // RA2: as above
+							WWMessageBox(L" ").Process(StringTable::LoadString("TXT_FIREWALL_SETTINGS_WARNING1", NULL, RA2_SOURCE, 1059), StringTable::LoadString("TXT_OK", NULL, RA2_SOURCE, 1059), NULL, NULL, false); // RA2: as above
+						}
+						Session.SendDelay = true; // RA2: as above
+					} else {
+						Session.SendDelay = false; // RA2: as above
+					}
+					if (port > 0 && Session.PortNumberOverride == 0) { // RA2: as above
+						WWMessageBox(L" ").Process(StringTable::LoadString("TXT_FIREWALL_SETTINGS_WARNING2", NULL, RA2_SOURCE, 1070), StringTable::LoadString("TXT_OK", NULL, RA2_SOURCE, 1070), NULL, NULL, false); // RA2: as above
+					}
+					Session.PortNumberOverride = port; // RA2: as above
+					FirewallHelper.Clear(); // RA2: as above
+					RawFileClass settings("RA2.INI"); // RA2: as above
+					ConfigINI.Put_Bool("MultiPlayer", "SendDelay", Session.SendDelay); // RA2: as above
+					ConfigINI.Put_Int("MultiPlayer", "PortNumberOverride", Session.PortNumberOverride, 0); // RA2: as above
+					ConfigINI.Save(settings, false); // RA2: as above
+				}
+				// RA2: the OK button closes through the same result as Cancel
+
+				case IDCANCEL:
+					*result = 2;
+					break;
+
+				case IDC_IPX_NETCARD: { // RA2: as above
+					HWND card_control = GetDlgItem(window, IDC_IPX_NETCARD); // RA2: as above
+					CurrentNetCard = SendMessage(card_control, CB_GETCURSEL, 0, 0); // RA2: as above
+				}
+				break;
+			}
+			break;
+
+		case OD_TABFOCUS: // RA2: as above
+			Focus_Next_Tab_Item(lparam, wparam != 0); // RA2: as above
+			return(0);
+	}
+	return(0);
 }
 
 
@@ -361,9 +687,11 @@ BOOL CALLBACK IPX_Options_Proc(HWND window, UINT message, WPARAM wparam, LPARAM 
 /// <param name="width">The width of the display mode to change to.</param>
 /// <param name="height">The height of the display mode to change to.</param>
 /// <returns>bool; Was the mode changed? If not, the previous mode has been restored.</returns>
-bool Change_Display_Mode(int width, int height)
+bool Change_Display_Mode(int width, int height) // RA2: 0x005434E0
 {
 	DebugString("About to set video mode\n");
+
+	Point2D old_size(VideoModeWidth, VideoModeHeight); // RA2: as above
 
 	int redleft = DSurface::Get_Red_Left();
 	int redright = DSurface::Get_Red_Right();
@@ -402,7 +730,6 @@ bool Change_Display_Mode(int width, int height)
 
 			DebugString("Restoring mouse handler\n");
 			MouseCursor = new WWMouseClass(VisibleSurface, MainWindow);
-			MouseCursor->Capture_Mouse();
 
 			void const * mouseshp = MFCD::Retrieve("MOUSE.SHP");
 			if (mouseshp != NULL) {
@@ -466,13 +793,14 @@ bool Change_Display_Mode(int width, int height)
 		MoveWindow(MainWindow, 0, 0, windowrect.right - windowrect.left, windowrect.bottom - windowrect.top, TRUE);
 	}
 
-	Rect temp = VisibleRect;
-	temp.X = ((Options.IsSidebarOnRight || Debug_Map) ? 0 : SidebarClass::SIDE_WIDTH);
-	temp.Y = 16;
-	temp.Width -= SidebarClass::SIDE_WIDTH;
-	temp.Height -= 16;
+	Rect temp = Get_Title_Screen_Area(); // RA2: as above
 
-	Allocate_Surfaces(VisibleRect, Rect(0, 0, temp.Width, VisibleRect.Height), Rect(0, 0, temp.Width, VisibleRect.Height), Rect(0, 0, SidebarClass::SIDE_WIDTH, VisibleRect.Height));
+	{
+		Rect sidebar(0, 0, SidebarWidth, VisibleRect.Height); // RA2: as above
+		Rect tile(0, 0, temp.Width, VisibleRect.Height); // RA2: as above
+		Rect composite(0, 0, temp.Width, VisibleRect.Height); // RA2: as above
+		Allocate_Surfaces(VisibleRect, composite, tile, sidebar, false); // RA2: as above
+	}
 	LogicalSurface = HiddenSurface;
 
 	DebugString("Recalc color remap tables\n");
@@ -480,8 +808,6 @@ bool Change_Display_Mode(int width, int height)
 
 	if (MouseCursor == NULL) {
 		MouseCursor = new WWMouseClass(VisibleSurface, MainWindow);
-
-		MouseCursor->Capture_Mouse();
 
 		void const * mouseshp = MFCD::Retrieve("MOUSE.SHP");
 		if (mouseshp != NULL) {
@@ -499,17 +825,18 @@ bool Change_Display_Mode(int width, int height)
 	}
 
 	Map.Set_View_Dimensions(temp);
+	Relayout_Interface_Art(VideoModeWidth, VideoModeHeight); // RA2: as above
 
 	Map.Init_IO();
-	Map.Activate(
-#ifdef _DEBUG
-		Debug_Map == true ? 1 : 0
-#else
-		1
-#endif
-	);
+	Map.Activate(1); // RA2: as above
 	Map.Reposition_Sidebar();
 	Map.Flag_To_Redraw(GS_REDRAW_ALL);
+
+	for (HWND dialog = WS_Top_Window(); dialog != NULL; dialog = WS_Next_Lower_Dialog(dialog)) { // RA2: as above
+		On_WM_NCDESTROY(dialog); // RA2: as above
+		Resize_Dialog_To_Screen(dialog, &old_size); // RA2: as above
+	}
+
 	Show_Mouse();
 
 	DebugString("Mode change complete.\n");
@@ -527,7 +854,7 @@ bool Change_Display_Mode(int width, int height)
 /// <param name="width">The width of the display mode to try.</param>
 /// <param name="height">The height of the display mode to try.</param>
 /// <returns>bool; Was the new display mode accepted and left in place?</returns>
-bool Test_Display_Mode_Dialog(int width, int height)
+bool Test_Display_Mode_Dialog(int width, int height) // RA2: 0x00543A70
 {
 	int rc = -1;
 
@@ -543,7 +870,7 @@ bool Test_Display_Mode_Dialog(int width, int height)
 	HiddenSurface->Fill(TBLACK);
 	Update_Visible_Surface();
 	Show_Mouse();
-	Draw_Menu_Background();
+	Darken_Surface(NULL, true); // RA2: as above
 
 	HWND dialog = OwnerDraw::Begin_Dialog(IDD_OPT_CONFIRM_MODE, Test_Display_Mode_Dialog_Proc);
 	if (dialog) {
@@ -557,13 +884,13 @@ bool Test_Display_Mode_Dialog(int width, int height)
 			}
 			Title_Screen_Restore();
 			if (timer <= 0) {
-				PostMessage(dialog, WM_COMMAND, WM_DESTROY, 0);
+				PostMessage(dialog, WM_COMMAND, IDC_TRY_MODE_CANCEL, 0); // RA2: as above
 				timer = 5 * TIMER_SECOND;
 			}
 		}
 
 		OwnerDraw::End_Dialog(dialog);
-		if (rc != IDOK) {
+		if (rc != 1) { // RA2: as above
 			DebugString("Resetting display mode @ %dx%d\n", Options.ScreenWidth, Options.ScreenHeight);
 			Change_Display_Mode(Options.ScreenWidth, Options.ScreenHeight);
 			LogicalSurface = HiddenSurface;
@@ -582,146 +909,32 @@ bool Test_Display_Mode_Dialog(int width, int height)
 /// This routine records the button the player pressed so that the mode test can tell
 /// whether the new resolution was accepted or rejected.
 /// </summary>
-BOOL CALLBACK Test_Display_Mode_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+BOOL CALLBACK Test_Display_Mode_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x00543C40, TibSun's Test_Display_Mode_Dialog_Proc
 {
-	int * result;
-	int id;
-
 	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
 	if (rc == 0) {
-		result = (int *)GetWindowLong(window, DWL_USER);
+		int * result = (int *)GetWindowLong(window, DWL_USER);
 		switch (message) {
+			case OD_SUBCLASSED: { // RA2: as above
+				wchar_t const * text = StringTable::LoadString("GUI:ConfirmModeChange", NULL, RA2_SOURCE, 1493); // RA2: as above
+				HWND item = GetDlgItem(window, IDC_CONFIRM_MODE_TEXT); // RA2: as above
+				SendMessage(item, OD_SETTEXTW, 0, (LPARAM)text); // RA2: as above
+				break;
+			}
+
 			case WM_COMMAND:
-				id = LOWORD(wparam);
-				if (id > 0 && id <= IDCANCEL) {
-					*result = LOWORD(wparam);
+				switch (LOWORD(wparam)) {
+					case IDC_TRY_MODE_OK: // RA2: as above
+						*result = 1;
+						break;
+
+					case IDC_TRY_MODE_CANCEL: // RA2: as above
+						*result = 2;
+						break;
 				}
 				break;
 		}
 		return(0);
-	}
-	return(rc);
-}
-
-
-/// <summary>
-/// Handles the display options dialog messages.
-/// This routine fills the resolution list with the display modes the hardware reports,
-/// remembers which one the player picked, and tracks the movie stretching preference. The
-/// chosen resolution is staged in the temporary options so that it can be tested before
-/// being made permanent.
-/// </summary>
-static __forceinline BOOL Display_Options_Dialog_Body(HWND window, UINT message, WPARAM wparam)
-{
-	enum {
-		MIN_WIDTH = 640,
-		MIN_HEIGHT = 400,
-		MAX_WIDTH = 800,
-		MAX_HEIGHT = 600,
-		MAX_HI_WIDTH = 4096,
-		MAX_HI_HEIGHT = 4096,
-	};
-
-	static int * _modes = NULL;
-	static int _current_mode = -1;
-	static int _previous_mode = -1;
-	static bool _initialized = true;
-
-	int * result = (int *)GetWindowLong(window, DWL_USER);
-	switch (message) {
-		case WM_COMMAND:
-			switch (LOWORD(wparam)) {
-				default:
-					return(0);
-
-				case IDC_DISPLAY_RESLIST: {
-					HWND list = GetDlgItem(window, IDC_DISPLAY_RESLIST);
-					_current_mode = ListBox_GetCurSel(list);
-				}
-				return(0);
-
-				case IDOK: {
-					if (_previous_mode != _current_mode) {
-						Center_Window_Within_Window(window, MainWindow);
-						HWND list = GetDlgItem(window, IDC_DISPLAY_RESLIST);
-						if (list) {
-							int index = ListBox_GetItemData(list, _current_mode);
-							int * modes = &_modes[2 * index];
-							TempOptions.ScreenWidth = modes[0];
-							TempOptions.ScreenHeight = modes[1];
-						}
-					}
-					HWND button = GetDlgItem(window, IDC_STRETCH_MOVIES);
-					if (button) {
-						Options.StretchMovies = Button_GetCheck(button) == BST_CHECKED;
-					}
-				}
-				break;
-
-				case IDCANCEL:
-					break;
-			}
-			delete [] _modes;
-			*result = LOWORD(wparam);
-			break;
-
-		case WM_INITDIALOG: {
-			HWND list = GetDlgItem(window, IDC_DISPLAY_RESLIST);
-			if (Options.AllowHiResModes) {
-				_modes = EnumDisplayModes(MIN_WIDTH, MIN_HEIGHT, MAX_HI_WIDTH, MAX_HI_HEIGHT, 16);
-			} else {
-				_modes = EnumDisplayModes(MIN_WIDTH, MIN_HEIGHT, MAX_WIDTH, MAX_HEIGHT, 16);
-			}
-			int * modes = _modes;
-			int item_index = 0;
-			int initial_mode = -1;
-			int mode_index = 0;
-			if (modes != NULL) {
-				while (*modes != 0) {
-					int width = *modes++;
-					int height = *modes++;
-					if (Options.AllowHiResModes || width == MIN_WIDTH || width == MAX_WIDTH) {
-						if (width == TempOptions.ScreenWidth && height == TempOptions.ScreenHeight) {
-							initial_mode = mode_index;
-						}
-						char buffer[64];
-						sprintf(buffer, "%d x %d x 16", width, height);
-						int index = ListBox_AddString(list, buffer);
-						ListBox_SetItemData(list, index, item_index);
-						mode_index++;
-					}
-					item_index++;
-				}
-			}
-			ListBox_SetCurSel(list, initial_mode);
-			_initialized = true;
-			_current_mode = initial_mode;
-			_previous_mode = initial_mode;
-
-			HWND button = GetDlgItem(window, IDC_STRETCH_MOVIES);
-			if (button) {
-				bool stretch = Options.StretchMovies == true && DSurface::AllowStretchBlits == true;
-				Button_SetCheck(button, stretch != false);
-				EnableWindow(button, (BOOL)DSurface::AllowStretchBlits);
-			}
-		}
-		break;
-
-	}
-	return(0);
-}
-
-
-/// <summary>
-/// Handles the display options dialog.
-/// This routine gives the owner draw dialog system first refusal on the message and only
-/// deals with what it leaves behind.
-/// </summary>
-BOOL CALLBACK Display_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
-{
-	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-	if (rc == 0) {
-		return(Display_Options_Dialog_Body(window, message, wparam));
 	}
 	return(rc);
 }
