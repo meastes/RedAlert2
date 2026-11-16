@@ -427,231 +427,154 @@ namespace WorldDominationTour
 		OUTCOME_COUNT
 	};
 
-	class State {
-		public:
-			enum TerritoryState {
-				UNASSIGNED,
-				DISPUTED,
-				GDI,
-				NOD,
-			};
+	class State;
+	class History;
+	class CampaignProperties;
+	class Conflict;
+	class Territory;
+	class Campaign;
 
-			State(void);
-			~State(void);
-			State(WDTState * state, unsigned int tick);
-			State(State const & that);
-			State & operator=(State const & that);
-			bool operator==(State const & that);
-			TerritoryState Get_Territory_State(unsigned int terr);
-			int Count_Owned_Territories(int player_faction);
-		public:
-			/*
-			 * This points to the tour state the snapshot was taken from, and is what a
-			 * territory number is checked against. The state is not owned.
-			 */
-			WDTState *TourState;
+	/*
+	 * RA2: the classes of the tour are counted objects (ReferenceCounted) kept in rc_ptr, made by a
+	 * static Create. The screen of WDTSel.cpp only reads them, so what is declared is what it uses.
+	 */
 
-			/*
-			 * This points to the row of the tour state's ownership history belonging to the
-			 * tick this snapshot was taken at. If NULL, then nobody owns anything.
-			 */
-			unsigned char *Owners;
+	/*
+	 * RA2: the owner of every territory at one tick, read from the tour state (WDTState) of the
+	 * campaign; Owners is NULL for the empty state. Territory owners are 1 (disputed), 2 and 3 (the
+	 * two sides), 0 for none.
+	 */
+	class State : public ReferenceCounted {
+		public:
+			State(void); // RA2: 0x007307F0
+			State(rc_ptr<WDTState> const & tour, unsigned int tick); // RA2: 0x00730830
+			virtual ~State(void); // RA2: 0x007308E0
+			static rc_ptr<State> __fastcall Create(rc_ptr<WDTState> const & tour, int tick); // RA2: 0x00730700
+			static rc_ptr<State> __fastcall Create(void); // RA2: 0x00730790; the empty state
+			int Owner_Of(unsigned int terr) const; // RA2: 0x00730890
+			int Count_Owned(int owner) const; // RA2: 0x00730900; counts the territories of owner 2 and 3 only
+
+		public:
+			rc_ptr<WDTState> TourState; // RA2: +0x08
+			unsigned char * Owners; // RA2: +0x10; one byte per territory, from the tour state's list for the tick
 	};
 
-	class History {
+	/*
+	 * RA2: the tour state's ownership history, one State per tick.
+	 */
+	class History : public ReferenceCounted {
 		public:
-			History(WDTState * state);
-			~History(void);
-
-			bool Is_Tick_Valid(unsigned int tick);
-			State Get_State(unsigned int tick);
+			History(rc_ptr<WDTState> const & tour); // RA2: 0x00728EC0
+			virtual ~History(void); // RA2: 0x00728F40
+			static rc_ptr<History> __fastcall Create(rc_ptr<WDTState> const & tour); // RA2: 0x00728E50
+			rc_ptr<State> Get_State(int tick) const; // RA2: 0x00728F00
+			int Is_Tick_Valid(unsigned int tick) const; // RA2: 0x00728F20
 
 		public:
-			/*
-			 * This points to the tour state whose ownership history is read out. It belongs to
-			 * the campaign rather than to the history, and is NULL when no state arrived.
-			 */
-			WDTState *TourState;
+			rc_ptr<WDTState> TourState; // RA2: +0x08
 	};
 
-	class Conflict {
+	/*
+	 * RA2: one battle of the campaign, a territory of the tour state.
+	 */
+	class Conflict : public ReferenceCounted {
 		public:
-			Conflict(WDTTerritory * terr = NULL);
-			Conflict(Conflict const & that);
-			~Conflict(void);
-			Conflict & operator=(Conflict const & that);
-			bool operator==(Conflict const & that) const;
-
-			bool Is_Territory_Set(void) const;
-			int Get_Territory_Index(void) const;
-
-			void Init_Game_Options(void);
-			void Deinit_Game_Options(void);
-			void Process_Game_Options(char * str, int len);
-
-			bool operator!=(Conflict const & that) const { return(!(*this == that)); }
+			Conflict(rc_ptr<WDTTerritory> const & terr); // RA2: 0x00727360
+			virtual ~Conflict(void); // RA2: 0x007273C0
+			static rc_ptr<Conflict> __fastcall Create(rc_ptr<WDTTerritory> const & terr); // RA2: 0x007272F0
+			bool operator==(Conflict const & that) const; // RA2: 0x007273A0
+			bool Is_Territory_Set(void) const; // RA2: 0x007273E0
+			int Get_Territory_Index(void) const; // RA2: 0x007273F0; the territory's number (+0x08), 0 without one
+			bool Is_Territory(int index) const { return(Get_Territory_Index() == index); } // RA2: inline in Selection::Select_Territory
+			static void __fastcall Init_Game_Options(void); // RA2: 0x00727480
+			static void Deinit_Game_Options(void); // RA2: 0x00727920
+			WideWstring Describe_Options(void) const; // RA2: 0x00727960
 
 		public:
-			/*
-			 * This points to the territory that is to be fought over, which is what supplies
-			 * the battlefield and the game options once the player commits. If NULL, then the
-			 * conflict is a placeholder with no battle attached to it.
-			 */
-			WDTTerritory * Territory;
+			rc_ptr<WDTTerritory> Territory; // RA2: +0x08
 	};
 
-	typedef DynamicVectorClass<Conflict> CONFLICT_LIST;
-	typedef VectorCursor<Conflict, CONFLICT_LIST> CONFLICT_ITER;
+	typedef DynamicVectorClass<rc_ptr<Conflict> > CONFLICT_LIST; // RA2: counted pointers
+	typedef VectorCursor<rc_ptr<Conflict>, CONFLICT_LIST> CONFLICT_ITER;
 
-	class CampaignProperties {
+	/*
+	 * RA2: the descriptions of the tour state the campaign belongs to.
+	 */
+	class CampaignProperties : public ReferenceCounted {
 		public:
-			CampaignProperties(WDTState * state);
-			CampaignProperties(CampaignProperties const & that);
-			~CampaignProperties(void);
+			CampaignProperties(rc_ptr<WDTState> const & tour); // RA2: 0x0072D1F0
+			virtual ~CampaignProperties(void); // RA2: 0x0072D1C0
+			static rc_ptr<CampaignProperties> __fastcall Create(rc_ptr<WDTState> const & tour); // RA2: 0x0072D180
 
-			bool operator==(CampaignProperties const & that) const;
-			CampaignProperties & operator = (CampaignProperties const & that);
+			int Get_Cycle_ID(void) const; // RA2: 0x0072D290; 0 without a state
+			int Get_Layout(void) const; // RA2: 0x0072D2A0; the key into [LAYOUTS]
+			int Get_Map_ID(void) const; // RA2: 0x0072D2B0; 1 without a state
+			int Get_Current_Tick(void) const; // RA2: 0x0072D2D0; the state's conflict count less one
 
-			int Get_Cycle_ID(void) const;
-			int Get_Layout(void) const;
-			int Get_Map_ID(void) const;
-			int Get_Current_Tick(void) const;
-			const char * Get_Short_Desc(void) const;
-			const char * Get_Long_Desc(void) const;
-			const char * Get_Web_URL(void) const;
-
-			/*
-			 * This points to the tour state being described. Every property is answered out of
-			 * it, and a state that never arrived is answered with placeholders instead.
-			 */
-			WDTState *TourState;
+		public:
+			rc_ptr<WDTState> TourState; // RA2: +0x08
+			WideWstring ShortDescription; // RA2: +0x10
+			WideWstring LongDescription; // RA2: +0x14
 	};
 
-	class Campaign {
+	/*
+	 * RA2: the progress of one campaign, kept in WDTHist.INI under its name.
+	 */
+	class Campaign : public ReferenceCounted {
 		public:
-			Campaign(char const *name, CampaignProperties const &props);
-			~Campaign(void);
-
-			bool Is_Different_Cycle(void);
-			bool Is_Different(void);
-			void Write_INI(void);
-			void Reset_INI(void);
-			void Load_INI(INIClass & ini);
-			CONFLICT_ITER Get_Conflict_Iterator(int index);
-			void Set_Faction(int faction);
-			CampaignProperties & Get_Campaign_Properties(void) { return(Properties); }
+			Campaign(Wstring const & name, rc_ptr<CampaignProperties> const & props); // RA2: 0x00725F40
+			virtual ~Campaign(void); // RA2: 0x007262E0
+			static rc_ptr<Campaign> __fastcall Create(Wstring const & name, rc_ptr<CampaignProperties> const & props); // RA2: 0x00725EE0
+			bool Is_Different_Cycle(void) const; // RA2: 0x00726350
+			bool Is_Different(int faction) const; // RA2: 0x00726370; the saved progress of the faction differs
+			int Get_Last_Day(int faction) const; // RA2: 0x007263A0
+			void Save_Progress(int faction); // RA2: 0x007263B0
+			int Get_Player_Faction(void) const { return(PlayerFaction); }
 
 		public:
-			/*
-			 * This describes the tour cycle the campaign belongs to -- its identifier, its map
-			 * and how far it has run.
-			 */
-			CampaignProperties Properties;
-
-			/*
-			 * If the campaign is picking up a session the player already began, then this flag
-			 * will be true. It is cleared when the tour has moved on to a cycle the recorded
-			 * progress no longer belongs to.
-			 */
-			bool IsContinued;
-
-			/*
-			 * This is the record of who held each territory at each tick of the cycle,
-			 * which is what the selection screen replays.
-			 */
-			History CycleHistory;
-
-			/*
-			 * These are the battles still to be fought -- one for every territory that stands
-			 * disputed at the tick the campaign was built for.
-			 */
-			DynamicVectorClass<Conflict> Conflicts;
-
-			/*
-			 * This is the tour cycle that the campaign's recorded progress belongs to. Once it
-			 * no longer matches the cycle the tour is running, the campaign starts over.
-			 */
-			int CycleID;
-
-			/*
-			 * This is the tick the player was last shown, so that a new session replays only
-			 * what has happened since.
-			 */
-			int PreviousTick;
-
-			/*
-			 * This is the side the player has chosen to fight for. It decides the artwork, the
-			 * voice-overs and the descriptions the campaign is presented with.
-			 */
-			int PlayerFaction;
-
-			/*
-			 * This is the name of the campaign, which doubles as the section its progress is
-			 * recorded under in the tour history file.
-			 */
-			char Name[64];
+			rc_ptr<CampaignProperties> Properties; // RA2: +0x08
+			rc_ptr<History> CycleHistory; // RA2: +0x10
+			CONFLICT_LIST Conflicts; // RA2: +0x18
+			int CycleID; // RA2: +0x30
+			int LastDay[4]; // RA2: +0x34
+			int PlayerFaction; // RA2: +0x44
+			Wstring Name; // RA2: +0x48
 	};
 
-	class Territory {
-
+	/*
+	 * RA2: one territory of the map, made by Create from a section of WDTMap.ini.
+	 */
+	class Territory : public ReferenceCounted {
 		public:
-			Territory(int id, const char * fname, INIClass const & ini, const char * name, int side, MSEngine & engine, ConvertClass * drawer, MS_ANIM_LIST * anims, Point2D const & pos);
-			~Territory(void);
+			Territory(int id, INIClass const & ini, Wstring const & section, Wstring const & shape_prefix, Wstring const & name_prefix); // RA2: 0x00730BE0
+			virtual ~Territory(void); // RA2: 0x00730F80
 			static rc_ptr<Territory> __fastcall Create(int index, INIClass const & ini, Wstring const & section, Wstring const & shape_prefix, Wstring const & name_prefix); // RA2: 0x00730B80 (WDTTerr.cpp)
 			void Create_Owner_Anim(MSEngine * engine, ConvertClass * drawer, Point2D const & offset); // RA2: 0x00730E00
 			void Create_Highlight_Anim(MSEngine * engine, ConvertClass * drawer, Point2D const & offset); // RA2: 0x00730EC0
-			void Set_Owner_State(int state, MSEngine & engine, bool wait);
-			void Set_Highlight(bool active, MSEngine & engine);
-			void Set_Target_Anim(MSAnim * anim);
-			MSAnim * Remove_Target_Anim(void);
+			void Set_Owner_State(int state, MSEngine * engine, bool wait); // RA2: 0x00730FB0
+			void Set_Highlight(bool active, MSEngine * engine); // RA2: 0x00731120
+			void Set_Target_Anim(MSAnim * anim); // RA2: 0x00731190
+			MSAnim * Remove_Target_Anim(void); // RA2: 0x007311A0; returns the animation and clears it
+			Point2D const & Get_Target(void) const { return(Target); }
+			int Get_ID(void) const { return(ID); }
+			MSAnim * Get_Target_Anim(void) const { return(TargetAnim); }
+
 		public:
-			/*
-			 * This is the number the territory is known by, both in the tour's territory list
-			 * and as the color index that stands for it in the click map.
-			 */
-			int ID;
-
-			/*
-			 * This is the name of the territory as it is shown to the player.
-			 */
-			char Name[64];
-
-			/*
-			 * This is the blurb shown beneath the territory's name, written for the side the
-			 * player is fighting for.
-			 */
-			char Description[128];
-
-			/*
-			 * This is the point, relative to the map origin, the territory's target marker is
-			 * pinned to.
-			 */
-			Point2D Target;
-
-			/*
-			 * This is the overlay that colors the territory according to who holds it. It is
-			 * switched to another frame as the territory changes hands, and hidden outright
-			 * while nobody holds it at all.
-			 */
-			MSOverlayAnim *OwnerAnim;
-
-			/*
-			 * This is the overlay that lights the territory up while the mouse is over it.
-			 */
-			MSOverlayAnim *HighlightAnim;
-
-			/*
-			 * This is the marker that throbs over the territory while it stands disputed, or
-			 * NULL when there is nothing here to be fought over.
-			 */
-			MSAnim *TargetAnim;
+			int ID; // RA2: +0x08
+			WideWstring Name; // RA2: +0x0C
+			Point2D Target; // RA2: +0x10; where the target marker is pinned, relative to the map origin
+			Point2D Origin; // RA2: +0x18
+			Wstring ShapeName; // RA2: +0x20
+			MSOverlayAnim * OwnerAnim; // RA2: +0x24
+			MSAnim * HighlightAnim; // RA2: +0x28
+			MSAnim * TargetAnim; // RA2: +0x2C
 	};
 
-	typedef DynamicVectorClass<Territory *> TERR_LIST;
-	typedef VectorCursor<Territory *, TERR_LIST> TERR_ITER;
+	typedef DynamicVectorClass<rc_ptr<Territory> > TERRITORY_LIST;
+	typedef VectorCursor<rc_ptr<Territory>, TERRITORY_LIST> TERRITORY_ITER;
+	rc_ptr<Territory> __fastcall Find_Territory(TERRITORY_LIST & territories, int index); // RA2: 0x007311B0 (WDTTerr.cpp)
 
 	class Voices; // RA2: Map::Start_Intro takes the voice player
-	typedef DynamicVectorClass<rc_ptr<Territory> > TERRITORY_LIST; // RA2: the map's territories are counted pointers
 
 	/*
 	 * RA2: the map is a counted object made by Create. Load reads the map's section of WDTMap.ini
@@ -699,6 +622,7 @@ namespace WorldDominationTour
 			void Set_Back_Hot(MSEngine * engine, bool hot); // RA2: 0x0072A6D0
 			void Set_Back_Down(MSEngine * engine, bool down); // RA2: 0x0072A720
 			int Is_Over_Back(Point2D const & point) const; // RA2: 0x0072A770; inside the back button's rectangle (+0x54)
+			rc_ptr<Territory> Get_Territory(int index) { return(Find_Territory(Territories, index)); } // RA2: the territory with this number; inline (an out-of-line copy is 0x007302B0 in WDTSel.cpp)
 
 		public:
 			int MapNumber; // RA2: +0x08; the entry of [MAPS]
@@ -939,85 +863,35 @@ namespace WorldDominationTour
 		public:
 			class Anim : public MSAnim {
 				public:
-					Anim(Voices *voices);
-					virtual ~Anim(void);
+					Anim(Voices *voices); // RA2: 0x00732AA0
+					virtual ~Anim(void); // RA2: 0x00732AE0
 
-					virtual void Set_Active(bool active);
-					virtual void Pause(void);
-					virtual void Resume(void);
-					virtual bool Advance(Surface * surface, Rect & rect);
-					virtual void Redraw(Surface * surface, Rect const * rect=NULL);
-					virtual Rect Get_Rect(void) const;
-					virtual bool Has_Finished(void) const;
-					virtual void Restore(Rect const & rect);
+					virtual void Set_Active(bool active); // RA2: 0x00732AF0
+					virtual void Pause(void); // RA2: 0x00732B50
+					virtual void Resume(void); // RA2: 0x00732BA0
+					virtual bool Advance(Surface * surface, Rect & rect); // RA2: 0x00732BC0
+					virtual void Redraw(Surface * surface, Rect const * rect=NULL); // RA2: 0x00732BD0
+					virtual Rect Get_Rect(void) const; // RA2: 0x00732BE0
+					virtual bool Has_Finished(void) const; // RA2: 0x00732C10
+					virtual void Restore(Rect const & rect); // RA2: 0x00732C20
 
 				public:
-					/*
-					 * This points to the voice player the animation drives. The player
-					 * belongs to the screen rather than to the animation.
-					 */
-					Voices * VoicePlayer;
+					Voices * VoicePlayer; // RA2: +0x1C
 			};
 
-			class Sample {
-				public:
-					Sample(const char * name, int volume = 255);
-					~Sample(void);
+			/*
+			 * RA2: one group of announcements: the key prefix it is read under and, for each of
+			 * the three results, the plain and the emphatic line numbers.
+			 */
+			struct Group {
+				Group(void); // RA2: 0x00732060
+				void Load(INIClass & ini, Wstring const & section, int faction); // RA2: 0x007320C0
+				void Load(INIClass & ini, Wstring const & section, int faction, int kind, Wstring const & key); // RA2: 0x00732300
+				bool Pick(int faction, int kind, Wstring & name) const; // RA2: 0x00732160
+				bool Pick_Emphasis(int faction, int kind, Wstring & name) const; // RA2: 0x00732230
 
-					bool Playing(void) const;
-					void Start(void);
-					void Stop(void);
-
-				public:
-					/*
-					 * This is the volume the sample is played at, scaled by the player's
-					 * own sound volume setting.
-					 */
-					int Volume;
-
-					/*
-					 * This is the audio engine's handle for the sample while it is
-					 * playing, and INVALID_SAMPLE_HANDLE whenever it is not.
-					 */
-					int SoundHandle;
-
-					/*
-					 * This points to the sound data. If NULL, the sound was found
-					 * neither in the mixfiles nor on the disk, and the sample will
-					 * never make any noise.
-					 */
-					void * File;
-
-					/*
-					 * If the sound data was read off the disk, then this flag will be
-					 * true and the data is freed along with the sample. Data that came
-					 * out of a mixfile is left where it is.
-					 */
-					bool Allocated;
-			};
-
-			struct VoiceCategory {
-				public:
-					VoiceCategory(void);
-					void Set_Name(const char *name);
-					bool Pick_Standard_Sound(int side, Outcome outcome, char * buffer, int bufsize);
-					bool Pick_Emphasis_Sound(int side, Outcome outcome, char * buffer, int bufsize);
-					void Read(INIClass const & ini, const char * section, int side);
-					void Read_Voiceover(INIClass const & ini, const char * section, int side, Outcome outcome, const char * outcome_string);
-
-				public:
-					/*
-					 * This is the name the category is known by, which forms part
-					 * of the INI entry each of its voice-over lists is read from.
-					 */
-					char Name[16];
-
-					/*
-					 * These are the voice-over numbers the category may draw on, kept
-					 * per outcome and split into the ordinary lines and the emphatic
-					 * ones that follow them.
-					 */
-					VOICEINDEX_LIST VoiceIndexes[OUTCOME_COUNT][2];
+				Wstring Name; // RA2: +0x00
+				DynamicVectorClass<unsigned int> Lines[6]; // RA2: +0x04; plain at [kind * 2], emphatic at [kind * 2 + 1]
 			};
 
 			enum VoiceCategoryType {
@@ -1030,327 +904,100 @@ namespace WorldDominationTour
 				VOICECAT_COUNT
 			};
 
-			enum StandaloneVoiceType {
-				VOICE_STARTUP,
-				VOICE_TERRITORY_SELECT,
-				VOICE_COUNT
-			};
-
-			Voices(void) {}
-			Voices(int side);
-			~Voices(void);
-
-			void Init(INIClass const & ini, const char * section);
-			void Init_Standalone(INIClass const & ini, const char * section, StandaloneVoiceType voice, const char * voice_name);
-			bool Pick_Standard_Voice(VoiceCategoryType category, Outcome outcome, char * buffer, int);
-			bool Pick_Emphasis_Voice(VoiceCategoryType category, Outcome outcome, char * buffer, int);
-			bool Pick_Standalone_Voice(StandaloneVoiceType voice, char * buffer, int);
-
-			void Queue(VoiceCategoryType category, Outcome outcome, bool emphasis, bool count_queued, int delay);
-			void Queue(StandaloneVoiceType voice, bool count_queued, int delay);
+			Voices(int faction); // RA2: 0x007314C0
+			~Voices(void); // RA2: 0x00731680
+			void Load(INIClass & ini, Wstring const & section); // RA2: 0x007317A0
+			void Say(int group, int kind, bool emphasis, bool counted, int delay); // RA2: 0x00732510
 			void Say_List(int index, bool counted, int delay); // RA2: 0x00732700; says one of the voice lists read from the INI (the startup list is 0)
-			void Advance(void);
-			void Discard(void);
-			void Cleanup(void);
-			bool Playing(void);
+			bool Is_Speaking(void); // RA2: 0x00732A40
+			Anim * Create_Anim(void); // RA2: 0x00732A50
 
 		public:
-			/*
-			 * This is the side whose voice-overs this player speaks. The two sides keep their
-			 * lines in separate numbered sets.
-			 */
-			int Side;
-
-			/*
-			 * These are the voice-over lists for every occasion the tour comments on -- an
-			 * old cycle, the history replay, the player's standing, a territory, a game and
-			 * an evacuation.
-			 */
-			VoiceCategory VoiceCategories[VOICECAT_COUNT];
-
-			/*
-			 * These are the voice-over lists for the one-off announcements that are tied to no
-			 * outcome -- the startup greeting and the territory selection prompt.
-			 */
-			VOICEINDEX_LIST StandaloneVoices[VOICE_COUNT];
-
-			/*
-			 * This is the delay still to run before the queue starts speaking, which is how a
-			 * line can be held back until the moment it comments on has arrived.
-			 */
-			CDTimerClass<SystemTimerClass> Timer;
-
-			/*
-			 * If the voice-over at the head of the queue has yet to be started, then this flag
-			 * will be true. It keeps a line that has not been heard from being retired as
-			 * though it had already played itself out.
-			 */
-			bool IsIdle;
-
-			/*
-			 * This is the number of queued voice-overs that must be heard rather than dropped.
-			 * Anything queued beyond that count is thrown away when the next line arrives.
-			 */
-			int QueuedSampleCount;
-
-			/*
-			 * These are the voice-overs waiting to be spoken. Only the one at the head of the
-			 * queue is ever sounding; the rest wait their turn.
-			 */
-			DynamicVectorClass<Sample *> QueuedSamples;
+			int Faction; // RA2: +0x000
+			Group Groups[6]; // RA2: +0x004
+			DynamicVectorClass<unsigned int> Lists[2]; // RA2: +0x37C; startup and territory select
+			CDTimerClass<SystemTimerClass> Timer; // RA2: +0x3AC
+			bool Idle; // RA2: +0x3B8; nothing is being said
+			int Pending; // RA2: +0x3BC
+			DynamicVectorClass<Wstring> Queue; // RA2: +0x3C0; the speech names
+			void * Stream; // RA2: +0x3D8; the audio stream
 	};
 
+	/*
+	 * RA2: the screen where the player picks the next territory to attack (WDTSel.cpp). It is a
+	 * stack object (0x4B0 bytes) made by Show and Choose_Conflict.
+	 */
 	class Selection : public MSEngine {
 		typedef DynamicVectorClass<MSSfxEntry *> SFX_LIST;
 		typedef VectorCursor<MSSfxEntry *, SFX_LIST> SFX_ITER;
 
 		public:
-			Selection(Campaign *campaign, bool vq_anim);
-			~Selection(void);
+			Selection(rc_ptr<Campaign> const & campaign, int faction); // RA2: 0x0072D560
+			virtual ~Selection(void); // RA2: 0x0072D990 (scalar deleting 0x00730290)
 
-			void Set_Long_Description(void);
-			Territory * Pick_Territory(void);
-			void Do_Target_Selection(void);
-			void Presentation(void);
+			static void __fastcall Show(rc_ptr<Campaign> const & campaign, int faction); // RA2: 0x0072FF80
+			static bool __fastcall Choose_Conflict(rc_ptr<Campaign> const & campaign, int faction); // RA2: 0x0072FFC0
 
-		private:
-			void Init_Voices(INIClass const & ini, const char * name);
-			void Init_Sounds(INIClass const & ini, const char * name);
-			void Init_Dimensions(INIClass const & ini, const char * name);
-			void Init_Regions(INIClass const & ini, const char * name, bool vqanim);
-			void Init_Art(INIClass const & ini, const char * name);
-			void Init_Logo(INIClass const & ini, const char * name);
-			void Init_Target(INIClass const & ini, const char * name);
-
-			void Handle_Click(Point2D const & point, bool & selected);
-			bool Select_Territory_At(Point2D const & point);
-			void Update_Hovered_Territory(Point2D const & point);
-			void Do_Target_Anim(State const & state, bool show_targets, bool silent);
-			bool Select_Territory(Territory * territory);
-
-			void Remove_Target_Anims(void);
-			void Remove_Target_Anims2(void);
-
-			void On_Map_Enter(void);
-			void On_Map_Leave(void);
-			void On_Cancel_Enter(void);
-			void On_Cancel_Leave(void);
-
-			Outcome Get_Outcome(int tick, bool & mega);
-			bool Present_Ticks(int tick_from, int tick_to);
-
-			bool Present_History(int tick_from, int tick_to);
-			void Check_For_Breakout(void);
-			void Set_Text(char const * text = NULL, int start_delay = 0);
-			void Play_SFX(char const * name);
+			void Init_Voices(INIClass & ini, Wstring const & section); // RA2: 0x0072DC20
+			void Init_Sounds(INIClass & ini, Wstring const & section); // RA2: 0x0072DD10
+			void Init_Target(INIClass & ini, Wstring const & section); // RA2: 0x0072DEA0
+			rc_ptr<Territory> Pick_Territory(void); // RA2: 0x0072E050
+			void Handle_Click(Point2D const & point, bool & selected); // RA2: 0x0072E430
+			bool Select_Territory_At(Point2D const & point); // RA2: 0x0072E650
+			void Update_Hovered_Territory(Point2D const & point); // RA2: 0x0072E720
+			void Do_Target_Anim(rc_ptr<State> const & state, bool show_targets, bool silent); // RA2: 0x0072E780
+			bool Select_Territory(rc_ptr<Territory> const & territory); // RA2: 0x0072ED80
+			void Remove_Target_Anims(void); // RA2: 0x0072F180
+			void Remove_Target_Anims2(void); // RA2: 0x0072F200; an exact duplicate
+			void On_Map_Enter(void); // RA2: 0x0072F280
+			void On_Map_Leave(void); // RA2: 0x0072F340
+			void On_Cancel_Enter(void); // RA2: 0x0072F430
+			void On_Cancel_Leave(void); // RA2: 0x0072F540
+			void Do_Target_Selection(int faction); // RA2: 0x0072F5A0
+			int Get_Outcome(int tick, bool & mega); // RA2: 0x0072F6E0; 0 won, 1 lost, 2 neither
+			bool Present_Ticks(int tick_from, int tick_to); // RA2: 0x0072F7A0
+			void Presentation(int faction); // RA2: 0x0072FA00
+			bool Present_History(int tick_from, int tick_to); // RA2: 0x0072FB60
+			void Check_For_Breakout(void); // RA2: 0x0072FC80
+			void Set_Text(WideWstring const & text, int start_delay); // RA2: 0x0072FCD0
+			void Set_Tooltip(WideWstring const & text); // RA2: 0x0072FDA0
+			void Play_SFX(Wstring const & name); // RA2: 0x0072FE90
+			void Set_Long_Description(void); // RA2: 0x0072FF30
+			void Start(void); // RA2: 0x00730160
+			void End(void); // RA2: 0x00730230
 
 			void Add_Sfx_Entry(MSSfxEntry * entry) { if (entry != NULL) SfxEntries.Add(entry); }
-
-			void Start(void);
-			void End(void);
+			bool Hover_At(Point2D const & point) { return(Select_Territory_At(point)); } // RA2: an inline layer around the hover selection
+			int Region_At(Point2D const & point) { return((char)WorldMap->Is_Over_Back(point) ? 2 : 1); } // RA2: 2 over the back button, else 1 (inline)
 
 		public:
-			/*
-			 * This points to the campaign the screen presents: its map, its conflicts and the
-			 * side the player fights for all come from here. The campaign is not owned.
-			 */
-			Campaign * TourCampaign;
-
-			/*
-			 * This is the conflict waiting on the territory now selected, and stays empty
-			 * while the selection has no battle to offer.
-			 */
-			Conflict SelectedConflict;
-
-			/*
-			 * This is the announcer that comments on the campaign, speaking for the side the
-			 * player has chosen.
-			 */
-			Voices VoicePlayer;
-
-			/*
-			 * These are the territory counts that decide how the announcer reads the player's
-			 * standing. The plain pair choose between grim, even and triumphant commentary,
-			 * and the mega pair decide whether it is delivered emphatically.
-			 */
-			int WinningThreshold;
-			int LosingThreshold;
-			int MegaWinningThreshold;
-			int MegaLosingThreshold;
-
-			/*
-			 * If the player has pressed ESC to cut the presentation short, then this flag will
-			 * be true. Every step of the replay polls it, so the map stops advancing and the
-			 * sound effects that would have accompanied it are suppressed.
-			 */
-			bool Brokeout;
-
-			/*
-			 * This is the mouse position the screen last acted on, so that the hover work is
-			 * only done over again once the mouse has actually moved.
-			 */
-			Point2D LastPoint;
-
-			/*
-			 * This is the tick the tour had reached when the screen opened. A territory only
-			 * offers up its conflict while the tour has not moved on past it.
-			 */
-			int StartTick;
-
-			/*
-			 * This is the top left corner of the screen within the display, the screen being
-			 * centered rather than filling it. Every part of the layout is placed relative to
-			 * this point.
-			 */
-			Point2D Position;
-
-			/*
-			 * This is the part of the screen the mouse was last within -- the map or the
-			 * cancel button -- so that entering and leaving each is only handled on a change.
-			 */
-			int LastHoverZone;
-
-			/*
-			 * This is the region of the world being fought over, together with the territories
-			 * it is divided into.
-			 */
-			Map WorldMap;
-
-			/*
-			 * This is where the map begins within the screen. Mouse positions are made
-			 * relative to it before the click map is asked which territory they fall on.
-			 */
-			Point2D MapOrigin;
-
-			/// Unused
-			ConvertClass * RegionDrawer;
-
-			/*
-			 * This is the palette the territory overlays are drawn through, taken from the
-			 * region artwork so that they match the map beneath them.
-			 */
-			ConvertClass * TerritoryDrawer;
-
-			/*
-			 * This is the palette the player's faction logo is drawn through.
-			 */
-			ConvertClass * LogoDrawer;
-
-			/*
-			 * This is the backdrop the campaign map is painted over, playing either as a movie
-			 * or as a still image. The screen waits it out before the player is given control.
-			 */
-			MSAnim * RegionAnim;
-
-			/*
-			 * This is the mask that turns a point on the map into a territory: the color index
-			 * it carries at that point is the number of the territory lying there.
-			 */
-			Surface * ClickMapImage;
-
-			/*
-			 * This is the territory the mouse last read out of the click map. If -1, then the
-			 * mouse is over no territory at all.
-			 */
-			int HoveredTerritoryID;
-
-			/*
-			 * This points to the territory the screen is presenting -- the one wearing the
-			 * highlight and named in the caption -- or NULL while none is.
-			 */
-			Territory * MousedTerritory;
-
-			/*
-			 * This is the palette the target markers are drawn through.
-			 */
-			ConvertClass * TargetDrawer;
-
-			/*
-			 * This is the marker that zooms down onto a territory as it falls into dispute,
-			 * announcing a fresh battle to be fought.
-			 */
-			MSAnimEntry * ZoomingTarget;
-
-			/*
-			 * This is the marker that pulses over a disputed territory for as long as the
-			 * battle over it goes unclaimed.
-			 */
-			MSAnimEntry * ThrobbingTarget;
-
-			/*
-			 * This is the frame that divides the throbbing marker's artwork in two. The frames
-			 * below it play while the territory merely stands disputed, and those from it on
-			 * while the player has that territory selected.
-			 */
-			int ThrobbingTargetDividingFrame;
-
-			/*
-			 * This is the area of the screen the cancel button occupies, and so the region a
-			 * click or a hover is measured against.
-			 */
-			Rect CancelButtonRectangle;
-
-			/*
-			 * This is the artwork the cancel button wears while the mouse is elsewhere.
-			 */
-			MSPCXAnim * CancelButtonAnim;
-
-			/*
-			 * This is the artwork the cancel button wears while the mouse is over it.
-			 */
-			MSPCXAnim * CancelButtonHoverAnim;
-
-			/*
-			 * If the mouse is over the cancel button, then this flag will be true. It keeps
-			 * the button from being repainted on every frame the mouse rests there.
-			 */
-			char CancelButtonHovered;
-
-			/*
-			 * This is the panel the screen's caption is printed within, and the width the text
-			 * is wrapped to.
-			 */
-			Rect TextRect;
-
-			/*
-			 * This is the animation that types the caption out a character at a time, or NULL
-			 * while the panel is blank.
-			 */
-			MSPrintAnim * TextAnim;
-
-			/*
-			 * This is the caption being shown. It is wrapped in place before it is printed, so
-			 * this holds the wrapped copy rather than the text the caller supplied.
-			 */
-			char Text[256];
-
-			/*
-			 * This is the font the caption is printed with, and the one its wrapping is
-			 * measured by.
-			 */
-			MSFont * Font;
-
-			/*
-			 * This is the ownership snapshot the map is currently showing. The next one is
-			 * compared against it to find the territories that have changed hands.
-			 */
-			State CurrentState;
-
-			/*
-			 * This is the name of the music the screen plays, which is faded out again as the
-			 * screen closes.
-			 */
-			char *ThemeName;
-
-			/*
-			 * These are the screen's sound effects, each carrying the name it was given in the
-			 * map control file so that the presentation may ask for one by name.
-			 */
-			DynamicVectorClass<MSSfxEntry *> SfxEntries;
+			rc_ptr<Campaign> TourCampaign; // RA2: +0x48; the campaign the screen presents
+			rc_ptr<Conflict> SelectedConflict; // RA2: +0x50; the conflict waiting on the selected territory
+			Voices VoicePlayer; // RA2: +0x58
+			int WinningThreshold; // RA2: +0x434
+			int LosingThreshold; // RA2: +0x438
+			int MegaWinningThreshold; // RA2: +0x43C
+			int MegaLosingThreshold; // RA2: +0x440
+			bool Brokeout; // RA2: +0x444; Escape was pressed
+			Point2D LastPoint; // RA2: +0x448
+			int StartTick; // RA2: +0x450; the last conflict of the campaign
+			int LastHoverZone; // RA2: +0x454
+			rc_ptr<Map> WorldMap; // RA2: +0x458
+			int HoveredTerritoryID; // RA2: +0x460
+			rc_ptr<Territory> MousedTerritory; // RA2: +0x464
+			ConvertClass * TargetDrawer; // RA2: +0x46C
+			MSAnimEntry * ZoomingTarget; // RA2: +0x470
+			MSAnimEntry * ThrobbingTarget; // RA2: +0x474
+			int ThrobbingTargetDividingFrame; // RA2: +0x478
+			MSBitPrintAnim * TextAnim; // RA2: +0x47C; the description
+			MSBitPrintAnim * TooltipAnim; // RA2: +0x480
+			MSFont * Font; // RA2: +0x484
+			rc_ptr<State> CurrentState; // RA2: +0x488
+			Wstring ThemeName; // RA2: +0x490; the "Theme" entry of [SOUNDS]
+			SFX_LIST SfxEntries; // RA2: +0x494
+			int TextColor; // RA2: +0x4AC; the font color to put back
 	};
 
-	Territory * Find_Territory_By_ID(TERR_LIST & terr, int id);
-	Voices::Anim * WDT_New_Voiced_Animation(Voices & voices);
 	void Write_Map_INI(char const * map_name, char const * pcx1_file_name, char const * pcx2_file_name);
 };
 

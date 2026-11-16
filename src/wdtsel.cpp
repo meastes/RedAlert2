@@ -9,38 +9,40 @@
 
 #include "always.h"
 #include "language\language.h"
+#include "bitfont.h" // RA2: the includes this file needs
 
 #include "_keyboar.h"
 #include "_surface.h"
 #include "ccfile.h"
 #include "convert.h"
 #include "data.h"
+#include "dsurface.h" // RA2: the font color is a hicolor pixel
 #include "globals.h"
 #include "ini.h"
 #include "keyboard.h"
 #include "mschoice.h"
 #include "msfont.h"
 #include "newmenu.h"
-#include "netshare.h"
 #include "ownrdraw.h"
 #include "pcx.h"
 #include "session.h"
+#include "stringtable.h" // RA2: the texts come from the string table
 #include "theme.h"
 #include "vector.h"
 #include "wdtnet.h"
+#include "wonline.h" // RA2: WOL_Wait_Callback
 #include "worlddom.h"
-
-#define IID_DEFINED
-#include "wolapi\wolapi.h"
-
-typedef VectorClass<Point2D> POINT2D_LIST;
-typedef VectorCursor<Point2D, POINT2D_LIST> POINT2D_ITER;
-
-typedef VectorClass<Rect> RECT_LIST;
-typedef VectorCursor<Rect, RECT_LIST> RECT_ITER;
-
+#include "wstring.h" // RA2: the includes this file needs
 
 using namespace WorldDominationTour;
+
+extern int Text_Color; // RA2: 0x00A733E4, the font color of the dialogs
+rc_ptr<WDTTerritory> Find_WDT_Territory(int index); // RA2: 0x00769690, the tour's territory with this index (not in this module)
+WideWstring __fastcall Int_To_WideString_Width(int value, int width); // RA2: 0x00771130, the number as text, padded to the width
+WideWstring __fastcall operator+(wchar_t const * left, WideWstring const & right); // RA2: the text and the territory's name joined
+
+
+inline TERRITORY_ITER Walk_Territories(TERRITORY_LIST & list) { return(TERRITORY_ITER(list, 0)); } // RA2: the cursor over the map's territories is made one inline level down
 
 
 /// <summary>
@@ -50,42 +52,32 @@ using namespace WorldDominationTour;
 /// then sets it running.
 /// </summary>
 /// <param name="campaign">The campaign whose current state the screen presents.</param>
-/// <param name="vq_anim">Should the region backdrop play as a movie rather than a still
-/// image?</param>
-Selection::Selection(Campaign * campaign, bool vq_anim) :
-	MSEngine(),
-	TourCampaign(campaign),
-	SelectedConflict(),
-	VoicePlayer(campaign->PlayerFaction),
-	Brokeout(false),
-	LastPoint(-1, -1),
-	StartTick(campaign->Properties.Get_Current_Tick()),
-	Position(0, 0),
-	LastHoverZone(-1),
-	WorldMap(campaign->Properties.Get_Map_ID()),
-	MapOrigin(0, 0),
-	RegionDrawer(NULL),
-	TerritoryDrawer(NULL),
-	LogoDrawer(NULL),
-	RegionAnim(NULL),
-	ClickMapImage(NULL),
-	HoveredTerritoryID(-1),
-	MousedTerritory(NULL),
-	TargetDrawer(NULL),
-	ZoomingTarget(NULL),
-	ThrobbingTarget(NULL),
-	ThrobbingTargetDividingFrame(32),
-	CancelButtonAnim(NULL),
-	CancelButtonHoverAnim(NULL),
-	CancelButtonHovered(false),
-	TextRect(500, 100, 600, 350),
-	TextAnim(NULL),
-	Font(new MSFont(false)),
-	CurrentState(),
-	ThemeName(NULL),
-	SfxEntries()
+/// <param name="faction">The faction whose progress the screen shows.</param>
+Selection::Selection(rc_ptr<Campaign> const & campaign, int faction) : // RA2: counted campaign, the player's faction picks the voices and the map is made by Create
+	TourCampaign(campaign), // RA2: as above
+	VoicePlayer(campaign->Get_Player_Faction()), // RA2: as above
+	Brokeout(false), // RA2: as above
+	LastPoint(-1, -1), // RA2: as above
+	StartTick(campaign->Properties->Get_Current_Tick()), // RA2: as above
+	LastHoverZone(-1), // RA2: as above
+	WorldMap(Map::Create(campaign->Properties->Get_Map_ID(), faction, campaign->Get_Player_Faction())), // RA2: as above
+	HoveredTerritoryID(-1), // RA2: as above
+	TargetDrawer(NULL), // RA2: as above
+	ZoomingTarget(NULL), // RA2: as above
+	ThrobbingTarget(NULL), // RA2: as above
+	ThrobbingTargetDividingFrame(32), // RA2: as above
+	TextAnim(NULL), // RA2: as above
+	TooltipAnim(NULL), // RA2: as above
+	Font(new MSFont(false)), // RA2: as above
+	CurrentState(State::Create()), // RA2: the empty state
+	ThemeName(NULL), // RA2: as above
+	SfxEntries(0, 0) // RA2: the sound list is made empty by its constructor arguments
 {
-	Add_Animation(WDT_New_Voiced_Animation(VoicePlayer));
+	int color = Text_Color; // RA2: the font color is put back by the destructor
+	int pixel = DSurface::Build_Hicolor_Pixel((unsigned char)color, (unsigned char)((unsigned short)color >> 8), (unsigned char)(color >> 16)); // RA2: as above
+	TextColor = BitFont::Instance->Set_Color(pixel) & 0xFFFF; // RA2: as above
+
+	Add_Animation(VoicePlayer.Create_Anim()); // RA2: the voice player is run by the engine
 
 	CCFileClass file("WDTMAP.INI");
 	INIClass ini;
@@ -94,20 +86,21 @@ Selection::Selection(Campaign * campaign, bool vq_anim) :
 	Init_Voices(ini, "VoiceOvers");
 	Init_Sounds(ini, "SOUNDS");
 
-	char entry[4];
+	Wstring layout; // RA2: the layout section name is a Wstring
+	ini.Get_String("LAYOUTS", Wstring_FromInt(campaign->Properties->Get_Layout()), "", layout); // RA2: as above
+	Init_Target(ini, layout); // RA2: as above
 
-	char layout[64];
-	sprintf(entry, "%d", campaign->Get_Campaign_Properties().Get_Layout());
-	ini.Get_String("LAYOUTS", entry, "", layout, sizeof(layout));
+	WorldMap->Load(ini, this, campaign->Is_Different(faction)); // RA2: the map reads the rest of the layout
 
-	Init_Dimensions(ini, layout);
+	WideWstring play_text(StringTable::LoadString("GUI:PlayWDT", NULL, "D:\\Ra2\\WDTSel.cpp", 157)); // RA2: the play button's text
+	MSBitPrintAnim * play = new MSBitPrintAnim(play_text, WorldMap->PlayRect, true); // RA2: as above
+	play->Set_Flag(true); // RA2: as above
+	Add_Animation(play); // RA2: as above
 
-	char region[64];
-	sprintf(entry, "%d", campaign->Get_Campaign_Properties().Get_Map_ID());
-	ini.Get_String("MAPS", entry, "", region, sizeof(region));
-
-	Init_Art(ini, layout);
-	Init_Regions(ini, region, vq_anim);
+	WideWstring back_text(StringTable::LoadString("TXT_BACK", NULL, "D:\\Ra2\\WDTSel.cpp", 164)); // RA2: the back button's text
+	MSBitPrintAnim * back = new MSBitPrintAnim(back_text, WorldMap->BackRect, true); // RA2: as above
+	back->Set_Flag(true); // RA2: as above
+	Add_Animation(back); // RA2: as above
 
 	Start();
 }
@@ -125,22 +118,16 @@ Selection::~Selection(void)
 	Remove_Target_Anims();
 	Remove_Target_Anims2();
 
-	for (SFX_ITER it = SfxEntries; it; it++) {
-		delete *it;
+	for (SFX_ITER sfx(SfxEntries, 0); sfx; sfx++) { // RA2: the cursor over the sound entries is made with an explicit start index
+		delete *sfx; // RA2: as above
 	}
 
-	delete RegionDrawer;
-	delete TerritoryDrawer;
-	delete LogoDrawer;
-	delete ClickMapImage;
 	delete TargetDrawer;
 	delete ZoomingTarget;
 	delete ThrobbingTarget;
 	delete Font;
 
-	if (ThemeName != NULL) {
-		free(ThemeName);
-	}
+	BitFont::Instance->Set_Color((unsigned short)TextColor); // RA2: the font color saved by the constructor is put back
 }
 
 
@@ -151,9 +138,9 @@ Selection::~Selection(void)
 /// </summary>
 /// <param name="ini">The map database to fetch the voice overs from.</param>
 /// <param name="section">The section that describes the voice overs.</param>
-void Selection::Init_Voices(INIClass const & ini, const char * section)
+void Selection::Init_Voices(INIClass & ini, Wstring const & section) // RA2: the INI and the section are the screen's own string types
 {
-	VoicePlayer.Init(ini, section);
+	VoicePlayer.Load(ini, section); // RA2: RA2 voice player loads its lists from the section
 	WinningThreshold = ini.Get_Int(section, "WinningThreshold", WinningThreshold);
 	MegaWinningThreshold = ini.Get_Int(section, "MegaWinningThreshold", MegaWinningThreshold);
 	LosingThreshold = ini.Get_Int(section, "LosingThreshold", LosingThreshold);
@@ -167,23 +154,23 @@ void Selection::Init_Voices(INIClass const & ini, const char * section)
 /// </summary>
 /// <param name="ini">The map database to fetch the sound list from.</param>
 /// <param name="section">The section that lists the sound effects.</param>
-void Selection::Init_Sounds(INIClass const & ini, const char * section)
+
+void Selection::Init_Sounds(INIClass & ini, Wstring const & section) // RA2: takes the INI and the section as RA2 string types
 {
-	char buffer[64];
-
-	ThemeName = strdup("MAPS");
-
+	Wstring value; // RA2: RA2 reads the entries as Wstring values; a "Theme" entry names the music
 	int count = ini.Entry_Count(section);
 	for (int i = 0; i < count; i++) {
-		char const * entry = ini.Get_Entry(section, i);
-		if (entry != NULL) {
-			if (ini.Get_String(section, entry, NULL, buffer, sizeof(buffer)) > 0) {
-				MSSfxEntry * sfx = new MSSfxEntry(entry, buffer);
-				if (sfx->Get_Name() == NULL) {
-					delete sfx;
-				} else {
-					Add_Sfx_Entry(sfx);
-				}
+		Wstring entry = ini.Get_Entry(section, i); // RA2: RA2 reads the entries as Wstring values; a "Theme" entry names the music
+		if (entry != 0 && ini.Get_String(section, entry, NULL, value) > 0) { // RA2: as above
+			if (entry == "Theme") { // RA2: the "Theme" entry names the music instead of a sound
+				ThemeName = value; // RA2: as above
+				break;
+			}
+			MSSfxEntry * sfx = new MSSfxEntry(entry, value); // RA2: RA2 reads the entries as Wstring values; a "Theme" entry names the music
+			if (sfx->Get_Name() == 0) { // RA2: as above
+				delete sfx;
+			} else if (sfx != NULL) { // RA2: RA2 reads the entries as Wstring values; a "Theme" entry names the music
+				SfxEntries.Add(sfx); // RA2: as above
 			}
 		}
 	}
@@ -197,16 +184,18 @@ void Selection::Init_Sounds(INIClass const & ini, const char * section)
 /// </summary>
 /// <param name="ini">The map database to fetch the layout from.</param>
 /// <param name="section">The section that describes this screen layout.</param>
-void Selection::Init_Dimensions(INIClass const & ini, const char * section)
+void Selection::Init_Target(INIClass & ini, Wstring const & section) // RA2: the target artwork of the player's faction
 {
-	Point2D size(640, 400);
-	size = ini.Get_Point(section, "Size", size);
-	Position = Point2D((HiddenSurface->Get_Width() - size.X) / 2, (HiddenSurface->Get_Height() - size.Y) / 2);
-	MapOrigin = ini.Get_Point(section, "MapOrigin", MapOrigin);
-	TextRect = ini.Get_Rect(section, "TextRect", TextRect);
-	TextRect += Position;
-	CancelButtonRectangle = ini.Get_Rect(section, "CancelButtonRectangle", CancelButtonRectangle);
-	CancelButtonRectangle += Position;
+	Wstring value; // RA2: RA2 reads the entries as Wstring values; a "Theme" entry names the music
+	Wstring faction(Faction_Name(TourCampaign->Get_Player_Faction())); // RA2: as above
+	if (ini.Get_String(section, faction + "ZoomingTarget", NULL, value) > 0) { // RA2: as above
+		ZoomingTarget = new MSAnimEntry(value); // RA2: as above
+	}
+	ini.Get_String(section, faction + "TargetPalette", NULL, value); // RA2: RA2 reads the palette name into the same Wstring
+	TargetDrawer = Create_Drawer(value); // RA2: as above
+	ini.Get_String(section, faction + "Target", NULL, value); // RA2: as above
+	ThrobbingTarget = new MSAnimEntry(value); // RA2: as above
+	ThrobbingTargetDividingFrame = ini.Get_Int(section, faction + "TargetDividingFrame", 32); // RA2: as above
 }
 
 
@@ -219,169 +208,28 @@ void Selection::Init_Dimensions(INIClass const & ini, const char * section)
 /// <param name="ini">The map database to fetch the region artwork from.</param>
 /// <param name="section">The section that describes this region.</param>
 /// <param name="vq_anim">Should the backdrop play as a movie rather than a still image?</param>
-void Selection::Init_Regions(INIClass const & ini, const char * section, bool vq_anim)
+rc_ptr<Territory> Selection::Pick_Territory(void) // RA2: the screen returns a counted pointer, empty when the player backs out
 {
-	char const * faction_name = TourCampaign->PlayerFaction == 3 ? "NOD" : "GDI";
-
-	char region_name[64];
-	ini.Get_String(section, "RegionName", NULL, region_name, sizeof(region_name));
-
-	char buffer[64];
-	sprintf(buffer, "%s%s.vqa", faction_name, region_name);
-	if (vq_anim) {
-		RegionAnim = new MSVQAnim(buffer, AlternateSurface, &Anims, true);
-	} else {
-		RegionAnim = new MSPCXAnim(buffer, &Anims, true);
-	}
-
-	Add_Animation(RegionAnim);
-
-	sprintf(buffer, "%s%s.pal", faction_name, region_name);
-	RegionDrawer = Create_Drawer(buffer);
-	TerritoryDrawer = Create_Drawer(buffer);
-
-	ini.Get_String(section, "ClickMap", 0, buffer, sizeof(buffer));
-	CCFileClass click_map_file(buffer);
-	ClickMapImage = Read_PCX_File(click_map_file);
-	click_map_file.Close();
-
-	char const * faction_prefix = TourCampaign->PlayerFaction == 3 ? "nr" : "gr";
-
-	char region_prefix[64];
-	ini.Get_String(section, "RegionPrefix", NULL, region_prefix, sizeof(region_prefix));
-
-	char territory_name[64];
-	sprintf(territory_name, "%s%s", region_prefix, faction_prefix);
-
-	WorldMap.Add_Territory(territory_name, ini, section, TourCampaign->PlayerFaction, *this, TerritoryDrawer, &Anims, Position);
-
-	char background_name[64];
-	sprintf(background_name, "%sBack.PCX", region_prefix);
-	CancelButtonAnim = new MSPCXAnim(background_name, &Anims, CancelButtonRectangle.TopLeft, true);
-	CancelButtonAnim->Set_Active(false);
-	Add_Animation(CancelButtonAnim);
-
-	sprintf(background_name, "%sBackh.PCX", region_prefix);
-	CancelButtonHoverAnim = new MSPCXAnim(background_name, &Anims, CancelButtonRectangle.TopLeft, true);
-	CancelButtonHoverAnim->Set_Active(false);
-	Add_Animation(CancelButtonHoverAnim);
-}
-
-
-/// <summary>
-/// Creates the decorative artwork for the selection screen.
-/// </summary>
-/// <param name="ini">The map database to fetch the artwork from.</param>
-/// <param name="section">The section that describes this screen layout.</param>
-void Selection::Init_Art(INIClass const & ini, const char * section)
-{
-	Init_Logo(ini, section);
-	Init_Target(ini, section);
-}
-
-
-/// <summary>
-/// Creates the faction logo animation for the selection screen.
-/// The artwork is chosen to suit the player's faction and placed wherever the screen
-/// layout asks for it.
-/// </summary>
-/// <param name="ini">The map database to fetch the logo position from.</param>
-/// <param name="section">The section that describes this screen layout.</param>
-void Selection::Init_Logo(INIClass const & ini, const char * section)
-{
-	char buffer[64];
-	char const * faction_name = TourCampaign->PlayerFaction == 3 ? "NOD" : "GDI";
-
-	sprintf(buffer, "%sLogo.PAL", faction_name);
-	LogoDrawer = Create_Drawer(buffer);
-
-	sprintf(buffer, "%sLogo.SHP", faction_name);
-
-	Point2D position(0,0);
-	position = ini.Get_Point(section, "Logo", position);
-	position += Position;
-
-	Add_Animation(new MSShapeAnim(buffer, position.X, position.Y, LogoDrawer, 5));
-}
-
-
-/// <summary>
-/// Fetches the target marker artwork for the player's faction.
-/// This routine picks up the zooming and throbbing target animations, along with the
-/// palette they draw through, that mark a conflict on the campaign map.
-/// </summary>
-/// <param name="ini">The map database to fetch the artwork names from.</param>
-/// <param name="section">The section that describes this screen layout.</param>
-void Selection::Init_Target(INIClass const & ini, const char * section)
-{
-	char buffer[64];
-	char buffer2[64];
-	char const * faction_name = TourCampaign->PlayerFaction == 3 ? "NOD" : "GDI";
-
-	sprintf(buffer2, "%sZoomingTarget", faction_name);
-	if (ini.Get_String(section, buffer2, NULL, buffer, sizeof(buffer)) > 0) {
-		ZoomingTarget = new MSAnimEntry(buffer);
-	}
-
-	sprintf(buffer2, "%sTargetPalette", faction_name);
-	ini.Get_String(section, buffer2, NULL, buffer, sizeof(buffer));
-	TargetDrawer = Create_Drawer(buffer);
-
-	sprintf(buffer2, "%sThrobbingTarget", faction_name);
-	ini.Get_String(section, buffer2, NULL, buffer, sizeof(buffer));
-	ThrobbingTarget = new MSAnimEntry(buffer);
-
-	sprintf(buffer2, "%sThrobbingTargetDividingFrame", faction_name);
-	ThrobbingTargetDividingFrame = ini.Get_Int(section, buffer2, 32);
-}
-
-
-/// <summary>
-/// Fetches a pixel from the territory click map.
-/// This routine is used when translating a mouse position into a territory. A point that
-/// falls outside the click map picks up the default value instead of reading out of bounds.
-/// </summary>
-/// <param name="surface">The click map to sample.</param>
-/// <param name="point">The point to sample, relative to the click map.</param>
-/// <param name="defval">The value to use for a point outside the click map.</param>
-/// <returns>Returns with the click map color at the point specified.</returns>
-int Get_Click_Map_Pixel(Surface * surface, Point2D const & point, int defval)
-{
-	return(point.X >= 0 && point.X < surface->Get_Width() && point.Y >= 0 && point.Y < surface->Get_Height() ? surface->Get_Pixel(point) : defval);
-}
-
-
-/// <summary>
-/// Runs the territory selection screen until the player commits or backs out.
-/// This routine owns the mouse loop for the campaign map. It raises the cancel button,
-/// routes clicks and hover movement to the map, and does not come back until the player
-/// has either picked a territory or pressed cancel.
-/// </summary>
-/// <returns>Returns with the territory picked. Otherwise, NULL is returned.</returns>
-Territory * Selection::Pick_Territory(void)
-{
-	CancelButtonAnim->Set_Active(true);
-	Set_Text(TourCampaign->Properties.Get_Long_Desc());
+	Set_Long_Description(); // RA2: the long description is set by the inline Set_Long_Description
 	bool canceled = false;
 	bool selected = false;
 
 	Keyboard->Clear();
 
-	while (!canceled) {
-		g_pChat->PumpMessages();
+	do { // RA2: RA2 runs the loop until the player picks a territory or backs out
+		WOL_Wait_Callback(); // RA2: as above
 		Wait_For_Focus();
 		Point2D point(MouseCursor->Get_Mouse_X(), MouseCursor->Get_Mouse_Y());
 
-		if (Keyboard->Check() != KN_NONE) {
+		if (Keyboard->Check()) { // RA2: any key waiting
 			int key = Keyboard->Get();
-			if (key & KN_LMOUSE) {
-				if ((key & WWKEY_RLS_BIT) != 0) {
-					if (CancelButtonRectangle.Is_Point_Within(point)) {
-						Play_SFX("Canceled");
-						canceled = true;
-					}
-				} else {
-					Handle_Click(point, selected);
+			if (key == KN_LMOUSE) { // RA2: the press
+				Handle_Click(point, selected);
+			} else if (key == (KN_LMOUSE | WWKEY_RLS_BIT)) { // RA2: the release
+				WorldMap->Set_Back_Hot(this, false); // RA2: as above
+				if (Region_At(point) == 2) { // RA2: as above
+					Play_SFX("Canceled");
+					canceled = true;
 				}
 			}
 
@@ -391,57 +239,42 @@ Territory * Selection::Pick_Territory(void)
 		 */
 		} else if (point != LastPoint) {
 			LastPoint = point;
-			int over_cancel = CancelButtonRectangle.Is_Point_Within(point);
-
-			int zone = over_cancel ? 2 : 1;
+			int zone = Region_At(point); // RA2: the back button region and state of the map (an exact copy of the executable)
 
 			if (LastHoverZone != zone) {
-
 				switch (LastHoverZone) {
+					case 1:
+						On_Map_Leave();
+						break;
 
-				case 1:
-					On_Map_Leave();
-					break;
-
-				case 2:
-					On_Cancel_Leave();
-					break;
+					case 2:
+						On_Cancel_Leave();
+						break;
 				}
 			}
 
 			switch (zone) {
+				case 1:
+					if (LastHoverZone != 1) {
+						On_Map_Enter();
+					}
+					Update_Hovered_Territory(point);
+					break;
 
-			case 1:
-				if (LastHoverZone != 1) {
-					On_Map_Enter();
-				}
-				Update_Hovered_Territory(point - MapOrigin - Position);
-				break;
-
-			case 2:
-				if (LastHoverZone != 2) {
-					On_Cancel_Enter();
-				}
-				break;
+				case 2:
+					if (LastHoverZone != 2) {
+						On_Cancel_Enter();
+					}
+					break;
 			}
 
 			LastHoverZone = zone;
 		}
 
 		Wait_Delay(1);
-		if (canceled) {
-			break;
-		}
-		if (selected) {
-			return(MousedTerritory);
-		}
-	}
+	} while (!canceled && !selected); // RA2: RA2 runs the loop until the player picks a territory or backs out
 
-	if (selected) {
-		return(MousedTerritory);
-	}
-
-	return(0);
+	return(selected ? MousedTerritory : rc_ptr<Territory>()); // RA2: as above
 }
 
 
@@ -452,21 +285,41 @@ Territory * Selection::Pick_Territory(void)
 /// </summary>
 /// <param name="point">The screen position that was clicked.</param>
 /// <param name="selected">Set to true if the click landed on a selectable territory.</param>
-void Selection::Handle_Click(Point2D const & point, bool & selected)
+#pragma auto_inline(off) // RA2: Pick_Territory calls it out of line
+void Selection::Handle_Click(Point2D const & point, bool & selected) // RA2: a press on the back button or on the map
 {
-	switch (CancelButtonRectangle.Is_Point_Within(point) ? 2 : 1) {
+	switch (Region_At(point)) { // RA2: the back button region and state of the map (an exact copy of the executable)
+		case 2:
+			WorldMap->Set_Back_Hot(this, true); // RA2: the back button region and state of the map (an exact copy of the executable)
+			On_Cancel_Enter();
+			break;
 
 		case 1:
-			selected = Select_Territory_At(point - MapOrigin - Position);
+			WorldMap->Set_Back_Hot(this, false); // RA2: the back button region and state of the map (an exact copy of the executable)
+			selected = Hover_At(point); // RA2: as above
 			if (selected) {
 				Play_SFX("ConflictSelected");
 			}
 			break;
+	}
+}
+#pragma auto_inline(on) // RA2: as above
 
-		case 2:
-			On_Cancel_Enter();
-			break;
 
+bool Selection::Select_Territory_At(Point2D const & point) // RA2: refreshes the hovered territory, then selects it
+{
+	Update_Hovered_Territory(point);
+	rc_ptr<Territory> territory = true ? WorldMap->Get_Territory(HoveredTerritoryID) : rc_ptr<Territory>(); // RA2: the dead condition is in the executable: a zeroed flag for the temporary and the copy through the default constructor and Set
+	return(Select_Territory(territory));
+}
+
+
+void Selection::Update_Hovered_Territory(Point2D const & point) // RA2: the click map holds territory numbers
+{
+	int id = WorldMap->Territory_At(point); // RA2: the map keeps its territories as counted pointers
+	if (id != HoveredTerritoryID) { // RA2: as above
+		HoveredTerritoryID = id; // RA2: as above
+		Select_Territory(WorldMap->Get_Territory(id)); // RA2: as above
 	}
 }
 
@@ -476,53 +329,9 @@ void Selection::Handle_Click(Point2D const & point, bool & selected)
 /// </summary>
 /// <param name="point">The point to look up, relative to the campaign map.</param>
 /// <returns>bool; Is there a conflict waiting on the territory selected?</returns>
-bool Selection::Select_Territory_At(Point2D const & point)
+void Selection::Do_Target_Anim(rc_ptr<State> const & state, bool show_targets, bool silent) // RA2: counted state; no sound effects, the owner changes are shown unless Escape was pressed (and the player has not asked for silence)
 {
-	Update_Hovered_Territory(point);
-
-	Territory * territory = Find_Territory_By_ID(WorldMap.Territories, HoveredTerritoryID);
-	return(Select_Territory(territory));
-}
-
-
-/// <summary>
-/// Tracks which territory the mouse is hovering over.
-/// This routine reads the territory out of the click map and, when it differs from the
-/// one already under the mouse, selects the new one.
-/// </summary>
-/// <param name="point">The mouse position, relative to the campaign map.</param>
-void Selection::Update_Hovered_Territory(Point2D const & point)
-{
-	int pixel = Get_Click_Map_Pixel(ClickMapImage, point, -1);
-
-	if (pixel != HoveredTerritoryID) {
-		Territory * territory = Find_Territory_By_ID(WorldMap.Territories, pixel);
-		HoveredTerritoryID = pixel;
-		Select_Territory(territory);
-	}
-}
-
-
-/// <summary>
-/// Advances the campaign map to a new state.
-/// This routine hands each territory whose ownership has changed over to its new owner,
-/// playing the occupation sound as it goes, and then runs the zoom and throb markers
-/// over the territories that are up for grabs.
-/// </summary>
-/// <param name="state">The campaign state the map is to be brought to.</param>
-/// <param name="show_targets">Should the disputed territories be marked as targets?</param>
-/// <param name="silent">Should the occupation sound effects be suppressed?</param>
-void Selection::Do_Target_Anim(State const & state, bool show_targets, bool silent)
-{
-	/*
-	 * Tear down any animations left over from the previous cycle transition.
-	 */
-	for (TERR_ITER teardown = WorldMap.Territories; teardown; teardown++) {
-		MSAnim * anim = teardown->Remove_Target_Anim();
-		if (anim != NULL) {
-			Remove_Anim(anim);
-		}
-	}
+	Remove_Target_Anims();
 
 	MS_ANIM_LIST zoom_anims;
 	MS_ANIM_LIST throb_anims;
@@ -532,48 +341,36 @@ void Selection::Do_Target_Anim(State const & state, bool show_targets, bool sile
 	 * matching occupation sound effect. When requested, queue the zoom/throb
 	 * target animations for newly disputed territories.
 	 */
-	for (TERR_ITER it(WorldMap.Territories, 0); it; it++) {
-		unsigned id = it.Cur()->ID;
-		int old_state = CurrentState.Get_Territory_State(id);
-		int new_state = ((State &)state).Get_Territory_State(id);
+	for (TERRITORY_ITER it = Walk_Territories(WorldMap->Territories); it; it++) { // RA2: the map keeps its territories as counted pointers
+		int id = (*it)->Get_ID(); // RA2: as above
+		int old_state = CurrentState->Owner_Of(id); // RA2: as above
+		int new_state = state->Owner_Of(id); // RA2: as above
 
 		if (new_state != old_state) {
 			Check_For_Breakout();
-
-			it.Cur()->Set_Owner_State(new_state, *this, !Brokeout || silent);
-
-			if (!silent && !Brokeout) {
-				switch (new_state) {
-
-				case 3:
-					Play_SFX("NODOccupy");
-					break;
-
-				case 2:
-					Play_SFX("GDIOccupy");
-					break;
-
-				case 1:
-					Play_SFX("Disputed");
-					break;
-				}
-			}
+			(*it)->Set_Owner_State(new_state, this, !Brokeout || silent); // RA2: the map keeps its territories as counted pointers
 		}
 
-		if (show_targets) {
-			if (new_state == 1) {
-				Point2D target = Position + MapOrigin + it.Cur()->Target;
+		if (show_targets && new_state == 1) { // RA2: the zoom and throb animations are made only when their files exist
+			Point2D target = WorldMap->Origin + (*it)->Get_Target(); // RA2: as above
+			int x = target.X; // RA2: as above
+			int y = target.Y; // RA2: as above
 
-				if (ZoomingTarget != NULL) {
-					MSFadeAnim * fade = new MSFadeAnim(ZoomingTarget->Get_Filename(), target.X, target.Y, TargetDrawer, 3, SHAPE_CENTER, &Anims);
+			if (ZoomingTarget != NULL) {
+				CCFileClass file(ZoomingTarget->Get_Filename()); // RA2: the zoom and throb animations are made only when their files exist
+				if (file.Is_Available()) { // RA2: as above
+					MSFadeAnim * fade = new MSFadeAnim(ZoomingTarget->Get_Filename(), x, y, TargetDrawer, 3, SHAPE_CENTER, &Anims); // RA2: as above
 					zoom_anims.Add(fade);
 				}
+			}
 
-				MSShapeAnim * shape = new MSShapeAnim(ThrobbingTarget->Get_Filename(), target.X, target.Y, TargetDrawer, 5, true, SHAPE_CENTER);
+			CCFileClass file(ThrobbingTarget->Get_Filename()); // RA2: the zoom and throb animations are made only when their files exist
+			if (file.Is_Available()) { // RA2: as above
+				MSShapeAnim * shape = new MSShapeAnim(ThrobbingTarget->Get_Filename(), x, y, TargetDrawer, 5, true, SHAPE_CENTER); // RA2: as above
 				shape->Set_Stop_Frame(ThrobbingTargetDividingFrame - 1);
 				shape->Set_Start_Frame(0);
 				shape->Set_Frame(0);
-				it.Cur()->Set_Target_Anim(shape);
+				(*it)->Set_Target_Anim(shape); // RA2: the map keeps its territories as counted pointers
 				throb_anims.Add(shape);
 			}
 		}
@@ -583,25 +380,23 @@ void Selection::Do_Target_Anim(State const & state, bool show_targets, bool sile
 	 * Play the queued target animations. On abort, discard the zoom animations;
 	 * otherwise play the zoom SFX and wait for each to complete.
 	 */
-	MS_ANIM_ITER zoom_iter = zoom_anims;
-	for (MS_ANIM_ITER throb_iter = throb_anims; throb_iter; throb_iter++) {
+	MS_ANIM_ITER zoom_iter(zoom_anims, 0); // RA2: the zoom and throb animations are made only when their files exist
+	for (MS_ANIM_ITER throb_iter(throb_anims, 0); throb_iter; throb_iter++) { // RA2: as above
 		Check_For_Breakout();
 
 		if (zoom_iter) {
 			if (Brokeout) {
-				MSAnim * anim = zoom_iter.Cur();
-				if (anim != NULL) {
-					delete anim;
-				}
+				MSAnim * anim = *zoom_iter; // RA2: the zoom and throb animations are made only when their files exist
+				delete anim;
 			} else {
 				Play_SFX("TargetZoom");
-				Add_Animation(zoom_iter.Cur());
-				Wait_For_Anim(zoom_iter.Cur(), 300000);
+				Add_Animation(*zoom_iter); // RA2: the zoom and throb animations are made only when their files exist
+				Wait_For_Anim(*zoom_iter, 300000); // RA2: as above
 			}
 			zoom_iter++;
 		}
 
-		Add_Animation(throb_iter.Cur());
+		Add_Animation(*throb_iter); // RA2: the zoom and throb animations are made only when their files exist
 	}
 
 	CurrentState = state;
@@ -616,20 +411,20 @@ void Selection::Do_Target_Anim(State const & state, bool show_targets, bool sile
 /// </summary>
 /// <param name="territory">The territory to select, or NULL to select none at all.</param>
 /// <returns>bool; Is there a conflict waiting on the selected territory?</returns>
-bool Selection::Select_Territory(Territory * territory)
+bool Selection::Select_Territory(rc_ptr<Territory> const & territory) // RA2: counted pointers; the conflict is a counted pointer too
 {
-	bool was_set = SelectedConflict.Is_Territory_Set();
+	bool was_set = SelectedConflict.Get() != NULL; // RA2: the conflict and the territory are counted pointers
 
-	if (territory == MousedTerritory) {
+	if (territory.Get() == MousedTerritory.Get()) { // RA2: as above
 		return(was_set);
 	}
 
-	if (MousedTerritory != NULL) {
-		if (SelectedConflict.Is_Territory_Set()) {
-			SelectedConflict = Conflict(NULL);
+	if (MousedTerritory.Get() != NULL) { // RA2: the conflict and the territory are counted pointers
+		if (SelectedConflict.Get() != NULL) { // RA2: as above
+			SelectedConflict = NULL; // RA2: as above
 		}
-		MousedTerritory->Set_Highlight(false, *this);
-		MSShapeAnim * anim = (MSShapeAnim *)MousedTerritory->TargetAnim;
+		MousedTerritory->Set_Highlight(false, this); // RA2: the conflict and the territory are counted pointers
+		MSShapeAnim * anim = (MSShapeAnim *)MousedTerritory->Get_Target_Anim(); // RA2: as above
 		if (anim != NULL) {
 			anim->Set_Stop_Frame(ThrobbingTargetDividingFrame - 1);
 			anim->Set_Start_Frame(0);
@@ -639,43 +434,62 @@ bool Selection::Select_Territory(Territory * territory)
 
 	MousedTerritory = territory;
 
-	if (territory == NULL) {
-		Set_Text(TourCampaign->Properties.Get_Long_Desc(), 0);
-		VoicePlayer.Queue(Voices::VOICE_TERRITORY_SELECT, false, 30);
+	if (MousedTerritory.Get() == NULL) { // RA2: the conflict and the territory are counted pointers
+		Set_Long_Description(); // RA2: as above
+		VoicePlayer.Say_List(1, false, 30); // RA2: as above
 		return(was_set);
 	}
 
 	bool found = false;
-	char * description = NULL;
+	WideWstring description; // RA2: the texts are wide strings
+	WideWstring options; // RA2: as above
 
-	int id = territory->ID;
-	int territory_state = CurrentState.Get_Territory_State(id);
-	int outcome = 2;
-	if (territory_state >= 2 && territory_state <= 3) {
-		outcome = TourCampaign->PlayerFaction != territory_state;
+	int id = MousedTerritory->Get_ID(); // RA2: as above
+	int territory_state = CurrentState->Owner_Of(id); // RA2: as above
+	int outcome = OUTCOME_DRAW; // RA2: as above
+	if (territory_state != 1 && territory_state != 0) { // RA2: as above
+		outcome = TourCampaign->Get_Player_Faction() != territory_state; // RA2: as above
 	}
-	VoicePlayer.Queue(Voices::VOICECAT_TERRITORY, (Outcome)outcome, false, false, 30);
+	VoicePlayer.Say(Voices::VOICECAT_TERRITORY, outcome, false, false, 30); // RA2: RA2 voice player: group, result, emphasis, counted, delay
 
-	MousedTerritory->Set_Highlight(true, *this);
+	switch (territory_state) { // RA2: as above
+		case 1:
+			Set_Tooltip(StringTable::LoadString("WDT:TerritorySelDispToolTip", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2b5)); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+			break;
 
-	char buffer[512];
+		case 2:
+			Set_Tooltip(StringTable::LoadString("WDT:AlliedHeldTooltip", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2ad)); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+			break;
 
-	if (TourCampaign->Properties.Get_Current_Tick() == StartTick) {
-		CONFLICT_ITER it = TourCampaign->Conflicts;
-		for (; it; it++) {
-			int id = MousedTerritory->ID;
-			if (it.Cur_Ref().Get_Territory_Index() == id) {
+		case 3:
+			Set_Tooltip(StringTable::LoadString("WDT:SovietHeldTooltip", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2b1)); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+			break;
+
+		default: // RA2: the tooltip when the territory is held by nobody
+			Set_Tooltip(StringTable::LoadString("WDT:TerritorySelectToolTip", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2b9)); // RA2: as above
+			break;
+	}
+
+	MousedTerritory->Set_Highlight(true, this); // RA2: the conflict and the territory are counted pointers
+
+	if (TourCampaign->Properties->Get_Current_Tick() == StartTick) { // RA2: as above
+		CONFLICT_ITER it(TourCampaign->Conflicts, 0); // RA2: as above
+		while (it) { // RA2: as above
+			rc_ptr<Conflict> const & conflict = *it; // RA2: as above
+			Conflict const * current = conflict.operator->(); // RA2: as above
+			int id = MousedTerritory->Get_ID(); // RA2: as above
+			if (current->Is_Territory(id)) { // RA2: as above
 				break;
 			}
+			it++; // RA2: the cursor over the counted conflicts steps on
 		}
 
 		if (it) {
 			found = true;
-			SelectedConflict = it.Cur_Ref();
-			strcpy(buffer, "\n");
-			it.Cur_Ref().Process_Game_Options(&buffer[1], 511);
-			description = buffer;
-			MSShapeAnim * anim = (MSShapeAnim *)territory->TargetAnim;
+			SelectedConflict = *it; // RA2: the conflict and the territory are counted pointers
+			description = (*it)->Describe_Options(); // RA2: as above
+			options = description; // RA2: as above
+			MSShapeAnim * anim = (MSShapeAnim *)territory->Get_Target_Anim(); // RA2: as above
 			if (anim != NULL) {
 				anim->Set_Stop_Frame(-1);
 				anim->Set_Start_Frame(ThrobbingTargetDividingFrame);
@@ -684,15 +498,11 @@ bool Selection::Select_Territory(Territory * territory)
 		}
 	}
 
-	char dest[256];
-	sprintf(dest, Fetch_String(TXT_WDT_FORMAT_TWO_LINES), MousedTerritory->Name, MousedTerritory->Description);
-	if (description != NULL) {
-		unsigned int len = strlen(dest);
-		if ((int)(256 - len) > 0) {
-			strncat(dest, buffer, 256 - len);
-		}
+	WideWstring text = StringTable::LoadString("WDT:TerritoryPrefix", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2d7) + MousedTerritory->Name + StringTable::LoadString("WDT:TerritorySuffix", NULL, "D:\\Ra2\\WDTSel.cpp", 0x2d7); // RA2: the conflict and the territory are counted pointers
+	if (options.length() > 0) { // RA2: as above
+		text += description; // RA2: as above
 	}
-	Set_Text(dest, 0);
+	Set_Text(text, 0); // RA2: RA2 string table text (label, source path and line as the executable passes them)
 	return(found);
 }
 
@@ -702,8 +512,8 @@ bool Selection::Select_Territory(Territory * territory)
 /// </summary>
 void Selection::Remove_Target_Anims(void)
 {
-	for (TERR_ITER it = WorldMap.Territories; it; it++) {
-		MSAnim * anim = it->Remove_Target_Anim();
+	for (TERRITORY_ITER it(WorldMap->Territories, 0); it; ++it) { // RA2: the map keeps its territories as counted pointers
+		MSAnim * anim = (*it)->Remove_Target_Anim(); // RA2: as above
 		if (anim != NULL) {
 			Remove_Anim(anim);
 		}
@@ -718,8 +528,8 @@ void Selection::Remove_Target_Anims(void)
 /// </summary>
 void Selection::Remove_Target_Anims2(void)
 {
-	for (TERR_ITER it = WorldMap.Territories; it; it++) {
-		MSAnim * anim = it->Remove_Target_Anim();
+	for (TERRITORY_ITER it(WorldMap->Territories, 0); it; ++it) { // RA2: the map keeps its territories as counted pointers
+		MSAnim * anim = (*it)->Remove_Target_Anim(); // RA2: as above
 		if (anim != NULL) {
 			Remove_Anim(anim);
 		}
@@ -744,7 +554,8 @@ void Selection::On_Map_Leave(void)
 {
 	Play_SFX("MapLeave");
 	HoveredTerritoryID = -1;
-	Select_Territory(NULL);
+	rc_ptr<Territory> none; // RA2: an empty counted pointer
+	Select_Territory(none); // RA2: as above
 }
 
 
@@ -753,19 +564,12 @@ void Selection::On_Map_Leave(void)
 /// This routine swaps the button over to its highlighted animation, repaints it, and
 /// plays the accompanying sound effect.
 /// </summary>
-void Selection::On_Cancel_Enter(void)
+void Selection::On_Cancel_Enter(void) // RA2: the back button of the map
 {
-	if (!CancelButtonHovered) {
-		CancelButtonHovered = true;
+	if (!WorldMap->BackButton.IsDown) { // RA2: the back button of the map is down
+		WorldMap->Set_Back_Down(this, true); // RA2: as above
 		Play_SFX("MouseCancel");
-		if (CancelButtonAnim != NULL) {
-			CancelButtonAnim->Set_Active(false);
-		}
-		if (CancelButtonHoverAnim != NULL) {
-			CancelButtonHoverAnim->Set_Active(true);
-		}
-		Restore_Anims(CancelButtonRectangle);
-		Restore_And_Advance();
+		Set_Tooltip(StringTable::LoadString("WOL:WDTTerritoryBack", NULL, "D:\\Ra2\\WDTSel.cpp", 894)); // RA2: RA2 string table text (label, source path and line as the executable passes them)
 	}
 }
 
@@ -776,16 +580,9 @@ void Selection::On_Cancel_Enter(void)
 /// </summary>
 void Selection::On_Cancel_Leave(void)
 {
-	if (CancelButtonHovered) {
-		CancelButtonHovered = false;
-		if (CancelButtonAnim != NULL) {
-			CancelButtonAnim->Set_Active(true);
-		}
-		if (CancelButtonHoverAnim != NULL) {
-			CancelButtonHoverAnim->Set_Active(false);
-		}
-		Restore_Anims(CancelButtonRectangle);
-		Restore_And_Advance();
+	if (WorldMap->BackButton.IsDown) { // RA2: the back button of the map is down
+		WorldMap->Set_Back_Down(this, false); // RA2: as above
+		Set_Tooltip(StringTable::LoadString("WDT:TerritorySelectToolTip", NULL, "D:\\Ra2\\WDTSel.cpp", 916)); // RA2: as above
 	}
 }
 
@@ -795,32 +592,30 @@ void Selection::On_Cancel_Leave(void)
 /// happened since the last visit, plants the target markers on the territories that are
 /// up for grabs, and writes the campaign back out again.
 /// </summary>
-void Selection::Do_Target_Selection(void)
+
+void Selection::Do_Target_Selection(int faction) // RA2: replays the days since the player's last visit, then marks the targets and saves the progress
 {
-	Set_Text();
+	Set_Text(NULL, 0); // RA2: RA2 string table text (label, source path and line as the executable passes them)
 
-	int current_tick = TourCampaign->Properties.Get_Current_Tick();
-	int previous_tick = TourCampaign->PreviousTick;
-
-	bool silent = true;
-
-	if (current_tick - previous_tick > 8) {
-		previous_tick = current_tick - 8;
+	int tick = TourCampaign->Properties->Get_Current_Tick(); // RA2: as above
+	bool won = true; // RA2: as above
+	int last_day = TourCampaign->Get_Last_Day(faction); // RA2: as above
+	if (tick - last_day > 8) { // RA2: as above
+		last_day = tick - 8; // RA2: as above
 	}
 
-	if (previous_tick != current_tick) {
-		silent = !Present_History(previous_tick, current_tick);
+	if (last_day != tick) { // RA2: the campaign history is read tick by tick (RA2 form)
+		won = !Present_History(last_day, tick); // RA2: as above
 	} else {
-		bool mega;
-		Outcome outcome = Get_Outcome(current_tick, mega);
-		VoicePlayer.Queue(Voices::VOICECAT_STATUS, outcome, mega, true, 0);
+		bool mega = false; // RA2: the campaign history is read tick by tick (RA2 form)
+		int outcome = Get_Outcome(tick, mega); // RA2: as above
+		VoicePlayer.Say(Voices::VOICECAT_STATUS, outcome, mega, true, 0); // RA2: as above
 	}
 
-	Set_Text();
+	Set_Text(NULL, 0); // RA2: RA2 string table text (label, source path and line as the executable passes them)
 	Check_For_Breakout();
-
-	Do_Target_Anim(TourCampaign->CycleHistory.Get_State(current_tick), true, silent);
-	TourCampaign->Write_INI();
+	Do_Target_Anim(TourCampaign->CycleHistory->Get_State(tick), true, won); // RA2: the campaign history is read tick by tick (RA2 form)
+	TourCampaign->Save_Progress(faction); // RA2: as above
 }
 
 
@@ -833,22 +628,20 @@ void Selection::Do_Target_Selection(void)
 /// <param name="mega">Set to true when the standing is lopsided enough to deserve the
 /// emphatic commentary rather than the ordinary one.</param>
 /// <returns>Returns with the outcome -- win, lose, or draw.</returns>
-Outcome Selection::Get_Outcome(int tick, bool & mega)
+int Selection::Get_Outcome(int tick, bool & mega) // RA2: the outcome of a tick, from the territories the player's side owns
 {
-	State state = TourCampaign->CycleHistory.Get_State(tick);
-	int faction = TourCampaign->PlayerFaction;
-	int owned = state.Count_Owned_Territories(faction);
-
-	if (owned <= LosingThreshold) {
-		mega = owned <= MegaLosingThreshold;
-		return(OUTCOME_LOSE);
+	rc_ptr<State> state = TourCampaign->CycleHistory->Get_State(tick); // RA2: the campaign history is read tick by tick (RA2 form)
+	if (state.Get() != NULL) { // RA2: as above
+		int owned = state->Count_Owned(TourCampaign->PlayerFaction); // RA2: as above
+		if (owned <= LosingThreshold) {
+			mega = owned <= MegaLosingThreshold;
+			return(OUTCOME_LOSE);
+		}
+		if (owned >= WinningThreshold) {
+			mega = owned >= MegaWinningThreshold;
+			return(OUTCOME_WIN);
+		}
 	}
-
-	if (owned >= WinningThreshold) {
-		mega = owned >= MegaWinningThreshold;
-		return(OUTCOME_WIN);
-	}
-
 	mega = false;
 	return(OUTCOME_DRAW);
 }
@@ -863,50 +656,36 @@ Outcome Selection::Get_Outcome(int tick, bool & mega)
 /// <param name="tick_from">The campaign cycle to start the animation from.</param>
 /// <param name="tick_to">The campaign cycle to run the animation up to.</param>
 /// <returns>bool; Did the sequence end before a single cycle could be presented?</returns>
-bool Selection::Present_Ticks(int tick_from, int tick_to)
+bool Selection::Present_Ticks(int tick_from, int tick_to) // RA2: shows each day in turn; true when nothing was shown
 {
-	int i = tick_from;
 	bool first = true;
-	int len = 0;
-
-	while (i <= tick_to) {
+	bool first_state = true; // RA2: the campaign history is read tick by tick (RA2 form)
+	unsigned int length = 0; // RA2: as above
+	for (int tick = tick_from; tick <= tick_to; tick++) { // RA2: as above
 		Check_For_Breakout();
-		if (!Brokeout) {
-			char str1[64];
-			char str2[64];
-			strncpy(str1, Fetch_String(TXT_WDT_REVIEWING_HISTORY), sizeof(str1));
-			if (first) {
-				len = strlen(str1);
-			}
-			sprintf(str2, Fetch_String(TXT_WDT_DAY), i + 1);
-			strcat(str1, str2);
-			if (first) {
-				char *trim = str1 + len;
-				while (*trim == ' ') {
-					trim++;
-				}
-				len = trim - str1;
-			}
-			Set_Text(str1, first == 0 ? len : 0);
-			Do_Target_Anim(TourCampaign->CycleHistory.Get_State(i), false, first);
-			first = false;
-			Wait_For_Anim(TextAnim);
-		} else {
+		if (Brokeout) {
 			break;
 		}
-		int loops = 5;
-		while (!Brokeout) {
-			if (loops-- == 0) {
-				break;
-			}
+
+		WideWstring text(StringTable::LoadString("WDT:ReviewingHistory", NULL, "D:\\Ra2\\WDTSel.cpp", 995)); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+		text += L"\n"; // RA2: as above
+		if (first) {
+			length = text.length(); // RA2: the text animation covers the map rectangle (RA2 form)
+		}
+		text += WideWstring(StringTable::LoadString("WDT:ReviewingHistoryDay", NULL, "D:\\Ra2\\WDTSel.cpp", 1003)) + WideWstring(L" ") + Int_To_WideString_Width(tick + 1, 2); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+		Set_Text(text, first ? 0 : length); // RA2: as above
+		Do_Target_Anim(TourCampaign->CycleHistory->Get_State(tick), false, first_state); // RA2: as above
+		first = false;
+		first_state = false; // RA2: the campaign history is read tick by tick (RA2 form)
+		Wait_For_Anim(TextAnim, 300000); // RA2: as above
+		int count = 5; // RA2: as above
+		while (!Brokeout && count--) { // RA2: as above
 			Wait_Delay(5);
 			Check_For_Breakout();
 		}
 		if (Brokeout) {
-			first = false;
 			break;
 		}
-		i++;
 	}
 
 	return(first);
@@ -918,34 +697,30 @@ bool Selection::Present_Ticks(int tick_from, int tick_to)
 /// cycles that have passed since the last visit, and then waits for the voices to
 /// finish before it returns.
 /// </summary>
-void Selection::Presentation(void)
+
+void Selection::Presentation(int faction) // RA2: the voice-over for the campaign so far, then the days in review
 {
-	Set_Text();
-
-	unsigned int current_tick = TourCampaign->Properties.Get_Current_Tick();
-	unsigned int previous_tick = TourCampaign->PreviousTick;
-
-	if ((int)(current_tick - previous_tick) > 8) {
-		previous_tick = current_tick - 8;
+	Set_Text(L"", 0); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+	int tick = TourCampaign->Properties->Get_Current_Tick(); // RA2: as above
+	int last_day = TourCampaign->Get_Last_Day(faction); // RA2: as above
+	if (tick - last_day > 8) { // RA2: as above
+		last_day = tick - 8; // RA2: as above
 	}
-
-	State previous_state = TourCampaign->CycleHistory.Get_State(previous_tick);
-	int faction = TourCampaign->PlayerFaction;
-	int owned = previous_state.Count_Owned_Territories(faction);
-
-	if (owned >= MegaWinningThreshold) {
-		VoicePlayer.Queue(Voices::VOICECAT_OLD_CYCLE, OUTCOME_WIN, owned >= 30, true, 0);
-	} else if (owned <= MegaLosingThreshold) {
-		VoicePlayer.Queue(Voices::VOICECAT_OLD_CYCLE, OUTCOME_LOSE, owned <= 0, true, 0);
-	} else {
-		VoicePlayer.Queue(Voices::VOICECAT_OLD_CYCLE, OUTCOME_DRAW, true, true, 0);
-	}
-
-	Present_Ticks(previous_tick, current_tick);
-
-	while (VoicePlayer.Playing() && !Brokeout) {
-		Wait_Delay(5);
-		Check_For_Breakout();
+	rc_ptr<State> state = TourCampaign->CycleHistory->Get_State(last_day); // RA2: the campaign history is read tick by tick (RA2 form)
+	if (state.Get() != NULL) { // RA2: as above
+		int owned = state->Count_Owned(TourCampaign->Get_Player_Faction()); // RA2: as above
+		if (owned >= MegaWinningThreshold) {
+			VoicePlayer.Say(Voices::VOICECAT_OLD_CYCLE, OUTCOME_WIN, owned >= 30, true, 0); // RA2: RA2 voice player: group, result, emphasis, counted, delay
+		} else if (owned <= MegaLosingThreshold) {
+			VoicePlayer.Say(Voices::VOICECAT_OLD_CYCLE, OUTCOME_LOSE, owned <= 0, true, 0); // RA2: RA2 voice player: group, result, emphasis, counted, delay
+		} else {
+			VoicePlayer.Say(Voices::VOICECAT_OLD_CYCLE, OUTCOME_DRAW, true, true, 0); // RA2: RA2 voice player: group, result, emphasis, counted, delay
+		}
+		Present_Ticks(last_day, tick); // RA2: the campaign history is read tick by tick (RA2 form)
+		while (VoicePlayer.Is_Speaking() && !Brokeout) { // RA2: as above
+			Wait_Delay(5);
+			Check_For_Breakout();
+		}
 	}
 }
 
@@ -958,36 +733,29 @@ void Selection::Presentation(void)
 /// <param name="tick_from">The campaign cycle the presentation starts from.</param>
 /// <param name="tick_to">The campaign cycle the presentation runs up to.</param>
 /// <returns>bool; Did the player cut the presentation short?</returns>
-bool Selection::Present_History(int tick_from, int tick_to)
+
+bool Selection::Present_History(int tick_from, int tick_to) // RA2: the voice-over for the change between two ticks, then the days
 {
-	State current_state = TourCampaign->CycleHistory.Get_State(tick_from);
-	int faction = TourCampaign->PlayerFaction;
-	int current_terr = current_state.Count_Owned_Territories(faction);
-	State previous_state = TourCampaign->CycleHistory.Get_State(tick_to);
-	faction = TourCampaign->PlayerFaction;
-	int previous_terr = previous_state.Count_Owned_Territories(faction);
-	int d_terr = previous_terr - current_terr;
-
-	Outcome outcome;
-	bool emphasis;
-
-	if (d_terr < -1) {
+	rc_ptr<State> before = TourCampaign->CycleHistory->Get_State(tick_from); // RA2: the campaign history is read tick by tick (RA2 form)
+	int old_count = before->Count_Owned(TourCampaign->Get_Player_Faction()); // RA2: as above
+	rc_ptr<State> after = TourCampaign->CycleHistory->Get_State(tick_to); // RA2: as above
+	int new_count = after->Count_Owned(TourCampaign->Get_Player_Faction()); // RA2: as above
+	int change = new_count - old_count; // RA2: as above
+	int outcome; // RA2: as above
+	bool mega;
+	if (change < -1) { // RA2: a loss of more than one territory is a defeat, a gain of more than one a win (more than three, or the mega thresholds, is emphatic)
 		outcome = OUTCOME_LOSE;
-		emphasis = d_terr < -3 || previous_terr <= MegaLosingThreshold;
-	} else if (d_terr > 1) {
+		mega = change < -3 || new_count <= MegaLosingThreshold; // RA2: the campaign history is read tick by tick (RA2 form)
+	} else if (change > 1) { // RA2: as above
 		outcome = OUTCOME_WIN;
-		emphasis = d_terr > 3 || previous_terr >= MegaWinningThreshold;
+		mega = change > 3 || new_count >= MegaWinningThreshold; // RA2: the campaign history is read tick by tick (RA2 form)
 	} else {
 		outcome = OUTCOME_DRAW;
-		bool mega;
-		emphasis = Get_Outcome(tick_to, mega) == OUTCOME_LOSE && mega;
+		mega = false;
+		mega = Get_Outcome(tick_to, mega) == OUTCOME_LOSE && mega; // RA2: the campaign history is read tick by tick (RA2 form)
 	}
-
-	VoicePlayer.Queue(Voices::VOICECAT_HISTORY, outcome, emphasis, true, 0);
-
-	bool interrupted = Present_Ticks(tick_from, tick_to) == false;
-
-	return(interrupted);
+	VoicePlayer.Say(Voices::VOICECAT_HISTORY, outcome, mega, true, 0); // RA2: RA2 voice player: group, result, emphasis, counted, delay
+	return(!Present_Ticks(tick_from, tick_to)); // RA2: as above
 }
 
 
@@ -1000,7 +768,7 @@ void Selection::Check_For_Breakout(void)
 {
 	Wait_For_Focus();
 	while (Keyboard->Check()) {
-		if (Keyboard->Get() == VK_ESCAPE) {
+		if (Keyboard->Get() == KN_ESC) { // RA2: the Escape key sets Brokeout
 			Brokeout = true;
 		}
 	}
@@ -1014,20 +782,18 @@ void Selection::Check_For_Breakout(void)
 /// </summary>
 /// <param name="text">The text to display, or NULL to leave the panel blank.</param>
 /// <param name="start_delay">The delay before the text begins to print itself out.</param>
-void Selection::Set_Text(char const * text, int start_delay)
+void Selection::Set_Text(WideWstring const & text, int start_delay) // RA2: the description is a bit print animation of the map's rectangle; start_delay is the length of the heading that is not typed again
 {
 	if (TextAnim != NULL) {
 		Remove_Anim(TextAnim);
-		HiddenSurface->Blit_From(TextRect, *AlternateSurface, TextRect);
-		Add_Update_Rect(TextRect);
+		HiddenSurface->Blit_From(WorldMap->DescriptionRect, *AlternateSurface, WorldMap->DescriptionRect, false, true); // RA2: the text animation covers the map rectangle (RA2 form)
+		Add_Update_Rect(WorldMap->DescriptionRect); // RA2: as above
 		TextAnim = NULL;
 	}
-
-	if (text != NULL) {
-		strncpy(Text, text, sizeof(Text));
-		MSPrintAnim::Word_Wrap(Text, sizeof(Text), Font, TextRect.Width);
-		TextAnim = new MSPrintAnim(Text, TextRect.X, TextRect.Y, Font, TextRect, start_delay, 1, true, true);;
-		TextAnim->Set_Transient(true);
+	if (text.length() > 0) { // RA2: the text animation covers the map rectangle (RA2 form)
+		WideWstring copy(text); // RA2: as above
+		TextAnim = new MSBitPrintAnim(copy, WorldMap->DescriptionRect, true); // RA2: as above
+		TextAnim->Set_Flag(true); // RA2: as above
 		Add_Animation(TextAnim);
 	}
 }
@@ -1039,17 +805,33 @@ void Selection::Set_Text(char const * text, int start_delay)
 /// quietly ignored.
 /// </summary>
 /// <param name="name">The name of the sound effect to play.</param>
-void Selection::Play_SFX(char const * name)
+void Selection::Set_Tooltip(WideWstring const & text) // RA2: RA2 string table text (label, source path and line as the executable passes them)
 {
-	if (name != NULL) {
+	Rect rect = WorldMap->TooltipRect; // RA2: the text animation covers the map rectangle (RA2 form)
+	if (TooltipAnim != NULL) { // RA2: as above
+		Remove_Anim(TooltipAnim); // RA2: as above
+		HiddenSurface->Blit_From(rect, *AlternateSurface, rect, false, true); // RA2: as above
+		Add_Update_Rect(rect); // RA2: as above
+		TooltipAnim = NULL; // RA2: as above
+	}
+	if (text.length() > 0) { // RA2: the text animation covers the map rectangle (RA2 form)
+		WideWstring copy(text); // RA2: as above
+		TooltipAnim = new MSBitPrintAnim(copy, rect, false); // RA2: as above
+		TooltipAnim->Set_Flag(true); // RA2: as above
+		Add_Animation(TooltipAnim); // RA2: as above
+	}
+}
+
+
+void Selection::Play_SFX(Wstring const & name) // RA2: RA2 looks the sound up by Wstring name
+{
+	if (name != 0) { // RA2: RA2 looks the sound up by Wstring name
 		SFX_ITER it(SfxEntries, 0);
-		for (; it; it++) {
-			if (stricmp(it->Get_Name(), name) == 0) {
-				break;
-			}
+		while (it && name == (*it)->Get_Name()) { // RA2: RA2 looks the sound up by Wstring name
+			++it; // RA2: as above
 		}
 		if (it) {
-			it->Play();
+			(*it)->Play(); // RA2: RA2 looks the sound up by Wstring name
 		}
 	}
 }
@@ -1061,7 +843,9 @@ void Selection::Play_SFX(char const * name)
 /// </summary>
 void Selection::Set_Long_Description(void)
 {
-	Set_Text(TourCampaign->Properties.Get_Long_Desc());
+	Set_Text(TourCampaign->Properties->LongDescription, 0); // RA2: RA2 string table text (label, source path and line as the executable passes them)
+	WideWstring tip(StringTable::LoadString("WDT:TerritorySelectToolTip", NULL, "D:\\Ra2\\WDTSel.cpp", 1230)); // RA2: as above
+	Set_Tooltip(tip); // RA2: as above
 }
 
 
@@ -1071,11 +855,11 @@ void Selection::Set_Long_Description(void)
 /// watches the territories change hands and nothing is picked.
 /// </summary>
 /// <param name="campaign">The campaign whose history is to be replayed.</param>
-void WDT_Review_Campaign(Campaign * campaign)
+void __fastcall Selection::Show(rc_ptr<Campaign> const & campaign, int faction) // RA2: the review of the campaign so far
 {
 	Keyboard->Clear();
-	Selection sel(campaign, false);
-	sel.Presentation();
+	Selection selection(campaign, faction); // RA2: the screen is a stack object made from the campaign
+	selection.Presentation(faction); // RA2: as above
 }
 
 
@@ -1087,37 +871,41 @@ void WDT_Review_Campaign(Campaign * campaign)
 /// <param name="campaign">The campaign whose map and conflicts are to be presented.</param>
 /// <param name="vq_anim">Should the animated backdrop be used?</param>
 /// <returns>bool; Was a playable territory chosen?</returns>
-bool WDT_Select_Campaign(Campaign * campaign, bool vq_anim)
+bool __fastcall Selection::Choose_Conflict(rc_ptr<Campaign> const & campaign, int faction) // RA2: runs the screen for the player's next conflict and hands the territory's battle settings to the session
 {
-	Selection sel(campaign, vq_anim);
-	sel.Set_Long_Description();
-	sel.Do_Target_Selection();
-	Territory *selterr = sel.Pick_Territory();
-	bool valid = selterr != NULL;
-	if (valid) {
-		int index = selterr->ID;
-		Session.WDTTerritory = index;
-		WDTTerritory *terr = WDT_Get_Territory(index);
-		if (terr != NULL) {
-			Session.Options.UnitCount = terr->UnitCount;
-			BuildLevel = terr->TechLevel;
-			Session.Options.Credits = terr->StartingCredits;
-			Session.Options.AlliesAllowed = terr->AlliesAllowed;
-			Session.Options.HarvTruce = terr->HarvTruce;
-			Session.Options.Bases = terr->Bases;
-			Session.Options.MCVRedeploy = terr->MCVRedeploy;
-			Session.Options.FogOfWar = terr->FogOfWar;
-			Session.Options.BridgeDestruction = terr->BridgeDestruction;
-			Session.Options.Goodies = terr->Goodies;
-			Session.Options.ShortGame = terr->ShortGame;
-			Session.Options.AIPlayers = 0;
-			Session.Options.AIDifficulty = DIFF_NORMAL;
-		} else {
-			valid = false;
-		}
+	if (campaign.Get() == NULL) { // RA2: the screen is a stack object made from the campaign
+		return(false); // RA2: as above
 	}
 
-	return(valid);
+	Selection selection(campaign, faction); // RA2: the screen is a stack object made from the campaign
+	selection.Set_Long_Description(); // RA2: as above
+	selection.Do_Target_Selection(faction); // RA2: as above
+	rc_ptr<Territory> territory = selection.Pick_Territory(); // RA2: as above
+	bool chosen = territory.Get() != NULL; // RA2: as above
+	if (chosen) { // RA2: as above
+		Session.TournamentTerritory = territory->ID; // RA2: as above
+		rc_ptr<WDTTerritory> settings = Find_WDT_Territory(Session.TournamentTerritory); // RA2: as above
+		if (settings.Get() != NULL) { // RA2: as above
+			Session.Options.UnitCount = settings->UnitCount; // RA2: as above
+			BuildLevel = settings->TechLevel; // RA2: as above
+			Session.Options.Credits = settings->StartingCredits; // RA2: as above
+			Session.Options.AlliesAllowed = (settings->Booleans & 0x4) != 0; // RA2: as above
+			Session.Options.HarvTruce = false; // RA2: as above
+			Session.Options.Bases = (settings->Booleans & 0x10) != 0; // RA2: as above
+			Session.Options.MCVRedeploy = (settings->Booleans & 0x20) != 0; // RA2: as above
+			Session.Options.FogOfWar = false; // RA2: as above
+			Session.Options.BridgeDestruction = true; // RA2: as above
+			Session.Options.Goodies = (settings->Booleans & 0x100) != 0; // RA2: as above
+			Session.Options.ShortGame = (settings->Booleans & 0x400) != 0; // RA2: as above
+			Session.Options.SWAllowed = (settings->Booleans & 0x200) != 0; // RA2: as above
+			Session.Options.BuildOffAlly = false; // RA2: as above
+			Session.Options.AIPlayers = 0;
+			Session.Options.AIDifficulty = (DiffType)1; // RA2: the chosen territory
+		} else {
+			chosen = false; // RA2: the chosen territory
+		}
+	}
+	return(chosen); // RA2: the chosen territory
 }
 
 
@@ -1126,23 +914,22 @@ bool WDT_Select_Campaign(Campaign * campaign, bool vq_anim)
 /// This routine takes the mouse, starts the screen's theme, clears the surfaces, and
 /// then waits out the map's introductory animation before the player is given control.
 /// </summary>
-void Selection::Start(void)
+void Selection::Start(void) // RA2: starts the theme, blanks the surfaces and runs the map's introduction
 {
-	OwnerDraw::Capture_Mouse();
-	if (ThemeName != NULL) {
-		Theme.Play_Song(Theme.From_Name(ThemeName));
+	IgnoreInput = false; // RA2: RA2 start and end of the screen: input, mouse and theme
+	if (ThemeName != 0) { // RA2: as above
+		Theme.Play_Song(Theme.From_Name(ThemeName.get())); // RA2: as above
 		Theme.Set_Repeat(true);
 	}
-	Hide_Mouse();
+	MouseCursor->Hide_Mouse(); // RA2: RA2 start and end of the screen: input, mouse and theme
 	AlternateSurface->Fill(0);
 	HiddenSurface->Fill(0);
-	VisibleSurface->Blit_From(*HiddenSurface);
+	VisibleSurface->Blit_From(*HiddenSurface, false, true); // RA2: the text animation covers the map rectangle (RA2 form)
 	Keyboard->Clear();
-	if (RegionAnim != NULL) {
-		VoicePlayer.Queue(Voices::VOICE_STARTUP, true, 0);
-		Wait_For_Anim(RegionAnim, 300000);
+	WorldMap->Start_Intro(this, &VoicePlayer); // RA2: RA2 start and end of the screen: input, mouse and theme
+	while (MouseCursor->Get_Mouse_State() < 0) { // RA2: as above
+		MouseCursor->Show_Mouse(); // RA2: as above
 	}
-	Show_Mouse();
 }
 
 
@@ -1153,216 +940,11 @@ void Selection::Start(void)
 /// </summary>
 void Selection::End(void)
 {
-	Hide_Mouse();
-	Theme.Fade_Out();
+	MouseCursor->Hide_Mouse(); // RA2: RA2 start and end of the screen: input, mouse and theme
+	Theme.Queue_Song((ThemeType)-3); // RA2: as above
 	AlternateSurface->Fill(0);
-	Draw_Menu_Background();
-	Show_Mouse();
-	OwnerDraw::Release_Mouse();
-}
-
-
-/// <summary>
-/// Converts a click map color index into a territory index.
-/// This routine is used by the map authoring scan loops to decide which territory, if
-/// any, a click map pixel belongs to. Two of the palette entries stand in for
-/// territories that fall outside the directly mapped range.
-/// </summary>
-/// <param name="color">The palette color index read from the click map.</param>
-/// <returns>Returns with the territory index, or 0xFF if the color names no territory.</returns>
-unsigned int Territory_Index_From_Click_Map_Color(unsigned int color)
-{
-	if (color != 32) {
-		if (color != 198) {
-			if (color > 0x1D) {
-				return(0xFF);
-			}
-			return(color);
-		}
-		return(23);
+	HiddenSurface->Fill(0);
+	while (MouseCursor->Get_Mouse_State() < 0) { // RA2: RA2 start and end of the screen: input, mouse and theme
+		MouseCursor->Show_Mouse(); // RA2: as above
 	}
-	return(18);
-}
-
-
-/// <summary>
-/// Constructs an empty centroid accumulator.
-/// </summary>
-Centroid::Centroid(void) :
-	Position(0,0),
-	Count(0)
-{
-	//nothing
-}
-
-
-/// <summary>
-/// Adds another point to the centroid accumulator.
-/// </summary>
-/// <returns>Returns with a reference to this accumulator so that adds may be chained.</returns>
-Centroid const & Centroid::operator+=(Point2D const & pt)
-{
-	Position += pt;
-	Count++;
-	return(*this);
-}
-
-
-/// <summary>
-/// Fetches the average of every point accumulated so far.
-/// </summary>
-/// <returns>Returns with the center point. An empty accumulator yields the origin.</returns>
-Point2D Centroid::Center_Point(void) const
-{
-	return(Count > 0 ? Point2D(Position.X / Count, Position.Y / Count) : Point2D(0,0));
-}
-
-
-/// <summary>
-/// Determines if two centroid accumulators are equivalent.
-/// </summary>
-/// <returns>bool; Do both accumulators hold the same running total?</returns>
-bool Centroid::operator==(Centroid const & that) const
-{
-	return(Position == that.Position && Count == that.Count);
-}
-
-
-/// <summary>
-/// Builds the territory definition file for a world domination map.
-/// This routine is used when authoring a tour map. It reads the two click map images
-/// that accompany the map -- one supplying each territory's origin point, the other its
-/// extent and center -- and writes an entry per territory back into WDTMap.ini.
-/// </summary>
-/// <param name="map_name">The name of the map, used as the INI section prefix.</param>
-/// <param name="pcx1_file_name">The click map supplying each territory's origin point.</param>
-/// <param name="pcx2_file_name">The click map supplying each territory's extent.</param>
-void WorldDominationTour::Write_Map_INI(char const * map_name, char const * pcx1_file_name, char const * pcx2_file_name)
-{
-	CDFileClass ifile;
-	/// The unused result captures are load-bearing for codegen: their dead IL weight
-	/// affects how the compiler inlines and allocates the rest of the routine.
-	int ok = ifile.Open("WDTMap.ini", 1);
-	INIClass ini;
-	int ok2 = ini.Load(ifile);
-	ifile.Close();
-	CDFileClass pfile1(pcx1_file_name);
-	Surface *surf1 = Read_PCX_File(pfile1);
-	CDFileClass pfile2(pcx2_file_name);
-	Surface *surf2 = Read_PCX_File(pfile2);
-
-	int height = surf2->Get_Height();
-	int width = surf2->Get_Width();
-
-	RECT_LIST rects(30);
-	POINT2D_LIST points(30);
-	CENTROID_LIST centroids(30);
-
-	RECT_ITER riter = rects;
-	for (; riter; riter++) {
-		Rect & rect = *riter;
-		rect.X = 0;
-		rect.Y = 0;
-		rect.Width = 0;
-		rect.Height = 0;
-	}
-
-	POINT2D_ITER piter = points;
-	for (; piter; piter++) {
-		*piter = Point2D(0,0);
-	}
-
-	/*
-	 * Scan the second PCX mask. Each non-background color index accumulates a
-	 * centroid sum and a bounding rectangle for that territory.
-	 */
-	Point2D point;
-	for (point.Y = 0; point.Y < height; point.Y++) {
-		for (point.X = 0; point.X < width; point.X++) {
-			unsigned n = Territory_Index_From_Click_Map_Color(surf2->Get_Pixel(point));
-			if (n >= 0xFF) {
-				continue;
-			}
-
-			if ((unsigned)centroids.Length() < n + 1) {
-				centroids.Resize(n + 1);
-			}
-			centroids[n] += point;
-
-			if ((unsigned)rects.Length() < n + 1) {
-				int length = rects.Length();
-				rects.Resize(n + 1);
-				RECT_ITER iter(rects, length);
-				for (; iter; iter++) {
-					Rect & blank = *iter;
-					blank.X = 0;
-					blank.Y = 0;
-					blank.Width = 0;
-					blank.Height = 0;
-				}
-			}
-			Rect & rect = rects[n];
-			if (rect.Width == 0) {
-				rect.Height = 0;
-			}
-			if (point.X < rect.X || point.X >= rect.X + rect.Width || point.Y < rect.Y || point.Y >= rect.Y + rect.Height) {
-				rect = Union(rect, Rect(point.X, point.Y, 1, 1));
-			}
-		}
-	}
-
-	/*
-	 * Scan the first PCX mask. Each non-background color index records the last
-	 * matching pixel position as the territory origin point.
-	 */
-	for (point.Y = 0; point.Y < height; point.Y++) {
-		for (point.X = 0; point.X < width; point.X++) {
-			unsigned n = Territory_Index_From_Click_Map_Color(surf1->Get_Pixel(point));
-			if (n >= 0xFF) {
-				continue;
-			}
-
-			if ((unsigned)points.Length() < n + 1) {
-				int length = points.Length();
-				points.Resize(n + 1);
-				POINT2D_ITER iter(points, length);
-				for (; iter; iter++) {
-					*iter = Point2D(0,0);
-				}
-			}
-			points[n] = point;
-		}
-	}
-
-	riter = RECT_ITER(rects);
-	piter = POINT2D_ITER(points);
-
-	char section[256];
-	char string[256];
-	char idx1[8];
-	char idx2[8];
-	int ti = 0;
-	int ci = 0;
-	while (riter) {
-		if (!piter) {
-			break;
-		}
-		sprintf(string, "Territory%02d", ti);
-		sprintf(idx1, "%02d", ti);
-		ti++;
-		sprintf(idx2, "%02d", ti);
-		strncpy(section, map_name, 255u);
-		strncat(section, idx1, 255u);
-		ini.Put_String(map_name, string, section);
-		ini.Put_Point(section, "Origin", *piter);
-		ini.Put_String(section, "Name", string);
-		ini.Put_String(section, "Description", string);
-		ini.Put_Point(section, "Target", centroids[ci].Center_Point());
-		riter++;
-		piter++;
-		ci++;
-	}
-
-	ifile.Open("WDTMap.ini", 2);
-	ini.Save(ifile);
 }

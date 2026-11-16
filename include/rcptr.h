@@ -37,7 +37,7 @@ class rc_ptr : public rc_ptr_base
 		rc_ptr & operator=(T * ptr) { Assign(ptr); return(*this); }
 		T * Get(void) const { return((T *)Ptr); }
 		T & operator*(void) const { return(*Get()); }
-		T * operator->(void) const { if (Ptr != NULL) { /* a debug-only reference count check; nothing in release */ } return((T *)Ptr); } // RA2: a null test with nothing left in it stands before the load (as in the YR decompilation); WDTState::Create_Territories 0x0072C490 matches only so
+		T * operator->(void) const { if (Ptr != NULL && Ptr != NULL) { /* a debug-only reference count check; nothing in release */ } /* RA2: the check is two tests (it stands for the assertion on a null pointer and on the count): the selection screen (WDTSel.cpp) calls operator-> out of line or inline exactly as the executable only with this much source in it; Selection::Select_Territory, Handle_Click and Select_Territory_At match so */ return((T *)Ptr); } // RA2: a null test with nothing left in it stands before the load (as in the YR decompilation); WDTState::Create_Territories 0x0072C490 matches only so
 };
 
 template<class T>
