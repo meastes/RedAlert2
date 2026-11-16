@@ -4855,7 +4855,6 @@ address,symbol,evidence
 0x0062A340,?Add_CRC@@YIXPAII@Z,"inferred: referenced by matched src/wsproto.cpp (9 references); across all matched code never at another address, and no other symbol here"
 0x0062A360,?Print_CRCs@@YIXPAVEventClass@@@Z,"inferred: referenced by matched src/queue.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0062DBA0,?Write_Sync_File@@YIXHPAVEventClass@@@Z,"inferred: referenced by matched src/queue.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x0062E670,?Add_Outgoing_Event@@YIXVEventClass@@@Z,"inferred: referenced by matched src/planmgr.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x0062E6E0,?Enqueue_Event@@YIXPAVEventClass@@@Z,"inferred: referenced by matched src/planmgr.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0062E840,?Send_Port_Unreachable@@YIXXZ,"inferred: referenced by matched src/mainloop.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x0062E9E0,?Next@?$QueueClass@VEventClass@@$0IA@@@QAEHXZ,"inferred: referenced by matched src/queue.cpp (1 reference); across all matched code never at another address, and no other symbol here"

@@ -102,12 +102,13 @@ class QueueClass
 		**	the object, then false will be returned.
 		*/
 		int Add(T const &);
+		int Add(T const &, unsigned long timing); // RA2: keeps the time the object was queued elsewhere
 
 		int Get_Head(void);
 		int Get_Tail(void);
 		T * Get_Array(void);
 
-	private:
+	public: // RA2: the queue's storage is read and written directly by the event code
 		int Head;								// Index of element in list the longest.
 		int Tail;								// Index where next new addition will go.
 
@@ -182,6 +183,20 @@ inline int QueueClass<T,size>::Add(T const &q)
 	if (Count < size) {
 		Array[Tail] = q;
 		Timings[Tail] = timeGetTime(); // RA2
+		Tail = (Tail + 1) & (size-1);
+		((int &)Count) = Count + 1;
+		return(true);
+	}
+	return(false);
+}
+
+
+template<class T, int size>
+inline int QueueClass<T,size>::Add(T const &q, unsigned long timing) // RA2: as above
+{
+	if (Count < size) {
+		Array[Tail] = q;
+		Timings[Tail] = timing;
 		Tail = (Tail + 1) & (size-1);
 		((int &)Count) = Count + 1;
 		return(true);

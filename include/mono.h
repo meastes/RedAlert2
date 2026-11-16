@@ -52,8 +52,8 @@ class MonoClass {
 		MonoClass(void);
 		~MonoClass(void);
 
-		static void Enable(void) {Enabled = true;};
-		static void Disable(void) {Enabled = false;};
+		static void Enable(void); // RA2: 0x0059D9C0, shows the mono window
+		static void Disable(void); // RA2: 0x0059DA00, hides it
 		static bool Is_Enabled(void) {return(Enabled);};
 		static MonoClass * Get_Page(int index); // RA2: returns the mono page of that index
 

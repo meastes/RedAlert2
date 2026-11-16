@@ -49,7 +49,7 @@
 
 extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30
 extern void __fastcall Enqueue_Event(EventClass * event); // RA2: 0x0062E6E0 (queue.cpp); puts the event on the list to run
-extern void __fastcall Add_Outgoing_Event(EventClass event); // RA2: 0x0062E670 (queue.cpp); sends the event to the other players
+extern bool __fastcall Add_Outgoing_Event(EventClass event); // RA2: 0x0062E670 (queue.cpp); sends the event to the other players, false when the list is full
 
 Rect PlanningRect(0, 0, 0, 0); // RA2: 0x00A76670; a rectangle nothing in this module reads (its initializer is the one at 0x00610380)
 

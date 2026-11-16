@@ -130,6 +130,7 @@ enum SerialCommandType {
 	SERIAL_PREVIEW_MODE,
 	SERIAL_PREVIEW_ACK,
 	SERIAL_REQ_PREVIEW,
+	SERIAL_TAUNT, // RA2: 0x78, a taunt (the packed byte follows the sender's ID)
 };
 
 enum NetCommandType {
@@ -288,6 +289,8 @@ struct SerialPacketType {
 		struct {
 			int Percent;
 		} Progress;
+
+		char Taunt; // RA2: +0x19, the packed taunt byte of a SERIAL_TAUNT packet (Play_Taunt)
 	};
 };
 
@@ -403,6 +406,11 @@ struct GlobalPacketType {
 			int Color;
 			unsigned int NameCRC;
 		} Options;
+
+		struct {
+			int ID; // RA2: +0x2F, the sender's player ID
+			char Address[sizeof(IPXAddressClass)]; // RA2: +0x33, its address with the packet router's port (command NET_IM_STILL_HERE)
+		} StillHere;
 
 		struct {
 			unsigned short MangledPortNumber;
