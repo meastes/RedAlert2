@@ -135,15 +135,9 @@ unk_0047FCF0,0x0047FCF0,0x004800C0,unknown,code not assigned to a module
 combuf,0x004800C0,0x00480AE0,tibsun,"functions compiled from src/combuf.cpp, matched, without gaps; two placed by the gap; ?Mono_Debug_Print@CommBufferClass@@QAEXH@Z not placed; ?Mono_Debug_Print2@CommBufferClass@@QAEXH@Z not placed"
 unk_00480AE0,0x00480AE0,0x00480E20,unknown,code not assigned to a module
 connect,0x00480E20,0x00481610,tibsun,"functions compiled from src/connect.cpp, matched, without gaps; one placed by the gap"
-unk_00481610,0x00481610,0x00482B50,unknown,code not assigned to a module
-unk_00482B50,0x00482B50,0x00482BC0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00482BC0,0x00482BC0,0x00482C00,unknown,code not assigned to a module
-unk_00482C00,0x00482C00,0x00482E00,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00482E00,0x00482E00,0x00482E10,unknown,code not assigned to a module
-unk_00482E10,0x00482E10,0x00482F20,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00482F20,0x00482F20,0x00482F60,unknown,code not assigned to a module
-unk_00482F60,0x00482F60,0x00482F80,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00482F80,0x00482F80,0x00483430,unknown,code not assigned to a module
+unk_00481610,0x00481610,0x00481850,unknown,code not assigned to a module
+conquer,0x00481850,0x004831A0,tibsun,"functions compiled from src/conquer.cpp, matched, without gaps; seven placed by the gap"
+unk_004831A0,0x004831A0,0x00483430,unknown,code not assigned to a module
 control,0x00483430,0x00483560,tibsun,"functions compiled from src/control.cpp, matched, without gaps; one placed by the gap"
 unk_00483560,0x00483560,0x00483650,unknown,code not assigned to a module
 convert,0x00483650,0x00486120,tibsun,"functions compiled from src/convert.cpp, matched, without gaps"
