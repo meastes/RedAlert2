@@ -2428,7 +2428,7 @@ void Assign_Houses(void)
 /// them for everyone playing has the shortfall made up with random spots on open ground.
 /// </summary>
 /// <returns>Returns with the list of cells that players may be started from.</returns>
-DynamicVectorClass<Cell> Build_Start_Waypoint_List(void) // RA2: no official argument, at 0x65FFF0
+DynamicVectorClass<Cell> Build_Start_Waypoint_List(char) // RA2: 0x65FFF0; the argument is passed (MultiplayerGameMode 0x005B7C00 loads it) and not used
 {
 	DynamicVectorClass<Cell> waypts;
 

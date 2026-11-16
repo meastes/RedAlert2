@@ -5288,7 +5288,7 @@ address,symbol,evidence
 0x0065E590,?Do_Abort@@YIXXZ,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0065E730,?Set_Scenario_Name@ScenarioClass@@QAEXPBD@Z,"compiled from src/scenario.cpp, matched"
 0x0065F980,?Write_Scenario_INI@@YIXPBD_N@Z,"compiled from src/scenario.cpp, matched"
-0x0065FFF0,?Build_Start_Waypoint_List@@YI?AV?$DynamicVectorClass@VCell@@@@XZ,"compiled from src/scenario.cpp, matched"
+0x0065FFF0,?Build_Start_Waypoint_List@@YI?AV?$DynamicVectorClass@VCell@@@@D@Z,"compiled from src/scenario.cpp, matched"
 0x00660F60,?Save@ScenarioClass@@QBEXPAUIStream@@@Z,"compiled from src/scenario.cpp, matched"
 0x006612C0,?Set_Global_To@ScenarioClass@@QAE_NH_N@Z,"compiled from src/scenario.cpp, matched"
 0x00661310,?Set_Global_To@ScenarioClass@@QAE_NPBD_N@Z,"compiled from src/scenario.cpp, matched"
