@@ -88,6 +88,7 @@
 #include "ovrlight.h"
 #include "particle.h"
 #include "partsys.h"
+#include "progress.h" // RA2: Progress.Initialize in Load_Game
 #include "psystype.h"
 #include "ptype.h"
 #include "revent.h"
@@ -160,6 +161,9 @@ _COM_SMARTPTR_TYPEDEF(ILinkStream, __uuidof(ILinkStream));
 /// RA2
 /// </summary>
 /// <returns>Returns with S_OK, or the failure code of the read that went wrong.</returns>
+void __fastcall Free_Interface_Art(void); // RA2: 0x006F30F0, defined in txtlabel2.cpp
+extern bool CrateWater[CRATE_COUNT]; // RA2: 0x00851118, saved and loaded with the miscellaneous values
+extern int UnlockInputFrame; // RA2: 0x00AB9174, saved and loaded with the miscellaneous values
 static bool Put_All(IStream *stream, int save_net); // RA2: defined after its caller
 
 static bool Get_All(IStream *stream, bool save_net); // RA2: defined after its caller
@@ -350,17 +354,18 @@ bool Save_Game(const char *file_name, wchar_t const * descr, bool ) // RA2: wide
 {
 	WCHAR name[64];
 
+	// RA2: the other failure and progress messages are not compiled in
+
 	DebugString("\nSAVING GAME [%s - %s]\n", file_name, descr);
+
+	IStoragePtr storage; // RA2: declared before the name is converted
 
 	MultiByteToWideChar(0,0, file_name, -1, name, sizeof(name)/sizeof(WCHAR));
 
 	/*
 	**	Open the file
 	*/
-	DebugString("Creating DocFile\n");
-	IStoragePtr storage;
 	if (FAILED(StgCreateDocfile(name, STGM_CREATE|STGM_SHARE_EXCLUSIVE|STGM_READWRITE, 0, &storage))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
@@ -392,24 +397,17 @@ bool Save_Game(const char *file_name, wchar_t const * descr, bool ) // RA2: wide
 	/*
 	**	Save the save-game version, for loading verification
 	*/
-	DebugString("Saving version information\n");
-	if (FAILED(info.Save(storage))) {
-		DebugString("\t***** FAILED!\n");
-		return(false);
-	}
+	info.Save(storage); // RA2: the result of saving the version information is not checked
 
-	DebugString("Creating content stream\n");
 	IStreamPtr content;
 	if (FAILED(storage->CreateStream(L"CONTENTS", STGM_CREATE|STGM_SHARE_EXCLUSIVE|STGM_READWRITE, 0, 0, &content))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
-	DebugString("Linking content stream to compressor\n");
 	ILinkStreamPtr link;
 	link.CreateInstance(CLSID_CompressStream, NULL, CLSCTX_INPROC|CLSCTX_LOCAL_SERVER);
 	if (FAILED(link->Link_Stream(content))) {
-		DebugString("\t***** FAILED!\n");
+		DebugString("\t***** FAILED!\n"); // RA2: the only failure message, after linking the stream
 		return(false);
 	}
 	IStreamPtr stream(link);
@@ -419,27 +417,22 @@ bool Save_Game(const char *file_name, wchar_t const * descr, bool ) // RA2: wide
 	**	and then encrypted. The message digest is calculated in the
 	**	process by using the data just as it is written to disk.
 	*/
-	DebugString("Calling Put_All()\n");
 	bool res = Put_All(stream,0);
 
-	DebugString("Unlinking content stream from compressor\n");
-	if (FAILED(link->Unlink_Stream(NULL))) {
-		DebugString("\t***** FAILED!\n");
+	if (FAILED(link->Unlink_Stream(NULL))) { // RA2: no debug messages around unlinking, releasing and committing
 		return(false);
 	}
 
-	DebugString("Releasing content stream\n");
 	content.Release();
 
-	DebugString("Closing DocFile\n");
 	if (FAILED(storage->Commit(0))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
 	DebugString("SAVING GAME [%s] - Complete\n\n", file_name, descr);
 	return(res);
 }
+
 
 
 /***************************************************************************
@@ -1003,6 +996,7 @@ bool Load_Game(const char *file_name)
 	}
 	IStreamPtr stream(link);
 
+	Progress.Initialize(100.0, 0, NULL); // RA2: the progress screen is set up before the load, with no dialog window
 	bool res = Get_All(stream, false);
 
 	link->Unlink_Stream(NULL);
@@ -1023,9 +1017,11 @@ bool Load_Game(const char *file_name)
 	Map.Complete_Radar_Refresh();
 	ScenarioActive = true;
 	TacticalActive = true;
+	Free_Interface_Art(); // RA2: the interface art is freed once the game is up (0x006F30F0)
 	DebugString("LOADING GAME [%s] - Complete\n\n", file_name);
 	return(true);
 }
+
 
 
 static bool Get_All(IStream *stream, bool save_net)
@@ -1374,19 +1370,24 @@ int Save_Misc_Values(IStream * stream)
 		return(res);
 	}
 
+	res = stream->Write(&CrateWater, sizeof(CrateWater), NULL); // RA2: the crate water flags are saved after the crate data
+	if (FAILED(res)) {
+		return(res);
+	}
+
 	res = stream->Write(&MissionControl, sizeof(MissionControl), NULL);
 	if (FAILED(res)) {
 		return(res);
 	}
 
-	int state = Get_Speech_State();
-	res = stream->Write(&state, sizeof(state), NULL);
+	res = stream->Write(&UnlockInputFrame, sizeof(UnlockInputFrame), NULL); // RA2: the input unlock frame replaces the speech state
 	if (FAILED(res)) {
 		return(res);
 	}
 
 	return(S_OK);
 }
+
 
 
 /***********************************************************************************************
@@ -1456,17 +1457,9 @@ int Load_Misc_Values(IStream * stream)
 	}
 
 
-	for (i = 0; i < ARRAY_SIZE(Ground); i++) {
-		int grnd_size = sizeof(GroundType);
-		int grnd_delta = sizeof(float);
-		res = stream->Read(&Ground[i], grnd_size - (IsOldSaveGame ? grnd_delta : 0), NULL);
-		if (FAILED(res)) {
-			return(res);
-		}
-		if (IsOldSaveGame) {
-			memmove(&Ground[i].Build, &Ground[i].Cost[7], grnd_delta);
-			Ground[i].Cost[SPEED_CREEP] = 0.0;
-		}
+	res = stream->Read(&Ground, sizeof(Ground), NULL); // RA2: the ground table is read in one piece, there is no old save game format
+	if (FAILED(res)) {
+		return(res);
 	}
 
 	IonStormClass::Load(stream);
@@ -1518,21 +1511,24 @@ int Load_Misc_Values(IStream * stream)
 		return(res);
 	}
 
+	res = stream->Read(&CrateWater, sizeof(CrateWater), NULL); // RA2: the crate water flags follow the crate data
+	if (FAILED(res)) {
+		return(res);
+	}
+
 	res = stream->Read(&MissionControl, sizeof(MissionControl), NULL);
 	if (FAILED(res)) {
 		return(res);
 	}
 
-	if (!IsOldSaveGame) {
-		HRESULT res = stream->Read(&ptr, sizeof(ptr), NULL);
-		if (FAILED(res)) {
-			return(res);
-		}
-		Set_Speech_State(((int)ptr != 0) ? true : false);
+	res = stream->Read(&UnlockInputFrame, sizeof(UnlockInputFrame), NULL); // RA2: the input unlock frame replaces the speech state
+	if (FAILED(res)) {
+		return(res);
 	}
 
 	return(S_OK);
 }
+
 
 
 /***************************************************************************

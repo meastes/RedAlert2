@@ -48,6 +48,32 @@ IndexClass<int, FoggedObjectClass *> FoggedObjectClass::FoggedObjectIndex;
 
 
 /// <summary>
+/// Finds the cell a coordinate lies in.
+/// </summary>
+/// <param name="coord">The coordinate to find the cell of.</param>
+/// <returns>Returns with the cell holding the coordinate.</returns>
+inline Cell Fog_Coord_Cell(Coord const & coord) // RA2: one more inline level between the coordinate and the cell
+{
+	Cell cell;
+	cell.X = coord.X / CELL_LEPTON_W;
+	cell.Y = coord.Y / CELL_LEPTON_H;
+	return(cell);
+}
+
+
+/// <summary>
+/// Computes the key a fogged object is listed under in the fogged object index.
+/// </summary>
+/// <param name="cell">The cell the remembered object lies in.</param>
+/// <param name="kind">The kind of object that is remembered.</param>
+/// <returns>Returns with the cell's diagonal order scaled by 71, less the kind.</returns>
+inline int Fog_Index_Key(Cell cell, int kind) // RA2: the key is the diagonal order times 71, not Cell::As_Int's shift by 6
+{
+	return((-(cell.X + cell.Y) * MAP_CELL_W + cell.Y - cell.X) * 71 - kind + INT_MAX);
+}
+
+
+/// <summary>
 /// Creates a fogged object without initializing it.
 /// This constructor is used by the load process, which is about to overwrite the
 /// object's data with the contents of the save game stream.
@@ -110,9 +136,7 @@ FoggedObjectClass::FoggedObjectClass(Coord const & coord, OverlayType type, int 
 
 	FoggyObjects.Add(this);
 
-	Cell cell = Position.As_Cell(); // RA2: the cell straight from Position, not through Get_Cell
-	int id = cell.As_Int() - RTTI + INT_MAX;
-	FoggedObjectIndex.Add_Index(id, this);
+	FoggedObjectIndex.Add_Index(Fog_Index_Key(Fog_Coord_Cell(Position), RTTI), this); // RA2: the key built in the call, from the cell of Position through one more inline level
 }
 
 
@@ -153,7 +177,7 @@ FoggedObjectClass::FoggedObjectClass(Coord const & coord, SmudgeType type, int d
 	FoggyObjects.Add(this);
 
 	Cell cell = Position.As_Cell(); // RA2: the cell straight from Position, not through Get_Cell
-	int id = cell.As_Int() - RTTI + INT_MAX;
+	int id = Fog_Index_Key(cell, RTTI); // RA2: the index key, not Cell::As_Int
 	FoggedObjectIndex.Add_Index(id, this);
 }
 
@@ -183,14 +207,14 @@ FoggedObjectClass::FoggedObjectClass(BuildingClass * object, bool fade) :
 
 	FoggyObjects.Add(this);
 
-	Cell cell = Get_Cell();
-	int id = cell.As_Int() - RTTI + INT_MAX;
-	FoggedObjectIndex.Add_Index(id, this);
+	FoggedObjectIndex.Add_Index(Fog_Index_Key(Fog_Coord_Cell(Position), RTTI), this); // RA2: the key built in the call, from the cell of Position through one more inline level
 
 	object->IsFogged = true;
 	int shapenum = object->Shape_Number();
 
-	DrawRecord record(object->Class, shapenum, 0, 0);
+	DrawRecord record; // RA2: the record is filled in field by field, and reused for each animation
+	record.TypeClass = object->Class;
+	record.FrameNumber = shapenum; // RA2: as above
 	if (object->Class->IsLaserFence && (object->LaserFenceFrame == 12 || object->LaserFenceFrame == 8)) {
 		record.HeightAdjust = 1;
 	} else {
@@ -206,7 +230,11 @@ FoggedObjectClass::FoggedObjectClass(BuildingClass * object, bool fade) :
 			object->Anims[i]->IsFogged = true;
 			AnimTypeClass *atype = object->Anims[i]->Class;
 			BoundingRect = Union(BoundingRect, object->Anims[i]->Get_Visual_Rect());
-			Records.Add(DrawRecord(atype, atype->Start + object->Anims[i]->Fetch_Stage(), 0, object->Anims[i]->ZAdjust));
+			record.TypeClass = atype; // RA2: as above
+			record.FrameNumber = atype->Start + object->Anims[i]->Fetch_Stage();
+			record.HeightAdjust = 0; // RA2: as above
+			record.ZAdjust = object->Anims[i]->ZAdjust; // RA2: as above
+			Records.Add(record); // RA2: as above
 		}
 	}
 
@@ -243,9 +271,7 @@ FoggedObjectClass::FoggedObjectClass(TerrainClass * object) :
 
 	Records.Add(DrawRecord(object->Class, 0, 0, 0));
 
-	Cell cell = Position.As_Cell(); // RA2: the cell straight from Position, not through Get_Cell
-	int id = cell.As_Int() - RTTI + INT_MAX;
-	FoggedObjectIndex.Add_Index(id, this);
+	FoggedObjectIndex.Add_Index(Fog_Index_Key(Fog_Coord_Cell(Position), RTTI), this); // RA2: the key built in the call, from the cell of Position
 }
 
 
@@ -260,7 +286,7 @@ FoggedObjectClass::~FoggedObjectClass(void)
 	FoggyObjects.Delete(this);
 
 	Cell cell = Position.As_Cell(); // RA2: the cell straight from Position, not through Get_Cell
-	int id = cell.As_Int() - RTTI + INT_MAX;
+	int id = Fog_Index_Key(cell, RTTI); // RA2: the index key, not Cell::As_Int
 	FoggedObjectIndex.Remove_Index(id);
 
 	if (RTTI == RTTI_BUILDING) {
@@ -313,8 +339,8 @@ void Draw_Fogged_Objects(Rect const & rect)
 		 */
 		Rect rectangle = data->BoundingRect;
 		rectangle.X -= TacticalMap->TacPixelX;
-		rectangle.Y = rectangle.Y - TacticalMap->TacPixelY + TacticalRect.Y;
-		rectangle.X += TacticalRect.X;
+		rectangle.Y -= TacticalMap->TacPixelY; // RA2: subtracted from Y as from X
+		rectangle += TacticalRect.Top_Left(); // RA2: the tactical origin added as a point
 
 		Rect clipped = Intersect(rect, rectangle);
 		if (!clipped.Is_Valid()) {
@@ -335,9 +361,8 @@ void Draw_Fogged_Objects(Rect const & rect)
 				cellptr->Overlay = data->Overlay;
 				cellptr->OverlayData = data->OverlayData;
 
-				Coord coord = Coord_Whole(Coord(cellptr->CellID));
 				Point2D point;
-				TacticalMap->Coord_To_Pixel(coord, point);
+				TacticalMap->Coord_To_Pixel(Coord_Whole(Coord(cellptr->CellID)), point); // RA2: the whole-cell coordinate passed straight in
 				point.X += ISO_TILE_PIXEL_W / -2;
 
 				cellptr->Draw_Overlay(point, rect);
@@ -360,7 +385,7 @@ void Draw_Fogged_Objects(Rect const & rect)
 
 				Point2D xy;
 				TacticalMap->Coord_To_Pixel((Coord)*position, xy);
-				xy += Point2D(TacticalRect.X - rect.X, TacticalRect.Y - rect.Y);
+				xy += TacticalRect.Top_Left() - rect.Top_Left(); // RA2: the offset as a difference of corners
 
 				int zadjust = -TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z);
 
@@ -368,10 +393,10 @@ void Draw_Fogged_Objects(Rect const & rect)
 					cellptr->Init_Drawer(NULL, 0x10000, 0, NORMAL_LIGHT, NORMAL_LIGHT, NORMAL_LIGHT);
 				}
 
-				Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, shapenum, xy, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zadjust - 4, ZGRAD_90DEG, cellptr->TileBrightness);
+				Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, shapenum, xy, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zadjust - 4, ZGRAD_90DEG, cellptr->TileBrightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 
 				if (DrawShapeShadows) {
-					Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, shapenum + shape->Get_Count() / 2, xy, rect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZWRITE), NULL, zadjust - 2, ZGRAD_GROUND, NORMAL_LIGHT);
+					Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, shapenum + shape->Get_Count() / 2, xy, rect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZWRITE), NULL, zadjust - 2, ZGRAD_GROUND, NORMAL_LIGHT, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 				}
 				break;
 			}
@@ -396,9 +421,9 @@ void Draw_Fogged_Objects(Rect const & rect)
 						 */
 						Coord * position = &data->Position;
 						Point2D drawpoint;
-						TacticalMap->Coord_To_Pixel(*position - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2, 0), drawpoint);
+						TacticalMap->Coord_To_Pixel(Coord(*position) - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2, 0), drawpoint); // RA2: the position is copied into a Coord before the subtraction
 						CellClass * cellptr = &Map[(Coord)*position];
-						drawpoint += Point2D(TacticalRect.X - rect.X, TacticalRect.Y - rect.Y);
+						drawpoint += TacticalRect.Top_Left() - rect.Top_Left(); // RA2: the offset as a difference of corners
 
 						if (type->IsInvisibleInGame) {
 							break;
@@ -426,15 +451,15 @@ void Draw_Fogged_Objects(Rect const & rect)
 						if (cellptr->Drawer == NULL) {
 							cellptr->Init_Drawer(NULL, 0x10000, 0, NORMAL_LIGHT, NORMAL_LIGHT, NORMAL_LIGHT);
 						}
-						ConvertClass * drawconvert = type->IsTerrainPalette ? (ConvertClass *)cellptr->Drawer : (ConvertClass *)cellptr;
+						ConvertClass * drawconvert = type->IsTerrainPalette ? (ConvertClass *)cellptr->Drawer : (ConvertClass *)converter; // RA2: the house color scheme converter, not the cell
 
 						if (cliprect.Height > 0) {
 							if (heightadjust) {
-								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum, shapepoint, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, brightness);
-								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum + shape->Get_Count() / 2, shapepoint, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, NORMAL_LIGHT);
+								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum, shapepoint, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, brightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
+								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum + shape->Get_Count() / 2, shapepoint, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, NORMAL_LIGHT, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 							} else {
 								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum, shapepoint, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton + zadjust - 2, ZGRAD_90DEG, brightness, zshapefile, 0, zdrawpoint);
-								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum + shape->Get_Count() / 2, shapepoint, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, NORMAL_LIGHT);
+								Draw_Shape(*LogicalSurface, *drawconvert, shape, shapenum + shape->Get_Count() / 2, shapepoint, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 2, ZGRAD_GROUND, NORMAL_LIGHT, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 							}
 						}
 
@@ -442,7 +467,7 @@ void Draw_Fogged_Objects(Rect const & rect)
 						 * Draw the building's bib graphic.
 						 */
 						if (type->BibShape != NULL) {
-							Draw_Shape(*LogicalSurface, *drawconvert, type->BibShape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 3, ZGRAD_GROUND, brightness);
+							Draw_Shape(*LogicalSurface, *drawconvert, type->BibShape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZWRITE), NULL, zlepton - 3, ZGRAD_GROUND, brightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 						}
 
 					} else {
@@ -452,33 +477,32 @@ void Draw_Fogged_Objects(Rect const & rect)
 						 */
 						AnimTypeClass * anim = (AnimTypeClass *)type;
 
-						if (anim->DetailLevel > Options.DetailLevel || shape == NULL) {
-							continue;
-						}
+						if (anim != NULL && anim->Fetch_RTTI() == RTTI_ANIMTYPE && anim->DetailLevel <= Options.DetailLevel && shape != NULL) { // RA2: the record's type is checked to be an animation type, and nothing is skipped with continue
 
-						Coord * position = &data->Position;
-						Point2D drawpoint;
-						TacticalMap->Coord_To_Pixel(*position - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2, 0), drawpoint);
-						drawpoint += Point2D(TacticalRect.X - rect.X, TacticalRect.Y - rect.Y);
+							Point3D * position = &data->Position; // RA2: the position read through the base class pointer in the animation case
+							Point2D drawpoint;
+							TacticalMap->Coord_To_Pixel(Coord(*position) - Coord(CELL_LEPTON_W / 2, CELL_LEPTON_H / 2, 0), drawpoint); // RA2: the position is copied into a Coord before the subtraction
+							drawpoint += TacticalRect.Top_Left() - rect.Top_Left(); // RA2: as above
 
-						int brightness = NORMAL_LIGHT;
-						if (!anim->IsUseNormalLight) {
-							brightness = Map[(Coord)*position].Brightness;
-						}
+							int brightness = NORMAL_LIGHT;
+							if (!anim->IsUseNormalLight) {
+								brightness = Map[(Coord)*position].Brightness;
+							}
 
-						ConvertClass * animconvert;
-						if (converter != NULL && anim->IsShouldUseCellDrawer) {
-							animconvert = (ConvertClass *)converter;
-						} else {
-							animconvert = AnimDrawer;
-						}
+							ConvertClass * animconvert;
+							if (converter != NULL && anim->IsShouldUseCellDrawer) {
+								animconvert = (ConvertClass *)converter;
+							} else {
+								animconvert = AnimDrawer;
+							}
 
-						int zadjust = data->Records[record].ZAdjust;
+							int zadjust = data->Records[record].ZAdjust;
 
-						if (anim->IsFlat) {
-							Draw_Shape(*LogicalSurface, *animconvert, shape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZGRAD), NULL, zadjust - TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z) - 2, ZGRAD_GROUND, brightness);
-						} else {
-							Draw_Shape(*LogicalSurface, *animconvert, shape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZGRAD), NULL, zadjust - TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z) - 2, ZGRAD_90DEG, brightness);
+							if (anim->IsFlat) {
+								Draw_Shape(*LogicalSurface, *animconvert, shape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZGRAD), NULL, zadjust - TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z) - 2, ZGRAD_GROUND, brightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
+							} else {
+								Draw_Shape(*LogicalSurface, *animconvert, shape, shapenum, drawpoint, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA|SHAPE_ZGRAD), NULL, zadjust - TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z) - 2, ZGRAD_90DEG, brightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
+							}
 						}
 					}
 				}
@@ -489,15 +513,14 @@ void Draw_Fogged_Objects(Rect const & rect)
 			 * Draw a fogged smudge.
 			 */
 			case RTTI_SMUDGE: {
-				Point2D point;
-				point.X = data->BoundingRect.X - TacticalMap->TacPixelX + TacticalRect.X + ISO_TILE_PIXEL_W / 2 - rect.X;
-				point.Y = data->BoundingRect.Y - TacticalMap->TacPixelY + TacticalRect.Y - rect.Y;
+				Point2D point = data->BoundingRect.Top_Left() - Point2D(TacticalMap->TacPixelX, TacticalMap->TacPixelY) + (TacticalRect.Top_Left() + Point2D(ISO_TILE_PIXEL_W / 2, 0)) - rect.Top_Left(); // RA2: the point built from the corners of the rectangles
 
 				ShapeSet const * shape = (ShapeSet const *)SmudgeTypes[data->Smudge]->Get_Image_Data();
 				if (shape != NULL) {
-					Coord * position = &data->Position;
+					Point3D * position = &data->Position; // RA2: as above, read through the base class pointer
 					CellClass * cellptr = &Map[(Coord)*position];
-					Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, data->SmudgeData, point, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL, -TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z), ZGRAD_90DEG, cellptr->TileBrightness);
+					int brightness = cellptr->TileBrightness; // RA2: the brightness is read into a local first
+					Draw_Shape(*LogicalSurface, *cellptr->Drawer, shape, data->SmudgeData, point, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL, -TacticalMap->Z_Lepton_To_Pixel(((Coord)*position).Z), ZGRAD_90DEG, brightness, NULL, 0, Point2D(0, 0)); // RA2: the last three arguments are passed explicitly
 				}
 				break;
 			}
@@ -604,7 +627,7 @@ HRESULT STDMETHODCALLTYPE FoggedObjectClass::Load(IStream * stream)
 		}
 
 		Cell cell = Get_Cell();
-		int id = cell.As_Int() - RTTI + INT_MAX;
+		int id = Fog_Index_Key(cell, RTTI); // RA2: the index key, not Cell::As_Int
 		FoggedObjectIndex.Add_Index(id, this);
 	}
 	return(result);
