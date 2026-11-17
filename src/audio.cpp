@@ -35,7 +35,7 @@ void Aux_Stream_Pause(void);
 void Aux_Stream_Resume(void);
 void Theme_Suspend(void);
 void Theme_Resume(void);
-void Audio_Worker_Service(void);
+void Process_Mouse_Unthreaded(void); // RA2: 0x007717C0 processes the mouse (wwmouse.cpp); the audio service calls it
 extern AudioSystemMaster * AudioSystemDSD;
 void AudioLoseFocus(void);
 void AudioRegainFocus(void);
@@ -247,7 +247,7 @@ void Audio_Service(void)
 			Sound_Service();
 			Speech_Service();
 			Theme.AI();
-			Audio_Worker_Service();
+			Process_Mouse_Unthreaded(); // RA2: as above
 			AudioServiceLast = now;
 		}
 		AudioServiceBusy = 0;

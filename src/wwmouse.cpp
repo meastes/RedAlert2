@@ -54,6 +54,7 @@
  *   WWMouseClass::Process_Mouse -- Mouse processing callback routine.                         *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
+#define RECT_NONE RECT_NONE_7 // RA2: every use of RECT_NONE in this module, also in the header inlines it expands (shapeset.h), reads the module's own copy at 0x00B2AF20
 #include "always.h"
 
 #include "wwmouse.h"
@@ -84,88 +85,122 @@ bool AllowNegativeY = false;
 
 static HANDLE MouseMutex = NULL; // RA2: a global, not a member
 
+/*
+**	RA2: the mouse is processed by a thread of its own (the O/S timer callback is gone). These
+**	hold the thread's control block, its handle and id, and whether it runs.
+*/
+struct MouseThreadInfoStruct { // RA2: as above
+	int Quit; // RA2: as above
+	int Count; // RA2: as above
+	int Done; // RA2: as above
+	int Unknown_0C; // RA2: as above
+	__int64 Delay; // RA2: as above
+	int Started; // RA2: as above
 
+	void Reset(void) // RA2: as above
+	{
+		Quit = 0; // RA2: as above
+		Done = 0; // RA2: as above
+		Started = 0; // RA2: as above
+		Delay = 16; // RA2: as above
+		Count = 0; // RA2: as above
+	}
+};
 
+static MouseThreadInfoStruct MouseThreadInfo; // RA2: as above
+static HANDLE MouseThread = NULL; // RA2: as above
+static DWORD MouseThreadID = 0; // RA2: as above
+static int MouseThreadActive = 0; // RA2: as above
 
+const Rect RECT_NONE_7(0, 0, 0, 0); // RA2: this module holds its own copy of RECT_NONE, at 0x00B2AF20 (its initializer is the first function of the module, 0x007717A0)
 
 
 /***********************************************************************************************
- * WWMouseClass::~WWMouseClass -- Destructor for mouse handler object.                         *
+ * Process_Mouse_Unthreaded -- Process the mouse from the caller's thread.                     *
  *                                                                                             *
- *    This will remove the mouse handler object from being processed. It returns the mouse     *
- *    back to O/S control.                                                                     *
- *                                                                                             *
- * INPUT:   none                                                                               *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   03/10/1997 JLB : Created.                                                                 *
+ *    This is called by the audio service loop. It processes the mouse only when there is no   *
+ *    mouse thread doing so.                                                                   *
  *=============================================================================================*/
-WWMouseClass::~WWMouseClass(void) // RA2: defined here
+void Process_Mouse_Unthreaded(void) // RA2: the executable's function that audio.cpp calls
 {
-	if (TimerHandle != NULL) {
-		timeKillEvent(TimerHandle);
-		_MousePtr = NULL;
-	}
-	CloseHandle(MouseMutex);
-
-	if (Background != NULL) {
-		delete Background;
-		Background = NULL;
-	}
-
-	if (Alternate != NULL) {
-		delete Alternate;
-		Alternate = NULL;
-	}
-
-	if (SidebarAlternate != NULL) {
-		delete SidebarAlternate;
-		SidebarAlternate = NULL;
+	if (!MouseThreadActive && _MousePtr != NULL) { // RA2: as above
+		_MousePtr->Process_Mouse(); // RA2: as above
 	}
 }
 
 
+/***********************************************************************************************
+ * Start_Mouse_Thread -- Start the thread that processes the mouse.                            *
+ *=============================================================================================*/
+DWORD WINAPI Mouse_Thread(LPVOID parameter); // RA2: as above
 
+void Start_Mouse_Thread(void) // RA2: not in TibSun
+{
+	char buffer[1024]; // RA2: as above
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	if (MouseMutex == NULL) { // RA2: as above
+		MouseMutex = CreateMutex(NULL, FALSE, NULL); // RA2: as above
+	}
+	if (!MouseThreadActive && MouseMutex != NULL) { // RA2: as above
+		MouseThreadInfo.Reset(); // RA2: as above
+		MouseThread = CreateThread(NULL, 0x1000, Mouse_Thread, &MouseThreadInfo, 0, &MouseThreadID); // RA2: as above
+		if (MouseThread != NULL) { // RA2: as above
+			MouseThreadActive = 1; // RA2: as above
+			if (!SetThreadPriority(MouseThread, THREAD_PRIORITY_TIME_CRITICAL)) { // RA2: as above
+				FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL); // RA2: as above
+				DebugString("Unable to change the priority of the mouse thread - %s\n", buffer); // RA2: as above
+				while (!MouseThreadInfo.Done) { // RA2: as above
+					Sleep(0); // RA2: as above
+				}
+				WaitForSingleObject(MouseThread, 5000); // RA2: as above
+				CloseHandle(MouseThread); // RA2: as above
+				MouseThreadActive = 0; // RA2: as above
+			}
+		}
+	}
+}
 
 
 /***********************************************************************************************
- * Callback_Process_Mouse -- Mouse O/S callback function.                                      *
- *                                                                                             *
- *    This routine is called periodically by the operating system. It handles updating the     *
- *    mouse cursor position to match the mouse movement.                                       *
- *                                                                                             *
- * INPUT:   n/a                                                                                *
- *                                                                                             *
- * OUTPUT:  none                                                                               *
- *                                                                                             *
- * WARNINGS:   none                                                                            *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   03/10/1997 JLB : Created.                                                                 *
+ * Mouse_Thread -- The thread procedure that processes the mouse.                              *
  *=============================================================================================*/
-void CALLBACK Callback_Process_Mouse( UINT, UINT, DWORD, DWORD, DWORD  )
+DWORD WINAPI Mouse_Thread(LPVOID parameter) // RA2: not in TibSun
 {
-	if (_MousePtr != NULL) {
-		_MousePtr->Process_Mouse();
+	MouseThreadInfoStruct * info = (MouseThreadInfoStruct *)parameter; // RA2: as above
+
+	info->Started = 1; // RA2: as above
+	info->Done = 0; // RA2: as above
+	while (!info->Quit) { // RA2: as above
+		_MousePtr->Block_Mouse(); // RA2: as above
+		if (_MousePtr != NULL) { // RA2: as above
+			_MousePtr->Process_Mouse(); // RA2: as above
+		}
+		_MousePtr->Unblock_Mouse(); // RA2: as above
+		Sleep((DWORD)info->Delay); // RA2: as above
+		info->Count++; // RA2: as above
+	}
+	info->Done = 1; // RA2: as above
+	return(0); // RA2: as above
+}
+
+
+/***********************************************************************************************
+ * Kill_Mouse_Thread -- Stop the mouse thread and release the mouse mutex.                     *
+ *=============================================================================================*/
+void Kill_Mouse_Thread(void) // RA2: not in TibSun
+{
+	if (MouseThreadActive) { // RA2: as above
+		MouseThreadInfo.Quit = 1; // RA2: as above
+		while (!MouseThreadInfo.Done) { // RA2: as above
+			Sleep(0); // RA2: as above
+		}
+		WaitForSingleObject(MouseThread, 5000); // RA2: as above
+		CloseHandle(MouseThread); // RA2: as above
+		MouseThreadActive = 0; // RA2: as above
+	}
+	if (MouseMutex != NULL) { // RA2: as above
+		CloseHandle(MouseMutex); // RA2: as above
+		MouseMutex = NULL; // RA2: as above
 	}
 }
 
@@ -188,34 +223,79 @@ void CALLBACK Callback_Process_Mouse( UINT, UINT, DWORD, DWORD, DWORD  )
  * HISTORY:                                                                                    *
  *   03/10/1997 JLB : Created.                                                                 *
  *=============================================================================================*/
+
 WWMouseClass::WWMouseClass(Surface * surfaceptr, HWND window) :
 	MouseState(-1), // RA2: no MouseMutex (not in RA2's layout)
 	IsCaptured(false),
 	MouseX(0),
 	MouseY(0),
+	CursorX(0), // RA2: the executable clears the cursor position too
+	CursorY(0), // RA2: as above
 	SurfacePtr(surfaceptr),
 	Window(window),
 	MouseShape(NULL),
 	ShapeNumber(0),
-	ConfiningRect(RECT_NONE),
+	ConfiningRect(RECT_NONE_7), // RA2: this module's own copy of RECT_NONE
 	MouseXHot(0),
 	MouseYHot(0),
 	Background(NULL),
-	SavedRegion(RECT_NONE),
+	SavedRegion(RECT_NONE_7), // RA2: as above
 	Alternate(NULL),
-	AltRegion(RECT_NONE),
+	AltRegion(RECT_NONE_7), // RA2: as above
 	SidebarAlternate(NULL),
-	SidebarAltRegion(RECT_NONE),
-	ConditionalRect(RECT_NONE),
+	SidebarAltRegion(RECT_NONE_7), // RA2: as above
+	ConditionalRect(RECT_NONE_7), // RA2: as above
 	ConditionalState(-1),
 	TimerHandle(0)
 {
-	_MousePtr = this;
-	MouseMutex = CreateMutex(NULL, FALSE, NULL);
-	TimerHandle = timeSetEvent(1000/60, 1, Callback_Process_Mouse, 0, TIME_PERIODIC);
-	Calc_Confining_Rect();
+	Block_Mouse(); // RA2: the executable locks the mouse around the setup; there is no O/S timer callback
+	Calc_Confining_Rect(); // RA2: as above
 	MouseXHot = ConfiningRect.X + (ConfiningRect.Width/2);
 	MouseYHot = ConfiningRect.Y + (ConfiningRect.Height/2);
+	_MousePtr = this; // RA2: as above
+	Unblock_Mouse(); // RA2: as above
+	ShowCursor(FALSE); // RA2: hides the O/S cursor
+}
+
+
+/***********************************************************************************************
+ * WWMouseClass::~WWMouseClass -- Destructor for mouse handler object.                         *
+ *                                                                                             *
+ *    This will remove the mouse handler object from being processed. It returns the mouse     *
+ *    back to O/S control.                                                                     *
+ *                                                                                             *
+ * INPUT:   none                                                                               *
+ *                                                                                             *
+ * OUTPUT:  none                                                                               *
+ *                                                                                             *
+ * WARNINGS:   none                                                                            *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   03/10/1997 JLB : Created.                                                                 *
+ *=============================================================================================*/
+
+WWMouseClass::~WWMouseClass(void) // RA2: defined here
+{
+	Block_Mouse(); // RA2: the executable locks the mouse instead of killing a timer
+	if (_MousePtr == this) { // RA2: as above
+		_MousePtr = NULL; // RA2: as above
+	}
+	Unblock_Mouse(); // RA2: as above
+
+	if (Background != NULL) { // RA2: as above
+		delete Background; // RA2: as above
+		Background = NULL; // RA2: as above
+	}
+
+	if (Alternate != NULL) { // RA2: as above
+		delete Alternate; // RA2: as above
+		Alternate = NULL; // RA2: as above
+	}
+
+	if (SidebarAlternate != NULL) { // RA2: as above
+		delete SidebarAlternate; // RA2: as above
+		SidebarAlternate = NULL; // RA2: as above
+	}
 }
 
 
@@ -240,7 +320,8 @@ void WWMouseClass::Calc_Confining_Rect(void)
 	lr.y = rect.bottom;
 	ClientToScreen(Window, &lr);
 
-	ConfiningRect = Rect(point.x, point.y, lr.x-point.x, lr.y-point.y);
+	Rect confine(point.x, point.y, lr.x-point.x, lr.y-point.y); // RA2: a named temporary (as the executable's source weight shows)
+	ConfiningRect = confine; // RA2: as above
 //	ConfiningRect = Rect(point.x, point.y, lr.x-point.x+1, lr.y-point.y+1);
 	DebugString("Calc_Confining_Rect(%d,%d,%d,%d)\n", point.x, point.y, lr.x-point.x, lr.y-point.y);
 }
