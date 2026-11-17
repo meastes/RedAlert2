@@ -573,8 +573,8 @@ stbuffer,0x0069A1A0,0x0069A430,tibsun,"functions compiled from src/stbuffer.cpp,
 stimer,0x0069A430,0x0069A450,tibsun,"functions compiled from src/stimer.cpp, matched, without gaps; two placed by definition order"
 unk_0069A450,0x0069A450,0x0069ADA0,unknown,code not assigned to a module
 storage,0x0069ADA0,0x0069B010,tibsun,"functions compiled from src/storage.cpp, matched, without gaps; one placed by the gap"
-straw,0x0069B010,0x0069B0C0,tibsun,"functions compiled from src/straw.cpp, matched, without gaps"
-unk_0069B0C0,0x0069B0C0,0x0069C660,unknown,code not assigned to a module
+straw,0x0069B010,0x0069B170,tibsun,"functions compiled from src/straw.cpp, matched, without gaps"
+unk_0069B170,0x0069B170,0x0069C660,unknown,code not assigned to a module
 super,0x0069C660,0x0069ECA0,tibsun,"functions compiled from src/super.cpp, without gaps; matched except ?Discharged@SuperClass@@QAE_N_NABVCell@@@Z and ?Place@SuperClass@@QAEXABVCell@@_N@Z; three placed by the gap"
 unk_0069ECA0,0x0069ECA0,0x0069F000,unknown,code not assigned to a module
 suprtype,0x0069F000,0x0069F8C0,tibsun,"functions compiled from src/suprtype.cpp, matched, without gaps; five placed by the gap; ?Special_From_Name@@YI?AW4SuperWeaponType@@PBD@Z not placed"

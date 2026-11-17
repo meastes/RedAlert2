@@ -6415,6 +6415,10 @@ address,symbol,evidence
 0x0069B010,??1Straw@@UAE@XZ,"compiled from src/straw.cpp, matched"
 0x0069B050,?Get_From@Straw@@UAEXPAV1@@Z,"compiled from src/straw.cpp, matched"
 0x0069B0A0,?Get@Straw@@UAEHPAXH@Z,"compiled from src/straw.cpp, matched"
+0x0069B0C0,??0SubTitle@@QAE@XZ,"compiled from src/straw.cpp, matched"
+0x0069B0F0,??1SubTitle@@QAE@XZ,"compiled from src/straw.cpp, matched"
+0x0069B100,?Set_RGB_Color@SubTitle@@QAEXEEE@Z,"compiled from src/straw.cpp, matched"
+0x0069B120,?Set_Caption@SubTitle@@QAEXPAG@Z,"compiled from src/straw.cpp, matched"
 0x0069B190,?Subtitles_Open@@YIPAVMovieSubtitles@@PBD@Z,"inferred: referenced by matched src/bfiofile2.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x0069B2A0,??1MovieSubtitles@@QAE@XZ,"inferred: referenced by matched src/bfiofile2.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x0069B420,?Process@MovieSubtitles@@QAE_NK@Z,"inferred: referenced by matched src/bfiofile2.cpp (3 references); across all matched code never at another address, and no other symbol here"
@@ -8913,7 +8917,7 @@ address,symbol,evidence
 0x007831F0,__makepath,symbol of VC6 LIBCMT.LIB makepath.obj
 0x00783290,_memmove,"inferred: called as _memmove by matched VC6 LIBCMT.LIB objects (_fptostr.obj, sbheap.obj, w_str.obj) and by matched Tiberian Sun functions (52 call sites); the code section of VC6 LIBCMT.LIB memmove.obj matches here, and at 0x00788CB0, which matched objects call as _memcpy (memcpy.obj has the same code)"
 0x007835C5,_wcsrchr,symbol of VC6 LIBCMT.LIB wcsrchr.obj
-0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (162 references); across all matched code never at another address, and no other symbol here"
+0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (163 references); across all matched code never at another address, and no other symbol here"
 0x00783622,_wcsncpy,symbol of VC6 LIBCMT.LIB wcsncpy.obj
 0x0078365F,_wcscat,symbol of VC6 LIBCMT.LIB wcscat.obj
 0x00783689,_wcscpy,symbol of VC6 LIBCMT.LIB wcscat.obj
