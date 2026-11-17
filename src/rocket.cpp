@@ -16,7 +16,7 @@
 **	no such file; the code is the executable's from 0x0063D8D0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "rocket.h" // RA2: the includes this file needs
 #include "fastmath.h" // RA2: the includes this file needs
@@ -36,9 +36,7 @@
 #include "tracker.h" // RA2: the includes this file needs
 #include "veteran.h" // RA2: the includes this file needs
 #include "voc.h" // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x0063D8D0)
 
-const Rect RocketRect(0, 0, 0, 0); // RA2: 0x00AB6858; a rectangle nothing in this module reads (its initializer is the one at 0x0063DAA0, after those of the geometry constants)
 
 char const * RocketTakeoffAnimName = "V3TAKOFF"; // RA2: 0x007EE804; the animation played where the rocket leaves its launcher
 char const * RocketTrailAnimName = "V3TRAIL"; // RA2: 0x007EE808; the animation left behind the flying rocket

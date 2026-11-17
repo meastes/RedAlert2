@@ -54,7 +54,6 @@
  *   WWMouseClass::Process_Mouse -- Mouse processing callback routine.                         *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
-#define RECT_NONE RECT_NONE_7 // RA2: every use of RECT_NONE in this module, also in the header inlines it expands (shapeset.h), reads the module's own copy at 0x00B2AF20
 #include "always.h"
 
 #include "wwmouse.h"
@@ -112,7 +111,6 @@ static HANDLE MouseThread = NULL; // RA2: as above
 static DWORD MouseThreadID = 0; // RA2: as above
 static int MouseThreadActive = 0; // RA2: as above
 
-const Rect RECT_NONE_7(0, 0, 0, 0); // RA2: this module holds its own copy of RECT_NONE, at 0x00B2AF20 (its initializer is the first function of the module, 0x007717A0)
 
 
 /***********************************************************************************************
@@ -235,16 +233,16 @@ WWMouseClass::WWMouseClass(Surface * surfaceptr, HWND window) :
 	Window(window),
 	MouseShape(NULL),
 	ShapeNumber(0),
-	ConfiningRect(RECT_NONE_7), // RA2: this module's own copy of RECT_NONE
+	ConfiningRect(RECT_NONE), // RA2: this module's own copy of RECT_NONE
 	MouseXHot(0),
 	MouseYHot(0),
 	Background(NULL),
-	SavedRegion(RECT_NONE_7), // RA2: as above
+	SavedRegion(RECT_NONE), // RA2: as above
 	Alternate(NULL),
-	AltRegion(RECT_NONE_7), // RA2: as above
+	AltRegion(RECT_NONE), // RA2: as above
 	SidebarAlternate(NULL),
-	SidebarAltRegion(RECT_NONE_7), // RA2: as above
-	ConditionalRect(RECT_NONE_7), // RA2: as above
+	SidebarAltRegion(RECT_NONE), // RA2: as above
+	ConditionalRect(RECT_NONE), // RA2: as above
 	ConditionalState(-1),
 	TimerHandle(0)
 {

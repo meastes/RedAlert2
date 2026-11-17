@@ -33,7 +33,6 @@
 #include "stringtable.h" // RA2: the includes this file needs
 #include "skirmish.h"
 
-const Rect SkirmishRect(0, 0, 0, 0); // RA2: 0x00ABCD90; a rectangle nothing in this module reads (its initializer is the one at 0x00682600)
 
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after the rectangle)
 

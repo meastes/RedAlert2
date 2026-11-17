@@ -43,7 +43,6 @@
 #include "stringtable.h" // RA2: as above
 #include "ldprgmgr.h" // RA2: as above
 
-Rect LoadProgressRect(0, 0, 0, 0); // RA2: 0x00A6E758; a rectangle nothing in this module reads (its initializer is the one at 0x00535720)
 
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after the rectangle, 0x00535740 to 0x005358F0)
 

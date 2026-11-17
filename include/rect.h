@@ -297,6 +297,5 @@ TRect<T> const Intersect(TRect<T> const & rect1, TRect<T> const & rect2)
 */
 typedef TRect<int> Rect;
 
-/// Made extern: as a const definition in this header, every module created its own
-/// instance of it, which bloated the binary.
-extern const Rect RECT_NONE;
+// RA2: defined here (internal linkage), so every module including this header holds its own copy and initializer
+const Rect RECT_NONE(0, 0, 0, 0); // RA2: as above

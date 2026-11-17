@@ -17,7 +17,7 @@
 **	executable's from 0x005B6C30.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "vector.h" // RA2: the includes this file needs
 #include "multiplayer.h" // RA2: the includes this file needs
@@ -42,10 +42,8 @@
 #include "dbgprint.h" // RA2: the includes this file needs
 #include <windows.h> // RA2: the includes this file needs
 #undef LoadString // RA2: as above
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x005B6A40)
 #include "rect.h" // RA2: the includes this file needs
 
-const Rect RECT_NONE_3(0, 0, 0, 0); // RA2: a rectangle nothing in this module reads, at 0x00A719B0 (its initializer is the one at 0x005B6C10, after those of the geometry constants)
 
 extern int __fastcall Clear_ComboBox(HWND list); // RA2: 0x006007F0
 extern bool Is_Current_Channel_Tournament(void); // RA2: 0x0073C370 (wonline.cpp)

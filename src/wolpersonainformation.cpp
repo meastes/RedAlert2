@@ -31,7 +31,6 @@
 #include <stdlib.h> // RA2: as above
 #include <wchar.h> // RA2: as above
 
-Rect ProfileRect(0, 0, 0, 0); // RA2: 0x00B26408, a rectangle nothing in this file reads (its initializer is the first one, at 0x00738450)
 
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after the rectangle, from 0x00738470)
 

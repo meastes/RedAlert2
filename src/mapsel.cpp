@@ -38,7 +38,6 @@
 #include "surface.h" // RA2: as above
 #include "theme.h" // RA2: as above
 #include "timer.h" // RA2: as above
-const Rect MapSelectRect(0, 0, 0, 0); // RA2: 0x00A70A70; a rectangle nothing in this module reads (its initializer is the first one, at 0x0058F320, before those of the geometry constants)
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after MapSelectRect, from 0x0058F340)
 
 #define RA2_SOURCE "D:\\Ra2\\MapSel.CPP" // RA2: the path the executable passes with each lookup

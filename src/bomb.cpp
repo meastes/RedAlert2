@@ -15,8 +15,8 @@
 **	TibSun has no such file; the code is the executable's from 0x00435970.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
 #define INCLUDE_COM // RA2: IStream
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "_map.h" // RA2: the includes this file needs
 #include "_rules.h" // RA2: the includes this file needs
@@ -40,11 +40,9 @@
 #include "techtype.h" // RA2: the includes this file needs
 #include "vector.h" // RA2: the includes this file needs
 #include "voc.h" // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00435970)
 
 extern "C" const CLSID CLSID_BombClass; // RA2: the class identifier GetClassID returns
 
-Rect BombRect(0, 0, 0, 0); // RA2: 0x0084EB98; a rectangle nothing in this module reads (its initializer is the one at 0x00435B3E)
 
 DynamicVectorClass<BombClass *> Bombs; // RA2: 0x0084EB78; every BombClass object, added by its constructor and removed by its destructor
 

@@ -110,7 +110,7 @@ class ThemeClass
 		bool Is_Allowed(ThemeType index) const;
 		bool Is_Normal(ThemeType index) const; // RA2
 		char const * INI_Name(ThemeType index) const; // RA2
-		bool Is_Regular(ThemeType theme) const {return(theme != THEME_NONE && Themes[theme]->Normal);}
+		// RA2: TibSun's inline Is_Regular (no caller; the executable's equivalent is Is_Normal above) is removed
 		char const * Base_Name(ThemeType index) const;
 		wchar_t const * Full_Name(ThemeType index) const; // RA2: wide
 		int Max_Themes(void) const {return(Themes.Count());}

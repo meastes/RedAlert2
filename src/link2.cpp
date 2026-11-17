@@ -15,7 +15,7 @@
 **	link2.cpp); the code is the executable's from 0x005393E0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "linetrail.h" // RA2: as above
 #include "dsurface.h" // RA2: as above
@@ -28,9 +28,7 @@
 #include "_rect.h" // RA2: as above
 #include "_surface.h" // RA2: as above
 #include "_tactica.h" // RA2: as above
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00539170)
 
-const Rect LineTrailRect(0, 0, 0, 0); // RA2: 0x00A6E918; a rectangle nothing in this module reads (its initializer is the one at 0x00539340, after those of the geometry constants)
 
 
 template<> inline bool DynamicVectorClass<LineTrail *>::Add(LineTrail * const & object) // RA2: this unit's Add holds the new length in a variable before the Resize call (the sum is formed in the register that held Length)

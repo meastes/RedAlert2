@@ -16,7 +16,7 @@
 **	planning mode ends. TibSun has no such file; the code is the executable's from 0x006101B0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include <string.h> // RA2: the includes this file needs
 #include "convert.h" // RA2: the includes this file needs
@@ -44,7 +44,6 @@
 #include "_surface.h" // RA2: the includes this file needs
 #include "dbgprint.h" // RA2: the includes this file needs
 #include "planmgr.h" // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006101B0)
 #include "mission.h" // RA2: the includes this file needs
 #include "cell.h" // RA2: the includes this file needs
 #include "_map.h" // RA2: Map, the mouse of the tactical view
@@ -55,7 +54,6 @@ extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30
 extern void __fastcall Enqueue_Event(EventClass * event); // RA2: 0x0062E6E0 (queue.cpp); puts the event on the list to run
 extern bool __fastcall Add_Outgoing_Event(EventClass event); // RA2: 0x0062E670 (queue.cpp); sends the event to the other players, false when the list is full
 
-Rect PlanningRect(0, 0, 0, 0); // RA2: 0x00A76670; a rectangle nothing in this module reads (its initializer is the one at 0x00610380)
 
 DynamicVectorClass<EventClass *> PlanningTokenClass::Events; // RA2: 0x00A76648; the planned events held until the end of planning mode
 DynamicVectorClass<PlanningNodeClass *> PlanningNodeClass::QueuedNodes; // RA2: 0x00A76758; the nodes queued to be rebuilt

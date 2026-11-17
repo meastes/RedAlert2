@@ -17,7 +17,7 @@
 */
 
 #define INCLUDE_COM
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "spawnmgr.h" // RA2: the includes this file needs
 #include "aircraft.h" // RA2: the includes this file needs
@@ -36,9 +36,7 @@
 #include "techno.h" // RA2: the includes this file needs
 #include "weapon.h" // RA2: the includes this file needs
 #include <new.h> // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006894A0)
 
-const Rect SpawnManagerRect(0, 0, 0, 0); // RA2: 0x00ABCFC0; a rectangle nothing in this module reads (its initializer is the one at 0x00689670, after those of the geometry constants)
 
 DynamicVectorClass<SpawnManagerClass *> SpawnManagers; // RA2: 0x00ABD028; every spawn manager in the game
 

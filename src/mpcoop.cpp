@@ -16,7 +16,7 @@
 **	from 0x005A2610 (the static initializers of the geometry constants) to 0x005A6DD0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "vector.h" // RA2: as above
 #include "mpcoop.h" // RA2: as above
@@ -55,9 +55,7 @@
 #include <string.h> // RA2: as above
 #include <stdlib.h> // RA2: as above
 #include "rect.h" // RA2: as above
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x005A2610)
 
-const Rect RECT_NONE_4(0, 0, 0, 0); // RA2: a rectangle nothing in this module reads, at 0x00A70CC0 (its initializer is the last one, at 0x005A27DE, after those of the geometry constants)
 
 extern DynamicVectorClass<Cell> Build_Start_Waypoint_List(char); // RA2: 0x0065FFF0 (scenario.cpp), the starting cells of the scenario
 extern int LobbyObserverSlot; // RA2: 0x007E6D90 (netdlg2.cpp), the lobby slot of the observer

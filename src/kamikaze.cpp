@@ -17,7 +17,7 @@
 */
 
 #define INCLUDE_COM // RA2: as above
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "aircraft.h" // RA2: the includes this file needs
 #include "airctype.h" // RA2: the includes this file needs
@@ -30,9 +30,7 @@
 #include "_map.h" // RA2: the includes this file needs
 #include "techno.h" // RA2: the includes this file needs
 #include <new.h> // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00531360)
 
-const Rect KamikazeRect(0, 0, 0, 0); // RA2: 0x00A6E450; a rectangle nothing in this module reads (its initializer is the one at 0x00531530, after those of the geometry constants)
 
 KamikazeClass Kamikazes; // RA2: 0x00A6E428; the tracker of the missiles flying at their targets (initializer 0x00531550, destructor 0x005315C0)
 

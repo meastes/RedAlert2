@@ -25,7 +25,6 @@
 #include "worlddom.h" // RA2: as above
 #include "playerprofile.h" // RA2: as above
 
-Rect WolStartRect(0, 0, 0, 0); // RA2: 0x00B26480, a rectangle nothing in this file reads (its initializer is the first one, at 0x0073A0F0)
 
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after the rectangle, from 0x0073A110)
 

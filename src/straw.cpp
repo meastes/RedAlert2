@@ -188,4 +188,3 @@ void SubTitle::Set_Caption(wchar_t * string) // RA2: 0x0069B120
 	}
 }
 
-Rect SubtitleUnusedRect(0, 0, 0, 0); // RA2: 0x00ABD740; a rectangle nothing reads (its initializer is the one at 0x0069B170)

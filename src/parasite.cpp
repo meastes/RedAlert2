@@ -17,7 +17,7 @@
 */
 
 #define INCLUDE_COM
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "parasite.h" // RA2: the includes this file needs
 #include "anim.h" // RA2: the includes this file needs
@@ -39,11 +39,9 @@
 #include "scenario.h" // RA2: the includes this file needs
 #include "veteran.h" // RA2: the includes this file needs
 #include <new.h> // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00605F30)
 
 static void __fastcall Make_Wakes(FootClass * victim, Coord coord); // RA2: 0x00606E10
 
-const Rect ParasiteRect(0, 0, 0, 0); // RA2: 0x00A76420; a rectangle nothing in this module reads (its initializer is the one at 0x00606100, after those of the geometry constants)
 
 DynamicVectorClass<ParasiteClass *> Parasites; // RA2: 0x00A76430; every parasite in the game (its initializer is the one at 0x00606120, its destructor the one at 0x00606160)
 

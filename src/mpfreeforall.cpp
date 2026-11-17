@@ -75,6 +75,5 @@ bool FreeForAll::IsSkirmishAllowed(void)
 	return(true);
 }
 
-const Rect RECT_NONE_2(0, 0, 0, 0);
 
 #include "geometry.h"

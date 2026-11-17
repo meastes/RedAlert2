@@ -16,7 +16,7 @@
 **	across it (type 2). TibSun has no such file; the code is the executable's from 0x006351B0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include <math.h> // RA2: as above
 #include "radbeam.h" // RA2: as above
@@ -28,7 +28,6 @@
 #include "session.h" // RA2: as above
 #include "tactical.h" // RA2: as above
 #include "xsurface.h" // RA2: as above
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006351B0)
 
 namespace FPSCounter { extern unsigned CurrentFrameRate; } // RA2: 0x00A6EB1C, declared as RA2's code uses it
 
@@ -36,7 +35,6 @@ const double DEGREES_TO_RADIANS = M_PI / 180.0; // RA2: 0x007EE398; read from me
 const double CIRCLE_DEGREES = 360.0; // RA2: a constant of this module (0x007A8898), the shortest span of a pulse
 const double HALF_CIRCLE_DEGREES = 180.0; // RA2: a constant of this module (0x007A88A0), the span of a swing
 
-const Rect RECT_NONE_RADBEAM(0, 0, 0, 0); // RA2: a rectangle nothing in this module reads, at 0x00AB64B0 (its initializer is the one at 0x00635380, after those of the geometry constants)
 
 DynamicVectorClass<RadBeam *> RadBeam::Array; // RA2: 0x00AB64E0; the live beams (its initializer is the one at 0x006353A0)
 

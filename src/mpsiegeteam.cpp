@@ -15,7 +15,6 @@
 #include <stddef.h>
 #include "stringtable.h"
 
-const Rect RECT_NONE_2(0, 0, 0, 0);
 
 #include "geometry.h"
 

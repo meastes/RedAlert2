@@ -16,7 +16,7 @@
 **	is the executable's from 0x0063ED70.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include <string.h> // RA2: the includes this file needs
 #include "vector.h" // RA2: the includes this file needs
@@ -34,7 +34,6 @@
 #include "win.h" // RA2: MainWindow
 #include "wsproto.h" // RA2: the includes this file needs
 #include "_wsproto.h" // RA2: PacketTransport
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x0063ED70)
 
 extern char * Wide_To_Narrow(wchar_t const * text); // RA2: 0x006FA120 (wonline.cpp), converts to a static buffer
 

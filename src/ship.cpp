@@ -18,7 +18,7 @@
 **	a wake behind a moving ship, and no chase of an infantry navigation target.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: as above
 
 #include "ship.h" // RA2: the ship locomotor has its own header
@@ -42,9 +42,7 @@
 #include "wave.h" // RA2: as above
 #include "spawnmgr.h" // RA2: Start_Of_Move asks the spawn manager about launching spawns
 
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00675410)
 
-const Rect RECT_NONE_6(0, 0, 0, 0); // RA2: a rectangle nothing in this module reads, at 0x00AB9198 (its initializer, 0x006755DE, follows those of the geometry constants)
 
 EXTERN_C const CLSID CLSID_ShipLocomotion; // RA2: 0x007A1FF0, the ship locomotor's class id (next to CLSID_HoverLocomotion 0x007A1F80)
 

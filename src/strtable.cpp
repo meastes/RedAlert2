@@ -17,8 +17,8 @@
 **	and back. TibSun has no such file; the code is the executable's from 0x006F8DD0.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes and the rectangle below, as its constants take their initializers (0x006F8BE0) before this module's own
 #define _WCTYPE_INLINE_DEFINED // RA2: the executable calls the library's iswspace (0x00784AA8); the inline version in wchar.h would call iswctype instead
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include <string.h> // RA2: as above
 #include <stdlib.h> // RA2: as above
@@ -34,9 +34,7 @@
 #include "mapgen.h" // RA2: as above
 #include "dbgprint.h" // RA2: as above
 #include "stringtable.h" // RA2: as above
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006F8BE0)
 
-const Rect StrTableRect(0, 0, 0, 0); // RA2: 0x00AC1358; a rectangle nothing in this module reads (its initializer is the last one, at 0x006F8DB0, after those of the geometry constants)
 
 int MaxLabelLen; // RA2: 0x00AD0428; the longest label name read so far
 char const * StringFileName; // RA2: 0x00AD0434; the file LoadFile was asked for, which Set_Jabber_Option and Set_Str_Option load again

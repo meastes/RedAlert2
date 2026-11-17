@@ -54,7 +54,6 @@
 #include "_rules.h" // RA2: the includes this file needs
 #include "rules.h" // RA2: the includes this file needs
 #include "dbgprint.h" // RA2: the includes this file needs
-Rect BeaconRect(0, 0, 0, 0); // RA2: 0x0084E8A0; a rectangle nothing in this module reads (its initializer is the one at 0x0042D770)
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x0042D770)
 
 extern Rect const __fastcall Intersect(Rect const & bounding_rect, Rect const & draw_rect, int * x, int * y); // RA2: 0x0041FDF0, the compiled copy of rect.h's Intersect that the callers do not expand

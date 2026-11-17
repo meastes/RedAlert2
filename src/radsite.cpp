@@ -16,8 +16,8 @@
 **	TibSun has no such file; the code is the executable's from 0x00637030.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
 #define INCLUDE_COM // RA2: IStream
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include "_map.h" // RA2: the includes this file needs
 #include "_rules.h" // RA2: the includes this file needs
@@ -34,9 +34,7 @@
 #include "swizzle.h" // RA2: the includes this file needs
 #include "tracker.h" // RA2: the includes this file needs
 #include "vector.h" // RA2: the includes this file needs
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x00637030)
 
-Rect RadSiteRect(0, 0, 0, 0); // RA2: 0x00AB65B8; a rectangle nothing in this module reads (its initializer follows those of the geometry constants, at 0x006371FE)
 
 extern "C" const CLSID CLSID_RadSiteClass; // RA2: the class identifier GetClassID returns
 

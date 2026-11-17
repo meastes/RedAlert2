@@ -16,7 +16,7 @@
 **	TibSun has no such file; the code is the executable's from 0x005B9C50.
 */
 
-#define RA2_GEOMETRY_H // RA2: geometry.h follows the includes, as its constants take their initializers after those of the other headers
+#include "geometry.h" // RA2: the geometry constants come before the rectangle of rect.h (the executable initializes them first)
 #include "always.h" // RA2: the includes this file needs
 #include <string.h> // RA2: the includes this file needs
 #include "_rules.h" // RA2: the includes this file needs
@@ -32,10 +32,8 @@
 #include "wsproto.h" // RA2: the includes this file needs
 #include "wspudp.h" // RA2: the includes this file needs
 #include "firewall.h" // RA2: FirewallHelperClass
-#include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x005B9C50)
 #include "rect.h" // RA2: the includes this file needs
 
-const Rect RECT_NONE_4(0, 0, 0, 0); // RA2: a rectangle nothing in this module reads, at 0x00A71AC0 (its initializer is the one at 0x005B9E1E, after those of the geometry constants)
 
 extern int ManglerCount; // RA2: 0x00B2AC34, how many mangler servers the WOL server list gave
 extern int ManglerIndex; // RA2: 0x00B2AC38, the one picked from them at random

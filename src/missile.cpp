@@ -20,7 +20,6 @@
 #include "mouse.h" // RA2: as above
 #include "velocity.h" // RA2: as above
 
-const Rect MissileRect(0, 0, 0, 0); // RA2: 0x00A70BD8 (the first initializer, 0x00593680, clears it); a rectangle nothing in this module reads
 
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized after MissileRect, from 0x005936A0)
 
