@@ -486,7 +486,9 @@ unk_00634AB0,0x00634AB0,0x00635440,unknown,code not assigned to a module
 radbeam,0x00635440,0x00636130,source,"functions compiled from src/radbeam.cpp, without gaps; matched except ?Compute_Pulse_Step@RadBeam@@QAEXXZ; ?Compute_Swing_Step@RadBeam@@QAEXXZ not placed"
 unk_00636130,0x00636130,0x00636830,unknown,code not assigned to a module
 radio,0x00636830,0x00636F90,tibsun,"functions compiled from src/radio.cpp, matched, without gaps; two placed by the gap"
-unk_00636F90,0x00636F90,0x00638310,unknown,code not assigned to a module
+unk_00636F90,0x00636F90,0x006372A0,unknown,code not assigned to a module
+radsite,0x006372A0,0x00637F90,source,"functions compiled from src/radsite.cpp, matched, without gaps; four placed by the gap"
+unk_00637F90,0x00637F90,0x00638310,unknown,code not assigned to a module
 ramfile,0x00638310,0x00638610,tibsun,"functions compiled from src/ramfile.cpp, matched, without gaps; two placed by definition order; two placed by the gap"
 unk_00638610,0x00638610,0x006386F0,unknown,code not assigned to a module
 random,0x006386F0,0x00638AC0,tibsun,"functions compiled from src/random.cpp, matched, without gaps"
