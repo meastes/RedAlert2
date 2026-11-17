@@ -387,21 +387,6 @@ void __fastcall Inflate_Rect(Rect & rect, int amount); // RA2: 0x6F1B00 (progres
 namespace OwnerDraw { // RA2: as above
 
 /*
-**	RA2: blends a colour into a pixel by alpha (0-255) per channel through the colour masks.
-*/
-inline unsigned short __cdecl Blend_Color(unsigned short pixel, unsigned short color, unsigned char alpha) // RA2: as above
-{
-	static unsigned int color_alpha; // RA2: as above
-	static unsigned int pixel_alpha; // RA2: as above
-	color_alpha = alpha; // RA2: as above
-	pixel_alpha = 255 - alpha; // RA2: as above
-	unsigned short red = (((pixel & Red_Green_Masks[0]) * pixel_alpha) + ((color & Red_Green_Masks[0]) * color_alpha)) >> 8 & Red_Green_Masks[0]; // RA2: as above
-	unsigned short green = (((pixel & Red_Green_Masks[1]) * pixel_alpha) + ((color & Red_Green_Masks[1]) * color_alpha)) >> 8 & Red_Green_Masks[1]; // RA2: as above
-	unsigned short blue = (((pixel & Blue_Mask) * pixel_alpha) + ((color & Blue_Mask) * color_alpha)) >> 8; // RA2: as above
-	return((unsigned short)(red | green | blue)); // RA2: as above
-}
-
-/*
 **	RA2: the record of a subclassed window, or NULL.
 */
 inline WinData * __cdecl Get_Record(HWND window) // RA2: as above

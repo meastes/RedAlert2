@@ -699,7 +699,7 @@ bool SurfaceCacheClass::DrawMasked(Rect const & rect, Surface & tosurface, Surfa
 					int count = image_width - right_clip - src_x;
 					do {
 						if (*mptr != 0) {
-							*dptr = OD_Blend_Color(*dptr, *sptr, *mptr);
+							*dptr = OwnerDraw::Blend_Color(*dptr, *sptr, *mptr);
 						}
 						dptr++;
 						mptr++;
@@ -714,7 +714,7 @@ bool SurfaceCacheClass::DrawMasked(Rect const & rect, Surface & tosurface, Surfa
 				int count = image_width - right_clip - src_x;
 				do {
 					if (*mptr != 0) {
-						*dptr = OD_Blend_Color(*dptr, pal16[(unsigned char)mptr[source_delta]], *mptr);
+						*dptr = OwnerDraw::Blend_Color(*dptr, pal16[(unsigned char)mptr[source_delta]], *mptr);
 					}
 					dptr++;
 					mptr++;

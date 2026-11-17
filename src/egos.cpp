@@ -630,8 +630,8 @@ void Show_Credits (void) // RA2: 0x4B37C0 (TibSun: Show_Who_Was_Responsible)
 				xidx = step * fade_y;
 				yidx = step * (VideoModeHeight - fade_y - 1);
 				for (fade_x = 0; fade_x < VideoModeWidth; fade_x++) {
-					(bsurf + xidx)[fade_x] = OD_Blend_Color((bsurf + xidx)[fade_x], 0, alpha);
-					(bsurf + yidx)[fade_x] = OD_Blend_Color((bsurf + yidx)[fade_x], 0, alpha);
+					(bsurf + xidx)[fade_x] = OwnerDraw::Blend_Color((bsurf + xidx)[fade_x], 0, alpha); // RA2: as above
+					(bsurf + yidx)[fade_x] = OwnerDraw::Blend_Color((bsurf + yidx)[fade_x], 0, alpha); // RA2: as above
 				}
 			}
 			CreditsSurface->Unlock(); // RA2: as above

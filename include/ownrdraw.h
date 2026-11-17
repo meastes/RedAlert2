@@ -311,23 +311,27 @@ extern COLORREF ODColorUnused1;
 #define OD_DRAW_CHAR_FLAG_VERTICAL_CENTER 4
 
 
-extern unsigned short ODRComponentMask;
-extern unsigned short ODGComponentMask;
-extern unsigned short ODBComponentMask;
+namespace OwnerDraw { extern unsigned short Red_Green_Masks[]; } // RA2: 0xA763DC, the red and green channel masks of the 16-bit pixel format (two entries; ownrdraw.cpp defines them)
+namespace OwnerDraw { extern unsigned short Blue_Mask; } // RA2: 0xA763E0, the blue channel mask
 
-inline unsigned short OD_Blend_Color(unsigned short pixel, unsigned short color, unsigned char alpha)
+namespace OwnerDraw { // RA2: the helper belongs to OwnerDraw (ownrdraw.cpp, egos.cpp and srfcache.cpp expand it)
+
+/*
+**	RA2: blends a colour into a pixel by alpha (0-255) per channel through the colour masks.
+*/
+inline unsigned short __cdecl Blend_Color(unsigned short pixel, unsigned short color, unsigned char alpha) // RA2: as above
 {
-	static unsigned blend_color_alpha;
-	static unsigned blend_pixel_alpha;
-
-	blend_color_alpha = alpha;
-	blend_pixel_alpha = 255 - alpha;
-
-	unsigned short r = ((((pixel & ODRComponentMask) * blend_pixel_alpha) + ((color & ODRComponentMask) * blend_color_alpha)) >> 8) & ODRComponentMask;
-	unsigned short g = ((((pixel & ODGComponentMask) * blend_pixel_alpha) + ((color & ODGComponentMask) * blend_color_alpha)) >> 8) & ODGComponentMask;
-	unsigned short b = (((pixel & ODBComponentMask) * blend_pixel_alpha) + ((color & ODBComponentMask) * blend_color_alpha)) >> 8;
-	return((unsigned short)(r | g | b));
+	static unsigned int color_alpha; // RA2: as above
+	static unsigned int pixel_alpha; // RA2: as above
+	color_alpha = alpha; // RA2: as above
+	pixel_alpha = 255 - alpha; // RA2: as above
+	unsigned short red = (((pixel & Red_Green_Masks[0]) * pixel_alpha) + ((color & Red_Green_Masks[0]) * color_alpha)) >> 8 & Red_Green_Masks[0]; // RA2: as above
+	unsigned short green = (((pixel & Red_Green_Masks[1]) * pixel_alpha) + ((color & Red_Green_Masks[1]) * color_alpha)) >> 8 & Red_Green_Masks[1]; // RA2: as above
+	unsigned short blue = (((pixel & Blue_Mask) * pixel_alpha) + ((color & Blue_Mask) * color_alpha)) >> 8; // RA2: as above
+	return((unsigned short)(red | green | blue)); // RA2: as above
 }
+
+} // RA2: as above
 
 
 /*
