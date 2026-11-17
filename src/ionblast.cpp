@@ -70,7 +70,8 @@ Point2D Spiral_Index_To_Point(int index);
 /// </summary>
 IonBlastClass::IonBlastClass(Coord coord) :
 	Lifetime(0),
-	Position(coord)
+	Position(coord), // RA2: as above
+	DisableIonBeam(0) // RA2: the constructor also clears the word at +0x10
 {
 	IonBlasts.Add(this);
 }
@@ -99,167 +100,119 @@ void IonBlastClass::AI(void)
 		return;
 	}
 
-	Point2D point;
-	if (TacticalMap->Coord_To_Pixel(Position, point)) {
-		if (Lifetime == 0) {
-			Map.ScreenY = 10;
+	if (DisableIonBeam != 1) { // RA2: a blast with the word at +0x10 set only ages; the body below sits one level deeper
+		Point2D point; // RA2: as above
+		TacticalMap->Coord_To_Pixel(Position, point); // RA2: the result is not tested and Map.ScreenY is not touched
+
+		if (Lifetime == 0) { // RA2: as above
+			if (Map[Position].Land_Type() == LAND_WATER) { // RA2: as above
+				new AnimClass(Rule->SplashList[Rule->SplashList.Count() - 1], Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: as above
+			} else {
+				new AnimClass(Rule->IonBlast, Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: as above
+			}
+			new AnimClass(Rule->IonBeam, Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: as above
+
+			if (Map[Position].IsUnderBridge) { // RA2: as above
+				Coord coord; // RA2: declared where it is used
+				coord.X = Position.X; // RA2: as above
+				coord.Z = BRIDGE_LEPTON_HEIGHT + Position.Z; // RA2: as above
+				coord.Y = Position.Y; // RA2: as above
+				Explosion_Damage(coord, Rule->IonCannonDamage, NULL, Rule->IonCannonWarhead, true); // RA2: as above
+			}
+
+			Explosion_Damage(Position, Rule->IonCannonDamage, NULL, Rule->IonCannonWarhead, true); // RA2: as above
+			Combat_Lighting(Position, Rule->IonCannonDamage, Rule->IonCannonWarhead, 0, 0); // RA2: the five argument form
 		}
-	}
 
-	if (Lifetime == 0) {
-		Coord coord;
+		Cell center(Position); // RA2: as above
 
-		if (Map[Position].Land_Type() == LAND_WATER) {
-			new AnimClass(Rule->SplashList[Rule->SplashList.Count() - 1], Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0);
-		} else {
-			new AnimClass(Rule->IonBlast, Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0);
-		}
-		new AnimClass(Rule->IonBeam, Position + Coord(0,0,5), 0, 1, (ShapeFlags_Type)(SHAPE_CENTER|SHAPE_WIN_REL), 0);
+		for (int x_offset = -3; x_offset < 4; x_offset++) { // RA2: as above
+			for (int y_offset = -3; y_offset < 4; y_offset++) { // RA2: as above
 
-		if (Map[Position].IsUnderBridge) {
-			coord.X = Position.X;
-			coord.Z = BRIDGE_LEPTON_HEIGHT + Position.Z;
-			coord.Y = Position.Y;
-			Explosion_Damage(coord, Rule->IonCannonDamage, NULL, Rule->IonCannonWarhead, true);
-		}
+				FootClass * occupier = (FootClass *)Map[center + Cell(x_offset, y_offset)].Cell_Occupier(); // RA2: as above
 
-		Explosion_Damage(Position, Rule->IonCannonDamage, NULL, Rule->IonCannonWarhead, true);
-		Combat_Lighting(Position, Rule->IonCannonDamage, Rule->IonCannonWarhead, 0, 0); // RA2: the five argument form
-	}
+				while (occupier != NULL) { // RA2: as above
 
-	Cell center(Position);
+					if (occupier->Fetch_RTTI() == RTTI_INFANTRY || occupier->Fetch_RTTI() == RTTI_UNIT) { // RA2: the exe tests the RTTI (15 then 1), not dynamic_cast
 
-	for (int x_offset = -3; x_offset < 4; x_offset++) {
-		for (int y_offset = -3; y_offset < 4; y_offset++) {
+						Point2D occupier_point; // RA2: as above
+						TacticalMap->Coord_To_Pixel(occupier->Get_Coord(), occupier_point); // RA2: as above
 
-			FootClass * occupier = (FootClass *)Map[center + Cell(x_offset, y_offset)].Cell_Occupier();
+						Point2D diff = occupier_point - point; // RA2: as above
+						int screen_dist = (int)fastmath::sqrt((double)diff.Y * diff.Y + (double)diff.X * diff.X) + 8; // RA2: Y squared first, written out instead of Point2D::Length
 
-			while (occupier != NULL) {
+						if (screen_dist < 128) { // RA2: as above
 
-				if (dynamic_cast<InfantryClass *>((ObjectClass *)occupier) != NULL || dynamic_cast<UnitClass *>((ObjectClass *)occupier) != NULL) {
+							char * displacement = (char *)BlastSurfaces[Lifetime]->Lock(Point2D(screen_dist + 128, 64)); // RA2: as above
 
-					Point2D occupier_point;
-					TacticalMap->Coord_To_Pixel(occupier->Get_Coord(), occupier_point);
+							if (*displacement > 0) { // RA2: as above
 
-					Point2D diff = occupier_point - point;
-					int screen_dist = diff.Length() + 8;
+								occupier->Set_Speed(0.0); // RA2: no weapons factory exemption; the blast always stops the unit
 
-					if (screen_dist < 128) {
-
-						char * displacement = (char *)BlastSurfaces[Lifetime]->Lock(Point2D(screen_dist + 128, 64));
-
-						if (*displacement > 0) {
-
-							/*
-							 * Units talking to a weapons factory (i.e. currently driving
-							 * out of one) are not stopped by the blast wave.
-							 */
-							bool stop = true;
-							if (occupier->Contact_With_Whom() != NULL) {
-								if (occupier->Contact_With_Whom()->Fetch_RTTI() == RTTI_BUILDING) {
-									if (((BuildingClass *)occupier->Contact_With_Whom())->Class->IsWeaponsFactory) {
-										stop = false;
-									}
-								}
+								int draw_offset = Spiral_Index_To_Point(*displacement).Y; // RA2: as above
+								occupier->IonBlastYDrawOffset = 2 * draw_offset; // RA2: as above
 							}
 
-							/*
-							 * Likewise, units standing on a weapons factory's exit cells
-							 * are not stopped, so they cannot pile up on the bib.
-							 */
-							bool on_exit_cell = false;
-							BuildingClass * building = Map[occupier->Get_Coord()].Cell_Building();
-							if (building != NULL && building->Class->IsWeaponsFactory) {
+							if (occupier->Techno_Type_Class()->Voxel.VoxLib != NULL // RA2: as above
+								&& !occupier->Techno_Type_Class()->Voxel.VoxLib->Load_Failed() // RA2: as above
+								&& *displacement >= 0) { // RA2: as above
 
-								Cell building_cell(building->Get_Coord());
-								Cell occupier_cell(occupier->Get_Coord());
+								/*
+								 * Rock the voxel unit away from the blast: build the vector
+								 * from the unit to the blast center, rotate it into the unit's
+								 * facing frame, and scale it by the slope of the ripple at the
+								 * unit's distance from the blast. The wave height there is
+								 * height/decay, so its slope comes out by the quotient rule.
+								 */
+								Coord blast_coord = Position; // RA2: as above
+								Coord occupier_coord = occupier->Get_Coord(); // RA2: as above
 
-								short cell_dx = occupier_cell.X - building_cell.X;
-								short cell_dy = occupier_cell.Y - building_cell.Y;
+								Vector3 to_blast((float)(blast_coord.X - occupier_coord.X), (float)(occupier_coord.Y - blast_coord.Y), (float)(blast_coord.Z - occupier_coord.Z)); // RA2: as above
+								Vector3 flat = to_blast; // RA2: as above
 
-								if (cell_dx == 0) {
-									if (cell_dy == 1) {
-										on_exit_cell = true;
+								double facing_rad = occupier->PrimaryFacing.Current().As_Radian(); // RA2: as above
+								float facing_sin = (float)fastmath::sin(facing_rad); // RA2: as above
+								float facing_cos = (float)fastmath::cos(facing_rad); // RA2: as above
+
+								float blast_dist = fastmath::sqrt((double)to_blast.X * to_blast.X + (double)to_blast.Y * to_blast.Y + (double)to_blast.Z * to_blast.Z); // RA2: written out instead of Vector3::Length
+
+								if (fabs(blast_dist) > 0.00002) { // RA2: as above
+
+									flat.Z = 0.0; // RA2: as above
+
+									double flat_len = fastmath::sqrt(flat.Y * flat.Y + flat.X * flat.X); // RA2: as above
+
+									Vector3 normal; // RA2: as above
+									if (flat_len != 0.0) { // RA2: as above
+										normal = flat / flat_len; // RA2: as above
+									} else {
+										normal = flat; // RA2: as above
 									}
-								} else if (cell_dx == 2) {
-									if (cell_dy == 1) {
-										on_exit_cell = true;
+
+									float forwards = normal.X * facing_cos + normal.Y * facing_sin; // RA2: as above
+									float sideways_zsin = -(normal.Z * facing_sin); // RA2: as above
+									double sideways_zcos = normal.Z * facing_cos; // RA2: as above
+									double sideways_y = normal.X * facing_sin - normal.Y * facing_cos; // RA2: as above
+									float sideways = (float)fastmath::sqrt(sideways_zsin * sideways_zsin + sideways_zcos * sideways_zcos + sideways_y * sideways_y); // RA2: as above
+									if (fabs(facing_cos * forwards - facing_sin * sideways - normal.X) > 0.0002 // RA2: as above
+										|| fabs(facing_cos * sideways + facing_sin * forwards - normal.Y) > 0.0002) { // RA2: as above
+										sideways = -sideways; // RA2: as above
 									}
-								} else if (cell_dx == 3) {
-									if (cell_dy == 1) {
-										on_exit_cell = true;
-									}
+
+									double decay = blast_dist + WaveAmplitudeFalloff; // RA2: as above
+									double height = (fastmath::sin((blast_dist - (double)Lifetime * WavePhaseSpeed + 38.0) * WaveFrequency) * 3.5 + 3.0) * WaveAmplitudeFalloff; // RA2: as above
+									double phase_cos = fastmath::cos((blast_dist - (double)Lifetime * WavePhaseSpeed + 38.0) * WaveFrequency); // RA2: as above
+									double slope = ((phase_cos * WaveFrequency * WaveAmplitudeFalloff * 3.5) * decay - height) / (decay * decay); // RA2: as above
+
+									occupier->AngleRotatedSideways = (float)(sideways * slope * WaveRockScale); // RA2: as above
+									occupier->AngleRotatedForwards = (float)(-(forwards * slope * WaveRockScale)); // RA2: as above
 								}
-							}
-
-							if (!on_exit_cell && stop) {
-								occupier->Set_Speed(0.0);
-							}
-
-							int draw_offset = Spiral_Index_To_Point(*displacement).Y;
-							occupier->IonBlastYDrawOffset = 2 * draw_offset;
-						}
-
-						if (occupier->Techno_Type_Class()->Voxel.VoxLib != NULL
-							&& !occupier->Techno_Type_Class()->Voxel.VoxLib->Load_Failed()
-							&& *displacement >= 0) {
-
-							/*
-							 * Rock the voxel unit away from the blast: build the vector
-							 * from the unit to the blast center, rotate it into the unit's
-							 * facing frame, and scale it by the slope of the ripple at the
-							 * unit's distance from the blast. The wave height there is
-							 * height/decay, so its slope comes out by the quotient rule.
-							 */
-							Coord blast_coord = Position;
-							Coord occupier_coord = occupier->Get_Coord();
-
-							Vector3 to_blast((float)(blast_coord.X - occupier_coord.X), (float)(occupier_coord.Y - blast_coord.Y), (float)(blast_coord.Z - occupier_coord.Z));
-							Vector3 flat = to_blast;
-
-							double facing_rad = occupier->PrimaryFacing.Current().As_Radian();
-							float facing_sin = (float)fastmath::sin(facing_rad);
-							float facing_cos = (float)fastmath::cos(facing_rad);
-
-							float blast_dist = to_blast.Length();
-
-							if (fabs(blast_dist) > 0.00002) {
-
-								flat.Z = 0.0;
-
-								double flat_len = fastmath::sqrt(flat.Y * flat.Y + flat.X * flat.X);
-
-								Vector3 normal;
-								if (flat_len != 0.0) {
-									normal = flat / flat_len;
-								} else {
-									normal = flat;
-								}
-
-								float forwards = normal.X * facing_cos + normal.Y * facing_sin;
-								float sideways_zsin = -(normal.Z * facing_sin);
-								double sideways_zcos = normal.Z * facing_cos;
-								double sideways_y = normal.X * facing_sin - normal.Y * facing_cos;
-								float sideways = (float)fastmath::sqrt(sideways_zsin * sideways_zsin + sideways_zcos * sideways_zcos + sideways_y * sideways_y);
-
-								if (fabs(facing_cos * forwards - facing_sin * sideways - normal.X) > 0.0002
-									|| fabs(facing_cos * sideways + facing_sin * forwards - normal.Y) > 0.0002) {
-									sideways = -sideways;
-								}
-
-								double decay = blast_dist + WaveAmplitudeFalloff;
-								double height = (fastmath::sin((blast_dist - (double)Lifetime * WavePhaseSpeed + 38.0) * WaveFrequency) * 3.5 + 3.0) * WaveAmplitudeFalloff;
-								double phase_cos = fastmath::cos((blast_dist - (double)Lifetime * WavePhaseSpeed + 38.0) * WaveFrequency);
-								double slope = ((phase_cos * WaveFrequency * WaveAmplitudeFalloff * 3.5) * decay - height) / (decay * decay);
-
-								occupier->AngleRotatedSideways = (float)(sideways * slope * WaveRockScale);
-								occupier->AngleRotatedForwards = (float)(-(forwards * slope * WaveRockScale));
 							}
 						}
 					}
-				}
 
-				occupier = (FootClass *)occupier->Next;
+					occupier = (FootClass *)occupier->Next; // RA2: as above
+				}
 			}
 		}
 	}

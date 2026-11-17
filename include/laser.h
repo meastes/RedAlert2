@@ -24,6 +24,7 @@ class LaserDrawClass : public StageClass
 		~LaserDrawClass(void);
 
 		void Draw_It(void);
+		void Draw_House_Color(void); // RA2: 0x00533C80, the drawing routine of a beam with IsHouseColor set
 		void AI(void);
 
 		static void Update_All(void);
