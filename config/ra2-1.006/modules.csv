@@ -524,7 +524,7 @@ scroll,0x006695E0,0x0066AC60,tibsun,"functions compiled from src/scroll.cpp, mat
 unk_0066AC60,0x0066AC60,0x0066CA70,unknown,code not assigned to a module
 serialed,0x0066CA70,0x0066E0A0,tibsun,"functions compiled from src/serialed.cpp, matched, without gaps"
 unk_0066E0A0,0x0066E0A0,0x0066E290,unknown,code not assigned to a module
-session,0x0066E290,0x00673090,tibsun,"functions compiled from src/session.cpp, without gaps; matched except ?Read@SessionOptionsClass@@QAEXAAVCCINIClass@@PBDHH@Z and ?Read_Scenario_Descriptions@SessionClass@@QAEXXZ and ??0MultiMission@@QAE@PBDPBG0_N0HH@Z and ?Init_Fixed_Alliances@SessionClass@@QAEXXZ; two placed by the gap"
+session,0x0066E290,0x00673090,tibsun,"functions compiled from src/session.cpp, without gaps; matched except ??0MultiMission@@QAE@PBDPBG0_N0HH@Z; two placed by the gap"
 unk_00673090,0x00673090,0x00674BF0,unknown,code not assigned to a module
 sha,0x00674BF0,0x00675000,tibsun,"functions compiled from src/sha.cpp, matched, without gaps"
 unk_00675000,0x00675000,0x00675020,unknown,code not assigned to a module
