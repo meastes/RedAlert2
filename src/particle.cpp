@@ -627,7 +627,7 @@ void ParticleClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 		return; // RA2: returns before drawing
 	}
 	if (Options.DetailLevel != 0 || Class->BehavesLike != BEHAVIOR_SMOKE && Class->BehavesLike != BEHAVIOR_SPARK) {
-		if (Debug_Map || MainWindow == 0 || !Scen->Special.IsFogOfWar || !Map.Is_Fogged((Coord const &)PositionCoord)) { // RA2: ArmageddonMode, not Debug_Map
+		if (Debug_Map || MainWindow == 0 || !Scen->Special.IsFogOfWar || !Map.Is_Fogged((Coord const &)PositionCoord)) { // RA2: the map-reveal debug flag is tested first
 
 			if (Class->BehavesLike != BEHAVIOR_SPARK && Class->BehavesLike != BEHAVIOR_RAILGUN) {
 				int height_offset = -15 - TacticalMap->Z_Lepton_To_Pixel(Height);

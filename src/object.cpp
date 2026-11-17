@@ -129,9 +129,23 @@
 #include "tactical.h"
 #include "tag.h"
 #include "tagtype.h"
+#include "terrtype.h" // RA2: Unlimbo reads TerrainTypeClass::IsTiberiumSpawn
 #include "tracker.h"
 
 namespace Unsorted { extern bool ArmageddonMode; }
+
+void Set_Type_Select_Mode(unsigned mode); // RA2: 0x006F6780 (uicmnds.cpp, not in main yet), the select-by-type mode; 0 leaves it
+
+class LineTrail { // RA2: a line trail object (link2.cpp in YR); only what object.cpp uses is declared
+public: // RA2: as above
+	LineTrail(void); // RA2: 0x005393E0, called by Unlimbo (meastes' name; the object is 528 bytes)
+	void Release_Owner(void); // RA2: 0x005394F0, called by Detach_All; YR's name Release_Owner (meastes: Clear_Owner)
+	void Set_Decrement(int value); // RA2: 0x00539510, called by Unlimbo; YR's name
+
+	RGBClass Color; // RA2: +0x00, set by Unlimbo
+	ObjectClass * Owner; // RA2: +0x04, the object that draws the trail
+	char Rest[520]; // RA2: the other members (not used here); fills the 528 bytes that Unlimbo allocates
+}; // RA2: as above
 
 
 
@@ -294,8 +308,22 @@ bool ObjectClass::Is_Type_Named(char const * name) const // RA2: not in TibSun, 
  *   02/07/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
 void ObjectClass::AI(void)
-{
+{ // RA2: as above
 	assert(this != NULL);
+
+	/*
+	**	RA2: the object's looping ambient sound and its custom sound are kept playing here.
+	*/
+	if (!IsInLimbo) { // RA2: as above
+		if (Class_Of() && Class_Of()->AmbientSound != -1) { // RA2: as above
+			Coord current = Position; // RA2: as above
+			VocClass::PlayAt(Class_Of()->AmbientSound, current, &AmbientSoundController); // RA2: as above
+		} // RA2: as above
+		if (CustomSound != -1) { // RA2: as above
+			Coord current = Position; // RA2: as above
+			VocClass::PlayAt(CustomSound, current, &CustomSoundController); // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
 
 	/*
 	**	Falling logic is handled here.
@@ -310,26 +338,26 @@ void ObjectClass::AI(void)
 			Per_Cell_Process(PCP_END);
 
 			Shorten_Attached_Anims(this);
-		}
+		} // RA2: as above
 
 		if (!IsInLimbo) {
 			if (IsAnimAttached) {
 				Riser.Z -= 1;
-				Riser.Z = MAX(Riser.Z, PARACHUTE_MAX_FALL_RATE);
-			} else {
+				Riser.Z = MAX(Riser.Z, Rule->ParachuteMaxFallRate); // RA2: the limits are the rules' ParachuteMaxFallRate and NoParachuteMaxFallRate
+			} else { // RA2: as above
 				Riser.Z -= GRAVITY;
-				Riser.Z = MAX(Riser.Z, NO_PARACHUTE_MAX_FALL_RATE);
-			}
+				Riser.Z = MAX(Riser.Z, Rule->NoParachuteMaxFallRate); // RA2: as above
+			} // RA2: as above
 
 			if (layer != In_Which_Layer()) {
 				Map.Submit(this);
-			}
+			} // RA2: as above
 
 			if (!IsFalling) {
 				if (IsToExplode && Strength > 0) {
 					int damage = Strength;
 					Take_Damage(damage, 0, Rule->C4Warhead, NULL, true, true);
-				}
+				} // RA2: as above
 
 				if (RTTI == RTTI_ANIM) {
 					AnimClass * anim = (AnimClass *)this;
@@ -339,15 +367,16 @@ void ObjectClass::AI(void)
 						anim->Set_Stage(FACING_COUNT * anim->Class->RunningFrames + 1);
 						if (Map[Get_Coord()].Land_Type() == LAND_WATER) {
 							new AnimClass(Rule->SplashList[0], Get_Coord() + Coord(0, 0, 3));
-						}
-					}
-				}
-			}
-		} else {
+						} // RA2: as above
+					} // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} else { // RA2: as above
 			Map.Remove(this);
-		}
-	}
-}
+		} // RA2: as above
+	} // RA2: as above
+} // RA2: as above
+
 
 
 /// <summary>
@@ -1032,24 +1061,22 @@ void ObjectClass::Unselect(void)
  *   07/23/1995 JLB : Adds to head or tail depending on leader type flag.                      *
  *=============================================================================================*/
 bool ObjectClass::Select(void)
-{
-	assert(this != NULL);
-
-	if (!Debug_Map && (IsInLimbo || IsSelected || !Class_Of()->IsSelectable)) {
+{ // RA2: as above
+	if (!Debug_Map && (IsInLimbo || IsSelected || !CanBeSelected())) { // RA2: the virtual CanBeSelected, not Class_Of()->IsSelectable
 		return(false);
-	}
+	} // RA2: as above
 
 	TechnoClass * techno = Dynamic_Cast<TechnoClass *>(this);
 	if (!Debug_Map && Can_Player_Move() && techno && techno->IsALoaner) {
 		return(false);
-	}
+	} // RA2: as above
 
 	/*
 	**	Don't allow selection of object when in building placement mode.
 	*/
 	if (Map.PendingObject) {
 		return(false);
-	}
+	} // RA2: as above
 
 	/*
 	**	If selecting an object of a different house than the player's, make sure that
@@ -1060,19 +1087,26 @@ bool ObjectClass::Select(void)
 		HouseClass * oldhptr = CurrentObject[0]->Owner_HouseClass();
 		if (oldhptr->Is_Player_Control() != tryhptr->Is_Player_Control() || !oldhptr->Is_Player_Control()) {
 			Unselect_All();
-		}
-	}
+		} // RA2: as above
+	} // RA2: as above
 
-	if (Is_Techno() && ((TechnoTypeClass *)Class_Of())->IsLeader) {
+	bool is_techno; // RA2: the flag test is kept in a local (meastes' form)
+	if (this != NULL) { // RA2: as above
+		is_techno = AbstractFlags & 1; // RA2: the flag test is inline (bit 0 of the abstract flags)
+	} // RA2: as above
+	if (this != NULL && is_techno && ((TechnoTypeClass *)Class_Of())->IsLeader) { // RA2: as above
 		CurrentObject.Add_Head(this);
-	} else {
+		Set_Type_Select_Mode(0); // RA2: selecting also leaves the select-by-type mode (0x006F6780); the executable repeats the call on both paths
+	} else { // RA2: as above
 		CurrentObject.Add(this);
-	}
+		Set_Type_Select_Mode(0); // RA2: as above
+	} // RA2: as above
 
 	IsSelected = true;
 
-	return(true);
-}
+	return(true); // RA2: as above
+} // RA2: as above
+
 
 
 /// <summary>
@@ -1357,7 +1391,7 @@ bool ObjectClass::Limbo(void)
  *   12/23/1994 JLB : Sets object strength.                                                    *
  *=============================================================================================*/
 bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
-{
+{ // RA2: as above
 	assert(this != NULL);
 
 	if (GameActive && IsInLimbo && !IsDown) {
@@ -1369,7 +1403,7 @@ bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
 			Coord ucoord = coord;
 			if (objclass != NULL) {
 				ucoord = objclass->Coord_Fixup(coord);
-			}
+			} // RA2: as above
 			PositionCoord = ucoord;
 
 			if (Mark(MARK_DOWN)) {
@@ -1381,13 +1415,13 @@ bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
 					*/
 					if (In_Which_Layer() != LAYER_NONE) {
 						Map.Submit(this);
-					}
+					} // RA2: as above
 
 					if (objclass != NULL) {
 
-						if (objclass->IsSentient && (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH || Fetch_ID() != -2)) {
-							Logic.Submit(this);
-						}
+						if (objclass->IsSentient && (Fetch_RTTI() != RTTI_TERRAIN || (Fetch_RTTI() == RTTI_TERRAIN && ((TerrainTypeClass const *)objclass)->IsTiberiumSpawn)) && (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH || Fetch_ID() != -2)) { // RA2: a terrain object is only logic-driven when its type spawns Tiberium
+							Logic.Submit(this, false); // RA2: both arguments are given
+						} // RA2: as above
 
 						if (objclass->AlphaImageData != NULL) {
 
@@ -1404,28 +1438,39 @@ bool ObjectClass::Unlimbo(Coord const & coord, Dir256 )
 							if (!ScenarioInit) {
 								Point2D dpoint = point - Point2D(TacticalMap->TacPixelX, TacticalMap->TacPixelY);
 								TacticalMap->Register_Dirty_Area(Rect(dpoint, alpha->Get_Width(), alpha->Get_Height()), true);
-							}
-						}
-					}
+							} // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
 
-					if (dynamic_cast<TechnoClass *>(this) != NULL && objclass != NULL) {
-						Cell const * list = Class_Of()->Occupy_List();
-						if (list != NULL) {
-							while (*list != REFRESH_EOL) {
-								Map[*list + coord.As_Cell()].Trigger_Veins();
-								list++;
-							}
-						}
-					}
-				}
-				return(true);
-			} else {
+					/*
+					**	RA2: an object whose type has a line trail gets one, coloured by the rules'
+					**	override or else by its type, and owned by this object.
+					*/
+					if (Class_Of()->UseLineTrail) { // RA2: as above
+						LineTrailer = new LineTrail(); // RA2: as above
+						if (LineTrailer != NULL) { // RA2: as above
+							RGBClass override_color = Rule->LineTrailColorOverride; // RA2: as above
+							if (override_color == RGBClass(0, 0, 0)) { // RA2: as above
+								RGBClass color = Class_Of()->LineTrailColor; // RA2: as above, through a local
+								LineTrailer->Color = color; // RA2: as above
+							} else { // RA2: as above
+								RGBClass color = Rule->LineTrailColorOverride; // RA2: as above, through a local
+								LineTrailer->Color = color; // RA2: as above
+							} // RA2: as above
+							LineTrailer->Set_Decrement(Class_Of()->LineTrailColorDecrement); // RA2: as above
+							LineTrailer->Owner = this; // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
+				} // RA2: as above
+				return(true); // RA2: as above
+			} else { // RA2: as above
 				IsInLimbo = true;
-			}
-		}
-	}
+			} // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
 	return(false);
-}
+} // RA2: as above
+
 
 
 /***********************************************************************************************
@@ -1482,8 +1527,11 @@ void ObjectClass::Detach(AbstractClass const * target, bool all)
  *   09/24/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
 void ObjectClass::Detach_All(bool all)
-{
-	assert(this != NULL);
+{ // RA2: as above
+	if (LineTrailer != NULL) { // RA2: the line trail lets go of this object first
+		LineTrailer->Release_Owner(); // RA2: as above
+		LineTrailer = NULL; // RA2: as above
+	} // RA2: as above
 
 	HouseClass * owner = Owner_HouseClass();
 	bool sensed = false;
@@ -1495,30 +1543,33 @@ void ObjectClass::Detach_All(bool all)
 
 	if (all) {
 		unselect = true;
-	} else {
-		if (Is_Techno()) {
-			if (((TechnoClass *)this)->Is_Sensed_By_Player()) {
-				sensed = true;
-			}
-		}
+	} else { // RA2: as above
+		bool techno; // RA2: the executable keeps the flag test in a local (meastes' form)
+		if (this != NULL) { // RA2: as above
+			techno = AbstractFlags & 1; // RA2: the flag test is inline (bit 0 of the abstract flags), not a call of Is_Techno
+		} // RA2: as above
+		if (this != NULL && techno && ((TechnoClass *)this)->Is_Sensed_By_Player()) { // RA2: as above
+			sensed = true; // RA2: as above
+		} // RA2: as above
 		if (!(owner != NULL && (owner->Is_Player_Control() || sensed))) {
 			unselect = true;
-		}
-	}
+		} // RA2: as above
+	} // RA2: as above
 
 	if (unselect) {
 		Unselect();
-	}
+	} // RA2: as above
 
 	if (Map.Object_To_Follow() == this) {
 		Map.Set_To_Follow(NULL);
-	}
+	} // RA2: as above
 
 	/*
 	**	Remove from targeting computers.
 	*/
 	Detach_This_From_All(this, all);
-}
+} // RA2: as above
+
 
 
 /***********************************************************************************************
@@ -1874,31 +1925,63 @@ bool ObjectClass::Revealed(HouseClass * house)
  *   02/07/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
 bool ObjectClass::Paradrop(Coord const & coord)
-{
-	assert(this != NULL);
+{ // RA2: as above
+	if (Map.In_Local_Radar(coord)) { // RA2: the drop point must lie inside the local radar rectangle
+		IsFalling = true; // RA2: as above
+		CellClass * cell = &Map[coord]; // RA2: as above
+		if (cell != NULL) { // RA2: as above
+			if (cell->IsUnderBridge) { // RA2: a bridge deck cell: the object lands on the bridge...
+				IsOnBridge = true; // RA2: as above
+				if (!cell->IsBridgeTraversable) { // RA2: ...but only where the deck can be walked on
+					return(false); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
 
-	IsFalling = true;
-	if (Unlimbo(coord, DIR_S)) {
-		AnimClass * anim = NULL;
+			/*
+			**	A techno object needs a cell its type can actually move onto.
+			*/
+			bool techno; // RA2: the flag test is kept in a local (meastes' form)
+			if (this != NULL) { // RA2: as above
+				techno = AbstractFlags & 1; // RA2: the flag test is inline (bit 0 of the abstract flags)
+			} // RA2: as above
+			bool clear = true; // RA2: as above
+			if (this != NULL && techno) { // RA2: as above
+				MZoneType zone = Techno_Type_Class()->MZone; // RA2: as above
+				Cell position = Cell(coord.X / 256, coord.Y / 256); // RA2: as above
+				clear = cell->Is_Clear_To_Move(Techno_Type_Class()->Speed, false, false, Map.Get_Cell_Zone(position, zone, IsOnBridge), zone, -1, true); // RA2: as above
+			} // RA2: as above
 
-		PositionCoord = coord;
+			if (clear) { // RA2: as above
+				if (Unlimbo(coord, DIR_S)) { // RA2: as above
+					Set_Coord(coord); // RA2: Set_Coord, not a plain assignment of PositionCoord
 
-		if (RTTI == RTTI_BULLET) {
-			anim = new AnimClass(Rule->BombParachute, coord);
-		} else {
-			anim = new AnimClass(Rule->Parachute, coord);
-		}
+					AnimClass * anim = NULL; // RA2: as above
+					if (Fetch_RTTI() == RTTI_BULLET) { // RA2: as above
+						anim = new AnimClass(Rule->BombParachute, coord, 0, 1, ShapeFlags_Type(SHAPE_WIN_REL | SHAPE_CENTER), 0); // RA2: all the arguments are given
+					} else { // RA2: as above
+						Coord above = coord; // RA2: the parachute opens 75 leptons above the drop point
+						above.Z += 75; // RA2: as above
+						anim = new AnimClass(Rule->Parachute, above, 0, 1, ShapeFlags_Type(SHAPE_WIN_REL | SHAPE_CENTER), 0); // RA2: as above
+					} // RA2: as above
 
-		/*
-		**	If the animation was created, then attach it to this object.
-		*/
-		if (anim != NULL) {
-			anim->Attach_To(this);
-		}
-		return(true);
-	}
+					/*
+					**	If the animation was created, then attach it to this object.
+					*/
+					if (anim != NULL) { // RA2: as above
+						anim->Attach_To(this); // RA2: as above
+						if (Fetch_RTTI() != RTTI_BULLET) { // RA2: a parachutist is drawn in its owner's colours and the cell's light
+							anim->AlternativeDrawer = (ConvertClass *)GetRemapColour(); // RA2: as above
+							anim->AlternativeBrightness = Get_Cell_Ptr()->Brightness; // RA2: as above
+						} // RA2: as above
+					} // RA2: as above
+					return(true); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
 	return(false);
-}
+} // RA2: as above
+
 
 
 /***********************************************************************************************

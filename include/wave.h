@@ -114,6 +114,8 @@ class WaveClass : public ObjectClass
 		 */
 		bool IsWaveActive;
 
+		bool IsWaveFading; // RA2: set once the wave has outgrown a tenth of its length or lost its tether; the trailing edge is only drawn in while it is set (byte at +0x119)
+
 		/*
 		 * This is the number of game frames the sonic wave has left to live, counting down
 		 * from 100. It doubles as the phase of the ripple, so the distortion appears to

@@ -160,7 +160,7 @@ class BuildingTypeClass : public TechnoTypeClass
 		*/
 		RTTIType ToBuild;
 
-		Point3D TargetCoordOffset; // RA2: +0xC48
+		Coord TargetCoordOffset; // RA2: +0xC48, a Coord: Read_INI (0x459A00) copies it as a block like ExitCoordinate
 
 		/*
 		**	For building that produce ground units (infantry and vehicles), there is a default

@@ -821,7 +821,6 @@ void WaveClass::Draw_Laser(Point2D const & point, Rect const & cliprect)
 
 		unsigned short * buffer = (unsigned short *)LogicalSurface->Lock();
 		if (buffer != NULL) {
-
 			int top = cliprect.Y;
 			int bottom = cliprect.Y + cliprect.Height;
 			int left = cliprect.X;
@@ -833,37 +832,25 @@ void WaveClass::Draw_Laser(Point2D const & point, Rect const & cliprect)
 			Rasterize_Polygon(WaveShape, DrawData);
 
 			if (DrawData.Points != NULL) {
-
 				int ystart = yoff + DrawData.BaseY;
 				int yend = MIN(DrawData.Count + ystart - 1, cliprect.Y + cliprect.Height);
 
-				unsigned short base_z = DepthBuffer->Get_Scroll_Delta(zpix);
-				unsigned short depth = base_z - ystart - 2;
+				unsigned short base_z = DepthBuffer->Get_Scroll_Delta(ystart); // RA2: the executable takes the depth from the first row, clamps with MIN/MAX, and walks the wrapped spans with a counted do-while
+				unsigned short depth = base_z - zpix - 2; // RA2: as above
 				unsigned int zoff = DepthBuffer->Get_Buffer_Offset(Point2D(0, ystart - TacticalRect.Y));
+				int y; // RA2: as above
 				int surfwidth = LogicalSurface->Get_Width();
-				int zwidth = DepthBuffer->Get_Buffer_Width();
 
-				if (zoff + 2 * (surfwidth + (yend - ystart + 1) * zwidth) < DepthBuffer->Get_Buffer_End()) {
-
-					/*
-					 * The wave lies entirely within the depth buffer, so the depth buffer
-					 * can be walked with a running cursor.
-					 */
+				if (zoff + 2 * (surfwidth + (yend - ystart + 1) * DepthBuffer->Get_Buffer_Width()) < DepthBuffer->Get_Buffer_End()) { // RA2: as above
+					int zwidth = DepthBuffer->Get_Buffer_Width(); // RA2: as above
 					int stride = LogicalSurface->Stride() >> 1;
 					unsigned short * scrptr = &buffer[ystart * stride];
 					Point2D * points = DrawData.Points;
 
-					for (int y = ystart; y <= yend; y++) {
+					for (y = ystart; y <= yend; y++) { // RA2: as above
 						if (y >= top && y <= bottom) {
-
-							int xstop = right;
-							if (points->Y + xoff < right) {
-								xstop = points->Y + xoff;
-							}
-							int xstart = points->X + xoff;
-							if (xstart <= left) {
-								xstart = left;
-							}
+							int xstop = MIN(points->Y + xoff, right); // RA2: as above
+							int xstart = MAX(points->X + xoff, left); // RA2: as above
 
 							zoff += 2 * xstart;
 							scrptr += xstart;
@@ -885,38 +872,29 @@ void WaveClass::Draw_Laser(Point2D const & point, Rect const & cliprect)
 						depth--;
 						points++;
 					}
-
 				} else {
-
-					/*
-					 * The wave extends beyond the end of the depth buffer, so every pixel
-					 * must fetch its (wrapped) depth buffer position the slow way.
-					 */
 					int i = 0;
-					for (int y = ystart; y <= yend; y++) {
+					for (y = ystart; y <= yend; y++, i++) { // RA2: as above
 						if (y >= cliprect.Y + 2 && y <= cliprect.Y + cliprect.Height - 2) {
-
-							int xstop = DrawData.Points[i].Y + xoff;
-							if (xstop >= cliprect.Width + cliprect.X - 2) {
-								xstop = cliprect.Width + cliprect.X - 2;
-							}
-							int xstart = cliprect.X + 2;
-							if (DrawData.Points[i].X + xoff > cliprect.X + 2) {
-								xstart = DrawData.Points[i].X + xoff;
-							}
+							Point2D const & span = DrawData.Points[i]; // RA2: as above
+							int xstop = MIN(span.Y + xoff, cliprect.Width + cliprect.X - 2); // RA2: as above
+							int xstart = MAX(span.X + xoff, cliprect.X + 2); // RA2: as above
 
 							unsigned short * scrptr = &buffer[xstart + y * (LogicalSurface->Stride() >> 1)];
-							int ypos = y - TacticalRect.Y;
+							Point2D zpos(xstart, y - TacticalRect.Y); // RA2: as above
 
-							for (int x = xstart; x <= xstop; x++) {
-								if (*(unsigned short *)DepthBuffer->Get_Buffer_Offset(Point2D(x, ypos)) > depth) {
-									Set_Laser_Pixel(scrptr, LaserEC);
-								}
-								scrptr++;
+							if (zpos.X <= xstop) { // RA2: as above
+								int remaining = xstop - zpos.X + 1; // RA2: as above
+								do { // RA2: as above
+									if (*(unsigned short *)DepthBuffer->Get_Buffer_Offset(zpos) > depth) { // RA2: as above
+										Set_Laser_Pixel(scrptr, LaserEC); // RA2: as above
+									}
+									zpos.X++; // RA2: as above
+									scrptr++; // RA2: as above
+								} while (--remaining != 0); // RA2: as above
 							}
 						}
 						depth--;
-						i++;
 					}
 				}
 			}
@@ -930,6 +908,7 @@ void WaveClass::Draw_Laser(Point2D const & point, Rect const & cliprect)
 		}
 	}
 }
+
 
 
 
@@ -1114,7 +1093,8 @@ void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & targe
 
 	start_coord = Lerp(target_coord, start_coord, WaveLengthFactor[Type]);
 
-	int distance2d = ((TPoint2D<int> &)start_coord - (TPoint2D<int> &)end_coord).Length(); /// 2D distance (X,Y only)
+	TPoint3D<float> planar_delta(start_coord.X - end_coord.X, start_coord.Y - end_coord.Y, 0); // RA2: the 2D delta is a float vector, built before the length is taken
+	int distance2d = (int)fastmath::sqrt((double)planar_delta.Y * planar_delta.Y + (double)planar_delta.X * planar_delta.X); // RA2: the length is taken inline from the float components, Y first
 
 	/// Set initial coordinates
 	StartCoord = start_coord;
@@ -1145,11 +1125,9 @@ void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & targe
 	start_left.Z 	= start_left.X 	* dz / distance2d_f + start_coord.Z;
 	start_right.Z 	= start_right.X * dz / distance2d_f + start_coord.Z;
 
-	double dx = end_coord.X - start_coord.X;
-	double dy = end_coord.Y - start_coord.Y;
-	float dx_f = dx;
-	double dist = fastmath::sqrt(dy * dy + dx_f * dx_f);
-
+	TPoint3D<float> heading(end_coord.X - start_coord.X, end_coord.Y - start_coord.Y, 0); // RA2: the heading is a float vector with no height
+	double dx = heading.X; // RA2: as above
+	double dist = heading.Length(); // RA2: the length comes from the vector's own Length
 	if (dist < dx) dx = dist;
 	if (-dx > dist) dx = -dist;
 
@@ -1191,6 +1169,7 @@ void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & targe
 }
 
 
+
 /// <summary>
 /// Handles the per frame update of the wave geometry.
 /// This routine keeps the wave anchored to the object that fired it and to the object it
@@ -1201,13 +1180,19 @@ void WaveClass::Build_Wave_Shape(Coord const & source_coord, Coord const & targe
 /// </summary>
 void WaveClass::Wave_Shape_AI(void) // RA2: defined after Wave_Recalc_Affected_Cells, at 0x00724200
 {
-	if (Target != NULL && Source != NULL && WaveEC != (int)(1.0 / WaveStep) && Source->TarCom == Target) {
-		if ((Source->PositionCoord - Target->As_Coord()).Length() > CELL_LEPTON_DIAG * 6.0) {
-			IsWaveActive = false;
-		}
-	} else {
-		IsWaveActive = false;
+	if (WaveProgress - FadeProgress > 0.1 && Type == WAVE_SONIC) { // RA2: a sonic wave that has grown past a tenth of its length starts fading
+		IsWaveFading = true; // RA2: as above
 	}
+
+	do { // RA2: a shared exit without goto
+		if (Target != NULL && Source != NULL && WaveEC != (int)(1.0 / WaveStep) && Source->TarCom == Target) { // RA2: as above
+			if ((Source->PositionCoord - Target->As_Coord()).Length() <= CELL_LEPTON_DIAG * 6.0) { // RA2: the tether holds while the wave is within six cell diagonals
+				break; // RA2: as above
+			}
+		}
+		IsWaveActive = false; // RA2: a broken tether ends the growth
+		IsWaveFading = true; // RA2: a broken tether starts the fade as well
+	} while (false); // RA2: as above
 
 	if (IsWaveActive) {
 		Build_Wave_Shape(Source->Fire_Coord(0), Target->As_Coord());
@@ -1221,22 +1206,22 @@ void WaveClass::Wave_Shape_AI(void) // RA2: defined after Wave_Recalc_Affected_C
 		WaveShape.Vertices[PolygonShapeStruct::END_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, WaveProgress);
 		WaveShape.Vertices[PolygonShapeStruct::END_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, WaveProgress);
 		WaveShape.Vertices[PolygonShapeStruct::END_RIGHT] = Lerp(WaveStartRight, WaveEndRight, WaveProgress);
-	} else if (!IsWaveActive) {
-		if (WaveStep * 0.5 + WaveProgress >= FadeProgress) {
-			FadeProgress += WaveStep;
-			if (WaveProgress <= FadeProgress) {
-				Delete_Me();
-				return;
-			} else {
-				WaveShape.Vertices[PolygonShapeStruct::START_RIGHT] = Lerp(WaveStartRight, WaveEndRight, FadeProgress);
-				WaveShape.Vertices[PolygonShapeStruct::START_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, FadeProgress);
-				WaveShape.Vertices[PolygonShapeStruct::START_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, FadeProgress);
-			}
+	}
+
+	if (IsWaveFading && FadeProgress <= WaveStep * 0.5 + WaveProgress) { // RA2: the fade runs off its own flag, not off the tether
+		FadeProgress += WaveStep; // RA2: as above
+		if (FadeProgress >= WaveProgress) { // RA2: as above
+			Delete_Me(); // RA2: as above
+			return; // RA2: as above
 		}
+		WaveShape.Vertices[PolygonShapeStruct::START_RIGHT] = Lerp(WaveStartRight, WaveEndRight, FadeProgress); // RA2: as above
+		WaveShape.Vertices[PolygonShapeStruct::START_MIDDLE] = Lerp(WaveStartMiddle, WaveEndMiddle, FadeProgress); // RA2: as above
+		WaveShape.Vertices[PolygonShapeStruct::START_LEFT] = Lerp(WaveStartLeft, WaveEndLeft, FadeProgress); // RA2: as above
 	}
 
 	Wave_Recalc_Affected_Cells();
 }
+
 
 
 /// <summary>

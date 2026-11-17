@@ -986,6 +986,7 @@ class TechnoTypeClass : public ObjectTypeClass
 
 		WeaponDataStruct const * Get_Weapon(int which) const;
 		WeaponDataStruct const * Get_Elite_Weapon(int which) const; // RA2
+		void Load_Palette(void); // RA2: 0x006DF620, builds the schemes of the Palette= file (meastes' name; outside this module)
 		bool Has_Turret_Weapons(void) const; // RA2: 0x6DF680
 		int Get_Turret_Weapon(int which) const; // RA2: 0x6DF6B0
 		void Set_Weapon(WeaponDataStruct const & weapon, int which);
