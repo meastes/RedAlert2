@@ -328,6 +328,7 @@ PlayerProfile::~PlayerProfile(void) // RA2: 0x007395B0
 void PlayerProfile::Save(Wstring const * name) // RA2: 0x007395D0
 {
 	WOLOptionsClass options; // RA2: the registry options are read first, whether or not anything is saved
+	options.Load(); // RA2: as above; the constructor only clears the two members
 	if (IsDirty) { // RA2: only a changed profile is written
 		Wstring section(*name); // RA2: as above
 		if (!name->length()) { // RA2: as above

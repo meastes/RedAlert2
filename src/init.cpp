@@ -164,6 +164,15 @@
 #include "_theater.h" // RA2: Init_Theater: Theaters
 #include "scheme.h" // RA2: as above: ColorSchemes
 #include "mpu.h" // RA2: Get_Performance_Profile: Get_RDTSC_CPU_Speed
+#include "mono.h" // RA2: Bootstrap clears mono page 4
+#include "bittext.h" // RA2: Bootstrap creates the BitText
+#include "volinfo.h" // RA2: Init_CDROM_Access: VolumeCheck
+#include "wolopt.h" // RA2: Init_CDROM_Access: WOLOptionsClass
+#include "voxdrsys.h" // RA2: Bootstrap: VoxelDrawSystem::Load_VPL_File
+#include "_voxel.h" // RA2: Bootstrap: Set_Voxel_Light_Angle
+#include "voxel.h" // RA2: Bootstrap: Init_Voxel_Matrices
+#include "_convert.h" // RA2: Bootstrap: the drawers
+#include "convert.h" // RA2: as above
 
 
 #include <conio.h>
@@ -217,6 +226,588 @@ struct MovieListEntry { // RA2: as above
 };
 
 int MovieListChoice = -1; // RA2: 0x007DB558, the list entry that was chosen last
+
+extern void Play_Movie(char const * name, ThemeType theme, bool clrscrn_after, bool stretch, bool clrscrn_before, bool fullscreen); // RA2: 0x005A02D0, the overload with the fullscreen flag (movie.cpp)
+bool Init_Secondary_Mixfiles(void); // RA2: 0x00515E70, defined below
+bool Init_Bulk_Data(void); // RA2: 0x00516900, defined below
+bool Init_Bootstrap_Mixfiles(void); // RA2: 0x00515C90, defined below
+bool __cdecl Init_Expansion_Files(void); // RA2: 0x00515AF0, defined below
+void Draw_Loading_Screen(void); // RA2: 0x00516560, defined below
+void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0, defined below
+void Init_Random(void); // RA2: 0x00515710, defined below
+void Init_Commands(void); // RA2: 0x005173C0, defined below
+extern void Init_Game_Modes(void); // RA2: 0x005B8BD0 (multiplayer.cpp)
+extern void __fastcall Load_All_Art(void); // RA2: 0x006F1B60 (txtlabel2.cpp)
+extern int __fastcall Audio_Init(int enable); // RA2: 0x00406AD0 (audio.cpp)
+extern void * EndGameGraphicsPalette; // RA2: 0x00A41670, GRFXTXT.PAL as Bootstrap loaded it
+extern ConvertClass * EndGameGraphicsConvert; // RA2: 0x00A41678, the end game graphic's palette conversion (tactical.cpp)
+extern ShapeSet const * EndGameGraphicsShape; // RA2: 0x00A41674, GRFXTXT.SHP (tactical.cpp)
+extern void * MouseShapes; // RA2: 0x00ABD488, MOUSE.SHP as Init_Mouse loaded it (startup.cpp)
+extern bool MouseShapesAllocated; // RA2: 0x00ABD48C (startup.cpp)
+extern TimeStamp LoadingScreenHoldUntil; // RA2: 0x00A41668, as below
+bool Init_Rules(void); // RA2: 0x005129C0, defined below
+BOOL CALLBACK Rules_Choice_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00513080, not in this file yet
+
+static bool Bootstrap(void); // RA2: Bootstrap, Init_Mouse and Init_CDROM_Access are expanded inline in Init_Game (0x005116A0), as in TibSun
+static void Init_Mouse(void); // RA2: as above
+static bool Init_CDROM_Access(void); // RA2: as above
+
+/***********************************************************************************************
+ * Init_Game -- Main game initialization routine.                                              *
+ *                                                                                             *
+ *    RA2 has Bootstrap, Init_Mouse and Init_CDROM_Access expanded inline in here.             *
+ *=============================================================================================*/
+int Init_Game(int, char * []) // RA2: 0x005116A0, 4420 bytes; this compiles to 4416: the executable also expands the CCFileClass destructor in the SOUND.INI load failure path, one inline expansion more than the budget allows here (unplaced)
+{
+	DebugString("Init Game\n"); // RA2: as above
+	Scen = new ScenarioClass; // RA2: as above
+
+	if (Scen == NULL) { // RA2: as above
+		DebugString("Failed to instantiate Scenario!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	Rule = new RulesClass; // RA2: as above
+
+	if (Rule == NULL) { // RA2: as above
+		DebugString("Failed to instantiate Rules!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	DebugString("Bootstrap....."); // RA2: as above
+
+	if (!Bootstrap()) { // RA2: as above
+		DebugStringNoPrefix(" ..Failed to bootstrap!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	DebugStringNoPrefix(" ...OK\n"); // RA2: as above
+
+	DebugString("Init Mouse\n"); // RA2: as above
+
+	Init_Mouse(); // RA2: as above
+
+	DebugString("Init CDROM\n"); // RA2: as above
+
+	if (!Init_CDROM_Access()) { // RA2: as above
+		DebugString("Failed to initialize CDROM access!\n"); // RA2: as above
+		return(1); // RA2: as above
+	}
+
+	DebugString("Init Secondary Mixfiles....."); // RA2: as above
+
+	if (!Init_Secondary_Mixfiles()) { // RA2: as above
+		DebugStringNoPrefix(" ...Failed!!!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	DebugStringNoPrefix(" ...OK\n"); // RA2: as above
+
+	DebugString("Init Campaigns\n"); // RA2: as above
+	Init_Campaigns(); // RA2: as above
+
+	DebugString("Init Heaps\n"); // RA2: no benchmarks and no Init_Keys at the start, and Init_Heaps and Init_Threads call nothing: only their DebugString lines remain
+	DebugString("Init Threads\n"); // RA2: as above
+
+	DebugString("Reading Game Settings\n"); // RA2: as above
+	Options.Load_Settings(); // RA2: as above
+
+	DebugString("Init Anim System\n"); // RA2: as above
+	Initialize_Options(); // RA2: the executable calls Initialize_Options and Set_Option(0) (vqoption.cpp) here, and plays the movies later, after Init_Rules
+	Set_Option(0); // RA2: as above
+
+	DebugString("Init Color Remap Tables\n"); // RA2: as above
+	GadgetClass::Set_Color_Scheme(DEFAULT_GADGET_SCHEME); // RA2: the executable stores the colour scheme name "Grey" (no Init_Color_Remaps call)
+
+	DebugString("Creating TacticalMap\n"); // RA2: as above
+
+	delete TacticalMap; // RA2: as above
+	TacticalMap = new Tactical; // RA2: as above
+
+	if (TacticalMap == NULL) { // RA2: as above
+		DebugString("Failed to create TacticalMap!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	LogicalSurface = HiddenSurface; // RA2: as above
+
+	DebugString("Reading SOUND.INI\n"); // RA2: SOUND.INI, EVA.INI and THEME.INI are read here, each into a local CCINIClass
+	CCFileClass voc_file("SOUND.INI"); // RA2: as above
+	if (voc_file.Is_Available() == false) { // RA2: as above
+		DebugString("Failed to find SOUND.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	CCINIClass voc_ini; // RA2: as above
+	if (!voc_ini.Load(voc_file, false)) { // RA2: as above
+		DebugString("Failed to load SOUND.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	Free_Vocs(); // RA2: as above
+	Init_Vocs(voc_ini); // RA2: 0x00714540 reads the sound list from SOUND.INI
+
+	DebugString("Reading EVA.INI\n"); // RA2: as above
+	CCFileClass eva_file("EVA.INI"); // RA2: as above
+	if (eva_file.Is_Available() == false) { // RA2: as above
+		DebugString("Failed to find EVA.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	CCINIClass eva_ini; // RA2: as above
+	if (!eva_ini.Load(eva_file, false)) { // RA2: as above
+		DebugString("Failed to load EVA.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	Speech_Free_All(); // RA2: 0x00716590 frees the speech, then VoxClass::Process (0x007163F0) reads EVA.INI
+	VoxClass::Process(eva_ini); // RA2: as above
+
+	DebugString("Reading THEME.INI\n"); // RA2: as above
+	CCFileClass theme_file("THEME.INI"); // RA2: as above
+	if (theme_file.Is_Available() == false) { // RA2: as above
+		DebugString("Failed to find THEME.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	CCINIClass theme_ini; // RA2: as above
+	if (!theme_ini.Load(theme_file, false)) { // RA2: as above
+		DebugString("Failed to load THEME.INI!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+	Theme.Free_Themes(); // RA2: as above
+	Theme.Init_Themes(theme_ini); // RA2: as above
+	Theme.Scan(); // RA2: as above
+
+	DebugString("Init Bulk Data\n"); // RA2: as above
+	if (!Init_Bulk_Data()) { // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	DebugString("Init Rules\n"); // RA2: as above
+	if (!Init_Rules()) { // RA2: as above
+		DebugString("Failed to initialize Rules!\n"); // RA2: as above
+		return(-1); // RA2: as above
+	}
+
+	while (AudioGetTime() < LoadingScreenHoldUntil) { // RA2: waits until LoadingScreenHoldUntil (0x00A41668, set by Draw_Loading_Screen) has passed
+	}
+
+	if (Special.IsFromInstall == true) { // RA2: WESTLOGO and A00_F00E play at the first start (the 6-argument Play_Movie 0x005A02D0 when EscapeMovies is set), otherwise WESTLOGO alone
+		DebugString("Playing first time intro sequence.\n"); // RA2: as above
+		if (Special.IsEscapeMovies) { // RA2: as above
+			Play_Movie("WESTLOGO", THEME_NONE, true, true, true, false); // RA2: as above
+			Play_Movie("A00_F00E", THEME_NONE, false, true, true, false); // RA2: as above
+		} else {
+			Play_Movie("WESTLOGO", THEME_NONE, true, true, true); // RA2: as above
+			Play_Movie("A00_F00E", THEME_NONE, false, true, true); // RA2: as above
+		}
+	} else {
+		DebugString("Playing startup movie.\n"); // RA2: as above
+		Play_Movie("WESTLOGO", THEME_NONE, true, true, true, false); // RA2: as above
+	}
+	Darken_Surface(NULL, true); // RA2: as above
+	Call_Back(); // RA2: as above
+
+	Session.MaxPlayers = Rule->MaxPlayers; // RA2: the session copies MaxPlayers from the rules (+0x1138 to 0x00A3D558)
+	GadgetClass::Set_Color_Scheme(DEFAULT_GADGET_SCHEME); // RA2: the executable stores the colour scheme name "Grey" (no Init_Color_Remaps call)
+
+	Session.GamesPlayed = 0; // RA2: the score table starts empty: every count is -1
+	Session.NumScores = 0; // RA2: as above
+	Session.CurGame = 0; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		Session.Score[i].Name[0] = 0; // RA2: as above
+		Session.Score[i].Wins = 0; // RA2: as above
+		for (int j = 0; j < 4; j++) { // RA2: as above
+			Session.Score[i].Kills[j] = -1; // RA2: as above
+			Session.Score[i].Lost[j] = -1; // RA2: as above
+			Session.Score[i].Built[j] = -1; // RA2: as above
+			Session.Score[i].Score[j] = -1; // RA2: as above
+		}
+	}
+	memset(Session.PlayerChatEnabled, true, sizeof(Session.PlayerChatEnabled)); // RA2: the eight chat flags at 0x00A3F118 are set
+
+	Init_Random(); // RA2: ends with Init_Random, Init_Commands and Init_Game_Modes
+	DebugString("Init Commands\n"); // RA2: as above
+	Init_Commands(); // RA2: as above
+	DebugString("Game Init Completed.\n"); // RA2: as above
+	Init_Game_Modes(); // RA2: as above
+	return(0); // RA2: as above
+}
+
+
+static bool Bootstrap(void) // RA2: as above
+{
+	int index; // RA2: as above
+
+	if (!HicolorFlag) { // RA2: as above
+		Set_Palette(BlackPalette); // RA2: as above
+	}
+
+	if (CD::Is_Override_Swap() == true) { // RA2: as above
+		CD::Set_Required_Disk(DISK_LOCAL); // RA2: as above
+	}
+
+	do { // RA2: as above
+		Keyboard->Check(); // RA2: as above
+	} while (!GameInFocus); // RA2: as above
+
+	SurfacesRestored = false; // RA2: as above
+	MonoClass::Get_Page(4)->Clear(); // RA2: clears mono page 4 (0x0059DA50) where TibSun calls Mono_Clear_Screen
+
+	if (!Init_Bootstrap_Mixfiles()) { // RA2: as above
+		DebugString("Failed to initialize bootstrap mixfiles!\n"); // RA2: as above
+		return(false); // RA2: as above
+	}
+
+	BitText::Instance = new BitText; // RA2: no Init_Fonts; the executable creates the BitText, starts the owner draw system, loads the interface art, starts the audio and draws the loading screen
+	OwnerDraw::Initialize(); // RA2: as above
+	Load_All_Art(); // RA2: as above
+	Audio_Init(AudioAllowed); // RA2: as above
+	Draw_Loading_Screen(); // RA2: as above
+	Keyboard->Clear(); // RA2: as above
+
+	memmove((unsigned char *)&SchemePalette[0], (void *)MFCD::Retrieve("UNITSNO.PAL"), sizeof(SchemePalette)); // RA2: as above
+
+	for (index = 0; index < 256; index++) { // RA2: as above
+		SchemePalette[index] = RGBClass( // RA2: as above
+				(unsigned char)(SchemePalette[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(SchemePalette[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(SchemePalette[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	memmove((unsigned char *)&GamePalette[0], (void *)MFCD::Retrieve("TEMPERAT.PAL"), sizeof(GamePalette)); // RA2: as above
+
+	for (index = 0; index < 256; index++) { // RA2: as above
+		GamePalette[index] = RGBClass( // RA2: as above
+				(unsigned char)(GamePalette[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(GamePalette[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(GamePalette[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	OriginalPalette = GamePalette; // RA2: as above
+	CCPalette = GamePalette; // RA2: as above
+	WhitePalette[0] = BlackPalette[0]; // RA2: as above
+
+	memmove((unsigned char *)&WaypointPalette[0], (void *)MFCD::Retrieve("WAYPOINT.PAL"), sizeof(WaypointPalette)); // RA2: as above
+
+	for (index = 0; index < 256; index++) { // RA2: as above
+		WaypointPalette[index] = RGBClass( // RA2: as above
+				(unsigned char)(WaypointPalette[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(WaypointPalette[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(WaypointPalette[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	CCFileClass vplfile("voxels.vpl"); // RA2: the result of Load_VPL_File is not checked
+	VoxelDrawSystem::Load_VPL_File(vplfile); // RA2: as above
+
+	for (int i = 0; i < ARRAY_SIZE(VoxelRGBColors); i++) { // RA2: as above
+		VoxelPalette[i] = RGBClass(VoxelRGBColors[i].Red, VoxelRGBColors[i].Green, VoxelRGBColors[i].Blue); // RA2: as above
+	}
+
+	UseVoxelCache = true; // RA2: as above
+	Set_Voxel_Camera_Angle(DefaultCameraAngle); // RA2: as above
+	Set_Voxel_Light_Angle(DefaultLightAngle); // RA2: as above
+	VoxelDrawSystem::Enable_Lighting(); // RA2: as above
+	VoxelDrawSystem::Disable_ZBuffer(); // RA2: as above
+
+	Init_Voxel_Matrices(); // RA2: as above
+
+	TerrainDrawer = new ConvertClass(GamePalette, GamePalette, *VisibleSurface, 0x35, false); // RA2: every drawer is built with 0x35 intensity levels and no blitter tables
+
+	PaletteClass pal; // RA2: as above
+
+	memmove((unsigned char *)&pal[0], (void *)MFCD::Retrieve("ANIM.PAL"), sizeof(pal)); // RA2: as above
+	for (index = 0; index < 256; index++) { // RA2: as above
+		pal[index] = RGBClass( // RA2: as above
+				(unsigned char)(pal[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	AnimDrawer = new ConvertClass(pal, GamePalette, *VisibleSurface, 0x35, false); // RA2: as above
+
+	memmove((unsigned char *)&pal[0], (void *)MFCD::Retrieve("PALETTE.PAL"), sizeof(pal)); // RA2: as above
+	for (index = 0; index < 256; index++) { // RA2: as above
+		pal[index] = RGBClass( // RA2: as above
+				(unsigned char)(pal[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	NormalDrawer = new ConvertClass(pal, GamePalette, *VisibleSurface, 0x35, false); // RA2: as above
+
+	memmove((unsigned char *)&pal[0], (void *)MFCD::Retrieve("UNITSNO.PAL"), sizeof(pal)); // RA2: as above
+	for (index = 0; index < 256; index++) { // RA2: as above
+		pal[index] = RGBClass( // RA2: as above
+				(unsigned char)(pal[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Blue()<<2)); // RA2: as above
+	}
+
+	VoxelDrawer = new ConvertClass(pal, GamePalette, *VisibleSurface, 0x35, false); // RA2: as above
+
+	memmove((unsigned char *)&pal[0], (void *)MFCD::Retrieve("CAMEO.PAL"), sizeof(pal)); // RA2: as above
+	for (index = 0; index < 256; index++) { // RA2: as above
+		pal[index] = RGBClass( // RA2: as above
+				(unsigned char)(pal[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Blue()<<2)); // RA2: as above
+	}
+	CameoDrawer = new ConvertClass(pal, GamePalette, *VisibleSurface, 0x35, false); // RA2: as above
+
+	memmove((unsigned char *)&pal[0], (void *)MFCD::Retrieve("MOUSEPAL.PAL"), sizeof(pal)); // RA2: as above
+	for (index = 0; index < 256; index++) { // RA2: as above
+		pal[index] = RGBClass( // RA2: as above
+				(unsigned char)(pal[index].Get_Red()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Green()<<2), // RA2: as above
+				(unsigned char)(pal[index].Get_Blue()<<2)); // RA2: as above
+	}
+	MouseDrawer = new ConvertClass(pal, GamePalette, *VisibleSurface, 1, false); // RA2: as above
+
+	TiberiumDrawer = VoxelDrawer; // RA2: as above
+
+	CCFileClass palfile("GRFXTXT.PAL"); // RA2: GRFXTXT.PAL, GRFXTXT.SHP and their ConvertClass (0x00A41670-0x00A41678) are loaded here
+	if (palfile.Is_Available()) { // RA2: as above
+		EndGameGraphicsPalette = Load_Alloc_Data(palfile); // RA2: as above
+		palfile.Close(); // RA2: as above
+		for (index = 0; index < 256; index++) { // RA2: as above
+			(*(PaletteClass *)EndGameGraphicsPalette)[index] = RGBClass( // RA2: as above
+					(unsigned char)((*(PaletteClass *)EndGameGraphicsPalette)[index].Get_Red()<<2), // RA2: as above
+					(unsigned char)((*(PaletteClass *)EndGameGraphicsPalette)[index].Get_Green()<<2), // RA2: as above
+					(unsigned char)((*(PaletteClass *)EndGameGraphicsPalette)[index].Get_Blue()<<2)); // RA2: as above
+		}
+	}
+	if (EndGameGraphicsPalette != NULL) { // RA2: as above
+		EndGameGraphicsConvert = new ConvertClass(*(PaletteClass *)EndGameGraphicsPalette, GamePalette, *VisibleSurface, 1, false); // RA2: as above
+	}
+
+	CCFileClass shpfile("GRFXTXT.SHP"); // RA2: as above
+	if (shpfile.Is_Available()) { // RA2: as above
+		EndGameGraphicsShape = (ShapeSet const *)Load_Alloc_Data(shpfile); // RA2: as above
+		shpfile.Close(); // RA2: as above
+	}
+
+	Init_Expansion_Files(); // RA2: as above
+
+	return(true); // RA2: as above
+}
+
+
+static void Init_Mouse(void) // RA2: as above
+{
+	MouseShapes = (void *)Load_Alloc_Data("MOUSE.SHP", MouseShapesAllocated); // RA2: MOUSE.SHP is loaded by name (0x00495270) into 0x00ABD488 and handed to the mouse
+	if (MouseShapes != NULL) { // RA2: as above
+		MouseCursor->Hide_Mouse(); // RA2: as above
+		Point2D pt = Point2D(0, 0); // RA2: as above
+		MouseCursor->Set_Cursor(pt, (ShapeSet const *)MouseShapes, 0); // RA2: as above
+	}
+	Map.Set_Default_Mouse(MOUSE_NORMAL, false); // RA2: as above
+	Call_Back(); // RA2: as above
+}
+
+
+static bool Init_CDROM_Access(void) // RA2: as above
+{
+	if (!CDFileClass::Is_There_Search_Drives()) { // RA2: as above
+		DebugString("Calling Force_CD_Available\n"); // RA2: as above
+		if (!CD().Force_Available(DISK_ANY)) { // RA2: as above
+			DebugString("Failed to find disk (user cancel)!\n"); // RA2: as above
+			return(false); // RA2: as above
+		}
+
+		int error; // RA2: as above
+		do { // RA2: as above
+			error = CDFileClass::Set_Search_Drives("?:\\"); // RA2: every CD drive is searched ("?:\\"); a message box explains the two error cases
+			switch (error) { // RA2: as above
+				case 1: // RA2: as above
+					Set_Palette(GamePalette); // RA2: as above
+					WWMessageBox().Process(StringTable::LoadString("TXT_CD_ERROR1", NULL, "D:\\Ra2\\Init.CPP", 0x104D), // RA2: as above
+						StringTable::LoadString("TXT_OK", NULL, "D:\\Ra2\\Init.CPP", 0x104D), NULL, NULL, false); // RA2: as above
+					return(false); // RA2: as above
+
+				case 2: // RA2: as above
+					Set_Palette(GamePalette); // RA2: as above
+					if (WWMessageBox().Process(StringTable::LoadString("TXT_CD_DIALOG_1", NULL, "D:\\Ra2\\Init.CPP", 0x1056), // RA2: as above
+							StringTable::LoadString("TXT_OK", NULL, "D:\\Ra2\\Init.CPP", 0x1056), // RA2: as above
+							StringTable::LoadString("TXT_CANCEL", NULL, "D:\\Ra2\\Init.CPP", 0x1056), NULL, false) == 1) { // RA2: as above
+						DebugString("Failed to find disk (user cancel)!\n"); // RA2: as above
+						return(false); // RA2: as above
+					}
+					break; // RA2: as above
+
+				default: // RA2: as above
+					if (!CD::Force_Available()) { // RA2: as above
+						DebugString("Failed to find disk (user cancel)!\n"); // RA2: as above
+						return(false); // RA2: as above
+					}
+					break; // RA2: as above
+			}
+		} while (error); // RA2: as above
+
+		CD::Set_Required_Disk(DISK_ANY); // RA2: as above
+		if (!VolumeCheck()) { // RA2: as above
+			DebugString("VolumeCheck FAILED!!\n"); // RA2: as above
+			WWMessageBox().Process(StringTable::LoadString("TXT_CD_ERROR1", NULL, "D:\\Ra2\\Init.CPP", 0x106F), // RA2: as above
+				StringTable::LoadString("TXT_OK", NULL, "D:\\Ra2\\Init.CPP", 0x106F), NULL, NULL, false); // RA2: as above
+			return(false); // RA2: as above
+		}
+
+		int disk = CD::Get_Current_Disk(60); // RA2: the disc found decides whether the first-time intro plays; the registry options can set EscapeMovies
+		if (!Special.IsFromInstall && disk > -1) { // RA2: as above
+			Special.IsFromInstall = ConfigINI.Get_Bool("Intro", "Play", true); // RA2: as above
+		}
+
+		WOLOptionsClass options; // RA2: the constructor clears the two members and Load (0x004FF200) is called explicitly: the executable does so inline
+		options.Load(); // RA2: as above
+		if (!options.Is_Bit0_Clear() && !options.Is_Bit2_Clear() && !options.Is_Bit1_Clear()) { // RA2: as above
+			Special.IsEscapeMovies = true; // RA2: as above
+		}
+
+		if (Special.IsFromInstall == true) { // RA2: WESTLOGO and A00_F00E play at the first start (the 6-argument Play_Movie 0x005A02D0 when EscapeMovies is set), otherwise WESTLOGO alone
+			CCFileClass ra2_ini("RA2.INI"); // RA2: as above
+			if (disk > -1) { // RA2: as above
+				Special.IsFromInstall = ConfigINI.Put_Bool("Intro", "Play", false); // RA2: as above
+			}
+			ConfigINI.Save(ra2_ini, false); // RA2: as above
+		}
+	} else {
+		DebugString("-CD parameter was specified. No CD init - all files must be local\n"); // RA2: as above
+		CD::Set_Required_Disk(DISK_LOCAL); // RA2: as above
+	}
+
+	return(true); // RA2: as above
+}
+
+
+void __fastcall Init_Campaigns(void) // RA2: 0x005127F0
+{
+	bool found = false; // RA2: as above
+	WIN32_FIND_DATA data; // RA2: as above
+	HANDLE handle = FindFirstFile("BATTLE*.INI", &data); // RA2: as above
+	if (handle != INVALID_HANDLE_VALUE) { // RA2: as above
+		do { // RA2: as above
+			if ((data.dwFileAttributes & 0x116) == 0) { // RA2: as above
+				char const * name = data.cAlternateFileName; // RA2: as above
+				if (strlen(name) == 0) { // RA2: as above
+					name = data.cFileName; // RA2: as above
+				}
+				CCFileClass file(name); // RA2: as above
+				CCINIClass * ini = new CCINIClass; // RA2: as above
+				ini->Load(file, false, false); // RA2: as above
+				if (stricmp(name, "BATTLE.INI") == 0) { // RA2: as above
+					found = true; // RA2: as above
+				}
+				Read_Battle_INI(*ini); // RA2: as above
+				delete ini; // RA2: as above
+			}
+		} while (FindNextFile(handle, &data)); // RA2: as above
+		FindClose(handle); // RA2: as above
+	}
+	if (!found) { // RA2: as above
+		CCFileClass file("BATTLE.INI"); // RA2: as above
+		CCINIClass * ini = new CCINIClass; // RA2: as above
+		if (ini != NULL) { // RA2: as above
+			ini->Load(file, false, false); // RA2: as above
+			Read_Battle_INI(*ini); // RA2: as above
+			delete ini; // RA2: as above
+		}
+	}
+}
+
+
+bool __fastcall Init_Rules(void) // RA2: 0x005129C0
+{
+	DynamicVectorClass<CCINIClass *> files; // RA2: as above
+	bool found = false; // RA2: as above
+	WIN32_FIND_DATA data; // RA2: as above
+	HANDLE handle = FindFirstFile("RULE*.INI", &data); // RA2: as above
+	if (handle != INVALID_HANDLE_VALUE) { // RA2: as above
+		do { // RA2: as above
+			if ((data.dwFileAttributes & 0x116) == 0) { // RA2: as above
+				char const * name = data.cAlternateFileName; // RA2: as above
+				if (data.cAlternateFileName[0] == 0) { // RA2: as above
+					name = data.cFileName; // RA2: as above
+				}
+				CCFileClass file(name); // RA2: as above
+				CCINIClass * ini = new CCINIClass; // RA2: as above
+				ini->Load(file, false, false); // RA2: as above
+				if (stricmp(name, "RULES.INI") == 0) { // RA2: as above
+					found = true; // RA2: as above
+					files.Add_Head(ini); // RA2: as above
+				} else {
+					files.Add(ini); // RA2: as above
+				}
+			}
+		} while (FindNextFile(handle, &data)); // RA2: as above
+		FindClose(handle); // RA2: as above
+	}
+	if (!found) { // RA2: as above
+		CCFileClass file("RULES.INI"); // RA2: as above
+		CCINIClass * ini = new CCINIClass; // RA2: as above
+		ini->Load(file, false, false); // RA2: as above
+		files.Add_Head(ini); // RA2: as above
+	}
+	if (files.Count() <= 0) { // RA2: as above
+		return(false); // RA2: as above
+	}
+
+	CCFileClass artfile("ART.INI"); // RA2: as above
+	if (ArtINI.Load(artfile, false, false) == 0) { // RA2: as above
+		DebugString("Failed to load ART.INI!\n"); // RA2: as above
+		return(false); // RA2: as above
+	}
+
+	CCINIClass * rules; // RA2: as above
+	if (files.Count() == 1) { // RA2: as above
+		rules = files[0]; // RA2: as above
+	} else {
+		int choice = DialogBoxParam(ProgramInstance, MAKEINTRESOURCE(0x93), MainWindow, Rules_Choice_Dialog_Proc, (LPARAM)&files); // RA2: as above
+		if (choice == -1) { // RA2: as above
+			choice = 0; // RA2: as above
+		}
+		rules = files[choice]; // RA2: as above
+	}
+	RuleINI = rules; // RA2: as above
+	Rule->Color_Schemes(*rules); // RA2: as above
+	Rule->Do_Movies(ArtINI); // RA2: as above
+	Rule->Audio_Visual_Rules(*RuleINI); // RA2: as above
+	Rule->MPlayer(*RuleINI); // RA2: as above
+
+	Session.Options.Credits = Rule->MPMoney; // RA2: as above
+	Session.Options.UnitCount = Rule->MPUnitCount; // RA2: as above
+	BuildLevel = Rule->MPBuildLevel; // RA2: as above
+	Session.Options.GameSpeed = Rule->GameSpeed; // RA2: as above
+	Session.Options.AIDifficulty = (DiffType)Rule->AIDifficultyStruct; // RA2: as above
+	Session.Options.AIPlayers = Rule->AIPlayers; // RA2: as above
+	Session.Options.BridgeDestruction = Rule->IsMPBridgeDestruction; // RA2: as above
+	Session.Options.Bases = Rule->IsMPBasesOn; // RA2: as above
+	Session.Options.Goodies = Rule->IsMPCrates; // RA2: as above
+	Session.Options.CTF = Rule->IsMPCaptureTheFlag; // RA2: as above
+	Session.Options.HarvTruce = Rule->HarvesterTruce; // RA2: as above
+	Session.Options.CrapEngineers = Rule->MultiEngineer; // RA2: as above
+	Session.Options.AlliesAllowed = Rule->AlliesAllowed; // RA2: as above
+	Session.Options.ShortGame = Rule->ShortGame; // RA2: as above
+	Session.Options.SWAllowed = Rule->SuperWeaponsAllowed; // RA2: as above
+	Session.Options.BuildOffAlly = Rule->BuildOffAlly; // RA2: as above
+	Session.Options.FogOfWar = Rule->FogOfWar; // RA2: as above
+	Session.Options.MCVRedeploy = Rule->MCVRedeploys; // RA2: as above
+
+	CCFileClass langfile("LANGRULE.INI"); // RA2: as above
+	if (langfile.Is_Available() == true) { // RA2: as above
+		CCINIClass lang; // RA2: as above
+		if (lang.Load(langfile, true, false) > 1) { // RA2: as above
+			return(false); // RA2: as above
+		}
+		Rule->Addition(lang); // RA2: as above
+	}
+
+	for (int index = 0; index < files.Count(); index++) { // RA2: as above
+		if (files[index] != RuleINI) { // RA2: as above
+			delete files[index]; // RA2: as above
+		}
+	}
+
+	CCFileClass aifile("AI.INI"); // RA2: as above
+	AIINI.Load(aifile, true, false); // RA2: as above
+	return(true); // RA2: as above
+}
+
 
 /***********************************************************************************************
  * Single_Player_Dialog_Proc -- Message handler of the single player dialog.                   *

@@ -694,7 +694,7 @@ void Encode_Game_Options(char * out) // RA2: 0x0073CCB0, RA2's option text: seed
 				NetNumType net; // RA2: as above
 				NetNodeType node; // RA2: as above
 				unsigned short socket; // RA2: as above
-				Session.unknown_2994[j].Get_Address(net, node, &socket); // RA2: as above
+				Session.SlotAddresses[j].Get_Address(net, node, &socket); // RA2: as above
 				address = *(int *)node; // RA2: as above
 				port = Session.WolPlayerState[j]; // RA2: as above
 				ping = Session.PlayerPortBase[j]; // RA2: as above
@@ -2626,7 +2626,8 @@ connect_failed: // RA2: label of the shared block described at the goto above
 	g_IgnoreNetStatus = false; // RA2: as above
 	Session.Read_MultiPlayer_Settings(); // RA2: as above
 
-	WOLOptionsClass options; // RA2: the constructor of wolopt.h (clears both members, calls Load)
+	WOLOptionsClass options; // RA2: the constructor of wolopt.h clears both members
+	options.Load(); // RA2: then Load is called, as 0x004FF200 shows
 	rc_ptr<PlayerProfile> profile; // RA2: as above
 	if (options.Is_Bit1_Clear()) { // RA2: as above
 		profile = PlayerProfile::Load(g_NickName); // RA2: the persona's own profile

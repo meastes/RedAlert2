@@ -216,14 +216,14 @@ void __cdecl Planning_End(void); // RA2: 0x6147B0
 void __fastcall Commit_Plans(int house); // RA2: 0x614850
 bool __fastcall Planning_Allows_Event_Type(int type); // RA2: 0x614B50
 void __stdcall Planning_Send_Event(EventClass event); // RA2: 0x614B70
-void __cdecl Planning_Hover(void); // RA2: 0x615C00 (not in this part yet)
-void __fastcall Planning_Refuse_Command(int kind); // RA2: 0x617250 (not in this part yet)
-inline bool __fastcall Planning_Mission_Allows(TechnoClass * techno); // RA2: 0x615A10; expanded in Commit_Plans
-int __fastcall Planning_Order_Kind(TechnoClass * techno, PlanningEventTargets const * event); // RA2: 0x615A80 (not in this part yet); how an order relates to the path of the techno: 0 refused outright, 1 and 2 past a terminating or a continual order, -1 taken
-void __fastcall Planning_Path_Append(TechnoClass * techno, PlanningNodeClass * node); // RA2: 0x6165A0 (not in this part yet); gives the techno the rest of the path of the node's first member from the node on
-void __fastcall Planning_Copy_Members(PlanningNodeClass * node, PlanningNodeClass * from, EventClass event); // RA2: 0x6167F0 (not in this part yet); adds every member of one node to another, each with a copy of the event aimed at its techno
-void __fastcall Planning_Remove_Node(PlanningNodeClass * node); // RA2: 0x616960 (not in this part yet); takes a node out of the paths of its members
-void __fastcall Planning_Convert_Loop_Moves(TechnoClass * techno); // RA2: 0x616A50 (not in this part yet); in the path of the techno turns the move orders after the loop start into the other move mission (event mission 2 into 0x29)
+void __cdecl Planning_Hover(void); // RA2: 0x615C00
+void __fastcall Planning_Refuse_Command(int kind); // RA2: 0x617250
+bool __fastcall Planning_Mission_Allows(TechnoClass * techno); // RA2: 0x615A10
+int __fastcall Planning_Order_Kind(TechnoClass * techno, PlanningEventTargets const * event); // RA2: 0x615A80; how an order relates to the path of the techno: 0 refused outright, 1 and 2 past a terminating or a continual order, -1 taken
+void __fastcall Planning_Path_Append(TechnoClass * techno, PlanningNodeClass * node); // RA2: 0x6165A0; gives the techno the rest of the path of the node's first member from the node on
+void __fastcall Planning_Copy_Members(PlanningNodeClass * node, PlanningNodeClass * from, EventClass event); // RA2: 0x6167F0; adds every member of one node to another, each with a copy of the event aimed at its techno
+void __fastcall Planning_Remove_Node(PlanningNodeClass * node); // RA2: 0x616960; takes a node out of the paths of its members
+void __fastcall Planning_Convert_Loop_Moves(TechnoClass * techno); // RA2: 0x616A50; in the path of the techno turns the move orders after the loop start into the other move mission (event mission 2 into 0x29)
 Rect __fastcall Planning_Centered_Rect(Point2D center, int size); // RA2: 0x6112D0; a size by size rectangle centered on a pixel
 
 inline void __fastcall Planning_Uncount(int house); // RA2: 0x616D20 (expanded where it is used); lowers the count of a house, never below 0

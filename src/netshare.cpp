@@ -98,7 +98,7 @@ int __fastcall Player_Color_Combo_ID(int player); // RA2: 0x004D1CB0
 void __fastcall Select_Player_Side(HWND dialog, int player); // RA2: 0x004D1820
 void __fastcall Select_Player_Color(HWND dialog, int player); // RA2: 0x004D23C0
 void __fastcall Update_Slot_Controls(HWND dialog, int slot, bool flag); // RA2: 0x005C9B90
-void __fastcall Show_Slot_Controls_2(HWND dialog); // RA2: 0x005CAFD0
+void __fastcall Show_Observer_Slot_Controls(HWND dialog); // RA2: 0x005CAFD0, defined below
 void __fastcall Change_Slot_Count(HWND dialog, int old_count, int count, MultiplayerGameMode * mode); // RA2: 0x005CB300
 NodeNameType * __fastcall Find_Lobby_Name(wchar_t const * name); // RA2: 0x005C8B20, the fixed entry with this name
 NodeNameType * __fastcall Find_Lobby_Entry_By_Name(WideWstring const & name); // RA2: 0x005CD1B0
@@ -1115,7 +1115,7 @@ bool __fastcall Net2DecodeGameopt(char const * text, char const * sender) // RA2
 			int old = LobbyObserverSlot; // RA2: as above
 			LobbyObserverSlot = copy[1] == '8' ? -1 : copy[1] - '0'; // RA2: as above
 			if (LobbyObserverSlot != old) { // RA2: as above
-				Show_Slot_Controls_2(dialog); // RA2: as above
+				Show_Observer_Slot_Controls(dialog); // RA2: as above
 				wchar_t name[256]; // RA2: as above
 				wcscpy(name, Narrow_To_Wide(copy + 2)); // RA2: as above
 				if (name[0] != 0) { // RA2: as above
@@ -1563,7 +1563,7 @@ bool __fastcall Net2DecodeGameopt(char const * text, char const * sender) // RA2
 						memset(node, 0, sizeof(node)); // RA2: as above
 						memcpy(node, &address, sizeof(address)); // RA2: as above
 						memset(net, 0, sizeof(net)); // RA2: as above
-						Session.unknown_2994[i].Set_Address(net, node, 0); // RA2: as above
+						Session.SlotAddresses[i].Set_Address(net, node, 0); // RA2: as above
 						token = strtok(NULL, ",:"); // RA2: as above
 						if (token != NULL) { // RA2: as above
 							int value; // RA2: as above
@@ -2690,7 +2690,7 @@ void __fastcall Send_Map_Preview(MapPreviewClass * preview) // RA2: 0x005C7EF0, 
 						if (flags != 0 && !(flags & 1)) { // RA2: as above
 							DebugString("Player %s has a NAT - no preview download possible\n", Wide_To_Narrow(Session.Players[i]->Name)); // RA2: as above
 							direct = false; // RA2: as above
-						} else if (!Session.unknown_2994[slot].Is_Same_Node(Session.Players[i]->Address)) { // RA2: as above
+						} else if (!Session.SlotAddresses[slot].Is_Same_Node(Session.Players[i]->Address)) { // RA2: as above
 							DebugString("Player %s has different local and external IPs - no preview download possible\n", Wide_To_Narrow(Session.Players[i]->Name)); // RA2: as above
 							direct = false; // RA2: as above
 						}
@@ -3650,6 +3650,8 @@ void __fastcall Lock_Slots(HWND dialog, int slot) // RA2: 0x005C9DA0, not in Tib
 
 char const * LobbyHostImage = "wolhost.pcx"; // RA2: 0x007E6DB8, the host's picture of the slot list (a variable holding the file name, not a literal at the call)
 char const * LobbyAcceptImage = "wolacpt.pcx"; // RA2: 0x007E6DBC, the picture of a player who accepted
+int LobbySlotCount = 8; // RA2: 0x007E6DE4, the number of slots the scenario gave the lobby last (8 before one was chosen)
+int LobbyExtraSlot; // RA2: 0x00A72D5C, 1 when the observer takes a slot of its own beyond the scenario's
 
 void __fastcall Refresh_Slot_Images(HWND dialog) // RA2: 0x005C9EC0, not in TibSun; shows the host's or accepted picture at every slot's control
 {
@@ -3665,67 +3667,96 @@ void __fastcall Refresh_Slot_Images(HWND dialog) // RA2: 0x005C9EC0, not in TibS
 	}
 }
 
-void __fastcall Refresh_Slot_Settings(HWND dialog, bool full) // RA2: 0x005CA000, not in TibSun; refreshes the flags, side and color boxes and the slot lists; when only the slot lists changed the boxes are left alone
+inline void Refresh_Country_Flags(HWND dialog) // RA2: not in TibSun; the flag picture at each player's control; the executable expands it twice in Refresh_Slot_Settings
 {
-	int i; // RA2: the loops share one counter
-	if (full) { // RA2: as above
-		Refresh_Slot_Combos(dialog); // RA2: as above
-		for (i = 0; i < 8; i++) { // RA2: as above
-			OwnerDraw::Set_Control_Image(GetDlgItem(dialog, Player_Control_ID(i)), Country_Flag(Slot_Country(i))); // RA2: as above
-		}
-		for (i = 0; i < 8; i++) { // RA2: as above
-			Select_Side_Combo(dialog, Player_Side_Combo_ID(i), Slot_Country(i)); // RA2: as above
-		}
-		Refresh_Slot_Colors(dialog); // RA2: as above
-		if (Session.Type == GAME_INTERNET) { // RA2: as above
-			Store_Slot_Pings(); // RA2: as above
-		}
-		return;
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		HWND control = GetDlgItem(dialog, Player_Control_ID(i)); // RA2: as above
+		Surface * flag = Country_Flag(Slot_Country(i)); // RA2: as above
+		OwnerDraw::Set_Control_Image(control, flag); // RA2: as above
 	}
-	for (int slot = 0; slot < 8; slot++) { // RA2: as above
-		HWND control = GetDlgItem(dialog, Slot_Color_Control_Id(slot)); // RA2: as above
-		Surface * image = NULL; // RA2: as above
-		if (Is_Real_Player_Entry(Session.Slots[slot]) && Is_Host_Name(Session.Slots[slot]->Name)) { // RA2: as above
-			image = SurfaceCache.GetSurface(LobbyHostImage, NULL); // RA2: as above
-		} else if (Is_Slot_Accepted(slot) == 1) { // RA2: as above
-			image = SurfaceCache.GetSurface(LobbyAcceptImage, NULL); // RA2: as above
-		}
-		OwnerDraw::Set_Control_Image(control, image); // RA2: as above
+}
+
+inline void Refresh_Side_Combos(HWND dialog) // RA2: not in TibSun; selects each slot's side in its side box (expanded twice in Refresh_Slot_Settings)
+{
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		int id = Player_Side_Combo_ID(i); // RA2: as above
+		Select_Side_Combo(dialog, id, Slot_Country(i)); // RA2: as above
 	}
-	wcscpy(SlotNamesOld, SlotNames); // RA2: as above
-	Get_Slot_Names(SlotNames); // RA2: as above
-	if (wcscmp(SlotNamesOld, SlotNames) != 0) { // RA2: as above
-		Refresh_Slot_Combos(dialog); // RA2: as above
-		if (Session.Type == GAME_INTERNET) { // RA2: as above
-			Store_Slot_Pings(); // RA2: as above
-		}
+}
+
+inline void Refresh_Slot_Image(HWND dialog, int slot) // RA2: not in TibSun; the host's or accepted picture at one slot's control
+{
+	HWND control = GetDlgItem(dialog, Slot_Color_Control_Id(slot)); // RA2: as above
+	Surface * image = NULL; // RA2: as above
+	if (Is_Real_Player_Entry(Session.Slots[slot]) && Is_Host_Name(Session.Slots[slot]->Name)) { // RA2: as above
+		image = SurfaceCache.GetSurface(LobbyHostImage, NULL); // RA2: as above
+	} else if (Is_Slot_Accepted(slot) == 1) { // RA2: as above
+		image = SurfaceCache.GetSurface(LobbyAcceptImage, NULL); // RA2: as above
 	}
-	for (i = 0; i < 8; i++) { // RA2: as above
-		OwnerDraw::Set_Control_Image(GetDlgItem(dialog, Player_Control_ID(i)), Country_Flag(Slot_Country(i))); // RA2: as above
-	}
+	OwnerDraw::Set_Control_Image(control, image); // RA2: as above
+}
+
+inline bool Country_List_Changed(void) // RA2: not in TibSun; rebuilds the country list text and tells whether it differs from the last one
+{
 	strcpy(SlotCountriesOld, SlotCountries); // RA2: as above
 	SlotCountries[0] = '\0'; // RA2: as above
-	for (i = 0; i < 8; i++) { // RA2: as above
-		char text[16]; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		char text[4]; // RA2: the executable's frame holds only four bytes for the text (push ecx), enough for "-2,"
 		sprintf(text, "%d,", Slot_Country(i)); // RA2: as above
 		strcat(SlotCountries, text); // RA2: as above
 	}
-	if (strcmp(SlotCountriesOld, SlotCountries) != 0) { // RA2: as above
-		for (i = 0; i < 8; i++) { // RA2: as above
-			Select_Side_Combo(dialog, Player_Side_Combo_ID(i), Slot_Country(i)); // RA2: as above
-		}
-	}
+	return strcmp(SlotCountriesOld, SlotCountries) != 0; // RA2: as above
+}
+
+inline bool Color_List_Changed(void) // RA2: not in TibSun; rebuilds the color list text and tells whether it differs from the last one
+{
 	strcpy(SlotColorsOld, SlotColors); // RA2: as above
 	SlotColors[0] = '\0'; // RA2: as above
-	for (i = 0; i < 8; i++) { // RA2: as above
-		char text[16]; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		char text[4]; // RA2: the executable's frame holds only four bytes for the text (push ecx), enough for "-2,"
 		sprintf(text, "%d,", Slot_Color(i)); // RA2: as above
 		strcat(SlotColors, text); // RA2: as above
 	}
-	if (strcmp(SlotColorsOld, SlotColors) != 0) { // RA2: as above
+	return strcmp(SlotColorsOld, SlotColors) != 0; // RA2: as above
+}
+
+inline bool Slot_Names_Changed(void) // RA2: not in TibSun; reads the slot names again and tells whether they differ from the last ones
+{
+	wcscpy(SlotNamesOld, SlotNames); // RA2: as above
+	Get_Slot_Names(SlotNames); // RA2: as above
+	return wcscmp(SlotNamesOld, SlotNames) != 0; // RA2: as above
+}
+
+void __fastcall Refresh_Slot_Settings(HWND dialog, bool full) // RA2: 0x005CA000, not in TibSun; refreshes the flags, side and color boxes and the slot pictures; when only the slot lists changed the boxes are left alone; written with the inline helpers above (the executable expands them, which keeps the callees Slot_Country, Slot_Color, Slot_Color_Control_Id and Is_Slot_Accepted out of line)
+{
+	if (full) { // RA2: as above
+		Refresh_Slot_Combos(dialog); // RA2: as above
+		Refresh_Country_Flags(dialog); // RA2: as above
+		Refresh_Side_Combos(dialog); // RA2: as above
+		Refresh_Slot_Colors(dialog); // RA2: as above
+		if (Session.Type == GAME_INTERNET) { // RA2: as above
+			Store_Slot_Pings(); // RA2: as above
+		}
+		return; // RA2: as above
+	}
+	for (int slot = 0; slot < 8; slot++) { // RA2: as above
+		Refresh_Slot_Image(dialog, slot); // RA2: as above
+	}
+	if (Slot_Names_Changed()) { // RA2: as above
+		Refresh_Slot_Combos(dialog); // RA2: as above
+		if (Session.Type == GAME_INTERNET) { // RA2: as above
+			Store_Slot_Pings(); // RA2: as above
+		}
+	}
+	Refresh_Country_Flags(dialog); // RA2: as above
+	if (Country_List_Changed()) { // RA2: as above
+		Refresh_Side_Combos(dialog); // RA2: as above
+	}
+	if (Color_List_Changed()) { // RA2: as above
 		Refresh_Slot_Colors(dialog); // RA2: as above
 	}
 }
+
 
 int __fastcall Is_Slot_Accepted(int slot) // RA2: 0x005CA3B0, not in TibSun; the slot holds a computer player or a player who accepted
 {
@@ -3818,3 +3849,1073 @@ void __fastcall Refresh_Slot_Colors(HWND dialog) // RA2: 0x005CA540, not in TibS
 		}
 	}
 }
+
+#define OD_COMBOADDSTRINGW (WM_USER + 194) // RA2: 0x4C2, adds a wide string to an owner-drawn combo box
+#define OD_COMBOSETEDIT (WM_USER + 192) // RA2: 0x4C0, sets the text shown in the combo box itself
+
+inline void Add_Combo_Entry(HWND combo, wchar_t const * text, NodeNameType * const & entry) // RA2: not in TibSun; adds a wide string to a combo box and attaches the lobby entry as its data; the entry is taken by reference because the executable reads it after the text was added (a by-value argument is read first)
+{
+	int index = SendMessageA(combo, OD_COMBOADDSTRINGW, 0, (LPARAM)text); // RA2: as above
+	SendMessageA(combo, CB_SETITEMDATA, index, (LPARAM)entry); // RA2: as above
+}
+
+void __fastcall Refresh_Slot_Combos(HWND dialog) // RA2: 0x005CA6C0, not in TibSun; refills the entry list of every slot's combo box: the entries that may be chosen by the host, the current entry shown
+{
+	bool ai_allowed = (Session.MPGameMode == NULL || Session.MPGameMode->IsSkirmishAllowed()) && !Is_Current_Channel_Tournament(); // RA2: as above
+	int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+	if (LobbyObserverSlot == 0) { // RA2: as above
+		if (ai_allowed || limit < Get_Lobby_Slot_Limit_Plus_One()) { // RA2: as above
+			limit++; // RA2: as above
+		}
+	}
+	for (int slot = 0; slot < 8; slot++) { // RA2: as above
+		bool beyond_map = false; // RA2: as above
+		if (slot == LobbyObserverSlot) { // RA2: as above
+			if (slot > Get_Scenario_Slot_Limit(Session.Options.ScenarioIndex)) { // RA2: as above
+				NodeNameType * seated = Session.Slots[slot]; // RA2: as above
+				if (seated != LobbyEntries[0] && (seated == NULL || (seated != LobbyEntries[2] && seated != LobbyEntries[3] && seated != LobbyEntries[4]))) { // RA2: as above
+					beyond_map = true; // RA2: as above
+				}
+			}
+			if (slot == LobbyObserverSlot && Session.MPGameMode != NULL) { // RA2: as above
+				Session.MPGameMode->vt_entry_A0(); // RA2: as above
+			}
+		}
+		int id = Get_Slot_Control_Id(slot); // RA2: as above
+		HWND combo = GetDlgItem(dialog, id); // RA2: as above
+		bool hidden = ShowWindow(combo, SW_HIDE) == 0; // RA2: as above
+		SendDlgItemMessageA(dialog, id, CB_RESETCONTENT, 0, 0); // RA2: as above
+		NodeNameType * entry = Session.Slots[slot]; // RA2: as above
+		wchar_t const * text = entry->Name; // RA2: as above
+		if (entry == LobbyEntries[0]) { // RA2: as above
+			text = StringTable::LoadString("GUI:Open", NULL, "D:\\Ra2\\netshare.cpp", 4885); // RA2: as above
+		} else if (entry == LobbyEntries[1]) { // RA2: as above
+			text = StringTable::LoadString("GUI:Closed", NULL, "D:\\Ra2\\netshare.cpp", 4887); // RA2: as above
+		} else if (entry == LobbyEntries[2]) { // RA2: as above
+			text = StringTable::LoadString("GUI:AIEasy", NULL, "D:\\Ra2\\netshare.cpp", 4889); // RA2: as above
+		} else if (entry == LobbyEntries[3]) { // RA2: as above
+			text = StringTable::LoadString("GUI:AINormal", NULL, "D:\\Ra2\\netshare.cpp", 4891); // RA2: as above
+		} else if (entry == LobbyEntries[4]) { // RA2: as above
+			text = StringTable::LoadString("GUI:AIHard", NULL, "D:\\Ra2\\netshare.cpp", 4893); // RA2: as above
+		} else if (entry == LobbyEntries[5]) { // RA2: as above
+			text = StringTable::LoadString("GUI:Waiting", NULL, "D:\\Ra2\\netshare.cpp", 4895); // RA2: as above
+		} else if (entry == LobbyEntries[6]) { // RA2: as above
+			text = StringTable::LoadString("GUI:OpenObserver", NULL, "D:\\Ra2\\netshare.cpp", 4897); // RA2: as above
+		}
+		if (entry != NULL && (entry == LobbyEntries[2] || entry == LobbyEntries[3] || entry == LobbyEntries[4]) && !ai_allowed) { // RA2: as above
+			text = StringTable::LoadString("GUI:Open", NULL, "D:\\Ra2\\netshare.cpp", 4904); // RA2: as above
+		}
+		WideWstring current(text); // RA2: as above
+		if (Is_Host()) { // RA2: as above
+			if (Is_Real_Player_Entry(entry)) { // RA2: as above
+				Add_Combo_Entry(combo, text, entry); // RA2: as above
+			}
+			if (!Is_Local_Name(text)) { // RA2: as above
+				if (slot < limit && (!beyond_map || slot != LobbyObserverSlot || slot < Get_Scenario_Slot_Limit(Session.Options.ScenarioIndex))) { // RA2: as above
+					Add_Combo_Entry(combo, StringTable::LoadString("GUI:Open", NULL, "D:\\Ra2\\netshare.cpp", 4928), LobbyEntries[0]); // RA2: as above
+				}
+				if (slot == LobbyObserverSlot) { // RA2: as above
+					Add_Combo_Entry(combo, StringTable::LoadString("GUI:OpenObserver", NULL, "D:\\Ra2\\netshare.cpp", 4938), LobbyEntries[6]); // RA2: as above
+				}
+				Add_Combo_Entry(combo, StringTable::LoadString("GUI:Closed", NULL, "D:\\Ra2\\netshare.cpp", 4945), LobbyEntries[1]); // RA2: as above
+				if (ai_allowed && !beyond_map) { // RA2: as above
+					Add_Combo_Entry(combo, StringTable::LoadString("GUI:AIEasy", NULL, "D:\\Ra2\\netshare.cpp", 4953), LobbyEntries[2]); // RA2: as above
+					Add_Combo_Entry(combo, StringTable::LoadString("GUI:AINormal", NULL, "D:\\Ra2\\netshare.cpp", 4959), LobbyEntries[3]); // RA2: as above
+					Add_Combo_Entry(combo, StringTable::LoadString("GUI:AIHard", NULL, "D:\\Ra2\\netshare.cpp", 4965), LobbyEntries[4]); // RA2: as above
+				}
+			}
+		} else {
+			Add_Combo_Entry(combo, text, entry); // RA2: as above
+		}
+		SendMessageA(combo, OD_COMBOSETEDIT, -1, (LPARAM)current.text()); // RA2: as above
+		if (!hidden) { // RA2: as above
+			ShowWindow(combo, SW_SHOW); // RA2: as above
+		}
+	}
+}
+
+
+bool __fastcall Reset_AI_Slots(HWND dialog) // RA2: 0x005CACB0, not in TibSun; a computer player picked in a slot's combo box is replaced by an open slot, or by a closed one beyond the lobby's limit; tells whether any was
+{
+	bool changed = false; // RA2: as above
+	int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		int id = Get_Slot_Control_Id(i); // RA2: as above
+		int selected = SendDlgItemMessageA(dialog, id, CB_GETCURSEL, 0, 0); // RA2: as above
+		NodeNameType * data = (NodeNameType *)SendDlgItemMessageA(dialog, id, CB_GETITEMDATA, selected, 0); // RA2: as above
+		if (Is_AI_Entry(data)) { // RA2: as above
+			if (i < limit) { // RA2: as above
+				Session.Slots[i] = LobbyEntries[0]; // RA2: as above
+			} else {
+				Session.Slots[i] = LobbyEntries[1]; // RA2: as above
+			}
+			Update_Slot_Controls(dialog, i, false); // RA2: as above
+			Session.Options.AISlots.Difficulties[i] = -1; // RA2: as above
+			Session.Options.AISlots.Countries[i] = -1; // RA2: as above
+			Session.Options.AISlots.Colors[i] = -1; // RA2: as above
+			changed = true; // RA2: as above
+		}
+	}
+	return(changed); // RA2: as above
+}
+
+inline void Show_Slot(HWND dialog, int slot) // RA2: not in TibSun; shows the color picture, entry combo, flag and boxes of a slot, the color box stays hidden for an observer
+{
+	int color_id; // RA2: as above
+	int slot_id; // RA2: as above
+	if (slot == 0) { // RA2: as above
+		color_id = 1746; // RA2: as above
+		slot_id = 1041; // RA2: as above
+	} else if (slot == 1) { // RA2: as above
+		color_id = 1747; // RA2: as above
+		slot_id = 1042; // RA2: as above
+	} else if (slot == 2) { // RA2: as above
+		color_id = 1748; // RA2: as above
+		slot_id = 1043; // RA2: as above
+	} else if (slot == 3) { // RA2: as above
+		color_id = 1749; // RA2: as above
+		slot_id = 1044; // RA2: as above
+	} else if (slot == 4) { // RA2: as above
+		color_id = 1750; // RA2: as above
+		slot_id = 1045; // RA2: as above
+	} else if (slot == 5) { // RA2: as above
+		color_id = 1751; // RA2: as above
+		slot_id = 1046; // RA2: as above
+	} else if (slot == 6) { // RA2: as above
+		color_id = 1752; // RA2: as above
+		slot_id = 1047; // RA2: as above
+	} else if (slot == 7) { // RA2: as above
+		color_id = 1753; // RA2: as above
+		slot_id = 1048; // RA2: as above
+	} else {
+		color_id = -1; // RA2: as above
+		slot_id = -1; // RA2: as above
+	}
+	int player_id = Player_Control_ID(slot); // RA2: as above
+	int color_combo_id = Player_Color_Combo_ID(slot); // RA2: as above
+	int side_combo_id = Player_Side_Combo_ID(slot); // RA2: as above
+	NodeNameType * entry = Session.Slots[slot]; // RA2: as above
+	bool observer; // RA2: as above
+	if (entry == LobbyEntries[6] || (entry != NULL && entry != LobbyEntries[0] && entry != LobbyEntries[1] && entry != LobbyEntries[5] && entry->Slot.SpectatorFlag == -1)) { // RA2: as above
+		observer = true; // RA2: as above
+	} else {
+		observer = false; // RA2: as above
+	}
+	HWND color = GetDlgItem(dialog, color_id); // RA2: as above
+	HWND combo = GetDlgItem(dialog, slot_id); // RA2: as above
+	HWND player = GetDlgItem(dialog, player_id); // RA2: as above
+	HWND color_combo = GetDlgItem(dialog, color_combo_id); // RA2: as above
+	HWND side_combo = GetDlgItem(dialog, side_combo_id); // RA2: as above
+	ShowWindow(color, SW_SHOW); // RA2: as above
+	ShowWindow(combo, SW_SHOW); // RA2: as above
+	ShowWindow(player, SW_SHOW); // RA2: as above
+	if (!observer) { // RA2: as above
+		ShowWindow(color_combo, SW_SHOW); // RA2: as above
+		ShowWindow(side_combo, SW_SHOW); // RA2: as above
+	} else {
+		ShowWindow(color_combo, SW_HIDE); // RA2: as above
+		ShowWindow(side_combo, SW_SHOW); // RA2: as above
+	}
+}
+
+// RA2: the executable calls Show_Slot_Controls (Change_Slot_Count does not expand it); written with the per-slot helper it compiles to the executable's size, but its small source tree would be expanded into Change_Slot_Count, so automatic inlining is off for it (debt: the original source got the call without this)
+#pragma auto_inline(off) // RA2: as above
+void __fastcall Show_Slot_Controls(HWND dialog, int first, int count) // RA2: 0x005CAE00, not in TibSun; shows the controls of count slots from the first one on
+{
+	int end = first + count; // RA2: as above
+	for (int slot = first; slot < end; slot++) { // RA2: as above
+		Show_Slot(dialog, slot); // RA2: as above
+	}
+}
+#pragma auto_inline() // RA2: as above
+
+void __fastcall Show_Observer_Slot_Controls(HWND dialog) // RA2: 0x005CAFD0, not in TibSun; shows the controls of the observer's slot (the last one when the observer is the first), the color box stays hidden for an observer
+{
+	int slot = LobbyObserverSlot; // RA2: as above
+	if (slot < 0) { // RA2: as above
+		return; // RA2: as above
+	}
+	if (slot == 0) { // RA2: as above
+		slot = Session.ScenarioMaxPlayers; // RA2: as above
+	}
+	if (slot >= 8) { // RA2: as above
+		return; // RA2: as above
+	}
+	int color_id; // RA2: as above
+	int slot_id; // RA2: as above
+	if (slot == 0) { // RA2: as above
+		color_id = 1746; // RA2: as above
+		slot_id = 1041; // RA2: as above
+	} else if (slot == 1) { // RA2: as above
+		color_id = 1747; // RA2: as above
+		slot_id = 1042; // RA2: as above
+	} else if (slot == 2) { // RA2: as above
+		color_id = 1748; // RA2: as above
+		slot_id = 1043; // RA2: as above
+	} else if (slot == 3) { // RA2: as above
+		color_id = 1749; // RA2: as above
+		slot_id = 1044; // RA2: as above
+	} else if (slot == 4) { // RA2: as above
+		color_id = 1750; // RA2: as above
+		slot_id = 1045; // RA2: as above
+	} else if (slot == 5) { // RA2: as above
+		color_id = 1751; // RA2: as above
+		slot_id = 1046; // RA2: as above
+	} else if (slot == 6) { // RA2: as above
+		color_id = 1752; // RA2: as above
+		slot_id = 1047; // RA2: as above
+	} else if (slot == 7) { // RA2: as above
+		color_id = 1753; // RA2: as above
+		slot_id = 1048; // RA2: as above
+	} else {
+		color_id = -1; // RA2: as above
+		slot_id = -1; // RA2: as above
+	}
+	int player_id = Player_Control_ID(slot); // RA2: as above
+	int color_combo_id = Player_Color_Combo_ID(slot); // RA2: as above
+	int side_combo_id = Player_Side_Combo_ID(slot); // RA2: as above
+	NodeNameType * entry = Session.Slots[slot]; // RA2: as above
+	bool observer; // RA2: as above
+	if (entry == LobbyEntries[6] || (entry != NULL && entry != LobbyEntries[0] && entry != LobbyEntries[1] && entry != LobbyEntries[5] && entry->Slot.SpectatorFlag == -1)) { // RA2: as above
+		observer = true; // RA2: as above
+	} else {
+		observer = false; // RA2: as above
+	}
+	HWND color = GetDlgItem(dialog, color_id); // RA2: as above
+	HWND combo = GetDlgItem(dialog, slot_id); // RA2: as above
+	HWND player = GetDlgItem(dialog, player_id); // RA2: as above
+	HWND color_combo = GetDlgItem(dialog, color_combo_id); // RA2: as above
+	HWND side_combo = GetDlgItem(dialog, side_combo_id); // RA2: as above
+	ShowWindow(color, SW_SHOW); // RA2: as above
+	ShowWindow(combo, SW_SHOW); // RA2: as above
+	ShowWindow(player, SW_SHOW); // RA2: as above
+	if (!observer) { // RA2: as above
+		ShowWindow(color_combo, SW_SHOW); // RA2: as above
+		ShowWindow(side_combo, SW_SHOW); // RA2: as above
+	} else {
+		ShowWindow(color_combo, SW_HIDE); // RA2: as above
+		ShowWindow(side_combo, SW_SHOW); // RA2: as above
+	}
+}
+
+// RA2: as for Show_Slot_Controls: the executable calls Hide_Slot_Controls; the loop written with while compiles to the executable's size, but it would be expanded into the callers, so automatic inlining is off for it (debt)
+#pragma auto_inline(off) // RA2: as above
+void __fastcall Hide_Slot_Controls(HWND dialog, int first) // RA2: 0x005CB170, not in TibSun; hides the controls of the slots from the first one on, except the observer's
+{
+	int slot = first; // RA2: as above
+	while (slot < 8) { // RA2: as above
+		if (slot == LobbyObserverSlot) { // RA2: as above
+			slot++; // RA2: as above
+			continue; // RA2: as above
+		}
+		int color_id; // RA2: as above
+		int slot_id; // RA2: as above
+		if (slot == 0) { // RA2: as above
+			color_id = 1746; // RA2: as above
+			slot_id = 1041; // RA2: as above
+		} else if (slot == 1) { // RA2: as above
+			color_id = 1747; // RA2: as above
+			slot_id = 1042; // RA2: as above
+		} else if (slot == 2) { // RA2: as above
+			color_id = 1748; // RA2: as above
+			slot_id = 1043; // RA2: as above
+		} else if (slot == 3) { // RA2: as above
+			color_id = 1749; // RA2: as above
+			slot_id = 1044; // RA2: as above
+		} else if (slot == 4) { // RA2: as above
+			color_id = 1750; // RA2: as above
+			slot_id = 1045; // RA2: as above
+		} else if (slot == 5) { // RA2: as above
+			color_id = 1751; // RA2: as above
+			slot_id = 1046; // RA2: as above
+		} else if (slot == 6) { // RA2: as above
+			color_id = 1752; // RA2: as above
+			slot_id = 1047; // RA2: as above
+		} else if (slot == 7) { // RA2: as above
+			color_id = 1753; // RA2: as above
+			slot_id = 1048; // RA2: as above
+		} else {
+			color_id = -1; // RA2: as above
+			slot_id = -1; // RA2: as above
+		}
+		int player_id = Player_Control_ID(slot); // RA2: as above
+		int side_id = Player_Side_Combo_ID(slot); // RA2: as above
+		int shade_id = Player_Color_Combo_ID(slot); // RA2: as above
+		HWND color = GetDlgItem(dialog, color_id); // RA2: as above
+		HWND entry = GetDlgItem(dialog, slot_id); // RA2: as above
+		HWND player = GetDlgItem(dialog, player_id); // RA2: as above
+		HWND side = GetDlgItem(dialog, side_id); // RA2: as above
+		HWND shade = GetDlgItem(dialog, shade_id); // RA2: as above
+		ShowWindow(color, SW_HIDE); // RA2: as above
+		ShowWindow(entry, SW_HIDE); // RA2: as above
+		ShowWindow(player, SW_HIDE); // RA2: as above
+		ShowWindow(side, SW_HIDE); // RA2: as above
+		ShowWindow(shade, SW_HIDE); // RA2: as above
+		slot++; // RA2: as above
+	}
+}
+#pragma auto_inline() // RA2: as above
+
+void __fastcall Change_Slot_Count(HWND dialog, int old_count, int count, MultiplayerGameMode * mode) // RA2: 0x005CB300, not in TibSun; shows or hides the controls of the slots that were added or removed, both counts limited to the lobby's
+{
+	if (Session.MPGameMode != NULL && !Session.MPGameMode->IsSkirmishAllowed() && !Is_Current_Channel_Tournament()) { // RA2: as above
+		int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+		if (old_count > limit) { // RA2: as above
+			old_count = limit; // RA2: as above
+		}
+	}
+	if ((mode != NULL && !mode->IsSkirmishAllowed()) || Is_Current_Channel_Tournament()) { // RA2: as above
+		int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+		if (count > limit) { // RA2: as above
+			count = limit; // RA2: as above
+		}
+	}
+	int added = count - old_count; // RA2: as above
+	if (added > 0) { // RA2: as above
+		Show_Slot_Controls(dialog, old_count, added); // RA2: as above
+		Show_Observer_Slot_Controls(dialog); // RA2: as above
+	} else {
+		if (added < 0) { // RA2: as above
+			Hide_Slot_Controls(dialog, count); // RA2: as above
+		}
+		Show_Observer_Slot_Controls(dialog); // RA2: as above
+	}
+}
+
+
+void __fastcall Change_Slot_Type(HWND dialog, int id, int data, int mode); // RA2: 0x005CBF20, defined below
+void Redraw_Player_List(void); // RA2: 0x007412F0, defined in wonline.cpp
+Wstring Wstring_Narrow(WideWstring const & text); // RA2: 0x00771280, as wonline.cpp
+
+void __fastcall Change_Slot_Range(HWND dialog, int first, int count) // RA2: 0x005CB3F0, not in TibSun; the entries chosen in the combo boxes of count slots from the first one on are seated, empty ones become open or closed, then the controls are shown
+{
+	int end = first + count; // RA2: as above
+	int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+	for (int i = first; i < end; i++) { // RA2: as above
+		int id = Get_Slot_Control_Id(i); // RA2: as above
+		int index = SendDlgItemMessageA(dialog, id, CB_GETCURSEL, 0, 0); // RA2: as above
+		NodeNameType * entry = (NodeNameType *)SendDlgItemMessageA(dialog, id, CB_GETITEMDATA, index, 0); // RA2: as above
+		NodeNameType * open = LobbyEntries[0]; // RA2: the open and closed entries are read once, before the test: the executable loads both into registers there
+		NodeNameType * closed = LobbyEntries[1]; // RA2: as above
+		if (entry != (NodeNameType *)-1 && entry != NULL && entry != open && entry != closed && entry != LobbyEntries[6] && entry != LobbyEntries[5]) { // RA2: as above
+			Change_Slot_Type(dialog, id, (int)entry, 0); // RA2: as above
+		} else if (i != LobbyObserverSlot) { // RA2: as above
+			if (i < limit) { // RA2: as above
+				Change_Slot_Type(dialog, id, (int)open, 0); // RA2: as above
+			} else {
+				Change_Slot_Type(dialog, id, (int)closed, 0); // RA2: as above
+			}
+		}
+	}
+	Show_Slot_Controls(dialog, first, count); // RA2: as above
+	Net2DisplayUsers(); // RA2: as above
+	Send_Lobby_Options(true, false); // RA2: as above
+}
+
+void __fastcall Clear_Observer_Slots(HWND dialog) // RA2: 0x005CB560, not in TibSun; observers are removed from the slots: the open ones become open or closed, the observer's own slot keeps its entry unless the scenario has no room for it
+{
+	bool changed = false; // RA2: as above
+	if (LobbyObserverSlot < 1) { // RA2: as above
+		int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+		for (int slot = 1; slot < 8; slot++) { // RA2: as above
+			int id = Get_Slot_Control_Id(slot); // RA2: as above
+			NodeNameType * entry = Session.Slots[slot]; // RA2: as above
+			if (slot < limit) { // RA2: as above
+				if (entry == LobbyEntries[6] || entry->Slot.SpectatorFlag == -1) { // RA2: as above
+					Change_Slot_Type(dialog, id, (int)LobbyEntries[0], 1); // RA2: as above
+					changed = true; // RA2: as above
+				}
+			} else if (entry == LobbyEntries[6] || entry->Slot.SpectatorFlag == -1) { // RA2: as above
+				Change_Slot_Type(dialog, id, (int)LobbyEntries[1], 1); // RA2: as above
+				changed = true; // RA2: as above
+			}
+		}
+	} else {
+		NodeNameType * entry = Session.Slots[LobbyObserverSlot]; // RA2: as above
+		if (LobbyObserverSlot > Get_Scenario_Slot_Limit(Session.Options.ScenarioIndex)) { // RA2: as above
+			NodeNameType * open = LobbyEntries[0]; // RA2: read once at the head of the test, as in Change_Slot_Range
+			NodeNameType * closed = LobbyEntries[1]; // RA2: as above
+			if ((Is_Seated_Entry(entry) && entry->Slot.SpectatorFlag != -1) // RA2: as above
+				|| (entry != NULL && (entry == LobbyEntries[2] || entry == LobbyEntries[3] || entry == LobbyEntries[4])) // RA2: as above
+				|| entry == open) { // RA2: as above
+				entry = closed; // RA2: as above
+				changed = true; // RA2: as above
+			}
+		}
+		Show_Observer_Slot_Controls(dialog); // RA2: as above
+		Change_Slot_Type(dialog, Get_Slot_Control_Id(LobbyObserverSlot), (int)entry, 1); // RA2: as above
+	}
+	if (changed) { // RA2: as above
+		Set_Slot_Country(dialog, Player_Side_Combo_ID(LobbyObserverSlot)); // RA2: as above
+	}
+	Net2DisplayUsers(); // RA2: as above
+	Send_Lobby_Options(true, false); // RA2: as above
+}
+
+void __fastcall Close_Slots_From(HWND dialog, int first) // RA2: 0x005CB7C0, not in TibSun; the slots from the first one on become open or closed, their controls are hidden and the lobby is redrawn and sent
+{
+	int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+	for (int slot = first; slot < 8; slot++) { // RA2: as above
+		int id = Get_Slot_Control_Id(slot); // RA2: as above
+		if (slot < limit) { // RA2: as above
+			if (slot != LobbyObserverSlot) { // RA2: as above
+				Change_Slot_Type(dialog, id, (int)LobbyEntries[0], 1); // RA2: as above
+			}
+		} else if (slot != LobbyObserverSlot) { // RA2: as above
+			Change_Slot_Type(dialog, id, (int)LobbyEntries[1], 1); // RA2: as above
+		}
+	}
+	Hide_Slot_Controls(dialog, first); // RA2: as above
+	if (g_pChat != NULL) { // RA2: as above
+		Redraw_Player_List(); // RA2: as above
+	} else {
+		Net2DisplayUsers(); // RA2: as above
+	}
+	Send_Lobby_Options(true, false); // RA2: as above
+}
+
+void __fastcall Change_Scenario_Slots(HWND dialog, int previous, int scenario) // RA2: 0x005CB8D0, not in TibSun; the lobby takes the number of slots of the scenario: new slots are shown and filled, removed ones are closed, and the observer's slot is moved to the last slot when the game mode asks for one
+{
+	int players = Get_Scenario_Slot_Limit(scenario); // RA2: as above
+	bool ai_allowed = (Session.MPGameMode == NULL || Session.MPGameMode->IsSkirmishAllowed()) && !Is_Current_Channel_Tournament(); // RA2: as above
+	if (!ai_allowed) { // RA2: as above
+		int limit = Get_Lobby_Slot_Limit(); // RA2: as above
+		if (players > limit) { // RA2: as above
+			players = limit; // RA2: as above
+		}
+	}
+	if (previous == -1) { // RA2: as above
+		LobbySlotCount = 8; // RA2: as above
+		LobbyExtraSlot = 0; // RA2: as above
+	}
+	int added = players - LobbySlotCount; // RA2: as above
+	int extra = 0; // RA2: as above
+	if (LobbyObserverSlot == 0) { // RA2: as above
+		if (ai_allowed || players < Get_Lobby_Slot_Limit_Plus_One()) { // RA2: as above
+			extra = 1; // RA2: as above
+			if (LobbyExtraSlot == 0 && added + players < 7) { // RA2: as above
+				added++; // RA2: as above
+			}
+		}
+	}
+	if (previous == -1 && LobbyObserverSlot == 0) { // RA2: as above
+		int side = Player_Side_Combo_ID(0); // RA2: as above
+		Fill_Observer_Combo(dialog, side); // RA2: as above
+		Select_Side_Combo(dialog, side, -3); // RA2: as above
+		SendMessageA(GetDlgItem(dialog, 1041), 0x4F1, 0, 1); // RA2: as above
+		int color = Player_Color_Combo_ID(0); // RA2: as above
+		Fill_Random_Color_Combo(dialog, color); // RA2: as above
+		Select_Color_Combo(dialog, color, 8); // RA2: as above
+	}
+	if (added > 0) { // RA2: as above
+		Change_Slot_Range(dialog, LobbyExtraSlot + LobbySlotCount, added); // RA2: as above
+	} else if (added < 0) { // RA2: as above
+		Close_Slots_From(dialog, extra + players); // RA2: as above
+	} else if (extra + players >= 7) { // RA2: as above
+		Change_Slot_Range(dialog, 7, 1); // RA2: as above
+	}
+	Clear_Observer_Slots(dialog); // RA2: as above
+	if (LobbyObserverSlot == -1 && Session.MPGameMode != NULL && Session.MPGameMode->vt_entry_A0()) { // RA2: as above
+		LobbyObserverSlot = 7; // RA2: as above
+		Clear_Observer_Slots(dialog); // RA2: as above
+		DebugString("Sending observer slot of 7\n"); // RA2: as above
+		char text[256]; // RA2: as above
+		NodeNameType * entry = Session.Slots[LobbyObserverSlot]; // RA2: as above
+		WideWstring name; // RA2: as above
+		if (entry == NULL || entry == LobbyEntries[0] || entry == LobbyEntries[1] || entry == LobbyEntries[5] || entry == LobbyEntries[6] // RA2: as above
+			|| entry == LobbyEntries[2] || entry == LobbyEntries[3] || entry == LobbyEntries[4]) { // RA2: as above
+			Wstring narrow = Lobby_Entry_Name(entry); // RA2: as above
+			name = Wstring_ToWide(narrow); // RA2: as above
+		} else {
+			name = entry->Name; // RA2: as above
+		}
+		{
+			WideWstring wide(name.get()); // RA2: as above
+			sprintf(text, "O%d%s", LobbyObserverSlot, Wstring_Narrow(wide).get()); // RA2: as above
+		}
+		Send_Host_Option(text); // RA2: as above
+	}
+	LobbySlotCount = players; // RA2: as above
+	LobbyExtraSlot = extra; // RA2: as above
+}
+
+
+bool __fastcall Lobby_Update_Dialog(HWND dialog, int count, bool flag1, bool flag2) // RA2: 0x005CBDB0, not in TibSun; tells whether the combo boxes hold a computer player where the game mode takes none, or a player beyond the count: an observer beyond it counts only when the game mode takes observers
+{
+	if (LobbyObserverSlot == 0) { // RA2: as above
+		count++; // RA2: as above
+	}
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		int id = Get_Slot_Control_Id(i); // RA2: as above
+		int index = SendDlgItemMessageA(dialog, id, CB_GETCURSEL, 0, 0); // RA2: as above
+		int data = SendDlgItemMessageA(dialog, id, CB_GETITEMDATA, index, 0); // RA2: as above
+		NodeNameType * entry; // RA2: as above
+		if (data == -1) { // RA2: as above
+			entry = NULL; // RA2: as above
+		} else {
+			entry = (NodeNameType *)data; // RA2: as above
+		}
+		if (Is_AI_Entry(entry) && Session.MPGameMode != NULL && !flag1) { // RA2: as above
+			return(true); // RA2: as above
+		}
+		if (i >= count) { // RA2: as above
+			bool player = entry != NULL && entry != LobbyEntries[0] && entry != LobbyEntries[1] && entry != LobbyEntries[6] && entry != LobbyEntries[5]; // RA2: as above
+			if (player && entry->Get_Country() != -3) { // RA2: as above
+				return(true); // RA2: as above
+			}
+			if (Session.MPGameMode != NULL && !flag2 && player && entry->Get_Country() == -3) { // RA2: as above
+				return(true); // RA2: as above
+			}
+		}
+	}
+	return(false); // RA2: as above
+}
+
+void __fastcall Reject_Join(NodeNameType * node); // RA2: 0x005BC3E0, defined in netdlg2.cpp
+void Send_Slot_Names(void); // RA2: 0x005BBD20, defined in netdlg2.cpp
+void Send_Player_List(void); // RA2: 0x0073C480, defined in wonline.cpp
+void __fastcall Kick_Channel_User(wchar_t const * name); // RA2: 0x0075CAE0, looks the channel user up by name and has the chat service remove it (WOL)
+void Update_Channel_Player_Limit(void); // RA2: 0x00749F20, tells the chat service the channel's new player limit (WOL)
+extern int ObserverMode; // RA2: 0x00A72C68, nonzero for an observer
+
+void __fastcall Change_Slot_Type(HWND dialog, int id, int data, int mode) // RA2: 0x005CBF20, not in TibSun; seats an entry in the slot of a combo box: a computer player is refused beside an observer, a player who is replaced is turned away, and the boxes follow the new entry; mode 1 and 2 tell the other players, mode 2 sends the lobby options as well
+{
+	NodeNameType * entry = (NodeNameType *)data; // RA2: as above
+	NodeNameType * choice = entry; // RA2: as above
+	int slot; // RA2: as above
+	if (id == 1041) { // RA2: as above
+		slot = 0; // RA2: as above
+	} else if (id == 1042) { // RA2: as above
+		slot = 1; // RA2: as above
+	} else if (id == 1043) { // RA2: as above
+		slot = 2; // RA2: as above
+	} else if (id == 1044) { // RA2: as above
+		slot = 3; // RA2: as above
+	} else if (id == 1045) { // RA2: as above
+		slot = 4; // RA2: as above
+	} else if (id == 1046) { // RA2: as above
+		slot = 5; // RA2: as above
+	} else if (id == 1047) { // RA2: as above
+		slot = 6; // RA2: as above
+	} else {
+		slot = id == 1048 ? 7 : -1; // RA2: as above
+	}
+	NodeNameType * seated = Session.Slots[slot]; // RA2: as above
+	NodeNameType * previous = seated; // RA2: as above
+	if (!(Is_AI_Entry(choice) && slot != LobbyObserverSlot)) { // RA2: as above
+		if (choice == LobbyEntries[6]) { // RA2: as above
+			bool booted = false; // RA2: as above
+			for (int i = 0; i < 8; i++) { // RA2: as above
+				NodeNameType * closed = LobbyEntries[1]; // RA2: as above
+				if (i != slot && Is_AI_Entry(Session.Slots[i])) { // RA2: as above
+					int other; // RA2: as above
+					if (i == 0) { // RA2: as above
+						other = 1041; // RA2: as above
+					} else if (i == 1) { // RA2: as above
+						other = 1042; // RA2: as above
+					} else if (i == 2) { // RA2: as above
+						other = 1043; // RA2: as above
+					} else if (i == 3) { // RA2: as above
+						other = 1044; // RA2: as above
+					} else if (i == 4) { // RA2: as above
+						other = 1045; // RA2: as above
+					} else if (i == 5) { // RA2: as above
+						other = 1046; // RA2: as above
+					} else if (i == 6) { // RA2: as above
+						other = 1047; // RA2: as above
+					} else {
+						other = i == 7 ? 1048 : -1; // RA2: as above
+					}
+					HWND combo = GetDlgItem(dialog, other); // RA2: as above
+					ShowWindow(combo, SW_HIDE); // RA2: as above
+					int count = SendDlgItemMessageA(dialog, other, CB_GETCOUNT, 0, 0); // RA2: as above
+					for (int index = 0; index < count; index++) { // RA2: as above
+						if (SendDlgItemMessageA(dialog, other, CB_GETITEMDATA, index, 0) == (int)closed) { // RA2: as above
+							SendDlgItemMessageA(dialog, other, CB_SETCURSEL, index, 0); // RA2: as above
+							break; // RA2: as above
+						}
+					}
+					ShowWindow(combo, SW_SHOW); // RA2: as above
+					Change_Slot_Type(dialog, other, (int)LobbyEntries[1], 0); // RA2: as above
+					booted = true; // RA2: as above
+				}
+			}
+			if (booted) { // RA2: as above
+				Lobby_Chat_Printf(-1, StringTable::LoadString("TXT_OBSERVER_BOOTED_AI", NULL, "D:\\Ra2\\netshare.cpp", 5567)); // RA2: as above
+			}
+		}
+	} else if (ObserverMode != 0 || (LobbyObserverSlot > 0 && (Session.Slots[LobbyObserverSlot]->Slot.SpectatorFlag == -1 || Session.Slots[LobbyObserverSlot] == LobbyEntries[6]))) { // RA2: as above
+		Lobby_Chat_Printf(-1, StringTable::LoadString("TXT_NO_AI_WITH_OBSERVER", NULL, "D:\\Ra2\\netshare.cpp", 5538)); // RA2: as above
+		previous = choice; // RA2: as above
+		choice = seated; // RA2: as above
+		if (Is_AI_Entry(choice)) { // RA2: as above
+			choice = LobbyEntries[1]; // RA2: as above
+		}
+		HWND combo = GetDlgItem(dialog, id); // RA2: as above
+		ShowWindow(combo, SW_HIDE); // RA2: as above
+		int count = SendDlgItemMessageA(dialog, id, CB_GETCOUNT, 0, 0); // RA2: as above
+		for (int index = 0; index < count; index++) { // RA2: as above
+			if (SendDlgItemMessageA(dialog, id, CB_GETITEMDATA, index, 0) == (int)choice) { // RA2: as above
+				SendDlgItemMessageA(dialog, id, CB_SETCURSEL, index, 0); // RA2: as above
+				break; // RA2: as above
+			}
+		}
+		ShowWindow(combo, SW_SHOW); // RA2: as above
+	}
+	if (entry == previous) { // RA2: as above
+		return; // RA2: as above
+	}
+	Session.Slots[slot] = entry; // RA2: as above
+	if (mode == 1 || mode == 2) { // RA2: as above
+		if (!Is_Real_Player_Entry(entry) && Is_Real_Player_Entry(previous)) { // RA2: as above
+			if (g_pChat == NULL) { // RA2: as above
+				Reject_Join(previous); // RA2: as above
+			} else {
+				Kick_Channel_User(previous->Name); // RA2: as above
+			}
+		}
+		if (g_pChat == NULL) { // RA2: as above
+			Send_Slot_Names(); // RA2: as above
+		} else {
+			Send_Player_List(); // RA2: as above
+		}
+	}
+	bool ai_now; // RA2: as above
+	if (Is_AI_Entry(entry)) { // RA2: as above
+		ai_now = true; // RA2: as above
+	} else {
+		ai_now = false; // RA2: as above
+	}
+	bool ai_before; // RA2: as above
+	if (Is_AI_Entry(previous)) { // RA2: as above
+		ai_before = true; // RA2: as above
+	} else {
+		ai_before = false; // RA2: as above
+	}
+	bool observer_now; // RA2: as above
+	if (entry == LobbyEntries[6]) { // RA2: as above
+		observer_now = true; // RA2: as above
+	} else if (!Is_Real_Player_Entry(entry)) { // RA2: as above
+		observer_now = false; // RA2: as above
+	} else if (entry->Slot.SpectatorFlag == -1) { // RA2: as above
+		observer_now = true; // RA2: as above
+	} else {
+		observer_now = false; // RA2: as above
+	}
+	bool observer_before = previous == LobbyEntries[6] || (Is_Real_Player_Entry(previous) && previous->Slot.SpectatorFlag == -1); // RA2: as above
+	if (observer_now || observer_before) { // RA2: as above
+		if (observer_now) { // RA2: as above
+			int side = Player_Side_Combo_ID(slot); // RA2: as above
+			Fill_Observer_Combo(dialog, side); // RA2: as above
+			int control; // RA2: as above
+			if (slot == 0) { // RA2: as above
+				control = 1041; // RA2: as above
+			} else if (slot == 1) { // RA2: as above
+				control = 1042; // RA2: as above
+			} else if (slot == 2) { // RA2: as above
+				control = 1043; // RA2: as above
+			} else if (slot == 3) { // RA2: as above
+				control = 1044; // RA2: as above
+			} else if (slot == 4) { // RA2: as above
+				control = 1045; // RA2: as above
+			} else if (slot == 5) { // RA2: as above
+				control = 1046; // RA2: as above
+			} else if (slot == 6) { // RA2: as above
+				control = 1047; // RA2: as above
+			} else {
+				control = slot == 7 ? 1048 : -1; // RA2: as above
+			}
+			SendMessageA(GetDlgItem(dialog, control), 0x4F1, 0, 1); // RA2: as above
+			int color = Player_Color_Combo_ID(slot); // RA2: as above
+			Fill_Random_Color_Combo(dialog, color); // RA2: as above
+			Select_Color_Combo(dialog, color, 8); // RA2: as above
+		} else {
+			int side = Player_Side_Combo_ID(slot); // RA2: as above
+			Fill_Side_Combo(dialog, side); // RA2: as above
+			int control; // RA2: as above
+			if (slot == 0) { // RA2: as above
+				control = 1041; // RA2: as above
+			} else if (slot == 1) { // RA2: as above
+				control = 1042; // RA2: as above
+			} else if (slot == 2) { // RA2: as above
+				control = 1043; // RA2: as above
+			} else if (slot == 3) { // RA2: as above
+				control = 1044; // RA2: as above
+			} else if (slot == 4) { // RA2: as above
+				control = 1045; // RA2: as above
+			} else if (slot == 5) { // RA2: as above
+				control = 1046; // RA2: as above
+			} else if (slot == 6) { // RA2: as above
+				control = 1047; // RA2: as above
+			} else {
+				control = slot == 7 ? 1048 : -1; // RA2: as above
+			}
+			SendMessageA(GetDlgItem(dialog, control), 0x4F1, 0, 0); // RA2: as above
+			int color = Player_Color_Combo_ID(slot); // RA2: as above
+			Fill_Random_Color_Combo(dialog, color); // RA2: as above
+			Select_Color_Combo(dialog, color, -2); // RA2: as above
+		}
+		Update_Slot_Controls(dialog, slot, false); // RA2: as above
+		Session.Options.AISlots.Difficulties[slot] = -1; // RA2: as above
+		Session.Options.AISlots.Countries[slot] = -1; // RA2: as above
+		Session.Options.AISlots.Colors[slot] = -1; // RA2: as above
+	}
+	if (ai_now) { // RA2: as above
+		Update_Slot_Controls(dialog, slot, true); // RA2: as above
+		Session.Options.AISlots.Difficulties[slot] = Get_AI_Difficulty(entry); // RA2: as above
+		Session.Options.AISlots.Countries[slot] = -2; // RA2: as above
+		Session.Options.AISlots.Colors[slot] = -2; // RA2: as above
+	} else if (ai_before) { // RA2: as above
+		Update_Slot_Controls(dialog, slot, false); // RA2: as above
+		Session.Options.AISlots.Difficulties[slot] = -1; // RA2: as above
+		Session.Options.AISlots.Countries[slot] = -1; // RA2: as above
+		Session.Options.AISlots.Colors[slot] = -1; // RA2: as above
+	}
+	if (g_pChat != NULL) { // RA2: as above
+		Update_Channel_Player_Limit(); // RA2: as above
+	}
+	if (ai_now || ai_before || observer_now || observer_before) { // RA2: as above
+		Session.Options.AIPlayers = Count_AI_Slots(); // RA2: as above
+		if (mode == 2) { // RA2: as above
+			if (g_pChat != NULL) { // RA2: as above
+				Redraw_Player_List(); // RA2: as above
+			} else {
+				Net2DisplayUsers(); // RA2: as above
+			}
+			Send_Lobby_Options(true, false); // RA2: as above
+		}
+	}
+}
+
+void __fastcall Select_Entry_Kind(HWND dialog, int id, int kind) // RA2: 0x005CC700, not in TibSun; picks the item of a type (see Get_Entry_Kind) in a slot's combo box and seats it
+{
+	NodeNameType * entry = Get_Kind_Entry(kind); // RA2: as above
+	Select_Combo_By_Data(dialog, id, (int)entry); // RA2: as above
+	Change_Slot_Type(dialog, id, (int)entry, 0); // RA2: as above
+}
+
+void __fastcall Load_Random_Map_Preview(HWND dialog) // RA2: 0x005CC800, not in TibSun; the preview of a random map is read from RandMap.img, any other map's is drawn
+{
+	if (Session.Scenarios[Session.Options.ScenarioIndex]->Is_Random_Map()) { // RA2: as above
+		delete MultiplayerMapPreview; // RA2: as above
+		MultiplayerMapPreview = new MapPreviewClass; // RA2: as above
+		MultiplayerMapPreview->Read_PCX_Preview("RandMap.img"); // RA2: as above
+		if (MultiplayerMapPreview->Get_Preview_Surface() == NULL) { // RA2: as above
+			Update_Network_Dialog_Preview(dialog); // RA2: as above
+		}
+		InvalidateRect(dialog, NULL, FALSE); // RA2: as above
+	} else {
+		Update_Network_Dialog_Preview(dialog); // RA2: as above
+	}
+}
+
+void __fastcall Save_Lobby_Options(HWND dialog, SessionOptionsClass * options) // RA2: 0x005CC890, not in TibSun; the game mode, map, the type, side and color of every slot but the first and the game settings are kept in the options
+{
+	options->MPGameMode = Session.Options.MPModeIndex; // RA2: as above
+	options->ScenIndex = Session.Options.ScenarioIndex; // RA2: as above
+	for (int slot = 1; slot < 8; slot++) { // RA2: as above
+		int id = Get_Slot_Control_Id(slot); // RA2: as above
+		int index = SendDlgItemMessageA(dialog, id, CB_GETCURSEL, 0, 0); // RA2: as above
+		int data = SendDlgItemMessageA(dialog, id, CB_GETITEMDATA, index, 0); // RA2: as above
+		options->SlotData[slot][0] = Get_Entry_Kind((NodeNameType *)(data == -1 ? 0 : data)); // RA2: as above
+		int side_id = Player_Side_Combo_ID(slot); // RA2: as above
+		options->SlotData[slot][1] = Side_Combo_Data(dialog, side_id, -1); // RA2: as above
+		int color_id = Player_Color_Combo_ID(slot); // RA2: as above
+		options->SlotData[slot][2] = Color_Combo_Data(dialog, color_id, -1); // RA2: as above
+	}
+	options->GameSpeed = Session.Options.GameSpeed; // RA2: as above
+	options->Credits = Session.Options.Credits; // RA2: as above
+	options->UnitCount = Session.Options.UnitCount; // RA2: as above
+	options->ShortGame = Session.Options.ShortGame; // RA2: as above
+	options->SuperWeaponsAllowed = Session.Options.SWAllowed; // RA2: as above
+	options->BuildOffAlly = Session.Options.BuildOffAlly; // RA2: as above
+	options->MCVRepacks = Session.Options.MCVRedeploy; // RA2: as above
+	options->CratesAppear = Session.Options.Goodies; // RA2: as above
+}
+
+void __fastcall Load_Lobby_Options(HWND dialog, SessionOptionsClass * options) // RA2: 0x005CCA30, not in TibSun; the saved game mode, map and settings are made current again (a restricted channel takes the first game mode if the saved one is not allowed) and every slot but the first is set to its saved type, side and color
+{
+	if (options->MPGameMode < 1 || options->MPGameMode > MultiplayerGameMode::GetModeCount()) { // RA2: as above
+		options->MPGameMode = First_Game_Mode()->MPModeIndex; // RA2: as above
+	}
+	Session.Options.MPModeIndex = options->MPGameMode; // RA2: as above
+	MultiplayerGameMode * mode = MultiplayerGameMode::Get(Session.Options.MPModeIndex); // RA2: as above
+	if (mode == NULL) { // RA2: as above
+		mode = First_Game_Mode(); // RA2: as above
+	}
+	if ((Is_Current_Channel_Tournament() || Is_Current_Channel_Flag_8()) && mode != NULL && mode->vt_entry_04()) { // RA2: as above
+		options->MPGameMode = First_Game_Mode()->MPModeIndex; // RA2: as above
+		Session.Options.MPModeIndex = options->MPGameMode; // RA2: as above
+		MultiplayerGameMode * found = MultiplayerGameMode::Get(Session.Options.MPModeIndex); // RA2: as above
+		if (found == NULL) { // RA2: as above
+			found = First_Game_Mode(); // RA2: as above
+		}
+		mode = found; // RA2: as above
+	}
+	options->MPGameMode = mode->MPModeIndex; // RA2: as above
+	Session.Options.MPModeIndex = mode->MPModeIndex; // RA2: as above
+	if (options->ScenIndex < 0 || options->ScenIndex >= Session.Scenarios.Count()) { // RA2: as above
+		options->ScenIndex = 0; // RA2: as above
+	}
+	Session.Options.ScenarioIndex = Set_Scenario_Info_From_Index(options->ScenIndex) ? options->ScenIndex : 0; // RA2: as above
+	if (!mode->IsMapAllowed(Session.Scenarios[Session.Options.ScenarioIndex])) { // RA2: as above
+		int index = mode->FirstValidMapIndex(); // RA2: as above
+		if (index == -1) { // RA2: as above
+			mode = First_Game_Mode(); // RA2: as above
+			options->MPGameMode = mode->MPModeIndex; // RA2: as above
+			Session.Options.MPModeIndex = mode->MPModeIndex; // RA2: as above
+			index = mode->FirstValidMapIndex(); // RA2: as above
+		}
+		options->ScenIndex = index; // RA2: as above
+		Session.Options.ScenarioIndex = index; // RA2: as above
+		Set_Scenario_Info_From_Index(index); // RA2: as above
+	}
+	Session.MPGameMode = mode; // RA2: as above
+	Set_Scenario_Info_From_Index(Session.Options.ScenarioIndex); // RA2: as above
+	Session.MPGameMode->vt_entry_20(); // RA2: as above
+	Session.MPGameMode->vt_entry_24(); // RA2: as above
+	mode->AssignTeamsAtStart(); // RA2: as above
+	mode->UnfixAlliances(); // RA2: as above
+	int limit = 8; // RA2: as above
+	if (Session.Type == GAME_INTERNET) { // RA2: as above
+		limit = (Is_Current_Channel_Tournament() && !Is_Current_Channel_Flag_8()) ? 2 : 4; // RA2: as above
+	}
+	if (LobbyObserverSlot == 0 && limit < 8) { // RA2: as above
+		limit++; // RA2: as above
+	}
+	for (int slot = 1; slot < 8; slot++) { // RA2: as above
+		int id = Get_Slot_Control_Id(slot); // RA2: as above
+		int kind = options->SlotData[slot][0]; // RA2: as above
+		if (Is_Current_Channel_Tournament() || LobbyObserverSlot == 0 || ObserverMode != 0) { // RA2: as above
+			if (kind == 4) { // RA2: as above
+				kind = 2; // RA2: as above
+			} else if (kind == 5) { // RA2: as above
+				kind = 2; // RA2: as above
+			} else if (kind == 6) { // RA2: as above
+				kind = 2; // RA2: as above
+			}
+		}
+		if (slot >= limit) { // RA2: as above
+			kind = 3; // RA2: as above
+		} else if (kind == 7) { // RA2: as above
+			kind = 2; // RA2: as above
+		}
+		Select_Entry_Kind(dialog, id, kind); // RA2: as above
+		int side_id = Player_Side_Combo_ID(slot); // RA2: as above
+		int color_id = Player_Color_Combo_ID(slot); // RA2: as above
+		if (kind != 2 && kind != 3) { // RA2: as above
+			if (kind == 7) { // RA2: as above
+				Select_Side_Combo(dialog, side_id, -3); // RA2: as above
+				Select_Color_Combo(dialog, color_id, -2); // RA2: as above
+				HWND side = GetDlgItem(dialog, side_id); // RA2: as above
+				HWND colors = GetDlgItem(dialog, color_id); // RA2: as above
+				EnableWindow(side, FALSE); // RA2: as above
+				EnableWindow(colors, FALSE); // RA2: as above
+			} else {
+				Select_Side_Combo(dialog, side_id, options->SlotData[slot][1]); // RA2: as above
+				Set_Slot_Country(dialog, side_id); // RA2: as above
+				Select_Color_Combo(dialog, color_id, options->SlotData[slot][2]); // RA2: as above
+				Set_Slot_Color(dialog, color_id); // RA2: as above
+			}
+		} else {
+			Select_Side_Combo(dialog, side_id, Session.MPGameMode->DefaultCountry()); // RA2: as above
+			Select_Color_Combo(dialog, color_id, -2); // RA2: as above
+			HWND side = GetDlgItem(dialog, side_id); // RA2: as above
+			HWND colors = GetDlgItem(dialog, color_id); // RA2: as above
+			EnableWindow(side, FALSE); // RA2: as above
+			EnableWindow(colors, FALSE); // RA2: as above
+		}
+	}
+	Session.Options.GameSpeed = options->GameSpeed; // RA2: as above
+	Session.Options.Credits = options->Credits; // RA2: as above
+	Session.Options.UnitCount = options->UnitCount; // RA2: as above
+	Session.Options.ShortGame = options->ShortGame; // RA2: as above
+	Session.Options.SWAllowed = options->SuperWeaponsAllowed; // RA2: as above
+	Session.Options.BuildOffAlly = options->BuildOffAlly; // RA2: as above
+	Session.Options.MCVRedeploy = options->MCVRepacks; // RA2: as above
+	Session.Options.Goodies = options->CratesAppear; // RA2: as above
+}
+
+
+void __fastcall Get_Window_Wide_Text(HWND window, WideWstring & text); // RA2: 0x00600E50, the text of a window, as Get_List_Item_Wide_Text for a list box item
+
+WideWstring __fastcall Limit_Name_Text(HWND control) // RA2: 0x005CCF50, not in TibSun; the text of a name edit with the line breaks cut off; it is cut to what the lobby allows: 120 characters, or the ones below 0x100 after the first wider character (40 at least) in a name with wider characters
+{
+	WideWstring text; // RA2: as above
+	Get_Window_Wide_Text(control, text); // RA2: as above
+	unsigned int limit = 120; // RA2: as above
+	if (!text.Is_Narrow()) { // RA2: as above
+		unsigned int i; // RA2: as above
+		for (i = 0; i < text.length(); i++) { // RA2: as above
+			if (text.getChar(i) > 256) { // RA2: as above
+				break; // RA2: as above
+			}
+		}
+		limit = i - 1; // RA2: as above
+		if (limit <= 40) { // RA2: as above
+			limit = 40; // RA2: as above
+		}
+	}
+	if (text.length() > limit) { // RA2: as above
+		text.truncate(limit); // RA2: as above
+		SendMessageA(control, 0x4B2, 0, (LPARAM)text.text()); // RA2: as above
+	}
+	{
+		WideWstring line_breaks(L"\n\r"); // RA2: as above
+		text.trimTrailing(line_breaks); // RA2: as above
+	}
+	return(text); // RA2: as above
+}
+
+void __fastcall Enable_Player_Combos(HWND dialog, bool value) // RA2: 0x005CD030, not in TibSun; enables or disables the side and color boxes of the first player's slot, unless it is the observer's
+{
+	if (dialog != NULL) { // RA2: as above
+		int slot = Find_First_Player_Slot(); // RA2: as above
+		if (slot != LobbyObserverSlot) { // RA2: as above
+			HWND control = GetDlgItem(dialog, Player_Side_Combo_ID(slot)); // RA2: as above
+			if (control != NULL) { // RA2: as above
+				EnableWindow(control, value); // RA2: as above
+			}
+			control = GetDlgItem(dialog, Player_Color_Combo_ID(slot)); // RA2: as above
+			if (control != NULL) { // RA2: as above
+				EnableWindow(control, value); // RA2: as above
+			}
+		}
+	}
+}
+
+char const * LobbyEntryCodes[7] = { "@Open@", "@Closed@", "@Waiting@", "@EasyAI@", "@MediumAI@", "@HardAI@", "@OpenObserver@" }; // RA2: 0x007E6DE8, the names the fixed entries go by in the slot names the host sends: open, closed, waiting, easy, medium and hard computer player and open observer slot
+
+Wstring __fastcall Lobby_Entry_Name(NodeNameType * entry) // RA2: 0x005CD0E0, not in TibSun; the name of a fixed entry in the slot names the host sends
+{
+	if (entry == LobbyEntries[0]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[0])); // RA2: as above
+	}
+	if (entry == LobbyEntries[1]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[1])); // RA2: as above
+	}
+	if (entry == LobbyEntries[5]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[2])); // RA2: as above
+	}
+	if (entry == LobbyEntries[2]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[3])); // RA2: as above
+	}
+	if (entry == LobbyEntries[3]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[4])); // RA2: as above
+	}
+	if (entry == LobbyEntries[4]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[5])); // RA2: as above
+	}
+	if (entry == LobbyEntries[6]) { // RA2: as above
+		return(Wstring(LobbyEntryCodes[6])); // RA2: as above
+	}
+	return(Wstring(LobbyEntryCodes[2])); // RA2: as above
+}
+
+NodeNameType * __fastcall Find_Lobby_Entry_By_Name(WideWstring const & name) // RA2: 0x005CD1B0, not in TibSun; the fixed entry a name of the slot names stands for, NULL for any other
+{
+	if (name.Is_Narrow()) { // RA2: as above
+		Wstring narrow = Wstring_Narrow(name); // RA2: as above
+		if (narrow == LobbyEntryCodes[0]) { // RA2: as above
+			return(LobbyEntries[0]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[1]) { // RA2: as above
+			return(LobbyEntries[1]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[2]) { // RA2: as above
+			return(LobbyEntries[5]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[3]) { // RA2: as above
+			return(LobbyEntries[2]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[4]) { // RA2: as above
+			return(LobbyEntries[3]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[5]) { // RA2: as above
+			return(LobbyEntries[4]); // RA2: as above
+		}
+		if (narrow == LobbyEntryCodes[6]) { // RA2: as above
+			return(LobbyEntries[6]); // RA2: as above
+		}
+	}
+	return(NULL); // RA2: as above
+}
+
+bool __fastcall Is_Lobby_Name(Wstring const & name) // RA2: 0x005CD2F0, not in TibSun; the name is one of the seven names of the fixed entries
+{
+	return(name == LobbyEntryCodes[0] || name == LobbyEntryCodes[1] || name == LobbyEntryCodes[2] || name == LobbyEntryCodes[3] || name == LobbyEntryCodes[4] || name == LobbyEntryCodes[5] || name == LobbyEntryCodes[6]); // RA2: as above
+}
+
+void Load_Observer_Mode(void) // RA2: 0x005CD380, not in TibSun; reads the observer mode from RA2.INI
+{
+	ObserverMode = ConfigINI.Get_Int("MultiPlayer", "ObserverMode", 0); // RA2: as above
+}
+
+void __fastcall Save_Observer_Mode(void) // RA2: 0x005CD3A0, not in TibSun; writes the observer mode to RA2.INI
+{
+	RawFileClass file("RA2.INI"); // RA2: as above
+	ConfigINI.Put_Int("MultiPlayer", "ObserverMode", ObserverMode); // RA2: as above
+	ConfigINI.Save(file, false); // RA2: as above
+}
+
+void __fastcall Update_Observer_Button(HWND dialog) // RA2: 0x005CD3F0, not in TibSun; the observer radio button, its picture and the text of the join button follow the observer mode
+{
+	if (dialog != NULL) { // RA2: as above
+		HWND control = GetDlgItem(dialog, 1888); // RA2: as above
+		if (control != NULL) { // RA2: as above
+			SendMessageA(control, 0xF1, ObserverMode != 0, 0); // RA2: as above
+		}
+		Surface * image; // RA2: as above
+		if (ObserverMode) { // RA2: as above
+			image = SurfaceCache.GetSurface("wolob.pcx", NULL); // RA2: as above
+		} else {
+			image = SurfaceCache.GetSurface("wolnob.pcx", NULL); // RA2: as above
+		}
+		HWND picture = GetDlgItem(dialog, 1887); // RA2: as above
+		OwnerDraw::Set_Control_Image(picture, image); // RA2: as above
+		control = GetDlgItem(dialog, 1741); // RA2: as above
+		if (control != NULL) { // RA2: as above
+			wchar_t const * text; // RA2: as above
+			if (ObserverMode) { // RA2: as above
+				text = StringTable::LoadString("GUI:Observe", NULL, "D:\\Ra2\\netshare.cpp", 6072); // RA2: as above
+			} else {
+				text = StringTable::LoadString("GUI:Join", NULL, "D:\\Ra2\\netshare.cpp", 6074); // RA2: as above
+			}
+			SendMessageA(control, 0x4B2, 0, (LPARAM)text); // RA2: as above
+			InvalidateRect(control, NULL, FALSE); // RA2: as above
+		}
+		control = GetDlgItem(dialog, 1581); // RA2: as above
+		if (control != NULL) { // RA2: as above
+			wchar_t const * text; // RA2: as above
+			if (ObserverMode) { // RA2: as above
+				text = StringTable::LoadString("GUI:Observe", NULL, "D:\\Ra2\\netshare.cpp", 6083); // RA2: as above
+			} else if (WS_Find_Dialog(0x113) == dialog) { // RA2: as above
+				text = StringTable::LoadString("GUI:JoinGame", NULL, "D:\\Ra2\\netshare.cpp", 6087); // RA2: as above
+			} else {
+				text = StringTable::LoadString("GUI:Join", NULL, "D:\\Ra2\\netshare.cpp", 6089); // RA2: as above
+			}
+			SendMessageA(control, 0x4B2, 0, (LPARAM)text); // RA2: as above
+			InvalidateRect(control, NULL, FALSE); // RA2: as above
+		}
+	}
+}
+
+void __fastcall Update_Observer_Buttons(HWND dialog) // RA2: 0x005CD540, not in TibSun; the observer buttons of the dialog and of every lobby dialog that is open follow the observer mode
+{
+	if (dialog != NULL) { // RA2: as above
+		Update_Observer_Button(dialog); // RA2: as above
+	}
+	HWND other = WS_Find_Dialog(0x116); // RA2: as above
+	if (other != NULL) { // RA2: as above
+		Update_Observer_Button(other); // RA2: as above
+	}
+	other = WS_Find_Dialog(0x113); // RA2: as above
+	if (other != NULL) { // RA2: as above
+		Update_Observer_Button(other); // RA2: as above
+	}
+	other = WS_Find_Dialog(0xBB); // RA2: as above
+	if (other != NULL) { // RA2: as above
+		Update_Observer_Button(other); // RA2: as above
+	}
+}
+

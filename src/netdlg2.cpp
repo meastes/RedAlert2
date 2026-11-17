@@ -133,8 +133,8 @@ void __fastcall Select_Color_Combo(HWND dialog, int id, int color); // RA2: 0x00
 void __fastcall Fill_Side_Combo(HWND dialog, int id); // RA2: 0x004D1560
 void __fastcall Fill_Color_Combo(HWND dialog, int id); // RA2: 0x004D2080
 int __fastcall Get_Slot_Control_Id(int slot); // RA2: 0x005C97A0, the id of the control of a slot
-void __fastcall Load_Lobby_Options(HWND dialog, void * options); // RA2: 0x005CCA30
-void __fastcall Save_Lobby_Options(void); // RA2: 0x005CC890
+void __fastcall Load_Lobby_Options(HWND dialog, SessionOptionsClass * options); // RA2: 0x005CCA30, the options are a SessionOptionsClass (netshare.cpp reads their game mode, map, slots and settings)
+void __fastcall Save_Lobby_Options(HWND dialog, SessionOptionsClass * options); // RA2: 0x005CC890, the executable passes the dialog and the options (the earlier declaration had no parameters)
 void __fastcall Update_Slot_Controls(HWND dialog, int slot, bool flag); // RA2: 0x005C9B90
 void __fastcall Change_Scenario_Slots(HWND dialog, int old_scenario, int scenario); // RA2: 0x005CB8D0
 void __fastcall Refresh_Slot_Images(HWND dialog); // RA2: 0x005C9EC0
@@ -1688,7 +1688,7 @@ LRESULT CALLBACK MPlayer_Host_Dialog_Proc(HWND window, UINT message, WPARAM wpar
 					delete MultiplayerMapPreview;
 					MultiplayerMapPreview = NULL;
 				}
-				Save_Lobby_Options(); // RA2: as above
+				Save_Lobby_Options(window, &Session.LAN); // RA2: the dialog and the LAN options are passed (the function takes both)
 				_netresponse = 2;
 			}
 			return(0);
@@ -1701,7 +1701,7 @@ LRESULT CALLBACK MPlayer_Host_Dialog_Proc(HWND window, UINT message, WPARAM wpar
 		case 0x588: // RA2: as above
 			EnableWindow(GetDlgItem(window, 0x588), FALSE); // RA2: as above
 			Net2OptionsLocked = true; // RA2: as above
-			Save_Lobby_Options(); // RA2: as above
+			Save_Lobby_Options(window, &Session.LAN); // RA2: the dialog and the LAN options are passed (the function takes both)
 			_netresponse = 0x588; // RA2: as above
 			return(0);
 		case 0x5AA: { // choose another map // RA2: as above

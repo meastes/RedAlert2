@@ -90,6 +90,8 @@
 #include "wonline.h"
 #include "xstraw.h"
 #include "wstring.h"
+#include "_wsproto.h" // RA2: PacketTransport
+#include "wspudp.h" // RA2: UDPInterfaceClass
 
 #include <ctime> // for station ID computation
 #include <dos.h> // for station ID computation
@@ -2318,6 +2320,140 @@ int SessionClass::Slot_To_Player(int slot) // RA2: RA2's signature
 		}
 	}
 	return 0; // RA2: as above
+}
+
+
+struct SessionPortAllocator : public SessionClass { // RA2: file-local home of Allocate_Player_Ports (0x00673090), no data: same code as a SessionClass member
+	void Allocate_Player_Ports(void); // RA2: as above
+};
+
+void SessionPortAllocator::Allocate_Player_Ports(void) // RA2: 0x00673090, SessionClass::Allocate_Player_Ports; a member of this file-local subclass because declaring it in session.h unmatches wonline Draw_Player_List
+{
+	int player; // RA2: as above
+	unsigned short port_offset = 1; // RA2: as above
+	DynamicVectorClass<NodeNameType *> ordered; // RA2: as above
+
+	DebugString("Allocating port numbers and local addresses\n"); // RA2: as above
+	if (Players.Count() < 2) { // RA2: as above
+		return; // RA2: as above
+	}
+
+	int local_count = 0; // RA2: as above
+	memset(NatPeerNames, 0, sizeof(NatPeerNames)); // RA2: as above
+	RotatePortBase = true; // RA2: as above
+
+	for (player = 0; player < Players.Count(); player++) { // RA2: as above
+		int slot = Player_To_Slot(player); // RA2: as above
+		if (slot >= 0 && slot < MAX_PLAYERS) { // RA2: as above
+			Players[player]->Address.Set_Port(PlayerPortBase[slot]); // RA2: as above
+			char * name = Wide_To_Narrow(Players[player]->Name); // RA2: as above
+			char const * address = Players[player]->Address.As_String(NULL); // RA2: as above
+			DebugString("Allocated port for player %s - %s\n", name, address); // RA2: as above
+		}
+	}
+
+	bool used[MAX_PLAYERS]; // RA2: as above
+	memset(used, 0, sizeof(used)); // RA2: as above
+
+	for (int i = 0; i < Players.Count(); i++) { // RA2: as above
+		int index = INT_MAX; // RA2: as above
+		int smallest = INT_MAX; // RA2: as above
+
+		for (int j = 0; j < Players.Count(); j++) { // RA2: as above
+			if (!used[j] && Players[j]->Slot.ColorIdx < smallest) { // RA2: as above
+				smallest = Players[j]->Slot.ColorIdx; // RA2: as above
+				index = j; // RA2: as above
+			}
+		}
+
+		if (index == INT_MAX) { // RA2: as above
+			break; // RA2: as above
+		}
+
+		used[index] = true; // RA2: as above
+		ordered.Add(Players[index]); // RA2: as above
+
+		if (ordered.Count() == Players.Count()) { // RA2: as above
+			break; // RA2: as above
+		}
+	}
+
+	memset(used, 0, sizeof(used)); // RA2: as above
+
+	for (i = 0; i < ordered.Count(); i++) { // RA2: as above
+		if (!used[i]) { // RA2: as above
+			IPXAddressClass address = ordered[i]->Address; // RA2: as above
+
+			for (int j = 0; j < ordered.Count(); j++) { // RA2: as above
+				if (j != i && !used[j] && address.Is_Same_Node(ordered[j]->Address)) { // RA2: as above
+					int peer_slot = Name_To_Slot(Wide_To_Narrow(ordered[j]->Name)); // RA2: as above
+					int local_slot = Name_To_Slot(Wide_To_Narrow(ordered[i]->Name)); // RA2: as above
+
+					if (PlayerPortBase[peer_slot] == PlayerPortBase[local_slot]) { // RA2: as above
+						ordered[j]->Address.Set_Port(PlayerPortBase[peer_slot] + port_offset++); // RA2: as above
+						used[j] = true; // RA2: as above
+						DebugString("Adjusted port number to %d for player %s\n", port_offset - 1, Wide_To_Narrow(ordered[j]->Name)); // RA2: as above
+					} else {
+						DebugString("Two player behand the same NAT but they are using different port bases anyway\n"); // RA2: as above
+					}
+
+					char * name = Wide_To_Narrow(ordered[i]->Name); // RA2: as above
+					if (stricmp(name, g_NickName.get()) == 0) { // RA2: as above
+						Copy_Player_Name(NatPeerNames[local_count++], ordered[j]->Name); // RA2: as above
+					}
+
+					name = Wide_To_Narrow(ordered[j]->Name); // RA2: as above
+					if (stricmp(name, g_NickName.get()) == 0) { // RA2: as above
+						Copy_Player_Name(NatPeerNames[local_count++], ordered[i]->Name); // RA2: as above
+					}
+				}
+			}
+		}
+	}
+
+	if (PortNumberOverride) { // RA2: as above
+		DebugString("Using %d for local port\n", PortNumberOverride); // RA2: as above
+		Players[0]->Address.Set_Port(PortNumberOverride); // RA2: as above
+		Slots[Player_To_Slot(0)]->Address.Set_Port(PortNumberOverride); // RA2: as above
+	}
+
+	for (i = 0; i < Players.Count(); i++) { // RA2: as above
+		PlayerPorts[i] = Players[i]->Address.Get_Port(); // RA2: as above
+		if (PlayerPorts[i] == 0) { // RA2: as above
+			PlayerPorts[i] = 1234; // RA2: as above
+		}
+	}
+
+	IPXAddressClass own_address = Players[0]->Address; // RA2: as above
+	NetNodeType own_node; // RA2: as above
+	own_address.Get_Node(own_node); // RA2: as above
+
+	for (i = 1; i < Players.Count(); i++) { // RA2: as above
+		if (own_address.Is_Same_Node(Players[i]->Address)) { // RA2: as above
+			DebugString("%s has the same IP address as me\n", Wide_To_Narrow(Players[i]->Name)); // RA2: as above
+
+			for (int j = 0; j < MAX_PLAYERS; j++) { // RA2: as above
+				NodeNameType * node = Slots[j]; // RA2: as above
+				char * name = Wide_To_Narrow(Players[i]->Name); // RA2: as above
+				char * peer_name = Wide_To_Narrow(node->Name); // RA2: as above
+
+				if (stricmp(name, peer_name) == 0) { // RA2: as above
+					NetNodeType local_node; // RA2: as above
+					SlotAddresses[j].Get_Node(local_node); // RA2: as above
+					Players[i]->Address.Set_Address(NULL, local_node, Players[i]->Address.Get_Port()); // RA2: as above
+
+					name = Wide_To_Narrow(Players[i]->Name); // RA2: as above
+					DebugString("Talking to NAT player %s on IP address %s\n", name, Players[i]->Address.As_String(NULL)); // RA2: as above
+				}
+			}
+		}
+	}
+
+	if (PacketTransport) { // RA2: as above
+		((UDPInterfaceClass *)PacketTransport)->Close_All_Port_Sockets(); // RA2: as above
+		((UDPInterfaceClass *)PacketTransport)->OpenSocket(PlayerPorts[0]); // RA2: as above
+		PacketTransport->Start_Listening(); // RA2: as above
+	}
 }
 
 

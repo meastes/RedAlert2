@@ -999,7 +999,7 @@ void MPCooperative::vt_entry_88(bool player_wins) // RA2: 0x005A46C0
 			LocalPlayer = p; // RA2: as above
 		}
 	}
-	memcpy(Addresses, Session.unknown_2994, sizeof(Addresses)); // RA2: as above
+	memcpy(Addresses, Session.SlotAddresses, sizeof(Addresses)); // RA2: as above
 	memcpy(PlayerStates, Session.WolPlayerState, sizeof(PlayerStates)); // RA2: as above
 	memcpy(PlayerPortBases, Session.PlayerPortBase, sizeof(PlayerPortBases)); // RA2: as above
 	memcpy(PlayerPorts, Session.PlayerPorts, sizeof(PlayerPorts)); // RA2: as above
@@ -1455,7 +1455,7 @@ void MPCooperative::vt_entry_94(void) // RA2: 0x005A5720
 		Session.Players[n]->Address.Get_Address(net, node, &port); // RA2: as above
 		PacketTransport->Set_Broadcast_Address(address, port); // RA2: as above
 	}
-	memcpy(Session.unknown_2994, Addresses, sizeof(Addresses)); // RA2: as above
+	memcpy(Session.SlotAddresses, Addresses, sizeof(Addresses)); // RA2: as above
 	memcpy(Session.WolPlayerState, PlayerStates, sizeof(PlayerStates)); // RA2: as above
 	memcpy(Session.PlayerPortBase, PlayerPortBases, sizeof(PlayerPortBases)); // RA2: as above
 	memcpy(Session.PlayerPorts, PlayerPorts, sizeof(PlayerPorts)); // RA2: as above

@@ -735,13 +735,13 @@ class SessionClass
 		unsigned short PacketRouterPort;
 		unsigned short : 16;
 		IPXAddressClass unknown_2988;
-		IPXAddressClass unknown_2994[MAX_PLAYERS];
+		IPXAddressClass SlotAddresses[MAX_PLAYERS];
 		int WolPlayerState[MAX_PLAYERS]; // RA2: +0x299C, cleared by Select_Game before the Internet game dialogs; name from that use only
 		int PeerProbeData[64][2]; // RA2: +0x29BC, cleared by Start_Network_Session
 		int ConnectionResults[64][2]; // RA2: +0x2BBC, set to -1 by Start_Network_Session (YR: ConnectionResults)
 		int ConnectionResultCount; // RA2: +0x2DBC, cleared by Start_Network_Session
 		unsigned short PeerPorts[MAX_PLAYERS]; // RA2: +0x2DC0, cleared by Start_Network_Session
-		char unknown_2E28[MAX_PLAYERS][36];
+		char NatPeerNames[MAX_PLAYERS][36]; // RA2: +0x2DD0, names of the players behind the local player's NAT (Allocate_Player_Ports)
 		bool SendDelay; // RA2: [MultiPlayer] SendDelay of RA2.INI
 		unsigned char unknown_2F49[0x23];
 		int unknown_2F6C[MAX_PLAYERS];
