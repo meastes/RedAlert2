@@ -5278,7 +5278,7 @@ address,size,evidence
 0x0060B2D0,272,"code of src/partsys.cpp, matched"
 0x0060B3E0,128,"code of src/partsys.cpp, matched"
 0x0060B460,128,"code of src/partsys.cpp, matched"
-0x0060B4E0,,"inferred: target of the call at 0x0060CB96 in matched src/partsys.cpp; size not known"
+0x0060B4E0,400,"code of src/partsys.cpp, matched"
 0x0060B670,,"inferred: target of the call at 0x0060CBA8 in matched src/partsys.cpp; size not known"
 0x0060BB70,,"inferred: target of the call at 0x0060CB8D in matched src/partsys.cpp; size not known"
 0x0060C050,,"inferred: target of the call at 0x0060CBB1 in matched src/partsys.cpp; size not known"
