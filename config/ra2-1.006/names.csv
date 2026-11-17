@@ -4974,7 +4974,8 @@ address,symbol,evidence
 0x005DD6D0,?Update_All@SpotLightClass@@SIXXZ,"compiled from src/ovrlight.cpp, matched"
 0x005DD760,?One_Time@SpotLightClass@@SIXXZ,"compiled from src/ovrlight.cpp, matched"
 0x005DDB40,?Clear_All@SpotLightClass@@SIXXZ,"compiled from src/ovrlight.cpp, matched"
-0x005DDB90,?Draw_It@SpotLightClass@@QAEXXZ,"inferred: referenced by matched src/blight.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x005DDB90,?Draw_It@SpotLightClass@@QAEXXZ,"compiled from src/ovrlight.cpp, matched"
+0x005DE2E0,?Draw_All@SpotLightClass@@SIXXZ,"compiled from src/ovrlight.cpp, matched"
 0x005DE880,?Init_Default_Colors@OwnerDraw@@YIXXZ,"compiled from src/ownrdraw.cpp, matched"
 0x005DE940,??0CellData@OwnerDraw@@QAE@XZ,"compiled from src/ownrdraw.cpp, matched"
 0x005DE970,?Hash_Key@@YIIAAI@Z,"compiled from src/ownrdraw.cpp, matched"
@@ -9385,6 +9386,14 @@ address,symbol,evidence
 0x0079729C,__towlower_lk,symbol of VC6 LIBCMT.LIB towlower.obj
 0x0079734F,___termcon,symbol of VC6 LIBCMT.LIB initcon.obj
 0x0079739D,__putch_lk,symbol of VC6 LIBCMT.LIB putch.obj
+0x0079813A,_Brighten_Color_565,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00798217,_Brighten_Color_655,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007982F4,_Brighten_Color_556,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007983D1,_Brighten_Color_555,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007984C0,_MMX_Brighten_Color_565,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00798602,_MMX_Brighten_Color_555,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00798740,_MMX_Brighten_Color_556,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00798880,_MMX_Brighten_Color_655,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00799241,_Asm_Interpolate,"inferred: referenced by matched src/interpal.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007992E6,_Asm_Interpolate_Line_Double,"inferred: referenced by matched src/interpal.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0079943B,_Asm_Interpolate_Line_Interpolate,"inferred: referenced by matched src/interpal.cpp (1 reference); across all matched code never at another address, and no other symbol here"
@@ -15450,7 +15459,7 @@ address,symbol,evidence
 0x00A72FF1,?PipShapesAllocated@ObjectTypeClass@@2_NA,"inferred: referenced by matched src/objtype.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00A72FF2,?Pip2ShapesAllocated@ObjectTypeClass@@2_NA,"inferred: referenced by matched src/objtype.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00A72FF3,?TalkBubbleShapesAllocated@ObjectTypeClass@@2_NA,"inferred: referenced by matched src/objtype.cpp (3 references); across all matched code never at another address, and no other symbol here"
-0x00A731C0,?SpotLights@@3V?$DynamicVectorClass@PAVSpotLightClass@@@@A,"inferred: referenced by matched src/ovrlight.cpp (32 references); across all matched code never at another address, and no other symbol here"
+0x00A731C0,?SpotLights@@3V?$DynamicVectorClass@PAVSpotLightClass@@@@A,"inferred: referenced by matched src/ovrlight.cpp (34 references); across all matched code never at another address, and no other symbol here"
 0x00A731E0,?SpotLightSurfaces@@3PAPAVBSurface@@A,"inferred: referenced by matched src/ovrlight.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x00A73378,?SpotLightMMXBuffer@@3PAHA,"inferred: referenced by matched src/ovrlight.cpp (9 references); across all matched code never at another address, and no other symbol here"
 0x00A7338C,?White_Color@@3HA,"inferred: referenced by matched src/ownrdraw.cpp (4 references); across all matched code never at another address, and no other symbol here"
