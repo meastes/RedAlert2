@@ -1381,6 +1381,19 @@ bool DriveLocomotionClass::While_Moving(bool just_started)
 
 
 
+// RA2: where an object is, as a value; each use copies the whole coordinate
+inline Coord Object_Coord(ObjectClass const * object) // RA2: as above
+{
+	return(object->PositionCoord); // RA2: as above
+}
+
+// RA2: the cell next to a cell; Start_Of_Move adds the offset component by component
+inline Cell Adjacent_Cell_Offset(Cell cell, int facing) // RA2: as above
+{
+	Cell const & offset = AdjacentCell[facing & 7]; // RA2: as above
+	return(Cell(cell.X + offset.X, cell.Y + offset.Y)); // RA2: as above
+}
+
 /***********************************************************************************************
  * DriveClass::Start_Of_Move -- Tries to get a unit to advance toward cell.                    *
  *                                                                                             *
@@ -1464,96 +1477,96 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 				stop_processing = true;
 				return(false);
 			}
-			if (LinkedTo->Is_In_Same_Zone(DestinationCoord)) {
-				if (DestinationCoord == COORD_NONE) return(false);
+			if (!LinkedTo->Is_In_Same_Zone(DestinationCoord)) { // RA2: the failure case comes first, the rest follows without nesting
+				LinkedTo->Assign_Destination(NULL); // RA2: as above
+				return(false); // RA2: as above
+			}
+			if (DestinationCoord == COORD_NONE) return(false); // RA2: as above
 
+			/*
+			**	If the unit is close enough to the target then just stop
+			**	driving now. This prevents the fidgeting that would occur
+			**	if they mindlessly kept trying to get to the exact location
+			**	desired. This is quite necessary since it is typical to move
+			**	several units with the same mouse click.
+			*/
+			if (!LinkedTo->Is_On_Priority_Mission() && LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && (LinkedTo->Mission == MISSION_MOVE || LinkedTo->Mission == MISSION_GUARD_AREA)) { // RA2: as above
+				Stop_Driver(); // RA2: as above
+				if (Abandon_Navigation()) return(true); // RA2: as above
+				if (!LinkedTo->IsActive) return(false); // RA2: as above
+			} else {
 				/*
-				**	If the unit is close enough to the target then just stop
-				**	driving now. This prevents the fidgeting that would occur
-				**	if they mindlessly kept trying to get to the exact location
-				**	desired. This is quite necessary since it is typical to move
-				**	several units with the same mouse click.
+				**	If a basic path could not be found, but the immediate move destination is
+				**	blocked by a friendly temporary blockage, then cause that blockage
+				**	to scatter.
 				*/
-				if (!LinkedTo->Is_On_Priority_Mission() && LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && (LinkedTo->Mission == MISSION_MOVE || LinkedTo->Mission == MISSION_GUARD_AREA)) {
-					Stop_Driver();
-					if (Abandon_Navigation()) return(true);
-					if (!LinkedTo->IsActive) return(false);
-				} else {
-					/*
-					**	If a basic path could not be found, but the immediate move destination is
-					**	blocked by a friendly temporary blockage, then cause that blockage
-					**	to scatter.
-					*/
-					Cell cell = Adjacent_Cell(LinkedTo->Center_Coord().As_Cell(), LinkedTo->PrimaryFacing.Current().As_Dir8());
-					if (Map.In_Local_Radar(cell)) {
-						MoveType ok = LinkedTo->Can_Enter_Cell(&Map[cell], LinkedTo->PrimaryFacing.Current().As_Dir8(), LinkedTo->Get_Cell_Height());
-						if (ok == MOVE_CLOSED_GATE) {
-							Incoming(cell);
-						} else if (ok == MOVE_TEMP) {
-							CellClass * cellptr = &Map[cell];
-							TechnoClass * blockage = cellptr->Cell_Techno(Point2D(0,0), LinkedTo->PositionCoord.Z > (Map.Get_Height_GL(cell) + (2 * LEVEL_LEPTON_H)));
-							if (blockage != NULL && LinkedTo->House->Is_Ally(blockage) && !LinkedTo->TClass->IsTrain) {
+				Cell cell = Adjacent_Cell(LinkedTo->Center_Coord().As_Cell(), LinkedTo->PrimaryFacing.Current().As_Dir8()); // RA2: as above
+				if (Map.In_Local_Radar(cell)) { // RA2: as above
+					MoveType ok = LinkedTo->Can_Enter_Cell(&Map[cell], LinkedTo->PrimaryFacing.Current().As_Dir8(), LinkedTo->Get_Cell_Height()); // RA2: as above
+					if (ok == MOVE_CLOSED_GATE) { // RA2: as above
+						Incoming(cell); // RA2: as above
+					} else if (ok == MOVE_TEMP) { // RA2: as above
+						CellClass * cellptr = &Map[cell]; // RA2: as above
+						TechnoClass * blockage = cellptr->Cell_Techno(Point2D(0,0), Object_Coord(LinkedTo).Z > (Map.Get_Height_GL(Coord(cell.X * CELL_LEPTON_W + CELL_LEPTON_W / 2, cell.Y * CELL_LEPTON_H + CELL_LEPTON_H / 2, 0)) + (2 * LEVEL_LEPTON_H))); // RA2: Object_Coord, the coordinate is read as a value
+						if (blockage != NULL && LinkedTo->House->Is_Ally(blockage) && !LinkedTo->TClass->IsTrain) { // RA2: as above
 
-								/*
-								**	If the target can be told to get out of the way, only bother
-								**	to do so if we aren't very close to the target and this
-								**	object can just say "good enough" and stop here.
-								*/
-								if (LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && !LinkedTo->In_Radio_Contact()) {
-									if (abs(DestinationCoord.Z - LinkedTo->PositionCoord.Z) < 2 * LEVEL_LEPTON_H) {
-										if (Map[(Coord const &)LinkedTo->PositionCoord].Land_Type() != LAND_TUNNEL) {
-											Stop_Driver();
-											return(Abandon_Navigation());
-										}
+							/*
+							**	If the target can be told to get out of the way, only bother
+							**	to do so if we aren't very close to the target and this
+							**	object can just say "good enough" and stop here.
+							*/
+							if (LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && !LinkedTo->HasAnyLink()) { // RA2: HasAnyLink, not In_Radio_Contact
+								if (abs(DestinationCoord.Z - Object_Coord(LinkedTo).Z) < 2 * LEVEL_LEPTON_H) { // RA2: Object_Coord, the coordinate is read as a value
+									if (Map[Object_Coord(LinkedTo)].Land_Type() != LAND_TUNNEL) { // RA2: Object_Coord, the coordinate is read as a value
+										Stop_Driver(); // RA2: as above
+										if (Abandon_Navigation()) return(true); // RA2: the result is tested, then false is returned
+										return(false); // RA2: as above
 									}
 								}
-
-								bool is_bridge;
-								if (!cellptr->IsUnderBridge || abs(LinkedTo->PositionCoord.Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) {
-									is_bridge = false;
-								} else {
-									is_bridge = true;
-								}
-								cellptr->Incoming(COORD_NONE, true, true, is_bridge);
 							}
+
+							bool is_bridge; // RA2: as above
+							if (!cellptr->IsUnderBridge || abs(Object_Coord(LinkedTo).Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) { // RA2: Object_Coord, the coordinate is read as a value
+								is_bridge = false; // RA2: as above
+							} else {
+								is_bridge = true; // RA2: as above
+							}
+							cellptr->Incoming(COORD_NONE, true, true, is_bridge); // RA2: as above
 						}
 					}
-
-					if (LinkedTo->TryTryAgain > 0) {
-						LinkedTo->TryTryAgain--;
-					} else {
-						Stop_Driver();
-						if (Abandon_Navigation()) return(true);
-						if (!LinkedTo->IsActive) return(false);
-						if (LinkedTo->IsNewNavCom) Sound_Effect(Rule->ScoldSound);
-						LinkedTo->IsNewNavCom = false;
-					}
 				}
 
-				/*
-				**	Since the path was blocked, check to make sure that it was completely
-				**	blocked. If so and it has a valid TarCom and it is out of range of the
-				**	TarCom, then give this unit a range limit so that it might not pick
-				**	a "can't reach" target again.
-				*/
-				if (!Is_Moving() && LinkedTo->TarCom != NULL && !LinkedTo->In_Range(LinkedTo->TarCom)) {
-					LinkedTo->IsScanLimited = true;
-					if (LinkedTo->Team != NULL) LinkedTo->Team->Scan_Limit();
-					LinkedTo->Assign_Target(NULL);
+				if (LinkedTo->TryTryAgain > 0) { // RA2: as above
+					LinkedTo->TryTryAgain--; // RA2: as above
+				} else {
+					Stop_Driver(); // RA2: as above
+					if (Abandon_Navigation()) return(true); // RA2: as above
+					if (!LinkedTo->IsActive) return(false); // RA2: as above
+					if (LinkedTo->IsNewNavCom) VocClass::PlayGlobal(Rule->ScoldSound, 1.0f, 0x2000, 0); // RA2: the scold sound plays through VocClass::PlayGlobal
+					LinkedTo->IsNewNavCom = false; // RA2: as above
 				}
-
-				/*
-				**	Stop the movement, for now, and let the subsequent logic in later game
-				**	frames resume movement as appropriate.
-				*/
-				Stop_Driver();
-				TrackNumber = -1;
-				IsTurretLockedDown = false;
-				return(false);
-			} else {
-				LinkedTo->Assign_Destination(NULL);
-				return(false);
 			}
+
+			/*
+			**	Since the path was blocked, check to make sure that it was completely
+			**	blocked. If so and it has a valid TarCom and it is out of range of the
+			**	TarCom, then give this unit a range limit so that it might not pick
+			**	a "can't reach" target again.
+			*/
+			if (!Is_Moving() && LinkedTo->TarCom != NULL && !LinkedTo->IsCloseEnoughToAttack(LinkedTo->TarCom)) { // RA2: IsCloseEnoughToAttack, not In_Range
+				LinkedTo->IsScanLimited = true; // RA2: as above
+				if (LinkedTo->Team != NULL) LinkedTo->Team->Scan_Limit(); // RA2: as above
+				LinkedTo->Assign_Target(NULL); // RA2: as above
+			}
+
+			/*
+			**	Stop the movement, for now, and let the subsequent logic in later game
+			**	frames resume movement as appropriate.
+			*/
+			Stop_Driver(); // RA2: as above
+			TrackNumber = -1; // RA2: as above
+			IsTurretLockedDown = false; // RA2: as above
+			return(false); // RA2: as above
 		}
 
 		if (LinkedTo->Path[0] == FACING_COUNT) {
@@ -1565,7 +1578,7 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 		**	blocked by a friendly temporary blockage, then cause that blockage
 		**	to scatter.
 		*/
-		Cell cell = Adjacent_Cell(LinkedTo->Center_Coord().As_Cell(), LinkedTo->Path[0]);
+		Cell cell = Adjacent_Cell_Offset(LinkedTo->Center_Coord().As_Cell(), LinkedTo->Path[0]); // RA2: the offset is added component by component
 		if (Map.In_Local_Radar(cell)) {
 			MoveType ok = LinkedTo->Can_Enter_Cell(&Map[cell], LinkedTo->Path[0], LinkedTo->Get_Cell_Height());
 
@@ -1573,7 +1586,7 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 				Incoming(cell);
 			} else if (ok == MOVE_TEMP) {
 				CellClass * cellptr = &Map[cell];
-				TechnoClass * blockage = cellptr->Cell_Techno(Point2D(0,0), LinkedTo->PositionCoord.Z > (Map.Get_Height_GL(cell) + (2 * LEVEL_LEPTON_H)));
+				TechnoClass * blockage = cellptr->Cell_Techno(Point2D(0,0), Object_Coord(LinkedTo).Z > (Map.Get_Height_GL(cell) + (2 * LEVEL_LEPTON_H))); // RA2: Object_Coord, the coordinate is read as a value
 				if (blockage != NULL && LinkedTo->House->Is_Ally(blockage) && !LinkedTo->TClass->IsTrain) {
 
 					/*
@@ -1581,9 +1594,9 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 					**	to do so if we aren't very close to the target and this
 					**	object can just say "good enough" and stop here.
 					*/
-					if (LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && !LinkedTo->In_Radio_Contact()) {
-						if (abs(DestinationCoord.Z - LinkedTo->PositionCoord.Z) < 2 * LEVEL_LEPTON_H) {
-							if (Map[(Coord const &)LinkedTo->PositionCoord].Land_Type() != LAND_TUNNEL) {
+					if (LinkedTo->Distance(DestinationCoord) < Rule->CloseEnoughDistance && !LinkedTo->HasAnyLink()) { // RA2: HasAnyLink, not In_Radio_Contact
+						if (abs(DestinationCoord.Z - Object_Coord(LinkedTo).Z) < 2 * LEVEL_LEPTON_H) { // RA2: Object_Coord, the coordinate is read as a value
+							if (Map[Object_Coord(LinkedTo)].Land_Type() != LAND_TUNNEL) { // RA2: Object_Coord, the coordinate is read as a value
 								Stop_Driver();
 								return(Abandon_Navigation());
 							}
@@ -1591,7 +1604,7 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 					}
 
 					bool is_bridge;
-					if (!cellptr->IsUnderBridge || abs(LinkedTo->PositionCoord.Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) {
+					if (!cellptr->IsUnderBridge || abs(Object_Coord(LinkedTo).Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) { // RA2: Object_Coord, the coordinate is read as a value
 						is_bridge = false;
 					} else {
 						is_bridge = true;
@@ -1617,14 +1630,16 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 	/*
 	**	Determine the coordinate of the next cell to move into.
 	*/
-	Coord dest = Adjacent_Cell(LinkedTo->PositionCoord, facing);
+	Coord dest = Adjacent_Cell(Object_Coord(LinkedTo), facing); // RA2: Object_Coord, the coordinate is read as a value
 
-	int cell_height = Map[(Coord const &)LinkedTo->PositionCoord].Height + (LinkedTo->IsOnBridge ? BRIDGE_CELL_HEIGHT : 0);
+	CellClass const & here = Map[Object_Coord(LinkedTo)]; // RA2: Object_Coord, the coordinate is read as a value
+	int cell_height = here.Height + (LinkedTo->IsOnBridge ? BRIDGE_CELL_HEIGHT : 0); // RA2: the cell is held in a reference
 
 	/*
 	 * If this move crosses a bridge transition, force a full scan next process.
 	 */
-	if (LinkedTo->IsOnBridge ^ Map[Adjacent_Cell(LinkedTo->PositionCoord, facing)].IsUnderBridge) {
+	CellClass const & next = Map[Adjacent_Cell(Object_Coord(LinkedTo), facing)]; // RA2: Object_Coord, the coordinate is read as a value
+	if (LinkedTo->IsOnBridge ^ next.IsUnderBridge) { // RA2: the cell is held in a reference
 		LinkedTo->IsPlanningToLook = true;
 	}
 	if (!LinkedTo->Is_Ready_To_Move()) {
@@ -1692,18 +1707,18 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 			*/
 			else if (cando == MOVE_TEMP) {
 				if (!LinkedTo->TClass->IsTrain) {
+					FootClass * unit = LinkedTo; // RA2: the unit is held in a local
 					if (retry) {
-						LinkedTo->Path[0] = FACING_NONE;
+						unit->Path[0] = FACING_NONE; // RA2: the unit is held in a local
 						LinkedTo->PathDelay = 0;
 						return(Start_Of_Move(stop_processing, false, false));
 					}
-					Coord diff = LinkedTo->Center_Coord() - DestinationCoord;
-					int dist = diff.Length();
+					int dist = unit->Distance(DestinationCoord); // RA2: the unit is held in a local
 					if (dist >= Rule->CloseEnoughDistance
-						|| abs(DestinationCoord.Z - LinkedTo->PositionCoord.Z) >= 2 * LEVEL_LEPTON_H
-						|| Map[(Coord const &)LinkedTo->PositionCoord].Land_Type() == LAND_TUNNEL) {
+						|| abs(DestinationCoord.Z - Object_Coord(LinkedTo).Z) >= 2 * LEVEL_LEPTON_H // RA2: Object_Coord, the coordinate is read as a value
+						|| Map[Object_Coord(LinkedTo)].Land_Type() == LAND_TUNNEL) { // RA2: Object_Coord, the coordinate is read as a value
 						bool is_bridge;
-						if (!Map[destcell].IsUnderBridge || abs(LinkedTo->PositionCoord.Z / LEVEL_LEPTON_H - Map[destcell].Height) <= 2) {
+						if (!Map[destcell].IsUnderBridge || abs(Object_Coord(LinkedTo).Z / LEVEL_LEPTON_H - Map[destcell].Height) <= 2) { // RA2: Object_Coord, the coordinate is read as a value
 							is_bridge = false;
 						} else {
 							is_bridge = true;
@@ -1780,7 +1795,7 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 					}
 				}
 			} else {
-				if (LinkedTo->IsNewNavCom) Sound_Effect(Rule->ScoldSound);
+				if (LinkedTo->IsNewNavCom) VocClass::PlayGlobal(Rule->ScoldSound, 1.0f, 0x2000, 0); // RA2: the scold sound plays through VocClass::PlayGlobal
 			}
 
 
@@ -1818,22 +1833,18 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 		if (speed > 1.0) speed = 1.0;
 
 		int destheight = Map.Get_Height_GL(Map[destcell].Cell_Coord());
-		int unitheight = Map.Get_Height_GL(LinkedTo->PositionCoord);
-		if (destheight > unitheight) {
-			if (LinkedTo->RTTI == RTTI_UNIT) {
-				if (LinkedTo->TClass->Speed == SPEED_TRACK) {
-					speed *= Rule->TrackedUphill;
-				} else {
-					speed *= Rule->WheeledUphill;
-				}
+		int unitheight = Map.Get_Height_GL(Object_Coord(LinkedTo)); // RA2: Object_Coord, the coordinate is read as a value
+		if (destheight > unitheight && LinkedTo->RTTI == RTTI_UNIT) { // RA2: the unit type test is part of the condition
+			if (LinkedTo->TClass->Speed == SPEED_TRACK) { // RA2: as above
+				speed *= Rule->TrackedUphill; // RA2: as above
+			} else {
+				speed *= Rule->WheeledUphill; // RA2: as above
 			}
-		} else if (destheight < unitheight) {
-			if (LinkedTo->RTTI == RTTI_UNIT) {
-				if (LinkedTo->TClass->Speed == SPEED_TRACK) {
-					speed *= Rule->TrackedDownhill;
-				} else {
-					speed *= Rule->WheeledDownhill;
-				}
+		} else if (destheight < unitheight && LinkedTo->RTTI == RTTI_UNIT) { // RA2: as above
+			if (LinkedTo->TClass->Speed == SPEED_TRACK) { // RA2: as above
+				speed *= Rule->TrackedDownhill; // RA2: as above
+			} else {
+				speed *= Rule->WheeledDownhill; // RA2: as above
 			}
 		}
 		if (speed == 0.0) speed = 0.5;
@@ -1870,18 +1881,17 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 				 * Regenerate the path so that movement can continue.
 				 */
 				int patharg = LinkedTo->TClass->IsTrain ? 1 : 0;
-				if (!LinkedTo->Basic_Path(DestinationCoord.As_Cell(), patharg)) {
+				bool found = LinkedTo->Basic_Path(DestinationCoord.As_Cell(), patharg); // RA2: the result of the path search is kept and returned as it is
+				if (!found) { // RA2: the result of the path search is kept and returned as it is
 					if (LinkedTo == NULL) {
 						stop_processing = true;
-						return(false);
+						return(found); // RA2: the result of the path search is kept and returned as it is
 					}
 					if (!LinkedTo->Is_In_Same_Zone(DestinationCoord)) {
 						LinkedTo->Assign_Destination(NULL);
 					}
 				}
 				nextface = LinkedTo->Path[1];
-			} else {
-				nextface = facing;
 			}
 		}
 		if (nextface == FACING_COUNT) nextface = facing;
@@ -1951,11 +1961,11 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 							return(Start_Of_Move(stop_processing, false, false));
 						}
 						if (LinkedTo->Distance(DestinationCoord) >= Rule->CloseEnoughDistance
-							|| abs(DestinationCoord.Z - LinkedTo->PositionCoord.Z) >= 2 * LEVEL_LEPTON_H
-							|| Map[(Coord const &)LinkedTo->PositionCoord].Land_Type() == LAND_TUNNEL) {
+							|| abs(DestinationCoord.Z - Object_Coord(LinkedTo).Z) >= 2 * LEVEL_LEPTON_H // RA2: Object_Coord, the coordinate is read as a value
+							|| Map[Object_Coord(LinkedTo)].Land_Type() == LAND_TUNNEL) { // RA2: Object_Coord, the coordinate is read as a value
 							CellClass * cellptr = &Map[destcell];
 							bool is_bridge;
-							if (!cellptr->IsUnderBridge || abs(LinkedTo->PositionCoord.Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) {
+							if (!cellptr->IsUnderBridge || abs(Object_Coord(LinkedTo).Z / LEVEL_LEPTON_H - cellptr->Height) <= 2) { // RA2: Object_Coord, the coordinate is read as a value
 								is_bridge = false;
 							} else {
 								is_bridge = true;
