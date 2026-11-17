@@ -90,7 +90,7 @@
 void __fastcall Queue_Speech(char const * name, int priority, int expire); // RA2: 0x00715B40, an EVA line by name
 extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted
 void __fastcall Speech_Cancel(int voice); // RA2: 0x00715E80, drops the lines of a voice still waiting
-AnimClass * __fastcall Create_Attached_Anim(HouseClass * house, AbstractClass * target, char const * anim, BulletClass * bullet); // RA2: 0x00438B80, makes the named animation at the target for the house and attaches the bullet to it
+AnimClass * __fastcall Create_Attached_Anim(HouseClass * house, AbstractClass * target, BulletClass * bullet, char const * anim); // RA2: 0x00438B80, the executable takes the bullet before the name (it loads the name from the second stack slot); makes the named animation at the target for the house and attaches the bullet to it
 
 Cell const CellAndNeighbors[9] = { // RA2: 0x00ABD7A0, built by the initializer at 0x0069C5A0: the cell itself, then its eight neighbours clockwise from east
 	Cell(0, 0), // RA2: as above
@@ -833,7 +833,7 @@ void SuperClass::Place(Cell const &cell, bool player) // RA2: does each weapon t
 				Coord launch(sound.X, sound.Y, sound.Z + 20000); // RA2: as above
 				BulletClass * bullet = payload->Bullet->Create_Bullet(target, NULL, payload->Attack, payload->WarheadPtr, payload->MaxSpeed, false); // RA2: as above
 				bullet->Set_Weapon_Type(payload); // RA2: as above
-				Create_Attached_Anim(House, target, "PSIWARN", bullet); // RA2: as above
+				Create_Attached_Anim(House, target, bullet, "PSIWARN"); // RA2: the bullet comes before the name
 				if (bullet != 0) { // RA2: as above
 					double y = sin(1.5707483884323126); // RA2: as above
 					y *= cos(1.5707483884323126); // RA2: as above

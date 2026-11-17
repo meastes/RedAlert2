@@ -216,6 +216,43 @@ enum SAMState {
 
 
 /// <summary>
+/// Whether one of the player's powered psychic detectors reaches the cell; never for the player's allies.
+/// </summary>
+bool __fastcall Psychic_Detector_Covers_Cell(HouseClass const * house, CellClass const * cell) // RA2: 0x00438A60 (anim.cpp calls it); free function of the executable
+{
+	if (PlayerPtr->Is_Ally(house)) return(false); // RA2: as above
+	int count = PlayerPtr->PsychicDetectionBuildings.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		BuildingClass * detector = PlayerPtr->PsychicDetectionBuildings[index]; // RA2: as above
+		if (detector->IsPowerOnline()) { // RA2: as above
+			Coord position = detector->Center_Coord(); // RA2: as above
+			Coord other = cell->Cell_Coord(); // RA2: as above
+			Coord delta(position.X - other.X, position.Y - other.Y, position.Z - other.Z); // RA2: as above
+			int distance = (int)fastmath::sqrt((double)delta.X * delta.X + (double)delta.Y * delta.Y + (double)delta.Z * delta.Z); // RA2: as above
+			if (distance <= (detector->Class->PsychicDetectionRadius << 8)) return(true); // RA2: as above
+		}
+	}
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// Makes the named animation at the target for the house and attaches the bullet to it.
+/// </summary>
+AnimClass * __fastcall Create_Attached_Anim(HouseClass * house, AbstractClass * target, BulletClass * bullet, char const * anim) // RA2: 0x00438B80 (super.cpp declares it); the bullet is the first stack argument, the name the second; free function of the executable
+{
+	AnimType index = AnimTypeClass::From_Name(anim); // RA2: as above
+	AnimTypeClass * type = AnimTypes[index]; // RA2: as above
+	Coord coord = target->Center_Coord(); // RA2: as above
+	AnimClass * animation = new AnimClass(type, coord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
+	animation->Set_Attached_Bullet(bullet); // RA2: as above
+	animation->Set_Owner(house); // RA2: as above
+	animation->Make_Invisible(); // RA2: sets the byte at +0x17D (IsInvisible)
+	return(animation); // RA2: as above
+}
+
+
+/// <summary>
 /// Constructs a building without initializing it.
 /// This constructor is used by the load process, which is about to overwrite the object
 /// wholesale with the data read from the save file.
@@ -225,7 +262,8 @@ BuildingClass::BuildingClass(NoInitClass const & x) :
 	CountDown(x),
 	PlacementDelay(x),
 	GateTimer(x),
-	BuildingStage()
+	BuildingStage(), // RA2: as above
+	CashProductionTimer(x) // RA2: the executable leaves the +0x5A0 timer alone here (no store at +0x5A0/+0x5A8)
 {
 }
 
