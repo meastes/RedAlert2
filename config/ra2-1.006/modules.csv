@@ -611,7 +611,7 @@ tevent,0x006E5DE0,0x006E6CD0,tibsun,"functions compiled from src/tevent.cpp, wit
 unk_006E6CD0,0x006E6CD0,0x006E7240,unknown,code not assigned to a module
 textbtn,0x006E7240,0x006E7520,tibsun,"functions compiled from src/textbtn.cpp, matched, without gaps"
 unk_006E7520,0x006E7520,0x006E7780,unknown,code not assigned to a module
-theme,0x006E7780,0x006E85B0,tibsun,"functions compiled from src/theme.cpp, without gaps; matched except ?Init_Themes@ThemeClass@@QAEXABVCCINIClass@@@Z and ?Scan@ThemeClass@@QAEXXZ and ?Play_Song@ThemeClass@@QAEHW4ThemeType@@@Z; ?Init_Themes@ThemeClass@@QAEXABVCCINIClass@@@Z and ?Play_Song@ThemeClass@@QAEHW4ThemeType@@@Z and ?Scan@ThemeClass@@QAEXXZ placed at their function starts; ??0ThemeControl@@QAE@XZ not placed"
+theme,0x006E7780,0x006E85B0,tibsun,"functions compiled from src/theme.cpp, matched, without gaps; ??0ThemeControl@@QAE@XZ not placed"
 unk_006E85B0,0x006E85B0,0x006E89A0,unknown,code not assigned to a module
 tiberium,0x006E89A0,0x006EA9B0,tibsun,"functions compiled from src/tiberium.cpp, matched, without gaps; one placed by the gap; ?Post_Load_Game@TiberiumClass@@SIXXZ not placed"
 unk_006EA9B0,0x006EA9B0,0x006EAF60,unknown,code not assigned to a module
