@@ -90,7 +90,7 @@ extern wchar_t IMECompositionString[256]; // RA2: as above
 unsigned int __fastcall Compute_Name_CRC(wchar_t const * name); // RA2: 0x005BBA50, the wide form of netdlg.h's
 extern int ChatTarget; // RA2: 0x00A6EBE0; who a typed message goes to: 1 everybody, 2 allies, 3 one player, 0 nobody
 extern char LastPagerName[]; // RA2: 0x00B2AC48; who paged last
-namespace OwnerDraw { char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: wide to narrow text, as modemgst.cpp declares it
+namespace OwnerDraw { void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: wide to narrow text, as modemgst.cpp declares it
 wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, a static buffer
 char * __fastcall Wide_To_Narrow(wchar_t const * wide); // RA2: 0x006FA120, a static buffer
 int __fastcall Parse_Page_Command(wchar_t const * text); // RA2: 0x00746480

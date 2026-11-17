@@ -1678,7 +1678,7 @@ unsigned int IPXManagerClass::Multicast_Response_Time(void) // RA2: 0x00526C70
 /// network behaved. The local player's own connection is passed over.
 /// </summary>
 namespace OwnerDraw { // RA2: RA2's form, as in YR's body; TibSun's form does not match
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: as above
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: as above
 }
 
 void IPXManagerClass::Store_Stats(void)

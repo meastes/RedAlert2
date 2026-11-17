@@ -48,7 +48,7 @@ extern char ModemRXString[];
 void __fastcall Char_To_Wide(wchar_t * dest, char const * source, int limit);
 
 namespace OwnerDraw {
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count);
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x006FA0F0, returns nothing
 }
 
 // Initialisers of geometry.h constants.

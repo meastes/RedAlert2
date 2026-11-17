@@ -1721,7 +1721,7 @@ WideWstring __fastcall Int_To_WideString_Width(int value, int width) // RA2: as 
 
 void __fastcall Char_To_Wide(wchar_t* dest, char const* source, int limit); // RA2: 0x006FA0C0 (campaign.cpp), widens a narrow string
 namespace OwnerDraw { // RA2: as conquer.cpp
-	char* __fastcall WideToCharString(char* dest, wchar_t const* src, int count); // RA2: 0x006FA0F0, narrows a wide string
+	void __fastcall WideToCharString(char* dest, wchar_t const* src, int count); // RA2: 0x006FA0F0, narrows a wide string
 }
 int __fastcall Bit_Stuff(unsigned char* source, unsigned char* dest, int count); // RA2: 0x00430DA0 (bfiofile2.cpp)
 unsigned int __fastcall Bit_Unstuff_String(unsigned char* source, wchar_t* dest, unsigned int count); // RA2: 0x00430F30 (bfiofile2.cpp)

@@ -40,7 +40,7 @@
 #include <math.h>
 
 namespace OwnerDraw {
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count);
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x006FA0F0, returns nothing
 }
 void __fastcall Char_To_Wide(wchar_t * dest, char const * source, int limit);
 wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x6FA180, static buffer

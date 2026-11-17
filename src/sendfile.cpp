@@ -67,7 +67,7 @@ void __fastcall Darken_Surface(Surface * surface, bool update); // RA2: 0x005159
 #define FILE_PACKET_BUFFER_SIZE	0x1E7 // RA2: the receive buffer of Receive_Remote_File
 
 namespace OwnerDraw { // RA2: WideToCharString lives in the OwnerDraw namespace (0x006FA0F0, as modemgst.cpp)
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: as above
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: as above
 }
 
 

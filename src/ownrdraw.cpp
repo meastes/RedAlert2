@@ -5633,7 +5633,7 @@ LRESULT __fastcall IME_Get_Result(); // RA2: as above
 void IME_Cancel_Composition(); // RA2: as above
 BOOL __fastcall IME_Service_Message(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: as above
 namespace OwnerDraw { // RA2: as above
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x6FA0F0
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x6FA0F0
 }
 void __fastcall Rect_Shrink(Rect *rect, int x, int y); // RA2: as above
 int __fastcall Pair_Key_Hash(int *); // RA2: as above

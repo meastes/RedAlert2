@@ -115,7 +115,7 @@ extern FirewallHelperClass FirewallHelper; // RA2: 0xA71B18, the firewall detect
 MultiplayerGameMode * First_Game_Mode(void); // RA2: 0x5B6EC0
 
 namespace OwnerDraw { // RA2: RA2's form, as in ipxmgr.cpp
-char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x6FA... narrows the player name
+void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); // RA2: 0x6FA... narrows the player name
 }
 
 extern int SavedGameSpeed; // RA2: 0x7F3230, the game speed from before the game was left (-1 when none)

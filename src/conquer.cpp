@@ -169,7 +169,7 @@ char * Wide_To_Narrow(wchar_t const * text);	// RA2: 0x006FA120 (wonline.cpp), t
 wchar_t * Narrow_To_Wide(char const * narrow);	// RA2: 0x006FA180 (wonline.cpp)
 unsigned int __fastcall Compute_Name_CRC(wchar_t const * name);	// RA2: 0x005BBA50, the wide form of netdlg.h's
 namespace OwnerDraw { // RA2: as above
-	char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count);	// RA2: 0x006FA0F0
+	void __fastcall WideToCharString(char * dest, wchar_t const * src, int count);	// RA2: 0x006FA0F0
 }
 
 enum { // RA2: SpecialDialogType has no enumerator for dialog 9

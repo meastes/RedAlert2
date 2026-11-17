@@ -78,7 +78,7 @@ void __fastcall Set_Item_Text(HWND dialog, MultiplayerGameMode * mode); // RA2: 
 void __fastcall Set_Skirmish_Dialog_Text(HWND dialog); // RA2: 0x005C34B0, puts the description of the chosen map into the dialog
 MultiplayerGameMode * Get_Current_Game_Mode(void); // RA2: 0x005C34D0, the game mode the session options name
 void __fastcall Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0, dims the screen behind a dialog (init.cpp)
-namespace OwnerDraw { bool __fastcall WS_Save_Dialog_Values(HWND dialog); bool __fastcall Is_Control_Disabled(HWND control); char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: ownrdraw.cpp's 0x005E5FC0, 0x005E4720 and 0x006FA0F0 (narrows a wide string)
+namespace OwnerDraw { bool __fastcall WS_Save_Dialog_Values(HWND dialog); bool __fastcall Is_Control_Disabled(HWND control); void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: ownrdraw.cpp's 0x005E5FC0, 0x005E4720 and 0x006FA0F0 (narrows a wide string)
 wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, widens a string into a static buffer
 MultiplayerGameMode * First_Game_Mode(void); // RA2: 0x005B6EC0, the first game mode of the list
 

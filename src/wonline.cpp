@@ -3829,7 +3829,7 @@ bool Connect_Player_Pairs(void) // RA2: 0x0074EF80, not in TibSun: makes the con
 }
 
 extern bool g_ReceivingHostPreview; // RA2: 0x00B2AC46, set while Receive_Host_Map_Preview takes the map preview from the host
-namespace OwnerDraw { char * __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: 0x006FA0F0, as in conquer.cpp
+namespace OwnerDraw { void __fastcall WideToCharString(char * dest, wchar_t const * src, int count); } // RA2: 0x006FA0F0, as in conquer.cpp
 
 bool Receive_Host_Map_Preview(void) // RA2: 0x00750D10, not in TibSun: a guest of a game channel takes the map preview from the host when the host's NET_PREVIEW_MODE packet is waiting in the global channel; true when the preview was received
 {
