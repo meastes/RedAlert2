@@ -54,8 +54,7 @@ animtype,0x00424E30,0x00426760,tibsun,"functions compiled from src/animtype.cpp,
 unk_00426760,0x00426760,0x00426B70,unknown,code not assigned to a module
 app,0x00426B70,0x00426E70,tibsun,"functions compiled from src/app.cpp, matched, without gaps; seven placed by the gap; ?QueryInterface@TiberianSunClassFactory@@UAGJABU_GUID@@PAPAX@Z not placed"
 unk_00426E70,0x00426E70,0x00427060,unknown,code not assigned to a module
-astar,0x00427060,0x0042AD30,tibsun,"functions compiled from src/astar.cpp, without gaps; matched except ?Find_Path_Regular@AStarClass@@AAEPAUPathStruct@@ABVCell@@0PAVFootClass@@PAW4FacingType@@H_N@Z"
-unk_0042AD30,0x0042AD30,0x0042B670,unknown,code not assigned to a module
+astar,0x00427060,0x0042B670,tibsun,"functions compiled from src/astar.cpp, without gaps; matched except ?Find_Path_Regular@AStarClass@@AAEPAUPathStruct@@ABVCell@@0PAVFootClass@@PAW4FacingType@@H_N@Z; 31 copies the compiler emitted after the last function"
 b64pipe,0x0042B670,0x0042B850,tibsun,"functions compiled from src/b64pipe.cpp, matched, without gaps"
 b64straw,0x0042B850,0x0042B950,tibsun,"functions compiled from src/b64straw.cpp, matched, without gaps"
 unk_0042B950,0x0042B950,0x0042B970,unknown,code not assigned to a module
