@@ -168,7 +168,7 @@ address,symbol,evidence
 0x004067E0,?AudioPriorityFromName@@YI_NPBDPAH@Z,"compiled from src/audevent.cpp, matched"
 0x00406830,?AudioControlApplyKeyword@@YI_NPAIPBD@Z,"compiled from src/audevent.cpp, matched"
 0x00406880,?AudioTypeApplyKeyword@@YIHPAIPBD@Z,"compiled from src/audevent.cpp, matched"
-0x004068F0,?DebugString@@YAXPBDZZ,"inferred: referenced by matched src/wincomm.cpp (1068 references); across all matched code never at another address, and no other symbol here"
+0x004068F0,?DebugString@@YAXPBDZZ,"inferred: referenced by matched src/wincomm.cpp (1072 references); across all matched code never at another address, and no other symbol here"
 0x00406AD0,?Audio_Init@@YIHH@Z,"compiled from src/audio.cpp, matched"
 0x00406C80,?Audio_Shutdown@@YIXXZ,"compiled from src/audio.cpp, matched"
 0x00406D20,?Audio_Open_Device@@YIHXZ,"compiled from src/audio.cpp, matched"
@@ -6427,9 +6427,21 @@ address,symbol,evidence
 0x0069B4E0,?Reset@MovieSubtitles@@QAEXXZ,"compiled from src/subtitle.cpp, matched; code at 2 addresses, the others matched by src/link.cpp"
 0x0069B4F0,?SetCallback@MovieSubtitles@@QAEXP6IXPAX@Z@Z,"compiled from src/subtitle.cpp, matched"
 0x0069B500,?Draw_Sub_Title@MovieSubtitles@@QAEXPAVSubTitle@@@Z,"compiled from src/subtitle.cpp, matched"
-0x0069B680,??0SubTitleParserClass@@QAE@AAVStraw@@@Z,"inferred: referenced by matched src/subtitle.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x0069B6C0,??1SubTitleParserClass@@QAE@XZ,"inferred: referenced by matched src/subtitle.cpp (2 references); across all matched code never at another address, and no other symbol here"
-0x0069B6D0,?Get_Sub_Titles@SubTitleParserClass@@QAEPAV?$DynamicVectorClass@PAVSubTitle@@@@PBD@Z,"inferred: referenced by matched src/subtitle.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0069B680,??0SubTitleParserClass@@QAE@AAVStraw@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069B6C0,??1SubTitleParserClass@@QAE@XZ,"compiled from src/subtitle2.cpp, matched; code at 931 addresses, placed by the gap"
+0x0069B6D0,?Get_Sub_Titles@SubTitleParserClass@@QAEPAV?$DynamicVectorClass@PAVSubTitle@@@@PBD@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069B9A0,?Find_Movie_Entry@SubTitleParserClass@@AAE_NPBD@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BAD0,?Parse_Sub_Title@SubTitleParserClass@@AAE_NPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BC60,?Parse_Token@@YGXPBGPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BCB0,?Get_Next_Line@SubTitleParserClass@@AAEPAGXZ,"compiled from src/subtitle2.cpp, matched"
+0x0069BD60,?Parse_Timecode@@YIKPBG@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BE30,?Parse_Time@@YIXPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BE40,?Parse_Duration@@YIXPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BE60,?Parse_Position@@YIXPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BEF0,?Parse_Color@@YIXPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069BF70,?Parse_Text@@YIXPAGPAVSubTitle@@@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069C100,?Read_Line@@YI_NAAVStraw@@PAGH@Z,"compiled from src/subtitle2.cpp, matched"
+0x0069C360,??0?$VectorClass@PAVSubTitle@@@@QAE@HPBQAVSubTitle@@@Z,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0069C660,??0SuperClass@@QAE@XZ,"compiled from src/super.cpp, matched"
 0x0069C730,??0SuperClass@@QAE@PAVSuperWeaponTypeClass@@PAVHouseClass@@@Z,"compiled from src/super.cpp, matched"
 0x0069C8B0,??1SuperClass@@UAE@XZ,"compiled from src/super.cpp, matched"
@@ -7454,7 +7466,7 @@ address,symbol,evidence
 0x006EEE10,?Load@TriggerTypeClass@@UAGJPAUIStream@@@Z,"compiled from src/trigtype.cpp, matched"
 0x006EEEA0,?Save@TriggerTypeClass@@UAGJPAUIStream@@H@Z,"compiled from src/trigtype.cpp, matched; code at 31 addresses, placed by the gap"
 0x006EEF10,?strtrim@@YIPADPAD@Z,"compiled from src/trim.cpp, matched"
-0x006EEF80,?wcstrim@@YIPAGPAG@Z,"inferred: referenced by matched src/modemhst.cpp (14 references); across all matched code never at another address, and no other symbol here"
+0x006EEF80,?wcstrim@@YIPAGPAG@Z,"inferred: referenced by matched src/modemhst.cpp (21 references); across all matched code never at another address, and no other symbol here"
 0x006EF1D0,??0TubeClass@@QAE@ABVCell@@W4FacingType@@@Z,"compiled from src/tube.cpp, matched"
 0x006EF2D0,??1TubeClass@@UAE@XZ,"compiled from src/tube.cpp, matched"
 0x006EF3A0,?Load@TubeClass@@EAGJPAUIStream@@@Z,"compiled from src/tube.cpp, matched"
@@ -8923,7 +8935,7 @@ address,symbol,evidence
 0x007831F0,__makepath,symbol of VC6 LIBCMT.LIB makepath.obj
 0x00783290,_memmove,"inferred: called as _memmove by matched VC6 LIBCMT.LIB objects (_fptostr.obj, sbheap.obj, w_str.obj) and by matched Tiberian Sun functions (52 call sites); the code section of VC6 LIBCMT.LIB memmove.obj matches here, and at 0x00788CB0, which matched objects call as _memcpy (memcpy.obj has the same code)"
 0x007835C5,_wcsrchr,symbol of VC6 LIBCMT.LIB wcsrchr.obj
-0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (171 references); across all matched code never at another address, and no other symbol here"
+0x00783605,_wcslen,"inferred: referenced by matched src/statbtn.cpp (176 references); across all matched code never at another address, and no other symbol here"
 0x00783622,_wcsncpy,symbol of VC6 LIBCMT.LIB wcsncpy.obj
 0x0078365F,_wcscat,symbol of VC6 LIBCMT.LIB wcscat.obj
 0x00783689,_wcscpy,symbol of VC6 LIBCMT.LIB wcscat.obj
@@ -8968,8 +8980,9 @@ address,symbol,evidence
 0x00784A0B,_fgetc,symbol of VC6 LIBCMT.LIB fgetc.obj
 0x00784AE6,_iswgraph,"inferred: referenced by matched src/netshare.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00784B11,_wcstok,symbol of VC6 LIBCMT.LIB wcstok.obj
-0x00784BB8,_wcstol,"inferred: referenced by matched src/options.cpp (3 references); across all matched code never at another address, and no other symbol here"
+0x00784BB8,_wcstol,"inferred: referenced by matched src/options.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00784BCF,_wcstoxl,symbol of VC6 LIBCMT.LIB wcstol.obj
+0x00784D76,_wcstoul,"inferred: referenced by matched src/subtitle2.cpp (7 references); across all matched code never at another address, and no other symbol here"
 0x00784D8D,__mbsnccnt,symbol of VC6 LIBCMT.LIB mbsnccnt.obj
 0x00784DDB,_swscanf,symbol of VC6 LIBCMT.LIB swscanf.obj
 0x00784E11,_getenv,"inferred: referenced by matched src/session.cpp (2 references); across all matched code never at another address, and no other symbol here"
@@ -8981,6 +8994,7 @@ address,symbol,evidence
 0x0078511C,__hw_cw,symbol of VC6 LIBCMT.LIB ieee87.obj
 0x007851A5,__abstract_sw,symbol of VC6 LIBCMT.LIB ieee87.obj
 0x007851DC,__global_unwind2,symbol of VC6 LIBCMT.LIB exsup.obj
+0x007853AC,_mbstowcs,"inferred: referenced by matched src/subtitle2.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00785409,__mbstowcs_lk,symbol of VC6 LIBCMT.LIB mbstowcs.obj
 0x00785509,_wcspbrk,symbol of VC6 LIBCMT.LIB wcspbrk.obj
 0x00785547,_fgets,symbol of VC6 LIBCMT.LIB fgets.obj
@@ -10284,6 +10298,7 @@ address,symbol,evidence
 0x007AB92C,??_7?$DynamicVectorClass@PAUSpawnControl@SpawnManagerClass@@@@6B@,"inferred: referenced by matched src/spawnmanager.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x007AB94C,??_7?$VectorClass@PAUSpawnControl@SpawnManagerClass@@@@6B@,"inferred: referenced by matched src/spawnmanager.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007AC0D0,??_7StaticButtonClass@@6B@,"inferred: referenced by matched src/statbtn.cpp (3 references); across all matched code never at another address, and no other symbol here"
+0x007AC194,??_7?$DynamicVectorClass@PAVSubTitle@@@@6B@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007AC1E4,??_7SuperClass@@6BINoticeSource@@@,"inferred: referenced by matched src/super.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x007AC1EC,??_7SuperClass@@6BINoticeSink@@@,"inferred: referenced by matched src/super.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x007AC1F4,??_7SuperClass@@6BIRTTITypeInfo@@@,"inferred: referenced by matched src/super.cpp (4 references); across all matched code never at another address, and no other symbol here"
@@ -13873,7 +13888,17 @@ address,symbol,evidence
 0x007F6274,??_C@_04FKCE@IDNO?$AA@,"inferred: referenced by matched src/stats.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007F627C,??_C@_0CJ@HGG@Sending?5game?5results?4?5?5SawComple@,"inferred: referenced by matched src/stats.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007F62DC,??_C@_0N@NIJK@subtitle?4txt?$AA@,"inferred: referenced by matched src/subtitle.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x007F6520,??_C@_15MHMA@?$AA?0?$AA?5?$AA?$AA@,"inferred: referenced by matched src/wonline.cpp (6 references); across all matched code never at another address, and no other symbol here"
+0x007F62F0,?SubtitleTokens@@3PAUSubtitleToken@@A,"inferred: referenced by matched src/subtitle2.cpp (4 references); across all matched code never at another address, and no other symbol here"
+0x007F6320,?SubtitleAlignments@@3PAUSubtitleAlignment@@A,"inferred: referenced by matched src/subtitle2.cpp (3 references); across all matched code never at another address, and no other symbol here"
+0x007F63B4,??_C@_0CO@CFJA@Error?3?5Subtitle?5control?5file?5is?5@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007F644C,??_C@_0CC@JCPF@?$CK?$CK?$CK?$CK?$CK?5Failed?5to?5create?5SubTitle?$CB@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007F6470,??_C@_1BC@EAML@?$AAE?$AAn?$AAd?$AAM?$AAo?$AAv?$AAi?$AAe?$AA?$AA@,"inferred: referenced by matched src/subtitle2.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x007F6484,??_C@_0BG@LAIB@Found?5movie?5entry?5?$CFs?6?$AA@,"inferred: referenced by matched src/subtitle2.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x007F649C,??_C@_1BG@DJJM@?$AAB?$AAe?$AAg?$AAi?$AAn?$AAM?$AAo?$AAv?$AAi?$AAe?$AA?$AA@,"inferred: referenced by matched src/subtitle2.cpp (4 references); across all matched code never at another address, and no other symbol here"
+0x007F64B4,??_C@_0CB@CJH@Error?5on?5line?5?$CFd?3?5missing?5token?6@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007F64D8,??_C@_0CF@FPAI@Error?5on?5line?5?$CFd?3?5mismatched?5quo@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007F6500,??_C@_0CA@EAIC@Error?5on?5line?5?$CFd?3?5syntax?5error?6?$AA@,"inferred: referenced by matched src/subtitle2.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x007F6520,??_C@_15MHMA@?$AA?0?$AA?5?$AA?$AA@,"inferred: referenced by matched src/wonline.cpp (7 references); across all matched code never at another address, and no other symbol here"
 0x007F6544,??_C@_0BI@LBFC@EVA_ReinforcementsReady?$AA@,"inferred: referenced by matched src/super.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x007F655C,??_C@_0BG@COOK@EVA_ChronosphereReady?$AA@,"inferred: referenced by matched src/super.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x007F6574,??_C@_0BI@JJFK@EVA_LightningStormReady?$AA@,"inferred: referenced by matched src/super.cpp (2 references); across all matched code never at another address, and no other symbol here"
@@ -14751,7 +14776,7 @@ address,symbol,evidence
 0x00839C50,?PacketTransport@@3PAVWinsockInterfaceClass@@A,"inferred: referenced by matched src/ipxconn.cpp (112 references); across all matched code never at another address, and no other symbol here"
 0x00839C68,?MouseCursor@@3PAVMouse@@A,"inferred: referenced by matched src/winfix.cpp (193 references); across all matched code never at another address, and no other symbol here"
 0x00839C6C,?DepthBuffer@@3PAVZBuffer@@A,"inferred: referenced by matched src/blit.cpp (54 references); across all matched code never at another address, and no other symbol here"
-0x00839D4C,??_C@_11A@?$AA?$AA@,"inferred: referenced by matched src/campaign.cpp (89 references); across all matched code never at another address, and no other symbol here"
+0x00839D4C,??_C@_11A@?$AA?$AA@,"inferred: referenced by matched src/campaign.cpp (90 references); across all matched code never at another address, and no other symbol here"
 0x00839D84,?_AHandleCallbackFunc1@@3P6AJPAU_VQAHandle@@@ZA,"inferred: referenced by matched src/ahandle.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00839D88,?_AHandleCallbackFunc2@@3P6AJPAU_VQAHandle@@PAX@ZA,"inferred: referenced by matched src/ahandle.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00839D90,?_handles@@3PAUAhandle@@A,"inferred: referenced by matched src/ahandle.cpp (43 references); across all matched code never at another address, and no other symbol here"

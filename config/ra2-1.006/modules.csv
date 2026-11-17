@@ -576,7 +576,8 @@ storage,0x0069ADA0,0x0069B010,tibsun,"functions compiled from src/storage.cpp, m
 straw,0x0069B010,0x0069B170,tibsun,"functions compiled from src/straw.cpp, matched, without gaps"
 unk_0069B170,0x0069B170,0x0069B190,unknown,code not assigned to a module
 subtitle,0x0069B190,0x0069B680,source,"functions compiled from src/subtitle.cpp, matched, without gaps"
-unk_0069B680,0x0069B680,0x0069C660,unknown,code not assigned to a module
+subtitle2,0x0069B680,0x0069C180,source,"functions compiled from src/subtitle2.cpp, matched, without gaps; one placed by the gap; inline ?Clear@?$DynamicVectorClass@PAVSubTitle@@@@UAEXXZ at 0x0069BF80; inline ?ID@?$DynamicVectorClass@PAVSubTitle@@@@UAEHPBQAVSubTitle@@@Z at 0x0069BFB0; inline ?GetItem@?$VectorClass@PAVSubTitle@@@@UBEPAVSubTitle@@H@Z at 0x0069BFD0; inline ??8?$VectorClass@PAVSubTitle@@@@UBE_NABV0@@Z at 0x0069BFE0; inline ?Resize@?$DynamicVectorClass@PAVSubTitle@@@@UAE_NHPBQAVSubTitle@@@Z at 0x0069C020; inline ?ID@?$DynamicVectorClass@PAVSubTitle@@@@UAEHABQAVSubTitle@@@Z at 0x0069C0D0"
+unk_0069C180,0x0069C180,0x0069C660,unknown,code not assigned to a module
 super,0x0069C660,0x0069ECA0,tibsun,"functions compiled from src/super.cpp, without gaps; matched except ?Discharged@SuperClass@@QAE_N_NABVCell@@@Z and ?Place@SuperClass@@QAEXABVCell@@_N@Z; three placed by the gap"
 unk_0069ECA0,0x0069ECA0,0x0069F000,unknown,code not assigned to a module
 suprtype,0x0069F000,0x0069F8C0,tibsun,"functions compiled from src/suprtype.cpp, matched, without gaps; five placed by the gap; ?Special_From_Name@@YI?AW4SuperWeaponType@@PBD@Z not placed"
