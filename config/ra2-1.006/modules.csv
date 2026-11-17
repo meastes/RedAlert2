@@ -645,8 +645,8 @@ tiberium,0x006E89A0,0x006EA9B0,tibsun,"functions compiled from src/tiberium.cpp,
 unk_006EA9B0,0x006EA9B0,0x006EAF60,unknown,code not assigned to a module
 tmission,0x006EAF60,0x006EB100,tibsun,"functions compiled from src/tmission.cpp, matched, without gaps"
 unk_006EB100,0x006EB100,0x006EB120,unknown,code not assigned to a module
-toggle,0x006EB120,0x006EB180,tibsun,"functions compiled from src/toggle.cpp, matched, without gaps; ?Action@ToggleClass@@MAEHIAAW4KeyNumType@@@Z not placed"
-unk_006EB180,0x006EB180,0x006EB2E0,unknown,code not assigned to a module
+toggle,0x006EB120,0x006EB2C0,tibsun,"functions compiled from src/toggle.cpp, matched, without gaps"
+unk_006EB2C0,0x006EB2C0,0x006EB2E0,unknown,code not assigned to a module
 tooltip,0x006EB2E0,0x006EBEF0,tibsun,"functions compiled from src/tooltip.cpp, matched, without gaps; two placed by the gap"
 unk_006EBEF0,0x006EBEF0,0x006ECB90,unknown,code not assigned to a module
 tracker,0x006ECB90,0x006ED030,tibsun,"functions compiled from src/tracker.cpp, matched, without gaps"
