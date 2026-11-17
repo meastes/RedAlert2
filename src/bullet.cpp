@@ -1652,7 +1652,14 @@ void BulletClass::NukeMaker(void) // RA2: at 0x463C50
 		bullet->WeaponType = weapon;
 		Coord coord = cptr->Center_Coord();
 		coord = coord + Coord(0, 0, WeaponType->Bullet->DetonationAltitude);
-		TVelocity3D<double> velocity(DIR_N, DIR_N, -1.0);
+		double angle = DirType(DIR_N).As_Radian(); // RA2: straight down; Y is built first (sin before any cos), then X, where the TVelocity3D constructors compute X first
+		double y = fastmath::sin(angle); // RA2: as above
+		y *= fastmath::cos(angle); // RA2: as above
+		y *= -1.0; // RA2: as above
+		TVelocity2D<double> planar(fastmath::cos(angle) * fastmath::cos(angle) * -1.0, y); // RA2: as above
+		TVelocity3D<double> velocity; // RA2: as above
+		static_cast<TVelocity2D<double> &>(velocity) = planar; // RA2: as above, X and Y copied together
+		velocity.Z = fastmath::sin(angle) * -1.0; // RA2: as above
 		bullet->Unlimbo(coord, velocity);
 	}
 }
