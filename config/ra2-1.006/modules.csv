@@ -365,7 +365,8 @@ unk_00598C20,0x00598C20,0x00598E10,unknown,code not assigned to a module
 modemhst,0x00598E10,0x0059CB80,tibsun,"functions compiled from src/modemhst.cpp, matched, without gaps; three placed by the gap"
 unk_0059CB80,0x0059CB80,0x0059CBA0,unknown,code not assigned to a module
 modemreg,0x0059CBA0,0x0059D590,tibsun,"functions compiled from src/modemreg.cpp, matched, without gaps; one placed by the gap"
-unk_0059D590,0x0059D590,0x0059EB60,unknown,code not assigned to a module
+unk_0059D590,0x0059D590,0x0059E160,unknown,code not assigned to a module
+mono,0x0059E160,0x0059EB60,tibsun,"functions compiled from src/mono.cpp, matched, without gaps; one placed by the gap"
 motlib,0x0059EB60,0x0059EDC0,tibsun,"functions compiled from src/motlib.cpp, matched, without gaps; one placed by the gap; ?Clear@MotionLibrary@@QAEXXZ not placed"
 unk_0059EDC0,0x0059EDC0,0x0059EDE0,unknown,code not assigned to a module
 unk_0059EDE0,0x0059EDE0,0x0059F020,unknown,code not assigned to a module
