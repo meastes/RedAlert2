@@ -89,12 +89,12 @@ static HANDLE MouseMutex = NULL; // RA2: a global, not a member
 **	hold the thread's control block, its handle and id, and whether it runs.
 */
 struct MouseThreadInfoStruct { // RA2: as above
-	int Quit; // RA2: as above
-	int Count; // RA2: as above
-	int Done; // RA2: as above
+	volatile int Quit; // RA2: volatile: the thread functions read and store this field in memory at every use (0x007717E0, 0x00771900, 0x007719A0)
+	volatile int Count; // RA2: volatile: the thread functions read and store this field in memory at every use (0x007717E0, 0x00771900, 0x007719A0)
+	volatile int Done; // RA2: volatile: the thread functions read and store this field in memory at every use (0x007717E0, 0x00771900, 0x007719A0)
 	int Unknown_0C; // RA2: as above
-	__int64 Delay; // RA2: as above
-	int Started; // RA2: as above
+	volatile __int64 Delay; // RA2: volatile: the thread functions read and store this field in memory at every use (0x007717E0, 0x00771900, 0x007719A0)
+	volatile int Started; // RA2: volatile: the thread functions read and store this field in memory at every use (0x007717E0, 0x00771900, 0x007719A0)
 
 	void Reset(void) // RA2: as above
 	{
