@@ -2419,6 +2419,8 @@ address,size,evidence
 0x004BF5A0,48,"code of src/fly.cpp, matched"
 0x004BF5D0,48,"code of src/fly.cpp, matched"
 0x004BF600,752,"code of src/fly.cpp, matched"
+0x004BF8F0,288,"code of src/fly.cpp, matched"
+0x004BFA10,224,"code of src/fly.cpp, matched"
 0x004BFB60,48,"function of the Tiberian Sun reconstruction, matched"
 0x004BFBC0,,"inferred: target of the call at 0x004BDE74 in matched src/fly.cpp; size not known"
 0x004BFBD0,,"inferred: target of the call at 0x00685B93 in matched src/smartdeform.cpp; size not known"

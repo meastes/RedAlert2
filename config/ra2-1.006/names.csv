@@ -2268,8 +2268,10 @@ address,symbol,evidence
 0x004BF5A0,?Apparent_Speed@FlyLocomotionClass@@UAGHXZ,"compiled from src/fly.cpp, matched"
 0x004BF5D0,?Get_Status@FlyLocomotionClass@@UAGHXZ,"compiled from src/fly.cpp, matched"
 0x004BF600,?Acquire_Hunter_Seeker_Target@FlyLocomotionClass@@UAGXXZ,"compiled from src/fly.cpp, matched"
+0x004BF8F0,?Needs_To_Land@FlyLocomotionClass@@QAE_NXZ,"compiled from src/fly.cpp, matched"
+0x004BFA10,?Is_Locked_To_Straight_Flight@FlyLocomotionClass@@QAE_NXZ,"compiled from src/fly.cpp, matched"
 0x004BFB60,??8?$TPoint2D@H@@QBE_NABV0@@Z,"inferred: referenced by matched src/hover.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x004BFBC0,?_Release@?$_com_ptr_t@V?$_com_IIID@UIFlyControl@@$1?_GUID_820f501c_4f39_11d2_9b70_00104b972fe8@@3U__s_GUID@@A@@@@AAEXXZ,"inferred: referenced by matched src/fly.cpp (4 references); across all matched code never at another address, and no other symbol here"
+0x004BFBC0,?_Release@?$_com_ptr_t@V?$_com_IIID@UIFlyControl@@$1?_GUID_820f501c_4f39_11d2_9b70_00104b972fe8@@3U__s_GUID@@A@@@@AAEXXZ,"inferred: referenced by matched src/fly.cpp (8 references); across all matched code never at another address, and no other symbol here"
 0x004BFBD0,??0?$VectorClass@PAVObjectClass@@@@QAE@HPBQAVObjectClass@@@Z,"inferred: referenced by matched src/smartdeform.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x004BFFD0,??0FoggedObjectClass@@QAE@ABVNoInitClass@@@Z,"compiled from src/fog.cpp, matched"
 0x004C0020,??0FoggedObjectClass@@QAE@XZ,"compiled from src/fog.cpp, matched"
@@ -9516,7 +9518,7 @@ address,symbol,evidence
 0x0079568A,__setmode_lk,symbol of VC6 LIBCMT.LIB setmode.obj
 0x007956EB,___crtGetLocaleInfoW,symbol of VC6 LIBCMT.LIB w_loc.obj
 0x007957FE,___crtGetLocaleInfoA,symbol of VC6 LIBCMT.LIB a_loc.obj
-0x00795940,?_com_issue_error@@YGXJ@Z,"inferred: referenced by matched src/blowfish.cpp (257 references); across all matched code never at another address, and no other symbol here"
+0x00795940,?_com_issue_error@@YGXJ@Z,"inferred: referenced by matched src/blowfish.cpp (260 references); across all matched code never at another address, and no other symbol here"
 0x0079594E,?_com_issue_errorex@@YGXJPAUIUnknown@@ABU_GUID@@@Z,symbol of VC6 COMSUPP.LIB comsupp.obj
 0x007959AF,?_com_dispatch_raw_method@@YAJPAUIDispatch@@JGGPAXPBGZZ,symbol of VC6 COMSUPP.LIB comsupp.obj
 0x007959EB,?_com_invoke_helper@@YAJPAUIDispatch@@JGGPAXPBGPADPAPAUIErrorInfo@@@Z,symbol of VC6 COMSUPP.LIB comsupp.obj
@@ -11854,7 +11856,7 @@ address,symbol,evidence
 0x007D8018,??_C@_0BN@MKPP@QueuedObjects?4Count?$CI?$CJ?5?$DN?$DN?5?$CFd?6?$AA@,"inferred: referenced by matched src/factory.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D8038,??_C@_0N@NJAM@Frame?5?$DN?$DN?5?$CFd?6?$AA@,"inferred: referenced by matched src/factory.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D8050,??_C@_0CP@PDHM@VirtualProtect?5failed?5with?5error@,"inferred: referenced by matched src/fastmath.cpp (2 references); across all matched code never at another address, and no other symbol here"
-0x007D80A8,__GUID_820f501c_4f39_11d2_9b70_00104b972fe8,"inferred: referenced by matched src/fly.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x007D80A8,__GUID_820f501c_4f39_11d2_9b70_00104b972fe8,"inferred: referenced by matched src/fly.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x007D82C0,??_C@_0N@PGLC@EVA_UnitLost?$AA@,"inferred: referenced by matched src/foot.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D83B4,?CurrentColorScheme@GadgetClass@@2PBDB,"inferred: referenced by matched src/gadget.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007D83B8,??_C@_04HPIL@Grey?$AA@,"inferred: referenced by matched src/radar.cpp (17 references); across all matched code never at another address, and no other symbol here"
@@ -15192,7 +15194,7 @@ address,symbol,evidence
 0x00832448,?IsometricTiles@@3V?$DynamicVectorClass@PAVIsometricTileClass@@@@A,"inferred: referenced by matched src/isotile.cpp (15 references); across all matched code never at another address, and no other symbol here"
 0x00832468,?Keyboard@@3PAUKeyboardClass@@A,"inferred: referenced by matched src/gadget.cpp (123 references); across all matched code never at another address, and no other symbol here"
 0x00832470,?Logic@@3VLogicClass@@A,"inferred: referenced by matched src/tracker.cpp (22 references); across all matched code never at another address, and no other symbol here"
-0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (2988 references); across all matched code never at another address, and no other symbol here"
+0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (2989 references); across all matched code never at another address, and no other symbol here"
 0x008325D0,?MapSizeX@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x008325D4,?MapSizeY@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00833694,?CurrentSuperWeaponType@@3W4SuperWeaponType@@A,"inferred: referenced by matched src/super.cpp (1 reference); across all matched code never at another address, and no other symbol here"
