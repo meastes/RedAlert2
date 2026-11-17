@@ -617,7 +617,9 @@ unk_006D9750,0x006D9750,0x006D9B40,unknown,code not assigned to a module
 techtype,0x006D9B40,0x006DF620,tibsun,"functions compiled from src/techtype.cpp, without gaps; matched except ?Read_INI@TechnoTypeClass@@UAE_NABVCCINIClass@@@Z and ??0TechnoTypeClass@@QAE@PBDW4SpeedType@@@Z; one placed by the gap; ?Read_INI@TechnoTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts; ?In_Range@TechnoTypeClass@@QBE_NABVCoord@@PAVAbstractClass@@PAVWeaponTypeClass@@@Z not placed; ?Set_Weapon@TechnoTypeClass@@QAEXABUWeaponDataStruct@@H@Z not placed"
 unk_006DF620,0x006DF620,0x006DFCA0,unknown,code not assigned to a module
 teleport,0x006DFCA0,0x006E1BF0,tibsun,"functions compiled from src/teleport.cpp, without gaps; matched except ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z; ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z placed at their function starts; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BA0; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BB0; inline ?Is_Piggybacking@TeleportLocomotionClass@@UAGEXZ at 0x006E1BC0"
-unk_006E1BF0,0x006E1BF0,0x006E3000,unknown,code not assigned to a module
+unk_006E1BF0,0x006E1BF0,0x006E1EF0,unknown,code not assigned to a module
+temporal,0x006E1EF0,0x006E2A20,source,"functions compiled from src/temporal.cpp, matched, without gaps; five placed by the gap"
+unk_006E2A20,0x006E2A20,0x006E3000,unknown,code not assigned to a module
 terrain,0x006E3000,0x006E4B10,tibsun,"functions compiled from src/terrain.cpp, without gaps; matched except ?Take_Damage@TerrainClass@@UAE?AW4ResultType@@AAHHPBVWarheadTypeClass@@PAVTechnoClass@@_N3@Z; one placed by the gap; ?GetClassID@TerrainClass@@UAGJPAU_GUID@@@Z not placed; ?Is_Animating@TerrainClass@@QBE_NXZ not placed"
 unk_006E4B10,0x006E4B10,0x006E4D60,unknown,code not assigned to a module
 unk_006E4D60,0x006E4D60,0x006E5260,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
