@@ -199,6 +199,7 @@ extern CCINIClass UIINI; // RA2: 0x00839860, UI.INI (init.cpp declares it the sa
 class MPScoreScreen { public: MPScoreScreen(void); void Presentation_005AAA40(void); }; // RA2: the multiplayer score screen (YR: MPScoreScreen, ctor 0x5AAA20); 0x5AAA40 shows it (placeholder name)
 void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0 (init.cpp declares it the same way)
 class UnknownScore_0069A640 { public: UnknownScore_0069A640(void); void Presentation_0069A650(void); }; // RA2: the single player score screen (ctor 0x69A640, Presentation 0x69A650; names_proposed: UnknownScore_0069A640::Presentation_0069A650)
+void Clear_Radar_Events(void); // RA2: 0x0063C640, clears the radar events (revent.cpp)
 void Show_Credits(void); // RA2: 0x4B37C0 (init.cpp declares it the same way; TibSun: Show_Who_Was_Responsible)
 void __fastcall Free_Interface_Art(void); // RA2: 0x006F30F0, frees the interface art (txtlabel2.cpp defines it, saveload.cpp declares it the same way)
 void Reset_Radar_Event_Cells(void); // RA2: 0x63C790, clears the radar event cell table (YR name)
@@ -2567,7 +2568,7 @@ bool Read_Scenario_INI(CCINIClass const & ini, bool is_mapgen)
 		Map.Init_Fog_System();
 	}
 
-	RadarEventClass::Clear();
+	Clear_Radar_Events(); // RA2: the executable calls the free copy at 0x0063C640 (revent.cpp), not RadarEventClass::Clear (0x0063B890, same code)
 
 	Map.Complete_Radar_Refresh();
 

@@ -5930,7 +5930,7 @@ address,symbol,evidence
 0x0063C380,?Load@RadarEventClass@@SI_NPAUIStream@@@Z,"compiled from src/revent.cpp, matched"
 0x0063C490,?Get_Max_Color@RadarEventClass@@QBE?AVRGBClass@@XZ,"compiled from src/revent.cpp, matched"
 0x0063C550,?Get_Min_Color@RadarEventClass@@QBE?AVRGBClass@@XZ,"compiled from src/revent.cpp, matched"
-0x0063C640,?Clear@RadarEventClass@@SIXXZ,"inferred: referenced by matched src/scenario.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0063C640,?Clear_Radar_Events@@YIXXZ,"inferred: referenced by matched src/scenario.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063C6C0,?Record_Event_Cell@@YIXABVCell@@@Z,"inferred: referenced by matched src/building.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063C790,?Reset_Radar_Event_Cells@@YIXXZ,"inferred: referenced by matched src/scenario.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0063CA50,?Delete_Index@?$DynamicVectorClass@PAVRadarEventClass@@@@QAE_NH@Z,"inferred: referenced by matched src/revent.cpp (1 reference); across all matched code never at another address, and no other symbol here"
