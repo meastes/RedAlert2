@@ -7449,6 +7449,7 @@ address,symbol,evidence
 0x006E7340,?Set_Text@TextButtonClass@@UAEXPBG_N@Z,"compiled from src/textbtn.cpp, matched"
 0x006E7390,?Draw_Background@TextButtonClass@@MAEXXZ,"compiled from src/textbtn.cpp, matched"
 0x006E7460,?Draw_Text@TextButtonClass@@MAEXPBG@Z,"compiled from src/textbtn.cpp, matched"
+0x006E7740,??0ThemeControl@@QAE@XZ,"compiled from src/theme.cpp, matched"
 0x006E7780,?Fill_In@ThemeControl@@QAE_NABVCCINIClass@@@Z,"compiled from src/theme.cpp, matched"
 0x006E7890,?Init_Themes@ThemeClass@@QAEXABVCCINIClass@@@Z,"compiled from src/theme.cpp, matched"
 0x006E7A70,?Free_Themes@ThemeClass@@QAEXXZ,"compiled from src/theme.cpp, matched"
