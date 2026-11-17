@@ -2528,34 +2528,47 @@ extern char g_LadderAddress[]; // RA2: 0x00B29018, the address of the ladder ser
 extern int g_LadderPort; // RA2: 0x00B2A8AC, the port of the ladder server
 extern bool g_PlaintextPassword; // RA2: 0x007FD374, TibSun's name; RequestConnection takes its low byte
 namespace OwnerDraw {
-class DialogControl { // RA2: the base of the controls dialogs report to (vtable 0x007A7B28)
+class DialogControl { // RA2: the base of the controls dialogs report to (vtable 0x007A7B28); the same class as in ownrdraw.cpp, whose header does not exist yet
 public:
-	virtual ~DialogControl(void) {}
-	int Unknown_04; // RA2: +0x04
-	bool Unknown_08; // RA2: +0x08
+	DialogControl(void); // RA2: 0x00601030
+	virtual ~DialogControl(void); // RA2: as above
+	virtual void Set_Window(unsigned int key, HWND window) = 0; // RA2: as above
+	virtual bool Is_Done(void) = 0; // RA2: as above
+	virtual HWND Get_Window(void) = 0; // RA2: as above
+	virtual bool Is_Cancelled(void) = 0; // RA2: as above
 };
 class SimpleDialogControl : public DialogControl { // RA2: vtable 0x007A7B40
 public:
 	SimpleDialogControl(void); // RA2: 0x006010C0, defined in another file
 	virtual ~SimpleDialogControl(void); // RA2: 0x006010E0, as above
+	virtual void Set_Window(unsigned int key, HWND window); // RA2: 0x006010F0
+	virtual bool Is_Done(void); // RA2: 0x00601170, reads the byte at +8
+	virtual HWND Get_Window(void); // RA2: 0x00601180, returns the dword at +4 (the dialogs store their answer there)
+	virtual bool Is_Cancelled(void); // RA2: 0x00601190
+	HWND window; // RA2: +0x04
+	bool IsDone; // RA2: +0x08
 };
+int __fastcall Controlled_Dialog(int resource, DLGPROC procedure, DialogControl * control); // RA2: 0x006011A0, runs the dialog until its control reports; defined in ownrdraw.cpp
 }
 class SimpleWonlineDialogControl : public OwnerDraw::SimpleDialogControl { // RA2: vtable 0x007AF6F4
 public:
 	SimpleWonlineDialogControl(void) {} // RA2: 0x0073C000 (inline: the base constructor and the vtable)
-	virtual ~SimpleWonlineDialogControl(void) {} // RA2: 0x0073C020 (the derived controls expand it)
+	virtual ~SimpleWonlineDialogControl(void); // RA2: 0x0073C020, called out of line by Connect_To_Server (stores the vtable, jumps to the base destructor); declared only, its copy lies before the module. Login_Wonline expands it (0x00742FD0 shows the vtable store and the base destructor call): the executable decides differently there, see the note at Login_Wonline
 };
-int __fastcall Run_Dialog_Control(int id, DLGPROC proc, OwnerDraw::DialogControl * control); // RA2: 0x006011A0, runs the dialog until its control reports; the result is the control's answer, negative when it was cancelled
 BOOL CALLBACK Locale_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00751190, the country dialog (0xFE)
 
 Wstring Server_Name_Without_Prefix(Server const * server); // RA2: 0x00745450, defined below
 
-static inline char Get_Locale_Pointer(Wstring const & name, int ** value) { return g_UserLocales.getPointer(name, value); } // RA2: a wrapper layer (debt: its real name is not known); the executable calls Dictionary::getPointer 0x00767570 out of line here, which the inline budget of the function only gives with this extra level
+// RA2: the executable calls Dictionary<Wstring, int>::add 0x00766070, ::remove(key, value) 0x007675E0 and ::getPointer 0x00767570 out of line from Connect_To_Server (meastes keeps them as non-inline members of the name set, defined in other files); these explicit specializations carry the template's own statements and are never expanded (auto_inline off), so the executable's copies are emitted here and match; replaces the Update_Locale layers and the Get_Locale_Pointer wrapper
+template<> char Dictionary<Wstring, int>::add(Wstring const & key, int & value); // RA2: defined at the end of the file (0x00766070 lies behind the file's other functions)
+template<> char Dictionary<Wstring, int>::remove(Wstring const & key, int & value); // RA2: as above (0x007675E0)
+
+
 
 static inline int Ask_Locale(void) // RA2: the dialog (0xFE, Locale_Dialog_Proc 0x00751190) that asks for the country of the persona; the control is destroyed on each way out (debt: its real name and form are not known, two returns give the executable's two copies of the destructor call)
 {
 	SimpleWonlineDialogControl control; // RA2: vtable 0x007AF6F4, constructed by 0x006010C0, destroyed by 0x0073C020
-	int answer = Run_Dialog_Control(0xFE, Locale_Dialog_Proc, &control); // RA2: as above
+	int answer = OwnerDraw::Controlled_Dialog(0xFE, Locale_Dialog_Proc, &control); // RA2: as above
 	if (answer < 0) { // RA2: cancelled
 		return(0);
 	}
@@ -2563,7 +2576,9 @@ static inline int Ask_Locale(void) // RA2: the dialog (0xFE, Locale_Dialog_Proc 
 }
 
 
-bool Connect_To_Server(Server * server) // RA2: 0x007424C0, not in TibSun (its Login_WOL did this): logs in to the chat server with the persona and password, waits for the answer (30 seconds, 20 rounds), reads the profile of the persona, tells the ladder server about it and settles the locale of the persona; NOT matching (unplaced): 2352 bytes against the executable's 2192 - the executable calls Dictionary::add (0x00766070) twice (one shared call block) where this body expands it once, and the register choices and stack slots differ; only an effect-free padding at the end of the function gave the size, which is refused
+static inline char Get_Locale_Pointer(Wstring const & name, int ** value) { return g_UserLocales.getPointer(name, value); } // RA2: a wrapper layer (debt: its real name is not known); the executable calls Dictionary::getPointer 0x00767570 out of line here; an explicit specialization of getPointer (auto_inline off) does that too but also changes User_Tooltip 0x0073F250 and Draw_Player_List 0x0073FEE0, which expand it
+
+bool Connect_To_Server(Server * server) // RA2: 0x007424C0, not in TibSun (its Login_WOL did this): logs in to the chat server with the persona and password, waits for the answer (30 seconds, 20 rounds), reads the profile of the persona, tells the ladder server about it and settles the locale of the persona; matches (2192 bytes) with the out-of-line derived destructor and the out-of-line Dictionary calls above
 {
 	strcpy((char *)server->login, g_NickName.get()); // RA2: the persona and the password go into the server entry
 	strcpy((char *)server->password, g_LoginPassword.get()); // RA2: as above
@@ -2688,9 +2703,11 @@ locale_wait_failed: // RA2: label of the shared block of the second wait
 	Wstring nick = nick_source.toLower(); // RA2: the locales are kept by lower case name
 	if (g_UserLocales.contains(nick)) { // RA2: the server answered for the persona
 		int locale = 0; // RA2: as above
-		int * value = NULL; // RA2: as above
-		if (Get_Locale_Pointer(nick, &value) && value != NULL) { // RA2: as above
-			locale = *value; // RA2: as above
+		{
+			int * value = NULL; // RA2: as above
+			if (Get_Locale_Pointer(nick, &value) && value != NULL) { // RA2: as above
+				locale = *value; // RA2: as above
+			}
 		}
 		if (locale != 0) { // RA2: the server already knows a locale: make the profile agree with it and tell the server the profile's
 			if (profile.Get() != NULL && profile->Locale != locale) { // RA2: as above
@@ -2698,9 +2715,10 @@ locale_wait_failed: // RA2: label of the shared block of the second wait
 					profile->SetLocale(locale, 2); // RA2: as above
 					profile->Save(&g_NickName); // RA2: as above
 				}
-				locale = profile->Locale; // RA2: as above
-				g_pChat->RequestSetLocale((Locale)locale); // RA2: virtual 0xB8
+				int current = profile->Locale; // RA2: read once into a register (the executable uses esi)
+				g_pChat->RequestSetLocale((Locale)current); // RA2: virtual 0xB8
 				g_pChat->RequestUserLocale(&user); // RA2: virtual 0xBC
+				locale = current; // RA2: the executable keeps the new locale in esi and stores it only here, for the update
 				g_UserLocales.updateValue(nick, locale); // RA2: Dictionary::remove then ::add (calls 0x007675E0 and 0x00766070)
 			}
 			return(true);
@@ -2820,6 +2838,154 @@ void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wai
 	for (int i = 0; i < EV_COUNT; i++) {
 		ResetEvent(g_WaitEventHandles[i]);
 	}
+}
+
+int __fastcall Request_And_Wait_Server_List(unsigned int flags); // RA2: 0x00751C30, asks for the list of chat servers and waits for it (0 done, 1 failed, 2 quit), not yet defined
+LRESULT CALLBACK Wonline_Account_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x007540A0, the dialog proc of the login dialog (0x10F, 0x11D)
+LRESULT CALLBACK Wonline_Autologin_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00755070, the dialog proc of the dialog (0x112) after a login
+extern bool g_RememberLogin; // RA2: 0x00B2AC74, the login is to be kept in the chat service's list of logins (set by the login dialog)
+int Save_Nickname(char const * name, char const * password, bool mangle, int locale); // RA2: 0x00745320, defined below
+void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0, defined in init.cpp
+
+int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to Westwood Online: starts the chat services, fetches the server list, tries the stored login of the auto login persona, else opens the login dialog (the executable's debug text says "Creating login dlg") and connects to the server the persona's profile names; 1 when connected, 0 when not, negative when the server list could not be fetched; NOT matching (unplaced, 1904 bytes against the executable's 1857): the executable calls ArrayList::getPointer 0x00765E60 out of line in the three early expansions of Find_Server_Suffix / Connect_To_Selected_Server (the last two expansions are inline) which our build expands everywhere (about 16 bytes each; wrapper layers around the early calls make the expansions themselves vanish, so the inline budget is not what is wrong); it keeps the zero in ebp and the rc_ptr vtable in ebx where we use ebx; and it expands the derived control destructor (see SimpleWonlineDialogControl)
+{
+	bool failed = false; // RA2: as above
+	g_OnConnectionResult = 0; // RA2: as above
+	int result = Init_Wonline(); // RA2: as above
+	if (result != 1) { // RA2: as above
+		return(result); // RA2: as above
+	}
+	memset(&g_CurrentChannel, 0, sizeof(g_CurrentChannel)); // RA2: the lists of the last session go
+	memset(&g_PendingChannel, 0, sizeof(g_PendingChannel)); // RA2: as above
+	g_UserChannels.clear(); // RA2: as above
+	g_GameChannelList.clear(); // RA2: as above
+	g_UserList.clear(); // RA2: as above
+	g_ChannelCount = 0; // RA2: as above
+	result = 0; // RA2: as above
+	{
+		WideWstring fetching(StringTable::LoadString("TXT_FETCHING_SERVLIST", NULL, "D:\\Ra2\\wonline.cpp", 22220)); // RA2: as above
+		Show_Wait_Window(16, fetching, false); // RA2: as above
+	}
+	int sku = 0x2300; // RA2: the SKU of the tournament, or of the game
+	if (Online_Session_State != 2) { // RA2: as above
+		sku = 0x2100; // RA2: as above
+	}
+	int error = Request_And_Wait_Server_List(sku); // RA2: as above
+	switch (error) { // RA2: as above
+	case 0: // RA2: as above
+		break; // RA2: as above
+	case 2: // RA2: as above
+		failed = true; // RA2: as above
+		result = -1; // RA2: as above
+		break; // RA2: as above
+	default: // RA2: as above
+		failed = true; // RA2: as above
+		result = -2; // RA2: as above
+		break; // RA2: as above
+	}
+	WOLOptionsClass options; // RA2: as above
+	options.Load(); // RA2: as above
+	if (!failed) { // RA2: as above
+		if (options.Is_Bit0_Clear()) { // RA2: the auto login is on
+			Wstring persona = WOL_Auto_Login_Persona(); // RA2: as above
+			if (persona.length() > 0) { // RA2: as above
+				if (Recall_Stored_Login(persona)) { // RA2: expanded here
+					int index = -1; // RA2: as above
+					if (Online_Session_State == 2 || Online_Session_State == 1) { // RA2: an Internet game
+						rc_ptr<PlayerProfile> profile = PlayerProfile::Load(persona); // RA2: as above
+						if (profile.Get()) { // RA2: the server of the persona's profile (Find_Server_Suffix tests the empty name itself)
+							index = Find_Server_Suffix(profile->Name); // RA2: expanded here
+						}
+						if (index == -1) { // RA2: as above
+							index = g_CurrentServerIndex; // RA2: as above
+						}
+					} else {
+						rc_ptr<PlayerProfile> profile = PlayerProfile::Load(persona); // RA2: as above
+						if (profile.Get()) { // RA2: as above
+							if (profile->Name.length() == 0) { // RA2: as above
+								index = g_CurrentServerIndex; // RA2: as above
+							} else {
+								index = Find_Server_Suffix(profile->Name); // RA2: expanded here
+							}
+						}
+					}
+					if (index != -1) { // RA2: as above
+						g_CurrentServerIndex = index; // RA2: as above
+						if (Connect_To_Selected_Server()) { // RA2: expanded here
+							return(1); // RA2: as above
+						}
+						failed = Handle_Connection_Error(); // RA2: as above
+					}
+				}
+			}
+		}
+		if (g_NickName.length() == 0 && options.Is_Bit1_Clear()) { // RA2: as above
+			g_NickName = WOL_Last_Valid_Persona(); // RA2: as above
+		}
+		{
+			Wstring empty(""); // RA2: as above
+			WOL_Set_Auto_Login_Persona(empty); // RA2: the auto login is used once
+		}
+		if (failed) { // RA2: as above
+			return(0); // RA2: as above
+		}
+		DebugString("Creating login dlg\n"); // RA2: as above
+		SimpleWonlineDialogControl control; // RA2: as above
+		int dialog_id = options.Is_Bit1_Clear() ? 0x10F : 0x11D; // RA2: as above
+		Darken_Surface(NULL, true); // RA2: as above
+		HWND window = OwnerDraw::Begin_Dialog(dialog_id, (DLGPROC)Wonline_Account_Dialog_Proc, (LPARAM)&control); // RA2: as above
+		OwnerDraw::Display_Dialog(window); // RA2: as above
+		SetFocus(GetDlgItem(window, (g_NickName.length() > 0 && g_LoginPassword.length() == 0) ? 0x72C : 0x628)); // RA2: the password edit when the name is known
+		while (!control.Is_Done() && !WOL_Wait_Callback() && !OwnerDraw::Dialog_Message_Handler()) { // RA2: as above
+			Title_Screen_Restore(false); // RA2: as above
+		}
+		OwnerDraw::End_Dialog(window); // RA2: as above
+		if ((int)control.Get_Window() == 2) { // RA2: the dialog was cancelled
+			failed = true; // RA2: as above
+		} else {
+			WOL_Wait_Callback(); // RA2: as above
+			g_IgnoreNetStatus = false; // RA2: as above
+			WOLOptionsClass saved; // RA2: as above
+			saved.Load(); // RA2: as above
+			rc_ptr<PlayerProfile> profile; // RA2: as above
+			if (saved.Is_Bit1_Clear()) { // RA2: as above
+				profile = PlayerProfile::Load(g_NickName); // RA2: as above
+			} else {
+				profile = g_PlayerProfile.Get(); // RA2: as above
+			}
+			int found = -1; // RA2: as above
+			if (profile->Name.length() != 0) { // RA2: as above
+				found = Find_Server_Suffix(profile->Name); // RA2: expanded here
+			}
+			if (found != -1) { // RA2: as above
+				g_CurrentServerIndex = found; // RA2: as above
+			}
+			if (g_CurrentServerIndex >= g_Servers.length()) { // RA2: as above
+				g_CurrentServerIndex = -1; // RA2: as above
+			}
+			if (g_CurrentServerIndex == -1 && g_Servers.length() > 1) { // RA2: as above
+				g_CurrentServerIndex = 1; // RA2: as above
+			}
+			if (Connect_To_Selected_Server()) { // RA2: expanded here
+				if (g_RememberLogin && saved.Is_Bit1_Clear()) { // RA2: the login is kept for the next time
+					Save_Nickname(g_NickName.get(), g_LoginPassword.get(), g_PlaintextPassword, profile->Locale); // RA2: as above
+					Session.Write_MultiPlayer_Settings(); // RA2: as above
+				}
+				if (saved.Is_Bit0_Clear() && WOL_Get_Auto_Login()) { // RA2: as above
+					Darken_Surface(NULL, true); // RA2: as above
+					SimpleWonlineDialogControl next; // RA2: as above
+					OwnerDraw::Controlled_Dialog(0x112, (DLGPROC)Wonline_Autologin_Dialog_Proc, &next); // RA2: as above
+				}
+				return(1); // RA2: as above
+			}
+		}
+	}
+	Close_Wait_Window(0xFFFFFFFF); // RA2: expanded here
+	if (!failed) { // RA2: as above
+		Handle_Connection_Error(); // RA2: as above
+	}
+	g_IgnoreNetStatus = true; // RA2: as above
+	return(result); // RA2: as above
 }
 
 // RA2: declarations for the functions below (placed after Draw_Player_List: declarations above it change its code)
@@ -3152,7 +3318,7 @@ bool __fastcall Join_Game_Channel(Channel const * channel, bool observer) // RA2
 	if (channel->flags & 0x100) { // RA2: a private game: the player types the password
 		Darken_Surface(NULL, true); // RA2: as above
 		WonlineStringDialogControl control; // RA2: as above
-		if (Run_Dialog_Control(0xE1, (DLGPROC)Wonline_Password_Dialog_Proc, &control) == 2) { // RA2: cancelled
+		if (OwnerDraw::Controlled_Dialog(0xE1, (DLGPROC)Wonline_Password_Dialog_Proc, &control) == 2) { // RA2: cancelled
 			return(false); // RA2: as above
 		}
 		password = control.Text; // RA2: as above
@@ -3937,3 +4103,63 @@ void Add_Test_Player_Potato_Too(void) // RA2: 0x007515B0, not in TibSun: a test 
 	++Session.NumPlayers; // RA2: as above
 	Session.HostAddress = player->Address; // RA2: the host
 }
+
+#pragma auto_inline(off) // RA2: as above
+template<> char Dictionary<Wstring, int>::add(Wstring const & key, int & value) // RA2: as above
+{
+	int offset; // RA2: as above
+	DNode<Wstring, int> * node, * item, * temp; // RA2: as above
+	float percent; // RA2: as above
+	item = new DNode<Wstring, int>; // RA2: as above
+	item->key = key; // RA2: as above
+	item->value = value; // RA2: as above
+	item->hashNext = NULL; // RA2: as above
+	offset = keyHash(key); // RA2: as above
+	node = table[offset]; // RA2: as above
+	if (node == NULL) { table[offset] = item; } // RA2: as above
+	else { temp = table[offset]; table[offset] = item; item->hashNext = temp; } // RA2: as above
+	entries++; // RA2: as above
+	percent = (float)entries; // RA2: as above
+	percent /= (float)getSize(); // RA2: as above
+	if (percent >= EXPAND_THRESHOLD) { expand(); } // RA2: as above
+	return(TRUE); // RA2: as above
+}
+template<> char Dictionary<Wstring, int>::remove(Wstring const & key, int & value) // RA2: as above
+{
+	int offset; // RA2: as above
+	DNode<Wstring, int> * node, * last, * temp; // RA2: as above
+	float percent; // RA2: as above
+	if (entries == 0) return(FALSE); // RA2: as above
+	percent = (float)(entries - 1); // RA2: as above
+	percent /= (float)getSize(); // RA2: as above
+	offset = keyHash(key); // RA2: as above
+	node = table[offset]; // RA2: as above
+	last = node; // RA2: as above
+	if (node == NULL) return(FALSE); // RA2: as above
+	if ((node->key) == key) { // RA2: as above
+		value = node->value; // RA2: as above
+		temp = table[offset]->hashNext; // RA2: as above
+		delete(table[offset]); // RA2: as above
+		table[offset] = temp; // RA2: as above
+		entries--; // RA2: as above
+		if (percent <= SHRINK_THRESHOLD) shrink(); // RA2: as above
+		return(TRUE); // RA2: as above
+	}
+	node = node->hashNext; // RA2: as above
+	char retval = FALSE; // RA2: as above
+	while (node != NULL) { // RA2: as above
+		if (node->key == key) { // RA2: as above
+			value = node->value; // RA2: as above
+			last->hashNext = node->hashNext; // RA2: as above
+			entries--; // RA2: as above
+			delete(node); // RA2: as above
+			retval = TRUE; // RA2: as above
+			break; // RA2: as above
+		}
+		last = node; // RA2: as above
+		node = node->hashNext; // RA2: as above
+	}
+	if (percent <= SHRINK_THRESHOLD) shrink(); // RA2: as above
+	return(retval); // RA2: as above
+}
+#pragma auto_inline(on) // RA2: as above
