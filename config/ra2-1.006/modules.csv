@@ -647,7 +647,7 @@ unvqtblc,0x0070B690,0x0070B820,tibsun,"functions compiled from src/unvqtblc.cpp,
 unk_0070B820,0x0070B820,0x0070C440,unknown,code not assigned to a module
 utracker,0x0070C440,0x0070C610,tibsun,"functions compiled from src/utracker.cpp, matched, without gaps; two placed by the gap"
 unk_0070C610,0x0070C610,0x0070C800,unknown,code not assigned to a module
-vanim,0x0070C800,0x0070DF90,tibsun,"functions compiled from src/vanim.cpp, without gaps; matched except ??0VoxelAnimClass@@QAE@PBVVoxelAnimTypeClass@@ABVCoord@@PAVHouseClass@@@Z and ?Load@VoxelAnimClass@@UAGJPAUIStream@@@Z and ??0VoxelAnimClass@@QAE@XZ and ??1VoxelAnimClass@@UAE@XZ and ?Draw_It@VoxelAnimClass@@UBEXABVPoint2D@@ABV?$TRect@H@@@Z and ?AI@VoxelAnimClass@@UAEXXZ; ??0VoxelAnimClass@@QAE@XZ and ??1VoxelAnimClass@@UAE@XZ and ?Load@VoxelAnimClass@@UAGJPAUIStream@@@Z placed at their function starts"
+vanim,0x0070C800,0x0070DF90,tibsun,"functions compiled from src/vanim.cpp, without gaps; matched except ??0VoxelAnimClass@@QAE@PBVVoxelAnimTypeClass@@ABVCoord@@PAVHouseClass@@@Z and ?AI@VoxelAnimClass@@UAEXXZ"
 unk_0070DF90,0x0070DF90,0x0070E1A0,unknown,code not assigned to a module
 vanimtype,0x0070E1A0,0x0070EE10,tibsun,"functions compiled from src/vanimtype.cpp, matched, without gaps; four placed by the gap"
 unk_0070EE10,0x0070EE10,0x0070EFC0,unknown,code not assigned to a module
