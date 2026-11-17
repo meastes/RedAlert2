@@ -27,11 +27,13 @@ string to it's own memory (for assignment or construction).
 #include "always.h"
 
 #include "wstring.h"
+#include "widewstring.h" // RA2: the wide string class shares this file
 
 #include "win.h" /// needed for NULL, TRUE and FALSE
 
 #include <cctype>
 #include <cstring>
+#include <cwchar> // RA2: wide string functions
 
 
 /// <summary>
@@ -922,3 +924,904 @@ bool Wstring::containsAny(Wstring const& chars) const
 }
 
 
+/// <summary>
+/// RA2: Constructs an empty wide string.
+/// </summary>
+WideWstring::WideWstring(void) :str(NULL) // RA2: as above
+{
+}
+
+
+/// <summary>
+/// RA2: Constructs a wide string from a block of text.
+/// </summary>
+WideWstring::WideWstring(wchar_t const* string) :str(NULL) // RA2: as above
+{
+	*this = string; // RA2: copies through the assignment
+}
+
+
+/// <summary>
+/// RA2: Constructs a copy of another wide string.
+/// </summary>
+WideWstring::WideWstring(WideWstring const& other) :str(NULL) // RA2: as above
+{
+	if (other.str != NULL) // RA2: as above
+	{
+		str = new wchar_t[wcslen(other.str) + 1]; // RA2: as above
+		wcscpy(str, other.str); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2: Destroys the wide string and frees the text it owns.
+/// </summary>
+WideWstring::~WideWstring(void) // RA2: as above
+{
+	if (str) // RA2: as above
+		delete(str); // RA2: as above
+	str = NULL; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Compares against a block of text for equality.
+/// </summary>
+bool WideWstring::operator==(wchar_t const* other) const // RA2: as above
+{
+	if ((str == NULL) && (other == NULL)) // RA2: as above
+		return(true); // RA2: as above
+
+	if ((str != NULL) && (other != NULL)) // RA2: as above
+		return(wcscmp(str, other) == 0 ? true : false); // RA2: as above
+
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Compares against another wide string for equality.
+/// </summary>
+bool WideWstring::operator==(WideWstring const& other) const // RA2: as above
+{
+	if ((str == NULL) && (other.str == NULL)) // RA2: as above
+		return(true); // RA2: as above
+
+	if ((str != NULL) && (other.str != NULL)) // RA2: as above
+		return(wcscmp(str, other.str) == 0 ? true : false); // RA2: as above
+
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Compares against a block of text for inequality.
+/// </summary>
+bool WideWstring::operator!=(wchar_t const* other) const // RA2: as above
+{
+	if ((str == NULL) && (other == NULL)) // RA2: as above
+		return(false); // RA2: as above
+
+	if ((str == NULL) || (other == NULL)) // RA2: as above
+		return(true); // RA2: as above
+
+	if (wcscmp(str, other) != 0) // RA2: as above
+		return(true); // RA2: as above
+	else // RA2: as above
+		return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Compares against another wide string for inequality.
+/// </summary>
+bool WideWstring::operator!=(WideWstring const& other) const // RA2: as above
+{
+	if ((str == NULL) && (other.str == NULL)) // RA2: as above
+		return(false); // RA2: as above
+
+	if ((str == NULL) || (other.str == NULL)) // RA2: as above
+		return(true); // RA2: as above
+
+	if (wcscmp(str, other.str) != 0) // RA2: as above
+		return(true); // RA2: as above
+	else // RA2: as above
+		return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Replaces the text with an owned copy of a block of text.
+/// </summary>
+WideWstring& WideWstring::operator=(wchar_t const* other) // RA2: as above
+{
+	set(other); // RA2: as above
+	return(*this); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Replaces the text with an owned copy of another wide string.
+/// </summary>
+WideWstring& WideWstring::operator=(WideWstring const& other) // RA2: as above
+{
+	if ((str == NULL) && (other.str == NULL)) // RA2: compares the pointers and wcscmp here instead of operator==
+		return(*this); // RA2: as above
+
+	if ((str != NULL) && (other.str != NULL) && (wcscmp(str, other.str) == 0)) // RA2: as above
+		return(*this); // RA2: as above
+
+	set(other.get()); // RA2: as above
+	return(*this); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Appends a block of text.
+/// </summary>
+char WideWstring::cat(wchar_t const* s) // RA2: as above
+{
+	wchar_t* oldStr; // RA2: as above
+	unsigned int len; // RA2: as above
+
+	if (s == NULL) // RA2: as above
+		return(TRUE); // RA2: as above
+
+	oldStr = str; // RA2: as above
+
+	len = wcslen(s) + 1; // RA2: as above
+	if (oldStr) // RA2: as above
+		len += wcslen(oldStr); // RA2: as above
+
+	str = new wchar_t[len * 2]; // RA2: the allocation is twice the characters needed
+
+	if (oldStr) // RA2: as above
+		wcscpy(str, oldStr); // RA2: as above
+	else // RA2: as above
+		str[0] = 0; // RA2: as above
+	wcscat(str, s); // RA2: as above
+
+	if (oldStr) // RA2: as above
+		delete(oldStr); // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Appends a fixed number of characters of a block of text.
+/// </summary>
+char WideWstring::cat(unsigned int size, wchar_t const* s) // RA2: as above
+{
+	wchar_t* oldStr; // RA2: as above
+	unsigned int len; // RA2: as above
+
+	oldStr = str; // RA2: as above
+
+	len = size + 1; // RA2: as above
+	if (oldStr) // RA2: as above
+		len += wcslen(oldStr); // RA2: as above
+
+	str = new wchar_t[len * 2]; // RA2: as above
+
+	if (oldStr) // RA2: as above
+		wcscpy(str, oldStr); // RA2: as above
+	else // RA2: as above
+		str[0] = 0; // RA2: as above
+	if (s) // RA2: as above
+		wcsncat(str, s, size); // RA2: as above
+
+	if (oldStr) // RA2: as above
+		delete(oldStr); // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Appends another wide string.
+/// </summary>
+char WideWstring::cat(WideWstring const& other) // RA2: as above
+{
+	return(cat(other.get())); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Appends a block of text.
+/// </summary>
+WideWstring& WideWstring::operator+=(wchar_t const* string) // RA2: as above
+{
+	cat(string); // RA2: as above
+	return(*this); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Appends another wide string.
+/// </summary>
+WideWstring& WideWstring::operator+=(WideWstring const& other) // RA2: as above
+{
+	cat(other); // RA2: as above
+	return(*this); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Joins the text and a block of text.
+/// </summary>
+WideWstring WideWstring::operator+(wchar_t const* string) const // RA2: as above
+{
+	WideWstring temp = *this; // RA2: as above
+	temp.cat(string); // RA2: as above
+	return(temp); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Joins the text and another wide string.
+/// </summary>
+WideWstring WideWstring::operator+(WideWstring const& s) const // RA2: as above
+{
+	WideWstring temp = *this; // RA2: as above
+	temp.cat(s); // RA2: as above
+	return(temp); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Deletes count characters from a position (see Wstring::remove).
+/// </summary>
+wchar_t WideWstring::remove(int pos, int count) // RA2: as above
+{
+	wchar_t* s; // RA2: as above
+	int len; // RA2: as above
+
+	len = (int)wcslen(str); // RA2: as above
+	if (pos + count > len) // RA2: as above
+		pos = len - count; // RA2: as above
+	if (pos < 0) // RA2: as above
+	{
+		count += pos; // RA2: as above
+		pos = 0; // RA2: as above
+	}
+	if (count <= 0) // RA2: as above
+		return(FALSE); // RA2: as above
+
+	s = new wchar_t[len - count + 1]; // RA2: as above
+
+	str[pos] = 0; // RA2: as above
+	str[pos + count - 1] = 0; // RA2: as above
+	wcscpy(s, str); // RA2: as above
+	wcscat(s, &(str[pos + count])); // RA2: as above
+	delete(str); // RA2: as above
+	str = s; // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Removes every instance of a character.
+/// </summary>
+char WideWstring::removeChar(wchar_t c) // RA2: as above
+{
+	int len = 0; // RA2: as above
+	wchar_t* cptr = NULL; // RA2: as above
+	char removed = FALSE; // RA2: as above
+
+	if (str == NULL) // RA2: as above
+		return(FALSE); // RA2: as above
+
+	len = wcslen(str); // RA2: as above
+	while ((cptr = wcschr(str, c)) != NULL) // RA2: as above
+	{
+		memmove(cptr, cptr + 1, len * 2 - ((int)(cptr - str)) - 2); // RA2: the executable moves len * 2 - index - 2 bytes (the index is not doubled)
+		len--; // RA2: as above
+		str[len] = 0; // RA2: as above
+		removed = TRUE; // RA2: as above
+	}
+
+	if (removed) // RA2: as above
+	{
+		wchar_t* newStr = new wchar_t[wcslen(str) + 1]; // RA2: as above
+		wcscpy(newStr, str); // RA2: as above
+		delete(str); // RA2: as above
+		str = newStr; // RA2: as above
+	}
+	return(removed); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Removes the spaces and tabs.
+/// </summary>
+void WideWstring::removeSpaces(void) // RA2: as above
+{
+	removeChar(L' '); // RA2: as above
+	removeChar(L'\t'); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Removes the leading characters found in delim.
+/// </summary>
+void WideWstring::trimLeading(WideWstring const& delim) // RA2: as above
+{
+	unsigned int i = 0; // RA2: the index is unsigned (unsigned compares in the executable)
+	while (i < length() && wcschr(delim.get(), str[i])) // RA2: as above
+		i++; // RA2: as above
+	if (i > 0) // RA2: as above
+		remove(0, i); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Removes the trailing characters found in delim.
+/// </summary>
+void WideWstring::trimTrailing(WideWstring const& delim) // RA2: as above
+{
+	unsigned int i = length(); // RA2: as above
+	while (i--) // RA2: as above
+	{
+		if (!wcschr(delim.get(), str[i])) // RA2: as above
+			break; // RA2: as above
+	}
+	truncate(i + 1); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Frees the text.
+/// </summary>
+void WideWstring::clear(void) // RA2: as above
+{
+	if (str) // RA2: as above
+		delete(str); // RA2: as above
+	str = NULL; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Replaces the text with an empty buffer of the size given.
+/// </summary>
+void WideWstring::setSize(int size) // RA2: as above
+{
+	clear(); // RA2: as above
+	if (size < 0) // RA2: as above
+		return; // RA2: as above
+	str = new wchar_t[size]; // RA2: as above
+	memset(str, 0, size * 2); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Copies into a space padded cell of len characters.
+/// </summary>
+void WideWstring::cellCopy(wchar_t* dest, unsigned int len) const // RA2: as above
+{
+	unsigned int i; // RA2: as above
+
+	wcsncpy(dest, str, len); // RA2: as above
+	for (i = (unsigned int)wcslen(str); i < len; i++) // RA2: as above
+		dest[i] = L' '; // RA2: as above
+	dest[len] = 0; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: The text, or an empty string for none.
+/// </summary>
+wchar_t* WideWstring::get(void) const // RA2: as above
+{
+	if (!str) // RA2: as above
+		return((wchar_t*)L""); // RA2: as above
+	return(str); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: The character at an index, 0 past the end.
+/// </summary>
+wchar_t WideWstring::get(unsigned int index) // RA2: as above
+{
+	if (index < wcslen(str)) // RA2: as above
+		return(str[index]); // RA2: as above
+	return(0); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: The text, or an empty string for none.
+/// </summary>
+wchar_t* WideWstring::text(void) const // RA2: as above
+{
+	if (!str) // RA2: as above
+		return((wchar_t*)L""); // RA2: as above
+	return(str); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: The character at an index, 0 past the end.
+/// </summary>
+wchar_t WideWstring::operator[](unsigned int index) const // RA2: as above
+{
+	if (index < wcslen(str)) // RA2: as above
+		return(str[index]); // RA2: as above
+	return(0); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: The character at an index, 0 past the end.
+/// </summary>
+wchar_t WideWstring::getChar(unsigned int index) const // RA2: as above
+{
+	return(index < wcslen(str) ? str[index] : (wchar_t)0); // RA2: the conditional with a 16 bit zero gives xor eax, eax (the other index accessors give xor ax, ax)
+}
+
+
+/// <summary>
+/// RA2: The number of characters.
+/// </summary>
+unsigned int WideWstring::length(void) const // RA2: as above
+{
+	if (str == NULL) // RA2: as above
+		return(0); // RA2: as above
+	return((unsigned int)wcslen(str)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Inserts a block of text at a position.
+/// </summary>
+char WideWstring::insert(wchar_t const* instring, unsigned int pos) // RA2: as above
+{
+	if (str == NULL) // RA2: as above
+		return(set(instring)); // RA2: as above
+
+	if (pos > wcslen(str)) // RA2: as above
+		pos = wcslen(str); // RA2: as above
+
+	wchar_t* newstr = new wchar_t[wcslen(str) + wcslen(instring) + 1]; // RA2: as above
+	memset(newstr, 0, (wcslen(str) + wcslen(instring) + 1) * 2); // RA2: the sizes count bytes
+	wcscpy(newstr, str); // RA2: as above
+
+	int chars = wcslen(str) + 1 - pos; // RA2: as above
+	memmove(newstr + pos + wcslen(instring), newstr + pos, chars * 2); // RA2: as above
+
+	memmove(newstr + pos, instring, wcslen(instring) * 2); // RA2: as above
+
+	delete(str); // RA2: as above
+	str = newstr; // RA2: as above
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Inserts a character at a position.
+/// </summary>
+char WideWstring::insert(wchar_t k, unsigned int pos) // RA2: as above
+{
+	wchar_t* s; // RA2: as above
+	unsigned int len; // RA2: as above
+	wchar_t c[2]; // RA2: as above
+
+	if (!str) // RA2: as above
+	{
+		c[0] = k; // RA2: as above
+		c[1] = 0; // RA2: as above
+		return(set(c)); // RA2: as above
+	}
+
+	len = (unsigned int)wcslen(str); // RA2: as above
+	if (pos > len) // RA2: as above
+		pos = len; // RA2: as above
+
+	s = (wchar_t*)new wchar_t[(len + 2)]; // RA2: as above
+
+	c[0] = str[pos]; // RA2: as above
+	str[pos] = 0; // RA2: as above
+	c[1] = 0; // RA2: as above
+	wcscpy(s, str); // RA2: as above
+	str[pos] = c[0]; // RA2: as above
+	c[0] = k; // RA2: as above
+	wcscat(s, c); // RA2: as above
+	wcscat(s, &(str[pos])); // RA2: as above
+	delete(str); // RA2: as above
+	str = s; // RA2: as above
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Replaces every occurrence of replaceThis with withThis.
+/// </summary>
+char WideWstring::replace(wchar_t const* replaceThis, wchar_t const* withThis) // RA2: as above
+{
+	WideWstring dest; // RA2: as above
+	wchar_t* foundStr, * src; // RA2: as above
+	unsigned int len; // RA2: as above
+
+	src = get(); // RA2: as above
+	while (src && src[0]) // RA2: as above
+	{
+		foundStr = wcsstr(src, replaceThis); // RA2: as above
+		if (foundStr) // RA2: as above
+		{
+			len = (unsigned int)foundStr - (unsigned int)src; // RA2: as above
+			if (len) // RA2: as above
+			{
+				if (!dest.cat(len, src)) // RA2: the byte distance is passed as the count
+					return(FALSE); // RA2: as above
+			}
+			if (!dest.cat(withThis)) // RA2: as above
+				return(FALSE); // RA2: as above
+			src = (wchar_t*)((unsigned int)foundStr + wcslen(replaceThis) * 2); // RA2: as above
+		}
+		else // RA2: as above
+		{
+			if (!dest.cat(src)) // RA2: as above
+				return(FALSE); // RA2: as above
+
+			src = NULL; // RA2: as above
+		}
+	}
+	return(set(dest.get())); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Sets the text to an owned copy of a block of text.
+/// </summary>
+wchar_t WideWstring::set(wchar_t const* s) // RA2: as above
+{
+	unsigned int len; // RA2: as above
+
+	clear(); // RA2: as above
+
+	len = s ? (unsigned int)wcslen(s) + 1 : 1; // RA2: as above
+
+	str = new wchar_t[len]; // RA2: as above
+	str[0] = 0; // RA2: as above
+	if (s) // RA2: as above
+		wcscpy(str, s); // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Sets one character.
+/// </summary>
+char WideWstring::set(wchar_t c, unsigned int index) // RA2: as above
+{
+	if (index >= (unsigned int)wcslen(str)) // RA2: as above
+		return(FALSE); // RA2: as above
+
+	str[index] = c; // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Sets the text from a fixed number of characters.
+/// </summary>
+wchar_t WideWstring::set(unsigned int size, wchar_t const* string) // RA2: as above
+{
+	unsigned int len; // RA2: as above
+
+	clear(); // RA2: as above
+	len = size + 1; // RA2: as above
+
+	str = new wchar_t[len]; // RA2: as above
+
+	str[0] = 0; // RA2: as above
+	if (string) // RA2: as above
+		wcsncpy(str, string, size); // RA2: as above
+	str[size] = 0; // RA2: as above
+
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Converts the text to lower case.
+/// </summary>
+void WideWstring::toLower(void) // RA2: as above
+{
+	unsigned int i; // RA2: as above
+
+	for (i = 0; i < length(); i++) // RA2: as above
+	{
+		if ((str[i] >= L'A') && (str[i] <= L'Z')) // RA2: as above
+			str[i] = tolower(str[i]); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2: Fetches a copy of the text in lower case.
+/// </summary>
+WideWstring WideWstring::toLower(void) const // RA2: as above
+{
+	WideWstring tmp = *this; // RA2: as above
+	tmp.toLower(); // RA2: as above
+	return(tmp); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Converts the text to upper case.
+/// </summary>
+void WideWstring::toUpper(void) // RA2: as above
+{
+	unsigned int i; // RA2: as above
+
+	for (i = 0; i < length(); i++) // RA2: as above
+	{
+		if ((str[i] >= L'a') && (str[i] <= L'z')) // RA2: as above
+			str[i] = toupper(str[i]); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2: Fetches a copy of the text in upper case.
+/// </summary>
+WideWstring WideWstring::toUpper(void) const // RA2: as above
+{
+	WideWstring tmp = *this; // RA2: as above
+	tmp.toUpper(); // RA2: as above
+	return(tmp); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Truncates the text to len characters.
+/// </summary>
+char WideWstring::truncate(unsigned int len) // RA2: as above
+{
+	WideWstring tmp; // RA2: as above
+	if (!tmp.set(len, get()) || !set(tmp.get())) // RA2: as above
+		return(FALSE); // RA2: as above
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Truncates the text at (and including) the character c.
+/// </summary>
+char WideWstring::truncate(wchar_t c) // RA2: as above
+{
+	int len; // RA2: as above
+
+	if (str == NULL) // RA2: as above
+		return(FALSE); // RA2: as above
+
+	wchar_t* cptr = wcschr(str, c); // RA2: as above
+	if (cptr == NULL) // RA2: as above
+		return(FALSE); // RA2: as above
+	len = (int)(cptr - str); // RA2: as above
+	truncate((unsigned int)len); // RA2: as above
+	return(TRUE); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Gets the token after an offset (see Wstring::getToken).
+/// </summary>
+int WideWstring::getToken(int offset, wchar_t const* delim, WideWstring& out) const // RA2: as above
+{
+	int i; // RA2: as above
+	int start; // RA2: as above
+	int stop; // RA2: as above
+
+	if (offset < 0) // RA2: as above
+		return(-1); // RA2: as above
+
+	for (i = offset; i < (int)length(); i++) { // RA2: as above
+		if (wcschr(delim, str[i]) == NULL) // RA2: as above
+			break; // RA2: as above
+	}
+	if (i >= (int)length()) // RA2: as above
+		return(-1); // RA2: as above
+	start = i; // RA2: as above
+
+	for (; i < (int)length(); i++) { // RA2: as above
+		if (wcschr(delim, str[i]) != NULL) // RA2: as above
+			break; // RA2: as above
+	}
+	stop = i - 1; // RA2: as above
+	out.set(str + start); // RA2: as above
+	out.truncate((unsigned int)stop - start + 1); // RA2: as above
+	return(stop + 1); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Gets the line after an offset (see Wstring::getLine).
+/// </summary>
+int WideWstring::getLine(int offset, WideWstring& out) const // RA2: as above
+{
+	int i; // RA2: as above
+	int start; // RA2: as above
+	int stop; // RA2: as above
+
+	start = i = offset; // RA2: as above
+	if (start >= (int)length()) // RA2: as above
+		return(-1); // RA2: as above
+
+	for (; i < (int)length(); i++) { // RA2: as above
+		if (strchr("\r\n", str[i]) != NULL) // RA2: the line break characters are searched as a narrow string (the character is widened to int)
+			break; // RA2: as above
+	}
+	stop = i; // RA2: as above
+	if ((str[stop] == L'\r') && (str[stop + 1] == L'\n')) // RA2: as above
+		stop++; // RA2: as above
+
+	out.set(str + start); // RA2: as above
+	out.truncate((unsigned int)stop - start + 1); // RA2: as above
+	return(stop + 1); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Converts the text to an integer.
+/// </summary>
+int WideWstring::toInt(void) const // RA2: as above
+{
+	return(wcstol(str, NULL, 10)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Checks whether every character is below 0x100 (true for no text).
+/// </summary>
+bool WideWstring::Is_Narrow(void) const // RA2: as above
+{
+	if (str != NULL) // RA2: as above
+	{
+		int len = wcslen(str); // RA2: as above
+		for (int i = 0; i < len; i++) // RA2: as above
+		{
+			if (str[i] >= 0x100) // RA2: as above
+				return(false); // RA2: as above
+		}
+	}
+	return(true); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Builds a wide string from an integer.
+/// </summary>
+WideWstring __fastcall WideWstring_FromInt(int value) // RA2: as above
+{
+	wchar_t buf[32]; // RA2: as above
+	swprintf(buf, L"%d", value); // RA2: as above
+	return(WideWstring(buf)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Builds a wide string from an integer, zero padded to the width.
+/// </summary>
+WideWstring __fastcall Int_To_WideString_Width(int value, int width) // RA2: as above
+{
+	wchar_t buf[32]; // RA2: as above
+	swprintf(buf, L"%%0%dd", width); // RA2: as above
+	swprintf(buf, buf, value); // RA2: as above
+	return(WideWstring(buf)); // RA2: as above
+}
+
+
+void __fastcall Char_To_Wide(wchar_t* dest, char const* source, int limit); // RA2: 0x006FA0C0 (campaign.cpp), widens a narrow string
+namespace OwnerDraw { // RA2: as conquer.cpp
+	char* __fastcall WideToCharString(char* dest, wchar_t const* src, int count); // RA2: 0x006FA0F0, narrows a wide string
+}
+int __fastcall Bit_Stuff(unsigned char* source, unsigned char* dest, int count); // RA2: 0x00430DA0 (bfiofile2.cpp)
+unsigned int __fastcall Bit_Unstuff_String(unsigned char* source, wchar_t* dest, unsigned int count); // RA2: 0x00430F30 (bfiofile2.cpp)
+
+
+/// <summary>
+/// RA2: Widens a narrow string: the text goes through a scratch buffer into the result.
+/// </summary>
+WideWstring __fastcall Wstring_ToWide(Wstring const& string) // RA2: as above
+{
+	int len = string.length(); // RA2: as above
+	wchar_t* buffer = new wchar_t[len + 1]; // RA2: as above
+	Char_To_Wide(buffer, string.get(), len); // RA2: as above
+	WideWstring wide(buffer); // RA2: as above
+	delete(buffer); // RA2: as above
+	return(wide); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Narrows a wide string: the text goes through a scratch buffer into the result.
+/// </summary>
+Wstring __fastcall Wstring_Narrow(WideWstring const& wide) // RA2: as above
+{
+	int len = wide.length(); // RA2: as above
+	char* buffer = new char[len + 1]; // RA2: as above
+	OwnerDraw::WideToCharString(buffer, wide.get(), len); // RA2: as above
+	Wstring narrow(buffer); // RA2: as above
+	delete(buffer); // RA2: as above
+	return(narrow); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Joins a block of text and a wide string.
+/// </summary>
+WideWstring __fastcall operator+(wchar_t const* a, WideWstring const& b) // RA2: as above
+{
+	return(WideWstring(a).operator+(b)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Joins two wide strings.
+/// </summary>
+WideWstring __fastcall operator+(WideWstring const& a, WideWstring const& b) // RA2: as above
+{
+	WideWstring tmp(a); // RA2: as above
+	tmp.cat(b.get()); // RA2: as above
+	return(tmp); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Checks whether the text holds any of the characters.
+/// </summary>
+bool WideWstring::containsAny(wchar_t const* chars) const // RA2: as above
+{
+	if (chars != NULL && str != NULL) // RA2: as above
+	{
+		unsigned int len = wcslen(str); // RA2: as above
+		return(wcscspn(str, chars) < len); // RA2: as above
+	}
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Checks whether the text holds any of the characters.
+/// </summary>
+bool WideWstring::containsAny(WideWstring const& chars) const // RA2: as above
+{
+	return(containsAny(chars.get())); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Packs the 16 bit characters into a string of 7 bit characters (Bit_Stuff).
+/// </summary>
+Wstring __fastcall Wstring_FromWide(WideWstring const& wide) // RA2: as above
+{
+	int bits = (wide.length() + 1) * 16; // RA2: as above
+	unsigned char* buffer = new unsigned char[(bits + 6) / 7]; // RA2: as above
+	Bit_Stuff((unsigned char*)wide.get(), buffer, bits); // RA2: as above
+	Wstring packed((char*)buffer); // RA2: as above
+	delete(buffer); // RA2: as above
+	return(packed); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2: Unpacks a string of 7 bit characters into 16 bit characters (Bit_Unstuff_String).
+/// </summary>
+WideWstring __fastcall Wide_From_7_Bit(Wstring const& string) // RA2: as above
+{
+	int bytes = (string.length() + 1) * 7 / 8; // RA2: as above
+	int count = (bytes + 1) / 2; // RA2: as above
+	wchar_t* buffer = new wchar_t[count + 1]; // RA2: as above
+	Bit_Unstuff_String((unsigned char*)string.get(), buffer, count); // RA2: as above
+	WideWstring wide(buffer); // RA2: as above
+	delete(buffer); // RA2: as above
+	return(wide); // RA2: as above
+}

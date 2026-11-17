@@ -453,7 +453,7 @@ void Dropship_Screen(void)
 		palette_data[i] = RGBClass(palette_data[i].Get_Red() * 4, palette_data[i].Get_Green() * 4, palette_data[i].Get_Blue() * 4);
 	}
 
-	ConvertClass *drawer_dropship = new ConvertClass(palette_data, GamePalette, *VisibleSurface, 63, false);
+	ConvertClass *drawer_dropship = new ConvertClass(palette_data, GamePalette, *VisibleSurface, 53, false); // RA2: the executable passes 53 as the dropship drawer's flags, not 63
 	ConvertClass *drawer_dropship_alpha = new ConvertClass(palette_data, GamePalette, *VisibleSurface, 1, false);
 
 	memmove(&palette_data, (unsigned char *)MFCD::Retrieve("CAMEO.PAL"), sizeof(palette_data));
@@ -560,23 +560,21 @@ void Dropship_Screen(void)
 	bool accept = false;
 	bool recent_click = false;
 
-	unsigned int light_frame[ARRAY_SIZE(_green_light_ys)];
-	unsigned int light_start[ARRAY_SIZE(_green_light_ys)];
-	memset(light_frame, 0xFF, sizeof(light_frame));
-	memset(light_start, 0, sizeof(light_start));
+	unsigned int light_frame[ARRAY_SIZE(_green_light_ys)] = {(unsigned)-1, (unsigned)-1, (unsigned)-1, (unsigned)-1}; // RA2: aggregate initializer; the stack slots move up toward the executable's frame
+	unsigned int light_start[ARRAY_SIZE(_green_light_ys)] = {0, 0, 0, 0}; // RA2: as above
 
 	bool force_light_redraw = false;
 
 	DynamicVectorClass<ButtonFadeEffect *> button_fades;
 
-	unsigned int money_display_time = ::timeGetTime();
-	unsigned int screen_start_time = money_display_time;
-	int loadout_anim_frame = 0;
+	unsigned int screen_start_time = ::timeGetTime(); // RA2: declaration order of the timers follows the executable's frame slots
+	unsigned int money_display_time = screen_start_time; // RA2: as above
 	unsigned int last_input_time = 0;
+	unsigned int pilot_start_time = 0; // RA2: as above
 	int pilot_frame = -1;
 
 	CDTimerClass<SystemTimerClass> pilot_timer = _pilot_delay;
-	unsigned int pilot_start_time = 0;
+	int loadout_anim_frame = 0; // RA2: as above
 
 	DynamicVectorClass<CrossDissolveEffect *> cross_dissolves;
 	bool force_info_redraw = false;
