@@ -59,6 +59,16 @@
 #include "aircraft.h"
 #include "airctype.h"
 #include "aitrig.h"
+#include "bomb.h" // RA2: as above
+#include "bomblist.h" // RA2: as above
+#include "capmgr.h" // RA2: as above
+#include "kamikaze.h" // RA2: as above
+#include "parasite.h" // RA2: as above
+#include "radsite.h" // RA2: as above
+#include "spawnmgr.h" // RA2: as above
+#include "temporal.h" // RA2: as above
+#include "theme.h" // RA2: as above
+#include "tracker.h" // RA2: as above
 #include "alphashp.h"
 #include "anim.h"
 #include "animtype.h"
@@ -164,6 +174,12 @@ _COM_SMARTPTR_TYPEDEF(ILinkStream, __uuidof(ILinkStream));
 void __fastcall Free_Interface_Art(void); // RA2: 0x006F30F0, defined in txtlabel2.cpp
 extern bool CrateWater[CRATE_COUNT]; // RA2: 0x00851118, saved and loaded with the miscellaneous values
 extern int UnlockInputFrame; // RA2: 0x00AB9174, saved and loaded with the miscellaneous values
+extern DynamicVectorClass<BombClass *> Bombs; // RA2: 0x0084EB78, defined in bomb.cpp
+HRESULT __fastcall Static_Sounds_Save(IStream * stream); // RA2: 0x00714A90, defined in voc.cpp
+extern bool ScenarioSaveNameSet; // RA2: 0x00A6EBD0, as in mainloop.cpp
+extern int SidebarWidth; // RA2: 0x007ADD80, as in sidebar.cpp
+extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30, as in winstub.cpp
+HRESULT __fastcall Static_Sounds_Load(IStream * stream); // RA2: 0x00714B80, defined in voc.cpp
 static bool Put_All(IStream *stream, int save_net); // RA2: defined after its caller
 
 static bool Get_All(IStream *stream, bool save_net); // RA2: defined after its caller
@@ -194,7 +210,7 @@ HRESULT Load_Vector(IStream * stream) // RA2: Load_Vector at 0x654C40 matches on
 /// <returns>Returns with S_OK, or the failure code of the first object that refused to
 /// save.</returns>
 template<class T>
-__forceinline HRESULT Save_Vector(IStream * stream, const DynamicVectorClass<T> &list)
+inline HRESULT Save_Vector(IStream * stream, const DynamicVectorClass<T> &list) // RA2: as above
 {
 	int count = list.Count();
 	HRESULT result = stream->Write(&count, sizeof(count), NULL);
@@ -568,6 +584,7 @@ static int Reconcile_Players(void)
 
 static bool Put_All(IStream *stream, int save_net)
 {
+	// RA2: no "Saving ..." or failure messages are compiled in (only the two skirmish ones remain)
 	/*
 	**	Save the scenario global information.
 	*/
@@ -575,42 +592,32 @@ static bool Put_All(IStream *stream, int save_net)
 	Environment.Save(stream);
 	Rule->Save(stream);
 
-	DebugString("Saving AnimTypes\n");
 	if (FAILED(Save_Vector(stream, AnimTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
 	/*
 	**	Save the map.  The map must be saved first, since it saves the Theater.
 	*/
-	DebugString("Saving Map\n");
 	Map.Save(stream);
 
-	DebugString("Saving Tunnels\n");
 	if (FAILED(Save_Vector(stream, Tubes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
 	/*
 	**	Save miscellaneous variables.
 	*/
-	DebugString("Saving Misc. Values\n");
 	if (FAILED(Save_Misc_Values(stream))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
 	/*
 	**	Save the Logic & Map layers
 	*/
-	DebugString("Saving Logic\n");
 	Logic.Save(stream);
 
-	DebugString("Saving TacticalMap\n");
 	if (FAILED(OleSaveToStream(TacticalMap, stream))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
 
@@ -618,271 +625,215 @@ static bool Put_All(IStream *stream, int save_net)
 	**	Save all game objects.  This code saves every object that's stored in a
 	**	TFixedIHeap class.
 	*/
-	DebugString("Saving HouseTypes\n");
 	if (FAILED(Save_Vector(stream, HouseTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Houses\n");
 	if (FAILED(Save_Vector(stream, Houses))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Units\n");
 	if (FAILED(Save_Vector(stream, Units))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving UnitTypes\n");
 	if (FAILED(Save_Vector(stream, UnitTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving InfantryTypes\n");
 	if (FAILED(Save_Vector(stream, InfantryTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Infantry\n");
 	if (FAILED(Save_Vector(stream, Infantry))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving BuildingTypes\n");
 	if (FAILED(Save_Vector(stream, BuildingTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Buildings\n");
 	if (FAILED(Save_Vector(stream, Buildings))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving AircraftTypes\n");
 	if (FAILED(Save_Vector(stream, AircraftTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Aircraft\n");
 	if (FAILED(Save_Vector(stream, Aircraft))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Anims\n");
 	if (FAILED(Save_Vector(stream, Anims))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving TaskForces\n");
 	if (FAILED(Save_Vector(stream, TaskForces))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving TeamTypes\n");
 	if (FAILED(Save_Vector(stream, TeamTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Teams\n");
 	if (FAILED(Save_Vector(stream, Teams))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving ScriptTypes\n");
 	if (FAILED(Save_Vector(stream, ScriptTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Scripts\n");
 	if (FAILED(Save_Vector(stream, Scripts))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving TagTypes\n");
 	if (FAILED(Save_Vector(stream, TagTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Tags\n");
 	if (FAILED(Save_Vector(stream, Tags))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving TriggerTypes\n");
 	if (FAILED(Save_Vector(stream, TriggerTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Triggers\n");
 	if (FAILED(Save_Vector(stream, Triggers))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	/// Nothing is tested here, so the failure message is printed whether the write
-	/// succeeded or not, and a genuine failure never aborts the save.
-	DebugString("Saving AITriggerTypes\n");
-	Save_Vector(stream, AITriggerTypes);
-	DebugString("\t***** FAILED!\n");
-	//return(false);
-	DebugString("Saving Actions\n");
-	if (FAILED(Save_Vector(stream, Actions))) {
-		DebugString("\t***** FAILED!\n");
-		return(false);
-	}
-	DebugString("Saving Events\n");
+	Save_Vector(stream, AITriggerTypes); // RA2: the result is not tested
+	Save_Vector(stream, Actions); // RA2: as above
 	if (FAILED(Save_Vector(stream, Events))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Factories\n");
 	if (FAILED(Save_Vector(stream, Factories))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving VoxelAnimTypes\n");
 	if (FAILED(Save_Vector(stream, VoxelAnimTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving VoxelAnims\n");
 	if (FAILED(Save_Vector(stream, VoxelAnims))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Warheads\n");
 	if (FAILED(Save_Vector(stream, Warheads))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Weapons\n");
 	if (FAILED(Save_Vector(stream, Weapons))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving ParticleTypes\n");
 	if (FAILED(Save_Vector(stream, ParticleTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Particles\n");
 	if (FAILED(Save_Vector(stream, Particles))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving ParticleSystemTypes\n");
 	if (FAILED(Save_Vector(stream, ParticleSystemTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving ParticleSystems\n");
 	if (FAILED(Save_Vector(stream, ParticleSystems))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving BulletTypes\n");
 	if (FAILED(Save_Vector(stream, BulletTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Bullets\n");
 	if (FAILED(Save_Vector(stream, Bullets))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving WaypointPaths\n");
 	if (FAILED(Save_Vector(stream, WaypointPaths))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving SmudgeTypes\n");
 	if (FAILED(Save_Vector(stream, SmudgeTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving OverlayTypes\n");
 	if (FAILED(Save_Vector(stream, OverlayTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving LightSources\n");
 	if (FAILED(Save_Vector(stream, LightSources))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving BuildingLights\n");
 	if (FAILED(Save_Vector(stream, BuildingLights))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Sides\n");
 	if (FAILED(Save_Vector(stream, Sides))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Tiberiums\n");
 	if (FAILED(Save_Vector(stream, Tiberiums))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Empulses\n");
 	if (FAILED(Save_Vector(stream, EMPulseClass::EMPulses))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving SuperWeaponTypes\n");
 	if (FAILED(Save_Vector(stream, SuperWeaponTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving SuperWeapons\n");
 	if (FAILED(Save_Vector(stream, SuperWeapons))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving TerrianTypes\n");
+	{ // RA2: the timed super weapons are written as their raw pointers, after the count
+		int count = TimedSuperWeapons.Count(); // RA2: as above
+		HRESULT result = stream->Write(&count, sizeof(count), NULL); // RA2: as above
+		if (SUCCEEDED(result)) { // RA2: as above
+			for (int index = 0; index < count; index++) { // RA2: as above
+				SuperClass * super = TimedSuperWeapons[index]; // RA2: as above
+				result = stream->Write(&super, sizeof(super), NULL); // RA2: as above
+				if (FAILED(result)) { // RA2: as above
+					break; // RA2: as above
+				}
+			}
+		}
+		if (FAILED(result)) { // RA2: as above
+			return(false); // RA2: as above
+		}
+	}
 	if (FAILED(Save_Vector(stream, TerrainTypes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Terrains\n");
 	if (FAILED(Save_Vector(stream, Terrains))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving FoggedObjects\n");
 	if (FAILED(Save_Vector(stream, FoggedObjectClass::FoggyObjects))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving AlphaShapes\n");
 	if (FAILED(Save_Vector(stream, AlphaShapes))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving Waves\n");
 	if (FAILED(Save_Vector(stream, Waves))) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving VeinholeMonster\n");
 	if (!VeinholeMonsterClass::Save_All(stream)) {
-		DebugString("\t***** FAILED!\n");
 		return(false);
 	}
-	DebugString("Saving RadarEvents\n");
 	if (!RadarEventClass::Save(stream)) {
-		DebugString("\t***** FAILED!\n");
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, CaptureManagerArray))) { // RA2: the next ten steps are not in TibSun
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, Parasites))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, Temporals))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, SpawnManagers))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(AircraftTracker.Save(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Kamikazes.Save(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(BombList.Save(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, Bombs))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Save_Vector(stream, RadSites))) { // RA2: as above
 		return(false);
 	}
 
 	if (Session.Type == GAME_SKIRMISH) {
 		DebugString("Writing Skirmish Session.Options\n");
 		if (!Session.Options.Save(stream)) {
-			DebugString("\t***** FAILED!\n");
 			return(false);
 		}
 	}
 
+	if (FAILED(Static_Sounds_Save(stream))) { // RA2: the sounds, the speech and the theme close the save
+		return(false); // RA2: as above
+	}
+	if (FAILED(Speech_Save(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Theme.Save(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
 	return(true);
 }
 
@@ -1028,19 +979,20 @@ static bool Get_All(IStream *stream, bool save_net)
 {
 	Clear_Scenario();
 	Scen->Load(stream);
-	Disable_Addon(ADDON_ANY); // RA2: no required-addon check (RequiredAddOn is not in RA2's ScenarioClass)
 
-	if (!Prep_For_Side(Scen->IsGDI ? SIDE_GDI : SIDE_NOD)) {
+	if (!Prep_For_Side(Scen->IsGDI ? SIDE_GDI : SIDE_NOD)) { // RA2: no required-addon check (RequiredAddOn is not in RA2's ScenarioClass)
 		return(false);
 	}
 
-	Rect temp = VisibleRect;
-	temp.X = ((Options.IsSidebarOnRight || Debug_Map) ? 0 : SidebarClass::SIDE_WIDTH);
-	temp.Y = 16;
-	temp.Width -= SidebarClass::SIDE_WIDTH;
-	temp.Height -= 16;
+	Rect temp; // RA2: as above
+	temp = Get_Title_Screen_Area(); // RA2: the area comes from the title screen's layout, not from VisibleRect and the sidebar's width
 
-	Allocate_Surfaces(VisibleRect, Rect(0, 0, temp.Width, VisibleRect.Height), Rect(0, 0, temp.Width, VisibleRect.Height), Rect(0, 0, SidebarClass::SIDE_WIDTH, VisibleRect.Height));
+	{ // RA2: the surface rectangles live in their own block
+		Rect sidebar(0, 0, SidebarWidth, VisibleRect.Height); // RA2: the surfaces are sized from SidebarWidth
+		Rect tile(0, 0, temp.Width, VisibleRect.Height); // RA2: as above
+		Rect composite(0, 0, temp.Width, VisibleRect.Height); // RA2: as above
+		Allocate_Surfaces(VisibleRect, composite, tile, sidebar, false); // RA2: the arguments are built beforehand, in this order
+	}
 
 	Map.Set_View_Dimensions(temp);
 
@@ -1048,17 +1000,7 @@ static bool Get_All(IStream *stream, bool save_net)
 
 	Init_Theater(Scen->Theater);
 
-	RulesClass::Load_Art_INI();
-
-	if (Addon_Enabled(ADDON_FIRESTORM) == true) {
-		CCFileClass artfs("ARTFS.INI");
-		if (artfs.Is_Available() == true) {
-			ArtINI.Load(artfs, false);
-		}
-	}
-
-	Rule->Load(stream); // RA2: no per-side speech preparation (SpeechSide is not in RA2's ScenarioClass)
-
+	Rule->Load(stream); // RA2: no art INI loading and no per-side speech preparation (SpeechSide is not in RA2's ScenarioClass)
 
 	if (FAILED(Load_Vector(stream))) {	/// AnimTypes
 		return(false);
@@ -1218,6 +1160,28 @@ static bool Get_All(IStream *stream, bool save_net)
 	if (FAILED(Load_Vector(stream))) {	/// SuperWeapons
 		return(false);
 	}
+	TimedSuperWeapons.Clear(); // RA2: the timed super weapons are read back as raw pointers and swizzled
+	{
+		int count; // RA2: as above
+		SuperClass * super; // RA2: as above
+		HRESULT result = stream->Read(&count, sizeof(count), NULL); // RA2: as above
+		if (SUCCEEDED(result) && count > 0) { // RA2: as above
+			int index; // RA2: as above
+			for (index = 0; index < count; index++) { // RA2: as above
+				result = stream->Read(&super, sizeof(super), NULL); // RA2: as above
+				if (FAILED(result)) { // RA2: as above
+					break; // RA2: as above
+				}
+				TimedSuperWeapons.Add(super); // RA2: as above
+			}
+			for (index = 0; index < count; index++) { // RA2: as above
+				Swizzler.Swizzle((void **)&TimedSuperWeapons[index]); // RA2: as above
+			}
+		}
+		if (FAILED(result)) { // RA2: as above
+			return(false); // RA2: as above
+		}
+	}
 	if (FAILED(Load_Vector(stream))) {	/// TerrainTypes
 		return(false);
 	}
@@ -1239,6 +1203,36 @@ static bool Get_All(IStream *stream, bool save_net)
 	if (!RadarEventClass::Load(stream)) {
 		return(false);
 	}
+	if (FAILED(Load_Vector(stream))) {	/// CaptureManagerArray // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Load_Vector(stream))) {	/// Parasites // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Load_Vector(stream))) {	/// Temporals // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Load_Vector(stream))) {	/// SpawnManagers // RA2: as above
+		return(false); // RA2: as above
+	}
+	AircraftTracker.Clear(); // RA2: as above
+	if (FAILED(AircraftTracker.Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	Kamikazes.Clear(); // RA2: as above
+	if (FAILED(Kamikazes.Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	BombList.Clear(); // RA2: as above
+	if (FAILED(BombList.Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Load_Vector(stream))) {	/// Bombs // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Load_Vector(stream))) {	/// RadSites // RA2: as above
+		return(false); // RA2: as above
+	}
 
 	if (Session.Type == GAME_SKIRMISH) {
 		DebugString("Reading Skirmish Session.Options\n");
@@ -1248,7 +1242,21 @@ static bool Get_All(IStream *stream, bool save_net)
 		}
 	}
 
+	if (FAILED(Static_Sounds_Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Speech_Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (FAILED(Theme.Load(stream))) { // RA2: as above
+		return(false); // RA2: as above
+	}
+
 	Map.Flag_To_Redraw(GS_REDRAW_ALL);
+
+	if (Session.Type == GAME_NORMAL) { // RA2: as above
+		ScenarioSaveNameSet = true; // RA2: as above
+	}
 
 	return(true);
 }

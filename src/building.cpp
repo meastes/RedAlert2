@@ -187,6 +187,7 @@ void Record_Event_Cell(Cell const & cell); // RA2: 0x63C6C0, the ring of recent 
 #include "bomb.h" // RA2: Active_Click_With reads the attached bomb's owner
 
 void Queue_Speech(char const * name, int priority, int expire); // RA2: 0x715B40, an EVA line by name
+extern bool IsCameoRefreshPending; // RA2: 0x8373C2; set when an infiltration changes the buildable cameos, the sidebar then refreshes them
 void __fastcall Cloak_Cell_Occupiers(CellClass * cellptr); // RA2: defined after its first caller
 
 namespace Unsorted { extern int MuteSWLaunches; extern bool ArmageddonMode; }
@@ -2658,10 +2659,7 @@ bool BuildingClass::Active_Click_With(ActionType action, ObjectClass * object, b
 		if (object != NULL) {
 			Player_Assign_Mission(MISSION_ATTACK, object, NULL, NULL); // RA2: with the two extra arguments
 		}
-		return(true);
-	}
-
-	if (action == ACTION_SELF) {
+	} else if (action == ACTION_SELF) { // RA2: an else-if chain, the cases leave through the end of the function
 		if (Class->Is_Factory()) {
 			OutList.Add(EventClass(Owner(), EventClass::PRIMARY, TargetClass(this)));
 		}
@@ -2672,27 +2670,25 @@ bool BuildingClass::Active_Click_With(ActionType action, ObjectClass * object, b
 			Player_Assign_Mission(MISSION_UNLOAD, object, NULL, NULL); // RA2: as above
 			return(true);
 		}
-		return(true);
-	}
-
-	if (action == ACTION_DETONATE) { // RA2: the attached bomb is detonated
-		OutList.Add(EventClass(AttachedBomb->OwnerHouse->HeapID, EventClass::DETONATE, TargetClass(this))); // RA2: as above
-		return(true);
-	}
-
-	if (action == ACTION_MOVE) {
-		RTTIType factory = Class->ToBuild;
-		if (factory == RTTI_INFANTRYTYPE || factory == RTTI_UNITTYPE || factory == RTTI_AIRCRAFTTYPE) { // RA2: a barracks, a war factory or an airfield sets a rally point
-			Cell cell = object->Center_Coord().As_Cell(); // RA2: the rally point is the clicked object's cell
-			Assign_Rally_Point(cell, true); // RA2: announced
-			return(true);
+	} else {
+		if (action == ACTION_DETONATE) { // RA2: the attached bomb is detonated
+			return(OutList.Add(EventClass(AttachedBomb->OwnerHouse->HeapID, EventClass::DETONATE, TargetClass(this))), true); // RA2: as above
+		} else {
+			if (action != ACTION_MOVE) { // RA2: as above
+				return(true); // RA2: as above
+			}
+			RTTIType factory = Class->ToBuild; // RA2: as above
+			if (factory == RTTI_INFANTRYTYPE || factory == RTTI_UNITTYPE || factory == RTTI_AIRCRAFTTYPE) { // RA2: a barracks, a war factory or an airfield
+				Cell cell = object->Center_Coord().As_Cell(); // RA2: the rally point is the clicked object's cell
+				Assign_Rally_Point(cell, true); // RA2: announced
+				return(true); // RA2: as above
+			}
+			return(OutList.Add(EventClass(Owner(), EventClass::ARCHIVE, TargetClass(this), TargetClass(object))), true); // RA2: as above
 		}
-		OutList.Add(EventClass(Owner(), EventClass::ARCHIVE, TargetClass(this), TargetClass(object)));
-		return(true);
 	}
-
 	return(true);
 }
+
 
 
 /***********************************************************************************************
@@ -6574,6 +6570,7 @@ void BuildingClass::Detach(AbstractClass const * target, bool all)
 
 
 
+
 /***********************************************************************************************
  * BuildingClass::Crew_Type -- This determines the crew that this object generates.            *
  *                                                                                             *
@@ -7277,6 +7274,9 @@ void BuildingClass::Factory_AI(void)
 			**	abort the production and refund money.
 			*/
 			case 0:
+				if (product->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)product)->Class->Naval) { // RA2: a naval building that cannot be placed stops the AI's naval base planning
+					product->Owner_HouseClass()->IsNavalBaseAllowed = false; // RA2: as above
+				}
 				Factory->Abandon();
 				delete (FactoryClass *)Factory;
 				Factory = 0;
@@ -7294,7 +7294,9 @@ void BuildingClass::Factory_AI(void)
 			**	The object was successfully sent from this factory. Inform the house
 			**	tracking logic that the requested object has been produced.
 			*/
-			case 2:
+			case 2: { // RA2: braces for the sound's coordinate copy
+				Coord location = Position; // RA2: the building's own position is copied for the sound
+				VocClass::PlayIndexAtPos(Class->CreateUnitSound, location, 0); // RA2: the building's create-unit sound plays when the object leaves
 				House->Just_Built(product);
 //				fact->Completed();
 				Factory->Completed();
@@ -7302,6 +7304,7 @@ void BuildingClass::Factory_AI(void)
 				delete (FactoryClass *)Factory;
 				Factory = 0;
 				break;
+			} // RA2: as above
 
 			default:
 				break;
@@ -7344,6 +7347,14 @@ void BuildingClass::Factory_AI(void)
 					**	producing it now.
 					*/
 					if (techno != NULL) {
+						if (techno->Fetch_RTTI() == RTTI_UNITTYPE) { // RA2: a naval factory builds only ships and a land factory only land units
+							if (Class->Naval && !techno->Naval) { // RA2: as above
+								return; // RA2: as above
+							}
+							if (techno->Naval && !Class->Naval) { // RA2: as above
+								return; // RA2: as above
+							}
+						}
 						Factory = new FactoryClass;
 						if (Factory != NULL) {
 							if (!Factory->Set(*techno, *House, false)) {
@@ -7360,6 +7371,7 @@ void BuildingClass::Factory_AI(void)
 		}
 	}
 }
+
 
 /// <summary>
 /// RA2: an empty function nothing calls.
@@ -7852,9 +7864,14 @@ void BuildingClass::Create_Anim(char const * name, BAnimType anim, bool damaged,
 
 		Anims[anim] = animptr;
 
+		if (!IsPoweredOn && Class->AnimData[anim].Powered) { // RA2: an animation that runs with power starts disabled while the building is off
+			animptr->Disable(); // RA2: as above
+		}
+
 		if (animptr->Class->IsShouldUseCellDrawer) {
 			animptr->AlternativeDrawer = (ConvertClass *)GetRemapColour(); // RA2: the object's remap, not the house's color scheme
-			int brightness = Apparent_Brightness(Get_Cell_Ptr()->Brightness); // RA2: the cell's brightness
+			int height = Get_Cell_Ptr()->Brightness; // RA2: the cell's brightness
+			int brightness = Apparent_Brightness(height); // RA2: as above
 			if (Unknown_Virtual_32C()) { // RA2: with the effect tint (iron curtain)
 				brightness = GetEffectTintIntensity(brightness); // RA2: as above
 			}
@@ -7870,6 +7887,7 @@ void BuildingClass::Create_Anim(char const * name, BAnimType anim, bool damaged,
 		}
 	}
 }
+
 
 
 
@@ -7924,6 +7942,7 @@ void BuildingClass::Detach_Anim(AnimClass * anim)
 		return; // RA2: as above
 	}
 }
+
 
 
 
@@ -8044,6 +8063,7 @@ void BuildingClass::Update_Anim_Appearance(void)
 	Set_Anim_Drawer(converter, Brightness);
 	Set_Anim_Translucency(TranslucencyLevel);
 }
+
 
 
 
@@ -10241,85 +10261,32 @@ int BuildingClass::GetRadialIndicatorRange(void) const // RA2: not in TibSun, at
 /// tactical map, with a few spokes sweeping around it. Only the owning player sees it, and
 /// only while the building is switched on.
 /// </summary>
-void BuildingClass::Draw_Radial_Indicator(DWORD) // RA2: takes an argument; not const
+void BuildingClass::Draw_Radial_Indicator(DWORD sweep) // RA2: takes an argument; not const
 {
-	static const int _iso_tile_edge = 34;
-
-	if (Class->IsSensorArray || Class->IsCloakGenerator) {
-
-		/*
-		 * Project the radius onto the isometric axes and express it in pixels. The
-		 * 16/17 factor is cos(atan(1/4)) squared, so the spans are the radius resolved
-		 * along the view axes, and 0.265625 is 34/128 -- one isometric tile edge per
-		 * half cell. The final tile edge comes back off to cancel the half cell that
-		 * was added to the radius.
-		 */
-		int leptons = Class->CloakRadiusInCells * CELL_LEPTON + CELL_LEPTON / 2;
-		double xspan = fastmath::sqrt((double)(leptons * leptons) * (16.0 / 17.0));
-		double yspan = xspan * 0.25;
-		double spansq = 0.25 * (4.0 * yspan * yspan + xspan * xspan);
-		int radius = (int)(fastmath::sqrt(spansq) * 0.265625 - _iso_tile_edge);
-
-		if (radius != 0) {
-			if (IsOn && House->Is_Player_Control()) {
-
-				Point2D center;
-				TacticalMap->Coord_To_Pixel(Center_Coord(), center);
-				center += TacticalRect.TopLeft;
-
-				Point2D top_left;
-				top_left.X = center.X - radius;
-				top_left.Y = center.Y - radius / 2;
-
-				Rect bounds = Rect(top_left, 2 * radius, radius);
-				Rect clipped = Intersect(bounds, TacticalRect);
-
-				if (clipped.Is_Valid()) {
-					LogicalSurface->Draw_Ellipse(center, radius, radius / 2, TacticalRect, DSurface::Build_Hicolor_Pixel(Class->RadialColor.Get_Red(), Class->RadialColor.Get_Green(), Class->RadialColor.Get_Blue()));
-
-					static double _transparencies[] = { 0.05, 0.2, 0.4, 1.0 };
-
-					double radius_x = radius;
-					double radius_y = radius / 2;
-
-					for (int i = 0; i < 4; i++) {
-
-						/// The subtracted term is (angle / (2 * PI)) truncated, so this wraps
-						/// the sweep angle back into a single revolution.
-						double angle = ((double)(i + Frame) * 0.005) - (double)(int)((double)((i + Frame) * 0.005) / DEG_TO_RAD(360)) * DEG_TO_RAD(360);
-						Point2D end;
-
-						if (fabs(angle - M_PI / 2) < 0.001) {
-							end = center + Point2D(0, -radius_y);
-						} else {
-							if (fabs(angle - 3 * M_PI / 2) < 0.001) {
-								end = center + Point2D(0, radius_y);
-							} else {
-
-								/// Intersect the spoke with the ellipse, then put the signs
-								/// back on according to which quadrant the angle lands in.
-								double slope = fastmath::tan(angle);
-								double radius_y_sq = radius_y * radius_y;
-								double radius_x_sq = radius_x * radius_x;
-								double xdist = fastmath::sqrt(1.0 / (slope * slope / radius_y_sq + 1.0 / radius_x_sq));
-								double ydist = fastmath::sqrt((1.0 - xdist * xdist / radius_x_sq) * radius_y_sq);
-								double xoffset = angle > M_PI / 2 && angle < 3 * M_PI / 2 ? -xdist : xdist;
-
-								if (angle < M_PI) {
-									ydist = -ydist;
-								}
-
-								end = center + Point2D(xoffset, ydist);
-							}
-						}
-
-						LogicalSurface->Draw_Depth_Antialiased_Line(TacticalRect, center - TacticalRect.TopLeft, end - TacticalRect.TopLeft, Class->RadialColor, -500, -500, 0, 0, 1, 0, _transparencies[i]);
-					}
+	unsigned radius = GetRadialIndicatorRange(); // RA2: the range in leptons, the type's radial indicator range
+	if ((int)radius > 0 && IsOn && House->Is_Player_Control()) { // RA2: only the owning player sees it, while the building is switched on
+		if (Class->ConcentricRadialIndicator) { // RA2: a pulsing ellipse of the full range and a growing one inside it
+			static RGBClass white(255, 255, 255); // RA2: the color the pulse fades towards
+			RGBClass color = House->RemapColorRGB; // RA2: the house color, faded to white in the pulse
+			unsigned phase = (timeGetTime() >> 1) & 0x3FF; // RA2: the pulse phase, 1024 steps of two milliseconds
+			if (!(phase & 0x200)) { // RA2: the full ellipse is shown during the first half of the pulse
+				if (!(phase & 0x100)) { // RA2: and fades in during the first quarter
+					color.Adjust(~phase & 0xFF, white); // RA2: as above
 				}
+				Draw_Radial_Ellipse(radius, false, Center_Coord(), color, false, false); // RA2: as above
 			}
+			double scaled = (double)radius + 0.5; // RA2: the range in pixels, from half cells
+			unsigned pixels = (unsigned)(int)(scaled / fastmath::sqrt(2.0) * 60.0); // RA2: as above
+			pixels = (pixels * phase) >> 10; // RA2: the growing ellipse
+			if (pixels > 32) { // RA2: it shows only once it is large enough
+				Draw_Radial_Ellipse(pixels, false, Center_Coord(), House->RemapColorRGB, false, true); // RA2: as above
+			}
+		} else {
+			Draw_Radial_Ellipse(radius, *(bool *)&sweep, Center_Coord(), House->RemapColorRGB, true, false); // RA2: the plain ellipse; the low byte of the argument is passed on as it is (no bool normalisation)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -10514,15 +10481,95 @@ static inline bool Is_Tech_Building(BuildingTypeClass const * type)
 /// <param name="house">The house that has gained the intelligence.</param>
 void BuildingClass::Spied_By(HouseClass * house)
 {
-	SpiedBy |= 1 << house->Class->House;
-	if (Class->IsRadar) {
-		House->Update_Spied_Radar(house);
+	bool visible = false; // RA2: whether the spying is announced (a radar event was submitted for this cell)
+	if (House->Is_Player_Control() || house->Is_Player_Control()) { // RA2: as above
+		if (Submit_Radar_Event(RadarEventType(9), Get_Cell())) { // RA2: as above
+			visible = true; // RA2: as above
+		}
 	}
-	if (Class->Power > 0) {
-		House->Update_Spied_Power_Plants();
+	BuildingTypeClass const * type = Class; // RA2: as above
+	if (type->IsRadar) { // RA2: a spied radar blinds its owner's satellite
+		House->Spy_Satellite_Lost(); // RA2: as above
+		if (House->Is_Player_Control() && !House->SpySatActive && visible) { // RA2: as above
+			Queue_Speech("EVA_RadarSabotaged", -1, -1); // RA2: as above
+		}
+		if (house->Is_Player_Control() && !House->SpySatActive && visible) { // RA2: as above
+			Queue_Speech("EVA_BuildingInfRadarSabotaged", -1, -1); // RA2: as above
+		}
+	} else if (type->Power > 0) { // RA2: a spied power plant causes a blackout
+		House->Begin_Power_Blackout(Rule->SpyPowerBlackout); // RA2: as above
+		if (House->Is_Player_Control() && visible) { // RA2: as above
+			Queue_Speech("EVA_PowerSabotaged", -1, -1); // RA2: as above
+		} else if (house->Is_Player_Control() && visible) { // RA2: as above
+			Queue_Speech("EVA_BuildingInfiltrated", -1, -1); // RA2: as above
+			Queue_Speech("EVA_EnemyBasePoweredDown", -1, -1); // RA2: as above
+		}
+	} else if (type->SuperWeapon != -1) { // RA2: a spied superweapon building loses its charge
+		House->SuperWeapon[type->SuperWeapon]->Reset(); // RA2: as above
+		if (House->Is_Player_Control() || (house->Is_Player_Control() && visible)) { // RA2: as above
+			Queue_Speech("EVA_BuildingInfiltrated", -1, -1); // RA2: as above
+		}
+	} else {
+		for (int index = 0; index < Rule->BuildTech.Count(); index++) { // RA2: as above
+			if (Rule->BuildTech[index] == type) { // RA2: a tech building gives the spy's house the other side's technology
+				if (House->ActLike == 0) { // RA2: as above
+					house->Side0TechInfiltrated = true; // RA2: as above
+				} else {
+					house->Side1TechInfiltrated = true; // RA2: as above
+				}
+				house->IsRecalcNeeded = true; // RA2: as above
+				if (House->Is_Player_Control() && visible) { // RA2: as above
+					Queue_Speech("EVA_TechnologyStolen", -1, -1); // RA2: as above
+				}
+				if (house->Is_Player_Control() && visible) { // RA2: as above
+					Queue_Speech("EVA_BuildingInfiltrated", -1, -1); // RA2: as above
+					Queue_Speech("EVA_NewTechnologyAcquired", -1, -1); // RA2: as above
+				}
+				goto finished; // RA2: the tests below are skipped
+			}
+		}
+		if (type->Capacity > 0) { // RA2: a spied refinery or silo has its owner's money stolen
+			int stolen = (int)(House->Available_Money() * Rule->SpyMoneyStealPercent); // RA2: as above
+			House->Spend_Money(stolen); // RA2: as above
+			house->Refund_Money(stolen); // RA2: as above
+			if (House->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_CashStolen", -1, -1); // RA2: as above
+			}
+			if (house->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_BuildingInfCashStolen", -1, -1); // RA2: as above
+			}
+		} else if (type->ToBuild == RTTI_UNITTYPE) { // RA2: 0x28, a war factory
+			house->WarFactoryInfiltrated = true; // RA2: as above
+			house->IsRecalcNeeded = true; // RA2: as above
+			if (house->Is_Player_Control()) { // RA2: as above
+				IsCameoRefreshPending = true; // RA2: as above
+			}
+			if (House->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_TechnologyStolen", -1, -1); // RA2: as above
+			}
+			if (house->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_BuildingInfiltrated", -1, -1); // RA2: as above
+				Queue_Speech("EVA_NewTechnologyAcquired", -1, -1); // RA2: as above
+			}
+		} else if (type->ToBuild == RTTI_INFANTRYTYPE) { // RA2: 0x10, a barracks
+			house->BarracksInfiltrated = true; // RA2: as above
+			house->IsRecalcNeeded = true; // RA2: as above
+			if (house->Is_Player_Control()) { // RA2: as above
+				IsCameoRefreshPending = true; // RA2: as above
+			}
+			if (House->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_TechnologyStolen", -1, -1); // RA2: as above
+			}
+			if (house->Is_Player_Control() && visible) { // RA2: as above
+				Queue_Speech("EVA_BuildingInfiltrated", -1, -1); // RA2: as above
+				Queue_Speech("EVA_NewTechnologyAcquired", -1, -1); // RA2: as above
+			}
+		}
 	}
+finished: // RA2: the exit of the tech building case
 	Mark(MARK_CHANGE);
 }
+
 
 
 

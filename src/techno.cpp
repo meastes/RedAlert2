@@ -4464,36 +4464,46 @@ int TechnoClass::Rearm_Delay(int which) const
  *=============================================================================================*/
 void TechnoClass::Laser_Zap(AbstractClass * target, int which, WeaponTypeClass const * weapon, Coord const & source_coord)
 {
+	RGBClass half; // RA2: the house colour halved, zeroed on entry
+	RGBClass const * outer; // RA2: as above
+	RGBClass const * inner; // RA2: as above
+	int duration = weapon->LaserDuration; // RA2: as above
+	if (weapon->IsHouseColor) { // RA2: a house coloured laser: inner is the house's laser colour, outer half of it
+			inner = &House->LaserColor; // RA2: a house coloured laser: inner is the house's laser colour, outer half of it
+		half.Set(inner->Get_Red() >> 1, inner->Get_Green() >> 1, inner->Get_Blue() >> 1); // RA2: as above
+		outer = &half; // RA2: as above
+	} else {
+		inner = &weapon->LaserInnerColor; // RA2: the weapon's own colours
+		outer = &weapon->LaserOuterColor; // RA2: as above
+	}
 	Coord source;
 	Coord dest;
 	int zadjust = 0;
-	int duration = weapon->LaserDuration;
-
 	if (source_coord != COORD_NONE) {
 		source = source_coord;
 	} else {
 		source = Fire_Coord(which);
-		if (source.Y != Render_Coord().Y) {
-			Point2D p1 = TacticalMap->Coord_To_Pixel_Absolute(source);
-			Point2D p2 = TacticalMap->Coord_To_Pixel_Absolute(Render_Coord());
-			zadjust = p1.Y - p2.Y;
+		if (Fetch_RTTI() == RTTI_BUILDING) { // RA2: only a building's beam is kept above its own render row
+			Point2D p1 = TacticalMap->Coord_To_Pixel_Absolute(source); // RA2: as above
+			Point2D p2 = TacticalMap->Coord_To_Pixel_Absolute(Render_Coord()); // RA2: as above
+			zadjust = p1.Y; // RA2: as above
+			zadjust -= p2.Y; // RA2: as above
+			if (zadjust > 0) { // RA2: as above
+				zadjust = 0; // RA2: as above
+			}
 		}
 	}
-
-	ObjectClass *optr = target->As_ObjectClass();
-	if (optr != NULL) {
-		dest = optr->Target_Coord();
+	if (target && (target->AbstractFlags & 2)) { // RA2: an object gives its target coordinate
+		dest = ((ObjectClass *)target)->Target_Coord(); // RA2: as above
 	} else {
-		dest = target->Center_Coord();
+		dest = target->As_Coord(); // RA2: else its own coordinate
 	}
-
-	if (RTTI == RTTI_BUILDING) {
-		((BuildingClass *)this)->IsCharging = false;
+	LaserDrawClass * laser = new LaserDrawClass(source, dest, zadjust, true, *inner, *outer, weapon->LaserOuterSpread, duration, false, true, 1.0f, 0.0f); // RA2: no wave, fades
+	if (laser && weapon->IsHouseColor) { // RA2: the beam remembers it is house coloured
+		laser->IsHouseColor = true; // RA2: as above
 	}
-
-	new LaserDrawClass(source, dest, zadjust, true, weapon->LaserInnerColor, weapon->LaserOuterColor, weapon->LaserOuterSpread, duration, false, false, 1.0, 0.0);
-	new WaveClass(source, dest, this, weapon->IsBigLaser ? WAVE_BIG_LASER : WAVE_LASER, (TechnoClass *)target);
 }
+
 
 
 /// <summary>
@@ -6978,6 +6988,7 @@ void TechnoClass::Draw_Link_Line(Coord start, Coord end, RGBClass color) const /
 /// </summary>
 void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool shadow) const // RA2: not in TibSun, at 0x6D0DC0
 {
+	RGBClass shade; // RA2: the fade colour is zeroed on entry and assigned in the loop
 	Point2D start_point;
 	Point2D end_point;
 	TacticalMap->Coord_To_Pixel(start, start_point);
@@ -6991,15 +7002,15 @@ void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool 
 	Point2D shadow_end = end_point;
 	shadow_end.Y += 1;
 	if (shadow) {
-		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Line_End_Rect(shadow_start)), pixel);
-		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Line_End_Rect(shadow_end)), fade);
+		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Moved_Rect(Rect(-2, -2, 3, 3), shadow_start)), pixel); // RA2: the end marker is a moved 3x3 rectangle (the exe builds it through the rectangle constructor)
+		CompositeSurface->Fill_Rect(Intersect(TacticalRect, Moved_Rect(Rect(-2, -2, 3, 3), shadow_end)), fade); // RA2: the end marker is a moved 3x3 rectangle (the exe builds it through the rectangle constructor)
 	}
 	Rect clip = TacticalRect;
 	if (shadow && Clip_Line_To_Rect(shadow_start, shadow_end, clip)) {
 		CompositeSurface->Draw_Line(shadow_start, shadow_end, NormalDrawer->Convert_Pixel(0));
 	}
-	CompositeSurface->Fill_Rect(Intersect(TacticalRect, Line_End_Rect(start_point)), fade);
-	CompositeSurface->Fill_Rect(Intersect(TacticalRect, Line_End_Rect(end_point)), pixel);
+	CompositeSurface->Fill_Rect(Intersect(TacticalRect, Moved_Rect(Rect(-2, -2, 3, 3), start_point)), fade); // RA2: the end marker is a moved 3x3 rectangle (the exe builds it through the rectangle constructor)
+	CompositeSurface->Fill_Rect(Intersect(TacticalRect, Moved_Rect(Rect(-2, -2, 3, 3), end_point)), pixel); // RA2: the end marker is a moved 3x3 rectangle (the exe builds it through the rectangle constructor)
 	Coord last = start;
 	for (int i = 1, j = 63; i <= 64; i++, j--) {
 		Coord next;
@@ -7011,7 +7022,7 @@ void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool 
 		start_point.Y += TacticalRect.Y;
 		end_point.Y += TacticalRect.Y;
 		if (Clip_Line_To_Rect(start_point, end_point, clip)) {
-			RGBClass shade = color;
+			shade = color; // RA2: as above
 			int ratio = j * 4;
 			shade.Adjust(ratio < 0xFE ? ratio : 0xFE, BlackColor);
 			CompositeSurface->Draw_Line(start_point, end_point, DSurface::Build_Hicolor_Pixel(shade));
@@ -7019,6 +7030,7 @@ void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool 
 		last = next;
 	}
 }
+
 
 
 /// <summary>

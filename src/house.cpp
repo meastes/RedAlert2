@@ -181,6 +181,7 @@
 #include "temporal.h" // RA2: TemporalClass::JustLetGo for Blowup_All
 #include "side.h" // RA2: SideClass::From_Name for the civilian side test of Is_Allowed_To_Ally
 #include "stringtable.h" // RA2: StringTable::LoadString for the end-game captions
+#include "multiplayer.h" // RA2: MultiplayerGameMode, whose virtual tells Computer_Paranoid whether to act
 #include "super.h"
 #include "suprtype.h"
 #include "surface.h"
@@ -206,6 +207,7 @@
 #include "strategy.hh"
 
 extern HouseClass * ObserverHouse; // RA2: 0x00A72D28, the house of the observer (the player with team -1), as stats.cpp declares it
+extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted (as super.cpp declares it)
 
 ThreatType __fastcall Quarry_To_Threat(int quarry); // RA2: 0x6220E0, a script quarry as a threat type
 
@@ -2384,6 +2386,7 @@ void HouseClass::Make_Ally(HousesType house)
 void HouseClass::Make_Ally(HouseClass * house, bool announce) // RA2: the executable's form has the second argument (not used by TibSun's body)
 {
 	if (Is_Allowed_To_Ally(house)) {
+		Map.Update_Technos_Visibility(false, false); // RA2: the visibility of every techno is refreshed before and after (Reveal_Technos at the end)
 
 		Allies |= (1L << house->HeapID);
 
@@ -2407,11 +2410,9 @@ void HouseClass::Make_Ally(HouseClass * house, bool announce) // RA2: the execut
 			**	An alliance with another human player will cause the computer
 			**	players (if present) to become paranoid.
 			*/
-			if (Is_Human_Player() && Rule->IsComputerParanoid && !house->Class->IsMultiplayPassive) {
+			if (Is_Human_Player() && Rule->IsComputerParanoid && !house->Class->IsMultiplayPassive && Session.Type != GAME_NORMAL) { // RA2: only outside the campaign
 				Computer_Paranoid();
 			}
-
-			char buffer[80];
 
 			/*
 			**	Sweep through all techno objects and perform a cheeseball tarcom clear to ensure
@@ -2430,33 +2431,35 @@ void HouseClass::Make_Ally(HouseClass * house, bool announce) // RA2: the execut
 				}
 			}
 
-			/*
-			**	Cause all structures to be revealed to the house that has been
-			**	allied with.
-			*/
-			if (Rule->IsAllyReveal && house == PlayerPtr) {
-				for (int index = 0; index < Technos.Count(); index++) {
-					TechnoClass const * t = Technos[index];
-
-					if (!t->IsInLimbo && t->House == this) {
-						Map.Sight_From(t->Center_Coord(), t->TClass->SightRange, PlayerPtr, false);
-					}
-				}
-			}
-
 			if (Is_Human_Player() && Session.Type != GAME_NORMAL && !house->Class->IsMultiplayPassive) {
-				wsprintf(buffer, Fetch_String(TXT_HAS_ALLIED), (char const *)IniName, (char const *)house->IniName);
-// RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
+				wchar_t buffer[80]; // RA2: the message is a wide string
+				swprintf(buffer, StringTable::LoadString("TXT_HAS_ALLIED", 0, "D:\\Ra2\\House.CPP", 3149), UIName, house->UIName); // RA2: both house names are the wide UI names
+				Session.Messages.Add_Message(NULL, 0, buffer, Class->Scheme, TextPrintType(0x4046), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: as above
 
-				if (Is_Player_Control()) {
-					Speak(VOX_ALLIANCE_FORMED);
+				if (announce) { // RA2: EVA announces the alliance, or the request for one
+					if (house->Is_Ally(this)) { // RA2: as above
+						if (!MuteSWLaunches) { // RA2: as above
+							if (PlayerPtr->Is_Ally(house) && PlayerPtr->Is_Ally(this)) { // RA2: as above
+								Queue_Speech("EVA_AllianceFormed", -1, -1); // RA2: as above
+							} else { // RA2: as above
+								Queue_Speech("EVA_EnemyAllianceFormed", -1, -1); // RA2: as above
+							}
+						}
+					} else if (Is_Player_Control()) { // RA2: as above
+						Queue_Speech("EVA_RequestingAlliance", -1, -1); // RA2: as above
+					} else if (house->Is_Player_Control()) { // RA2: as above
+						Queue_Speech("EVA_AllianceRequested", -1, -1); // RA2: as above
+					}
 				}
 			}
 
 			Map.Flag_To_Redraw();
 		}
+		Map.Reveal_Technos(false, false); // RA2: as above
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -4135,10 +4138,9 @@ void HouseClass::Recalc_Center(void)
 		int x = 0;
 		int y = 0;
 		int count = 0;
-		int index;
 
 		int buildings = Buildings.Count(); // RA2: the count is read once for each loop
-		for (index = 0; index < buildings; index++) { // RA2: as above
+		for (int index = 0; index < buildings; index++) { // RA2: as above
 			BuildingClass const * b = Buildings[index];
 
 			if (b != NULL && !b->IsInLimbo && b->Strength > 0) { // RA2: no owner test, the house array holds only its own buildings
@@ -4179,8 +4181,8 @@ void HouseClass::Recalc_Center(void)
 		if (count > 1) {
 			int radius = 0;
 
-			buildings = Buildings.Count(); // RA2: as above
-			for (index = 0; index < buildings; index++) { // RA2: as above
+			int buildings = Buildings.Count(); // RA2: as above
+			for (int index = 0; index < buildings; index++) { // RA2: as above
 				BuildingClass const * b = Buildings[index];
 
 				if (b != NULL && !b->IsInLimbo && b->Strength > 0) { // RA2: as above
@@ -4212,6 +4214,7 @@ void HouseClass::Recalc_Center(void)
 		}
 	}
 }
+
 
 
 
@@ -4365,12 +4368,13 @@ int HouseClass::Expert_AI(void)
 				if (urgency[strat] == u) {
 					switch (strat) {
 						case STRATEGY_FIRE_SALE:
-							//acted |= AI_Fire_Sale(u);
-							AI_Fire_Sale(u);
+							if (CurBuildings > 0 && u == URGENCY_CRITICAL) { // RA2: the fire sale is run here, only at the highest urgency
+								Fire_Sale(); // RA2: as above
+								All_To_Hunt(); // RA2: as above
+							}
 							break;
 
 						case STRATEGY_RAISE_MONEY:
-							//acted |= AI_Raise_Money(u);
 							AI_Raise_Money(u);
 							break;
 
@@ -4384,6 +4388,7 @@ int HouseClass::Expert_AI(void)
 
 	return(TICKS_PER_SECOND*7 + Random_Pick(1, TICKS_PER_SECOND/2));
 }
+
 
 
 /// <summary>
@@ -4430,9 +4435,6 @@ UrgencyType HouseClass::Check_Fire_Sale(void)
 /// <returns>Returns with the urgency of this house's money troubles.</returns>
 UrgencyType HouseClass::Check_Raise_Money(void)
 {
-	int i;
-	int j;
-
 	UrgencyType urgency = URGENCY_NONE;
 
 	/*
@@ -4443,17 +4445,15 @@ UrgencyType HouseClass::Check_Raise_Money(void)
 	}
 
 	if (!Can_Make_Money()) {
-		if (ABQuantity.Value(Rule->BuildRefinery[0]->HeapID) > 0) {
+		bool has_refinery = ABQuantity.Value(Rule->BuildRefinery[0]->HeapID) > 0 || ABQuantity.Value(Rule->BuildRefinery[1]->HeapID) > 0; // RA2: either of the two refineries counts
+		if (has_refinery) { // RA2: the refinery test is a flag, and a harvester or refinery in production is found by a search that keeps the factory in a pointer; the urgency is assigned, not counted up
 
 			/*
 			 * A refinery already going up means the situation is being taken care of.
 			 */
-			for (i = 0; i < Buildings.Count(); i++) {
-				if (Buildings[i]->House == this) {
-					if (Buildings[i]->Class == Rule->BuildRefinery[0] && Buildings[i]->CurrentMission == MISSION_CONSTRUCTION) {
-						return(URGENCY_NONE);
-					}
-					urgency = URGENCY_NONE;
+			for (int i = 0; i < ::Buildings.Count(); i++) { // RA2: the search runs over every building in the game
+				if (::Buildings[i]->House == this && (::Buildings[i]->Class == Rule->BuildRefinery[0] || ::Buildings[i]->Class == Rule->BuildRefinery[1]) && ::Buildings[i]->CurrentMission == MISSION_CONSTRUCTION) { // RA2: as above
+					return(URGENCY_NONE); // RA2: as above
 				}
 			}
 
@@ -4461,61 +4461,67 @@ UrgencyType HouseClass::Check_Raise_Money(void)
 			 * There is a refinery, so a harvester is what this house is short of. If one is
 			 * not on order, or is on order but cannot be paid for, then cash must be raised.
 			 */
-			if (BuildUnit != Rule->HarvesterUnit[0]->HeapID) {
-				if (Available_Money() < Rule->HarvesterUnit[0]->Cost_Of(this)) {
-					urgency++;
+			if (BuildUnit != Rule->HarvesterUnit[0]->HeapID && BuildUnit != Rule->HarvesterUnit[1]->HeapID) { // RA2: either of the two harvesters counts
+				if (Available_Money() < Rule->HarvesterUnit[0]->Cost_Of(this) && Available_Money() < Rule->HarvesterUnit[1]->Cost_Of(this)) { // RA2: as above
+					urgency = URGENCY_LOW; // RA2: as above
 				}
 			} else {
-				for (j = 0; j < Factories.Count(); j++) {
-					FactoryClass * fptr = Factories[j];
-					if (fptr->House == this && Factories[j]->Get_Object() != NULL) {
+				FactoryClass * fptr = NULL; // RA2: as above
+				for (int j = 0; j < Factories.Count(); j++) { // RA2: as above
+					FactoryClass * fp = Factories[j]; // RA2: as above
+					if (fp->House == this && Factories[j]->Get_Object() != NULL) { // RA2: as above
 						UnitClass * unit = (UnitClass *)Factories[j]->Get_Object();
-						if (unit->RTTI == RTTI_UNIT && unit->Class == Rule->HarvesterUnit[0]) {
+						if (unit->RTTI == RTTI_UNIT && (unit->Class == Rule->HarvesterUnit[0] || unit->Class == Rule->HarvesterUnit[1])) { // RA2: as above
 							fptr = Factories[j];
-							if (fptr != NULL) {
-								int owed = fptr->Balance;
-								if (Available_Money() >= owed) {
-									return(urgency);
-								}
-							}
 							break;
 						}
 					}
 				}
-				urgency++;
+				if (fptr != NULL) { // RA2: as above
+					int owed = fptr->Balance; // RA2: as above
+					if (Available_Money() < owed) { // RA2: as above
+						urgency = URGENCY_LOW; // RA2: as above
+					}
+				} else {
+					urgency = URGENCY_LOW; // RA2: as above
+				}
 			}
 		} else {
 
 			/*
 			 * No refinery at all. The same reasoning applies to getting one built.
 			 */
-			if (BuildStructure != Rule->BuildRefinery[0]->HeapID) {
-				if (Available_Money() < Rule->BuildRefinery[0]->Cost_Of(this)) {
-					urgency++;
+			if (BuildStructure != Rule->BuildRefinery[0]->HeapID && BuildStructure != Rule->BuildRefinery[1]->HeapID) { // RA2: as above
+				if (Available_Money() < Rule->BuildRefinery[0]->Cost_Of(this) && Available_Money() < Rule->BuildRefinery[1]->Cost_Of(this)) { // RA2: as above
+					urgency = URGENCY_LOW; // RA2: as above
 				}
 			} else {
-				for (j = 0; j < Factories.Count(); j++) {
-					FactoryClass * fptr = Factories[j];
-					if (fptr->House == this && Factories[j]->Get_Object() != NULL) {
+				FactoryClass * fptr = NULL; // RA2: as above
+				for (int j = 0; j < Factories.Count(); j++) { // RA2: as above
+					FactoryClass * fp = Factories[j]; // RA2: as above
+					if (fp->House == this && Factories[j]->Get_Object() != NULL) { // RA2: as above
 						BuildingClass * building = (BuildingClass *)Factories[j]->Get_Object();
-						if (building->RTTI == RTTI_BUILDING && building->Class == Rule->BuildRefinery[0]) {
+						if (building->RTTI == RTTI_BUILDING && (building->Class == Rule->BuildRefinery[0] || building->Class == Rule->BuildRefinery[1])) { // RA2: as above
 							fptr = Factories[j];
-							if (fptr != NULL) {
-								int owed = fptr->Balance;
-								if (Available_Money() >= owed) {
-									return(urgency);
-								}
-							}
 							break;
 						}
 					}
 				}
-				urgency++;
+				if (fptr != NULL) { // RA2: as above
+					int owed = fptr->Balance; // RA2: as above
+					if (Available_Money() < owed) { // RA2: as above
+						urgency = URGENCY_LOW; // RA2: as above
+					}
+				} else {
+					urgency = URGENCY_LOW; // RA2: as above
+				}
 			}
 		}
 	}
 	return(urgency);
 }
+
+
 
 
 /// <summary>
@@ -4819,22 +4825,17 @@ int HouseClass::AI_Unit(void)
 {
 	if (BuildUnit != UNIT_NONE) return(TICKS_PER_SECOND);
 
-	int harv = AUQuantity.Value(Rule->HarvesterUnit[0]->HeapID);
-	int ref = ABQuantity.Value(Rule->BuildRefinery[0]->HeapID);
-	int mult;
-	if (Session.Type == GAME_NORMAL || Difficulty == DIFF_HARD) {
-		mult = 1;
-	} else {
-		mult = 2;
-	}
+	int harv = AUQuantity.Value(Get_First_Ownable(Rule->HarvesterUnit)->HeapID); // RA2: the first harvester this house may own
+	int ref = ABQuantity.Value(Rule->BuildRefinery[0]->HeapID) + ABQuantity.Value(Rule->BuildRefinery[1]->HeapID); // RA2: both refineries count
+	int mult = Rule->HarvestersPerRefinery; // RA2: the rules give the number of harvesters for each refinery
 
 	/*
 	**	A computer controlled house will try to build a replacement
 	**	harvester if possible.
 	*/
 	if (IQ >= Rule->IQHarvester && !IsTiberiumShort && !Is_Human_Player() && ref * mult > harv) {
-		if ((unsigned int)Rule->HarvesterUnit[0]->Level <= (unsigned int)Control.TechLevel) {
-			BuildUnit = Rule->HarvesterUnit[0]->HeapID;
+		if ((unsigned int)Get_First_Ownable(Rule->HarvesterUnit)->Level <= (unsigned int)Control.TechLevel) { // RA2: as above
+			BuildUnit = Get_First_Ownable(Rule->HarvesterUnit)->HeapID; // RA2: as above
 			return(TICKS_PER_SECOND);
 		}
 	}
@@ -4924,6 +4925,7 @@ int HouseClass::AI_Unit(void)
 
 	return(TICKS_PER_SECOND);
 }
+
 
 
 /***********************************************************************************************
@@ -5552,9 +5554,11 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
 {
 	UnitClass * best = 0;
 	int value = 0;
+	Cell center = coord.As_Cell(); // RA2: the units are looked for on the cells around the coordinate, not in the house's unit list
 
-	for (int index = 0; index < Units.Count(); index++) {
-		UnitClass * unit = Units[index];
+	int count = MapClass::RadiusCount[11]; // RA2: the scan covers the offsets of the whole RadiusOffset table (radius 11, the table's last entry)
+	for (int index = 0; index < count; index++) { // RA2: as above
+		UnitClass * unit = Map[center + MapClass::RadiusOffset[index]].Cell_Unit(true); // RA2: as above
 
 		if (unit && !unit->IsInLimbo && !Is_Ally(unit) && unit->House->Which_Zone(unit) == ZONE_NONE && unit->HeightAGL >= -20 && unit->Cloak != CLOAKED) {
 			int val = coord.Distance_To(unit->Center_Coord());
@@ -5572,6 +5576,7 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
 	}
 	return(NULL);
 }
+
 
 
 /***********************************************************************************************
@@ -6076,40 +6081,35 @@ void HouseClass::Write_All(CCINIClass & ini)
  *=============================================================================================*/
 void HouseClass::Write_INI(CCINIClass & ini)
 {
-	char const * name = Class->IniName;
+	char section[20]; // RA2: the section name is copied to a local first
+	strcpy(section, IniName); // RA2: the house's own name, not its type's
 
-	ini.Clear(name);
+	ini.Clear(section); // RA2: the keys are written to the local section copy, in the executable's order
 
-	ini.Put_Int(name, "Credits", (int)(Control.InitialCredits / 100));
-	ini.Put_SourceType(name, "Edge", Control.Edge);
-	ini.Put_Int(name, "ActsLike", ActLike);
-	ini.Put_Int(name, "TechLevel", Control.TechLevel);
-	ini.Put_Int(name, "IQ", Control.IQ);
-	ini.Put_Bool(name, "PlayerControl", IsPlayerControl);
-
-	if (AIGeneral) {
-		CLSID clsid;
-		IPersistPtr persist(AIGeneral);
-		persist->GetClassID(&clsid);
-		if (clsid != CLSID_AIHouse) {
-			ini.Put_CLSID(name, "AI", clsid);
-		}
-	}
+	ini.Put_String(section, "Country", Class->IniName); // RA2: the name of the house's country type
+	ini.Put_Int(section, "TechLevel", Control.TechLevel); // RA2: as above
+	ini.Put_Int(section, "Credits", Control.InitialCredits / 100); // RA2: as above
+	ini.Put_Int(section, "IQ", Control.IQ); // RA2: as above
+	ini.Put_SourceType(section, "Edge", Control.Edge); // RA2: as above
+	ini.Put_Bool(section, "PlayerControl", IsPlayerControl); // RA2: as above
+	ini.Put_Scheme_Index(section, "Color", Scheme); // RA2: the color scheme is written, no ActsLike, AI or Side key
 
 	unsigned allies = 0;
-	for (HousesType index = HOUSE_FIRST; index < Houses.Count(); index++) {
-		if ((Control.Allies & (1 << Houses[index]->HeapID)) != 0) {
-			allies |= (1 << Houses[index]->Class->House);
+	for (int index = 0; index < Houses.Count(); index++) { // RA2: the allied houses are written by house number
+		unsigned bit = 1 << Houses[index]->HeapID; // RA2: as above
+		if (bit & Control.Allies) { // RA2: as above
+			allies |= bit; // RA2: as above
 		}
 	}
-	ini.Put_Owners(name, "Allies", allies);
+	ini.Put_Houses(section, "Allies", allies); // RA2: as above
 
-	ini.Put_Scheme_Index(name, "Color", Scheme);
-	if (Class->Side != SIDE_NONE) {
-		ini.Put_Side(name, "Side", Class->Side);
+	if (UINameString[0] != '\0') { // RA2: the name shown to the player is written when there is one
+		ini.Put_String(section, "UIName", UINameString); // RA2: as above
 	}
-	Base.Write_INI(ini, name);
+	Base.Write_INI(ini, section); // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -6280,6 +6280,9 @@ bool HouseClass::Is_Allowed_To_Ally(HouseClass * house) const
  *=============================================================================================*/
 void HouseClass::Computer_Paranoid(void)
 {
+	bool forced = Rule->AlliesAllowed; // RA2: the rules flag is read first
+	if ((Session.MPGameMode != NULL && Session.MPGameMode->vt_entry_04()) || forced) { // RA2: only when the game mode asks for it or the rules force it
+
 	/*
 	**	Loop through every computer controlled house and make allies with all other computer
 	**	controlled houses and then make enemies with all other human controlled houses.
@@ -6297,15 +6300,18 @@ void HouseClass::Computer_Paranoid(void)
 				HouseClass * hptr2 = Houses[house2];
 				if (hptr2 != NULL && !hptr2->IsDefeated) {
 					if (hptr2->Is_Human_Player()) {
-						hptr->Make_Enemy(hptr2);
+						hptr->Make_Enemy(hptr2, false); // RA2: the announce flag is false
 					} else {
-						hptr->Make_Ally(hptr2);
+						hptr->Make_Ally(hptr2, false); // RA2: as above
 					}
 				}
 			}
 		}
 	}
+
+	}
 }
+
 
 
 /***********************************************************************************************
@@ -7655,74 +7661,82 @@ UnitTypeClass const * HouseClass::Get_First_Ownable(TypeList<UnitTypeClass const
 /// <returns>bool; Are all of the prerequisites satisfied?</returns>
 bool HouseClass::AI_Has_Prerequisites(TechnoTypeClass const * type, DynamicVectorClass<BuildingTypeClass const *> & owned, int ownedcount) const
 {
-	BuildingTypeClass const * own_building;
+	int i = 0; // RA2: the loops are the executable's do-while forms; a numbered prerequisite is looked up in the owned list, a negative one names a rules list of which any member will do
+	if (type->Prerequisite.Count() > 0) { // RA2: as above
+		do { // RA2: as above
+			int prereq = type->Prerequisite[i]; // RA2: as above
 
-	for (int i = 0; i < type->Prerequisite.Count(); i++) {
-
-		if (type->Prerequisite[i] >= 0) {
-
-			BuildingTypeClass const * b = BuildingTypes[type->Prerequisite[i]];
-			if (b != Rule->BuildConst[0]) {
-
-				bool found = false;
-				for (int j = 0; j < ownedcount; j++) {
-					if (owned[j] == b) {
-						found = true;
+			if (prereq >= 0) { // RA2: as above
+				int item = 0; // RA2: as above
+				if (ownedcount <= 0) { // RA2: as above
+					return(false); // RA2: as above
+				}
+				while (true) { // RA2: as above
+					if (owned[item] == BuildingTypes[prereq]) { // RA2: as above
 						break;
+					}
+					item++; // RA2: the executable's do-while forms; a negative prerequisite names one of the rules lists (-1 power ... -6 refinery)
+					if (item >= ownedcount) { // RA2: as above
+						return(false); // RA2: as above
 					}
 				}
 
-				if (!found) {
-					return(false);
+			} else {
+				TypeList<BuildingTypeClass const *> * group = NULL; // RA2: -1 power, -2 weapons, -3 barracks, -4 radar, -5 tech, -6 refinery
+
+				switch (prereq) { // RA2: as above
+					case -1: // RA2: as above
+						group = &Rule->BuildPower; // RA2: as above
+						break; // RA2: as above
+
+					case -2: // RA2: as above
+						group = &Rule->BuildWeapons; // RA2: as above
+						break; // RA2: as above
+
+					case -3: // RA2: as above
+						group = &Rule->BuildBarracks; // RA2: as above
+						break; // RA2: as above
+
+					case -4: // RA2: as above
+						group = &Rule->BuildRadar; // RA2: as above
+						break; // RA2: as above
+
+					case -5: // RA2: as above
+						group = &Rule->BuildTech; // RA2: as above
+						break; // RA2: as above
+
+					case -6: // RA2: as above
+						group = &Rule->BuildRefinery; // RA2: as above
+						break; // RA2: as above
 				}
-			}
 
-		} else {
-
-			if (type->Prerequisite[i] == -1) {
-				continue;
-			}
-
-			own_building = NULL;
-
-			switch (type->Prerequisite[i]) {
-
-				case STRUCT_G_FACTORY:
-					own_building = Get_First_Ownable(Rule->BuildWeapons);
-					break;
-
-				case STRUCT_G_BARRACKS:
-					own_building = Get_First_Ownable(Rule->BuildBarracks);
-					break;
-
-				case STRUCT_G_RADAR:
-					own_building = Get_First_Ownable(Rule->BuildRadar);
-					break;
-
-				case STRUCT_G_TECH:
-					own_building = Get_First_Ownable(Rule->BuildTech);
-					break;
-
-				default:
-					break;
-			}
-
-			bool found = false;
-			for (int j = 0; j < ownedcount; j++) {
-				if (owned[j] == own_building) {
-					found = true;
-					break;
+				int member = 0; // RA2: as above
+				if (group->Count() > 0) { // RA2: as above
+					do { // RA2: as above
+						BuildingTypeClass const * candidate = group->GetItem(member); // RA2: the list's virtual GetItem
+						int item = 0; // RA2: as above
+						if (ownedcount > 0) { // RA2: as above
+							do { // RA2: as above
+								if (owned[item] == candidate) { // RA2: as above
+									goto found; // RA2: a member of the list is owned; the structured forms (flag and breaks) compile to a longer loop
+								}
+								item++; // RA2: as above
+							} while (item < ownedcount); // RA2: as above
+						}
+						member++; // RA2: as above
+					} while (member < group->Count()); // RA2: as above
 				}
+				return(false); // RA2: as above
 			}
-
-			if (!found) {
-				return(false);
-			}
-		}
+found: // RA2: the shared exit of both searches; the structured form (a flag and breaks) was tested and compiles to a longer loop
+			i++; // RA2: as above
+		} while (i < type->Prerequisite.Count()); // RA2: as above
 	}
 
 	return(true);
 }
+
+
 
 
 /// <summary>
@@ -8144,8 +8158,8 @@ Cell HouseClass::Where_To_Place_Upgrade(BuildingTypeClass const * upgrade) const
 	int upgrade_level = upgradee_type->Upgrades + 10;
 	bool anyslot = upgrade->PowersUpToLevel == -1;
 
-	for (int i = 0; i < Buildings.Count(); i++) {
-		BuildingClass * b = Buildings[i];
+	for (int i = 0; i < ::Buildings.Count(); i++) { // RA2: the search runs over every building in the game, the house test is made on each
+		BuildingClass * b = ::Buildings[i]; // RA2: as above
 		if (b->House == this && b->Class == upgradee_type && b->Can_Upgrade(upgrade, this)) {
 			if (anyslot && upgrade_level > b->UpgradeLevel || !anyslot && b->UpgradeLevel == 0) {
 				upgrade_level = b->UpgradeLevel;
@@ -8160,6 +8174,7 @@ Cell HouseClass::Where_To_Place_Upgrade(BuildingTypeClass const * upgrade) const
 
 	return(Cell(0, 0));
 }
+
 
 
 /// <summary>
@@ -8515,7 +8530,7 @@ bool HouseClass::AI_Build_Defense(int nodeindex, DynamicVectorClass<Cell> * cell
 /// <returns>Returns with the list of candidates, which may well be empty.</returns>
 DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Air_Defense_Buildings(DynamicVectorClass<BuildingTypeClass const *> & owned) const
 {
-	unsigned ownable = 1 << HouseTypes.ID(Class);
+	unsigned ownable = 1 << HouseTypeClass::From_Name(Class->ParentCountry.Buffer); // RA2: the house type is found by the name of its parent country
 	DynamicVectorClass<BuildingTypeClass *> defenses;
 
 	for (int i = 0; i < BuildingTypes.Count(); i++) {
@@ -8529,6 +8544,7 @@ DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Air_Defense_Buildin
 }
 
 
+
 /// <summary>
 /// Fetches the anti-armor defenses this house could build.
 /// This routine gathers the candidates that the base defense planner will choose between.
@@ -8539,7 +8555,7 @@ DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Air_Defense_Buildin
 /// <returns>Returns with the list of candidates, which may well be empty.</returns>
 DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Armor_Defense_Buildings(DynamicVectorClass<BuildingTypeClass const *> & owned) const
 {
-	unsigned ownable = 1 << HouseTypes.ID(Class);
+	unsigned ownable = 1 << HouseTypeClass::From_Name(Class->ParentCountry.Buffer); // RA2: the house type is found by the name of its parent country
 	DynamicVectorClass<BuildingTypeClass *> defenses;
 
 	for (int i = 0; i < BuildingTypes.Count(); i++) {
@@ -8553,6 +8569,7 @@ DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Armor_Defense_Build
 }
 
 
+
 /// <summary>
 /// Fetches the anti-infantry defenses this house could build.
 /// This routine gathers the candidates that the base defense planner will choose between.
@@ -8563,7 +8580,7 @@ DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Armor_Defense_Build
 /// <returns>Returns with the list of candidates, which may well be empty.</returns>
 DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Ground_Defense_Buildings(DynamicVectorClass<BuildingTypeClass const *> & owned) const
 {
-	unsigned ownable = 1 << HouseTypes.ID(Class);
+	unsigned ownable = 1 << HouseTypeClass::From_Name(Class->ParentCountry.Buffer); // RA2: the house type is found by the name of its parent country
 	DynamicVectorClass<BuildingTypeClass *> defenses;
 
 	for (int i = 0; i < BuildingTypes.Count(); i++) {
@@ -8575,6 +8592,7 @@ DynamicVectorClass<BuildingTypeClass *> HouseClass::Get_Anti_Ground_Defense_Buil
 
 	return(defenses);
 }
+
 
 
 /// <summary>
@@ -9610,14 +9628,15 @@ void HouseClass::AI_Takeover(void)
 void HouseClass::Update_Present_Super_Weapons(void)
 {
 	if (GameActive) {
+		bool is_player = PlayerPtr == this; // RA2: whether this is the player's house is decided once, by house pointer
 		for (int s = 0; s < SuperWeapon.Count(); s++) {
 			if (SuperWeapon[s]->Is_Present() && ((SuperWeapon[s]->NeedsBuilding && !SuperWeapon[s]->Is_One_Time()) || IsDefeated)) {
 				bool present = false;
 				bool enabled = false;
 				if (!IsDefeated) {
-					for (int j = 0; j < Buildings.Count(); j++) {
-						BuildingClass * b = Buildings[j];
-						if (!b->IsInLimbo && b->IsActive && b->House->Fetch_ID() == Fetch_ID()) {
+					for (int j = 0; j < ::Buildings.Count(); j++) { // RA2: every building in the game is looked at, the house test is on the building
+						BuildingClass * b = ::Buildings[j]; // RA2: as above
+						if (!b->IsInLimbo && b->IsActive && Fetch_ID() == b->House->Fetch_ID()) { // RA2: this house's id is fetched first and compared with the building owner's
 							for (int k = 0; k < 3; k++) {
 								BuildingTypeClass const * upgrade = b->Upgrades[k];
 								if (upgrade != NULL && (upgrade->SuperWeapon == s || upgrade->SuperWeapon2 == s)) {
@@ -9643,33 +9662,25 @@ void HouseClass::Update_Present_Super_Weapons(void)
 					}
 				}
 
+				int tab = SidebarClass::Which_Tab(RTTI_SUPERWEAPON, SuperWeapon[s]->Class->Fetch_Heap_ID(), false); // RA2: the sidebar tab of the weapon is redrawn, not just the second column
+
 				if (present && !IsDefeated) {
-					if (!enabled && SuperWeapon[s]->Is_Powered() && SuperWeapon[s]->Suspend(true)) {
-						if (Fetch_ID() == PlayerPtr->Fetch_ID()) {
+					if ((!enabled && SuperWeapon[s]->Is_Powered() && SuperWeapon[s]->Suspend(true)) || (enabled && SuperWeapon[s]->Suspend(false))) { // RA2: the executable shares one block between the two cases
+						if (is_player) { // RA2: as above
 							if (Map.IsTargettingMode == s) {
 								Map.IsTargettingMode = SUPER_NONE;
 							}
-							Map.Column[1].Flag_To_Redraw();
-						}
-						IsRecalcNeeded = true;
-					}
-
-					if (enabled && SuperWeapon[s]->Suspend(false)) {
-						if (Fetch_ID() == PlayerPtr->Fetch_ID()) {
-							if (s == Map.IsTargettingMode) {
-								Map.IsTargettingMode = SUPER_NONE;
-							}
-							Map.Column[1].Flag_To_Redraw();
+							Map.Flag_Tab_To_Redraw(tab); // RA2: as above
 						}
 						IsRecalcNeeded = true;
 					}
 				} else {
 					if (SuperWeapon[s]->Remove() && PlayerPtr != NULL) {
-						if (Fetch_ID() == PlayerPtr->Fetch_ID()) {
+						if (is_player) { // RA2: as above
 							if (Map.IsTargettingMode == s) {
 								Map.IsTargettingMode = SUPER_NONE;
 							}
-							Map.Column[1].Flag_To_Redraw();
+							Map.Flag_Tab_To_Redraw(tab); // RA2: as above
 						}
 						IsRecalcNeeded = true;
 					}
@@ -9678,6 +9689,8 @@ void HouseClass::Update_Present_Super_Weapons(void)
 		}
 	}
 }
+
+
 
 
 /// <summary>

@@ -533,7 +533,7 @@ class MapClass: public GScreenClass
 		 * scan can start at an outer ring, and OcclusionOffset the neighbor of each offset
 		 * whose height decides whether that cell lies hidden behind higher ground.
 		 */
-		static int const RadiusCount[11];
+		static int const RadiusCount[12]; // RA2: twelve entries in the executable (0x7A5908: ... 309, 369)
 		static Cell const RadiusOffset[];
 		static Cell const OcclusionOffset[];
 

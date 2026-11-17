@@ -596,11 +596,13 @@ bool ThemeClass::Still_Playing(void) const
 /// <summary>
 /// RA2: writes the playing and the pending score to a save game.
 /// </summary>
-void ThemeClass::Save(IStream * stream) // RA2: at 0x6E8310
+long ThemeClass::Save(IStream * stream) // RA2: at 0x6E8310; returns the result of the last write
 {
-	if (SUCCEEDED(stream->Write(&Score, sizeof(Score), NULL))) {
-		stream->Write(&Pending, sizeof(Pending), NULL);
+	HRESULT result = stream->Write(&Score, sizeof(Score), NULL); // RA2: as above
+	if (SUCCEEDED(result)) { // RA2: as above
+		result = stream->Write(&Pending, sizeof(Pending), NULL); // RA2: as above
 	}
+	return(result); // RA2: as above
 }
 
 

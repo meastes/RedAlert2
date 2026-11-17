@@ -118,7 +118,7 @@ class ThemeClass
 		bool Still_Playing(void) const;
 		int Track_Length(ThemeType index) const;
 		void Fade_Stream(void); // RA2
-		void Save(IStream * stream); // RA2
+		long Save(IStream * stream); // RA2: an HRESULT, the result of the last write (0x6E8310; Put_All tests it)
 		long Load(IStream * stream); // RA2: an HRESULT
 		void Scan(void);
 		void AI(void);

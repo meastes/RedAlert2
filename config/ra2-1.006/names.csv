@@ -7063,7 +7063,7 @@ address,symbol,evidence
 0x006E81A0,?Stop@ThemeClass@@QAEX_N@Z,"compiled from src/theme.cpp, matched"
 0x006E8270,?Suspend@ThemeClass@@QAEXXZ,"compiled from src/theme.cpp, matched"
 0x006E82D0,?Still_Playing@ThemeClass@@QBE_NXZ,"compiled from src/theme.cpp, matched"
-0x006E8310,?Save@ThemeClass@@QAEXPAUIStream@@@Z,"compiled from src/theme.cpp, matched"
+0x006E8310,?Save@ThemeClass@@QAEJPAUIStream@@@Z,"compiled from src/theme.cpp, matched"
 0x006E8340,?Load@ThemeClass@@QAEJPAUIStream@@@Z,"compiled from src/theme.cpp, matched"
 0x006E8440,?Is_Allowed@ThemeClass@@QBE_NW4ThemeType@@@Z,"compiled from src/theme.cpp, matched"
 0x006E84E0,?Is_Normal@ThemeClass@@QBE_NW4ThemeType@@@Z,"compiled from src/theme.cpp, matched"
