@@ -11,6 +11,7 @@
  * disclaimers apply; see LICENSE.md.
  ******************************************************************************/
 
+#define RA2_GEOMETRY_H // RA2: this module has no initializer for the geometry constants of globals.h (nothing runs before its first function at 0x0060D970), so they stay undefined
 #include "always.h"
 
 #include "phoneed.h"
@@ -22,6 +23,18 @@
 #include "ownrdraw.h"
 #include "serialed.h"
 #include "trim.h"
+#undef LoadString // RA2: windows.h maps LoadString to LoadStringA
+#include "stringtable.h" // RA2: the captions come from the string table
+
+#undef Edit_SetText // RA2: the dialog's edit boxes are owner drawn and take the owner draw layer's own messages
+#undef Edit_GetText // RA2: as above
+#define Edit_SetText(h, s) ((int)SendMessage((h), 0x4b4, 0, (LPARAM)(s))) // RA2: 0x4B4 sets the text of an edit box as ANSI
+#define Edit_GetText(h, s, n) ((int)SendMessage((h), 0x4b5, (n), (LPARAM)(s))) // RA2: 0x4B5 gets the text as ANSI
+#define Edit_SetTextW(h, s) ((int)SendMessage((h), 0x4b2, 0, (LPARAM)(s))) // RA2: 0x4B2 sets the text as wide characters
+#define Edit_GetTextW(h, s, n) ((int)SendMessage((h), 0x4b3, (n), (LPARAM)(s))) // RA2: 0x4B3 gets the text as wide characters
+#define LS(name, line) StringTable::LoadString(name, NULL, "D:\\Ra2\\PhoneEd.cpp", line) // RA2: the string table lookup keeps its label and source line
+
+wchar_t * __fastcall wcstrim(wchar_t * buffer); // RA2: 0x6EEF80, as in modemgst.cpp
 
 static int _cdecl Phone_Compare (const void *p1, const void *p2);
 
@@ -49,21 +62,12 @@ BOOL CALLBACK Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 BOOL CALLBACK Edit_Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 
 
-/***************************************************************************
- * Phone_Dialog -- Lets user edit phone directory & dial                   *
- *                                                                         *
- * INPUT:                                                                  *
- *      none.                                                              *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      true = dial the current phone book entry, false = cancel.          *
- *                                                                         *
- * WARNINGS:                                                               *
- *      Serial options must have been read from CC.INI.                    *
- *                                                                         *
- * HISTORY:                                                                *
- *   04/29/1995 BRR : Created.                                             *
- *=========================================================================*/
+/// <summary>
+/// Lets the user edit the phone directory and dial.
+/// Serial options must have been read from the configuration beforehand. Any change to the
+/// phone book is written back with the multiplayer settings when the dialog closes.
+/// </summary>
+/// <returns>bool; Was a phone book entry chosen to be dialed?</returns>
 bool PhoneEdit::Dialog(void)
 {
 	_Dialog = OwnerDraw::Begin_Dialog(IDD_SERIAL_PHONE_LIST, (DLGPROC)Phone_Dialog_Proc);
@@ -121,11 +125,8 @@ BOOL CALLBACK Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		PhoneEdit * _this = (PhoneEdit *)GetWindowLong(window, DWL_USER);
 
 		switch (message) {
-		case WM_INITDIALOG:
+		case OD_SUBCLASSED: // RA2: the executable has one case for the subclassed message and none for WM_INITDIALOG; the name limit is set here with the columns
 			SendDlgItemMessage(window, IDC_PHONE_NAME, EM_SETLIMITTEXT, 20, 0);
-			break;
-
-		case OD_SUBCLASSED:
 			SendDlgItemMessage(window, IDC_PHONE_LIST, OD_ADDCOLUMN, 144, 2);
 			SendDlgItemMessage(window, IDC_PHONE_LIST, OD_ADDCOLUMN, 121, 150);
 			SendDlgItemMessage(window, IDC_PHONE_LIST, OD_ADDCOLUMN, 0, 275);
@@ -177,21 +178,7 @@ BOOL CALLBACK Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM
 
 			case IDC_PHONE_DELETE:
 				if (HIWORD(wparam) == 0) {
-					handle = GetDlgItem(_this->_Dialog, IDC_PHONE_LIST);
-					if (handle != 0) {
-						Session.CurPhoneIdx = ListBox_GetCurSel(handle);
-						if (Session.CurPhoneIdx > -1) {
-							Session.PhoneBook.Delete_Index(Session.CurPhoneIdx);
-							_this->Changed = true;
-							_this->Build_Phone_Listbox();
-							if (Session.CurPhoneIdx == -1) {
-								handle = GetDlgItem(_this->_Dialog, IDC_PHONE_NAME);
-								if (handle != 0) {
-									Edit_SetText(handle, "");
-								}
-							}
-						}
-					}
+					_this->Delete(); // RA2: the executable calls the member here, where TibSun's procedure carried the code
 				}
 				break;
 			}
@@ -216,7 +203,7 @@ Dial the current number
 bool PhoneEdit::Dial(void)
 {
 	HWND handle = GetDlgItem(_Dialog, IDC_PHONE_NAME);
-	GetWindowText(handle, Number, sizeof(Number));
+	Edit_GetText(handle, Number, sizeof(Number)); // RA2: the owner drawn edit box is read with its own message
 	HWND handle2 = GetDlgItem(_Dialog, IDC_PHONE_LIST);
 	Session.CurPhoneIdx = ListBox_GetCurSel(handle2);
 
@@ -239,7 +226,7 @@ bool PhoneEdit::Dial(void)
 			return(false);
 		}
 
-		strcpy( p_entry->Name, Fetch_String(TXT_NONAME) );
+		wcscpy( p_entry->Name, LS("TXT_NONAME", 231) ); // RA2: the name is a wide string from the string table
 		strcpy( p_entry->Number, Number);
 		p_entry->Settings.Port = 0;
 		p_entry->Settings.IRQ = -1;
@@ -262,31 +249,18 @@ bool PhoneEdit::Dial(void)
 }
 
 
-/***************************************************************************
- * Build_Phone_Listbox -- [re]builds the phone entry listbox               *
- *                                                                         *
- * This routine rebuilds the phone list box from scratch; it also updates  *
- * the contents of the phone # edit field.                                 *
- *                                                                         *
- * INPUT:                                                                  *
- *      list      ptr to list box                                          *
- *      edit      ptr to edit box                                          *
- *      buf      ptr to buffer for phone #                                 *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      none.                                                              *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   04/29/1995 BRR : Created.                                             *
- *=========================================================================*/
+/// <summary>
+/// Rebuilds the phone entry list box from scratch.
+/// The phone book is sorted by name and then number first. Each entry becomes a row with its
+/// name, number and baud rate, and the phone number edit box is refilled from the current
+/// selection.
+/// </summary>
 void PhoneEdit::Build_Phone_Listbox(void)
 {
 	HWND handle;
 	int i;
-	char item[80];
+	wchar_t item[80]; // RA2: the cell texts are wide strings
+	char number[80]; // RA2: the number stays narrow until it is formatted into the cell text
 
 	OwnerDraw::CellData thecell;
 
@@ -309,21 +283,21 @@ void PhoneEdit::Build_Phone_Listbox(void)
 		Build the list
 		........................................................................*/
 		for (i = 0; i < Session.PhoneBook.Count(); i++) {
-			__assume(1);
-			if ( !(strlen( Session.PhoneBook[i]->Name )) ) {
-				strcpy( item, " " );
+			if ( !(wcslen( Session.PhoneBook[i]->Name )) ) { // RA2: the name is wide
+				wcscpy( item, L" " ); // RA2: the blank name is wide
 			} else {
-				strncpy( item, Session.PhoneBook[i]->Name, PhoneEntryClass::PHONE_MAX_NAME-1 );
+				wcsncpy( item, Session.PhoneBook[i]->Name, PhoneEntryClass::PHONE_MAX_NAME-1 ); // RA2: as above
 				item[PhoneEntryClass::PHONE_MAX_NAME-1] = '\0';
 			}
 
-			int row = ListBox_AddString(handle, (LPARAM)item);
+			int row = SendMessage(handle, OD_ADDSTRINGW, 0, (LPARAM)item); // RA2: the wide form of adding a row
 
 			if ( !strlen( Session.PhoneBook[i]->Number ) ) {
-				strcpy( item, " " );
+				wcscpy( item, L" " ); // RA2: as above
 			} else {
-				strncpy( item, Session.PhoneBook[i]->Number, PhoneEntryClass::PHONE_MAX_NAME-1 );
-				item[PhoneEntryClass::PHONE_MAX_NAME-1] = '\0';
+				strncpy( number, Session.PhoneBook[i]->Number, PhoneEntryClass::PHONE_MAX_NAME-1 ); // RA2: the number is narrow and widened by the format below
+				number[PhoneEntryClass::PHONE_MAX_NAME-1] = '\0'; // RA2: as above
+				swprintf(item, L"%hs", number); // RA2: as above
 			}
 
 			thecell.type = OwnerDraw::CellData::DataType::TEXT;
@@ -332,9 +306,9 @@ void PhoneEdit::Build_Phone_Listbox(void)
 			SendMessage(handle, OD_SETCELL, MAKEWPARAM(150, row), (LPARAM)&thecell);
 
 			if (Session.PhoneBook[i]->Settings.Baud != -1) {
-				sprintf(item,"%d", Session.PhoneBook[i]->Settings.Baud);
+				swprintf(item, L"%d", Session.PhoneBook[i]->Settings.Baud); // RA2: wide format
 			} else {
-				sprintf(item,"[%s]", Fetch_String(TXT_DEFAULT));
+				swprintf(item, L"[%s]", LS("TXT_DEFAULT", 321)); // RA2: the label is looked up in the string table
 			}
 
 			thecell.type = OwnerDraw::CellData::DataType::TEXT;
@@ -575,21 +549,10 @@ void PhoneEdit::Delete(void)
 }
 
 
-/***************************************************************************
- * Edit_Phone_Dialog -- lets user edit a phone book entry                  *
- *                                                                         *
- * INPUT:                                                                  *
- *      phone      entry to edit                                           *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      true = OK, false = cancel                                          *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   04/29/1995 BRR : Created.                                             *
- *=========================================================================*/
+/// <summary>
+/// Lets the user edit a phone book entry.
+/// </summary>
+/// <returns>bool; true if the user accepted the changes, false if canceled.</returns>
 bool PhoneEntryEdit::Dialog(PhoneEntryClass *phone)
 {
 	if (phone == NULL) {
@@ -616,12 +579,10 @@ bool PhoneEntryEdit::Dialog(PhoneEntryClass *phone)
 		OwnerDraw::End_Dialog(_Dialog);
 	}
 
-	// if (RC != 1) {
-	// 	return(false);
-	// }
-	// return(true);
-
-	return(RC == 1 ? true : false);
+	if (RC != 1) { // RA2: the executable does not expand this function into Add and Edit (it calls it), which the single conditional return would allow
+		return(false); // RA2: as above
+	}
+	return(true); // RA2: as above
 }
 
 
@@ -635,7 +596,7 @@ bool PhoneEntryEdit::Dialog(PhoneEntryClass *phone)
 /// routine dealt with itself.</returns>
 BOOL CALLBACK Edit_Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
-	char buffer[64];
+	wchar_t buffer[64]; // RA2: wide, so that the name can be trimmed as wide characters
 
 	int rc;
 
@@ -645,7 +606,7 @@ BOOL CALLBACK Edit_Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, L
 		PhoneEntryEdit * _this = (PhoneEntryEdit *)GetWindowLong(window, DWL_USER);
 
 		switch (message) {
-		case WM_INITDIALOG:
+		case OD_SUBCLASSED: // RA2: the limits are set on the subclassed message, there is no WM_INITDIALOG case
 			SendDlgItemMessage(window, IDC_PHONE_NAME, EM_SETLIMITTEXT, 20, 0);
 			SendDlgItemMessage(window, IDC_PHONE_NUMBER, EM_SETLIMITTEXT, 20, 0);
 			break;
@@ -673,9 +634,9 @@ BOOL CALLBACK Edit_Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, L
 
 			case IDC_PHONE_NAME:
 				if (HIWORD(wparam) == EN_MAXTEXT || HIWORD(wparam) == EN_KILLFOCUS) {
-					Edit_GetText((HWND)lparam, buffer, sizeof(buffer));
-					strtrim(buffer);
-					Edit_SetText((HWND)lparam, buffer);
+					Edit_GetTextW((HWND)lparam, buffer, 64); // RA2: the name box is read and written as wide characters
+					wcstrim(buffer); // RA2: as above
+					Edit_SetTextW((HWND)lparam, buffer); // RA2: as above
 				}
 				break;
 
@@ -694,9 +655,9 @@ BOOL CALLBACK Edit_Phone_Dialog_Proc(HWND window, UINT message, WPARAM wparam, L
 
 			case IDC_PHONE_NUMBER:
 				if (HIWORD(wparam) == EN_MAXTEXT || HIWORD(wparam) == EN_KILLFOCUS) {
-					Edit_GetText((HWND)lparam, buffer, sizeof(buffer));
-					strtrim(buffer);
-					Edit_SetText((HWND)lparam, buffer);
+					Edit_GetText((HWND)lparam, buffer, 64); // RA2: the number box is narrow; the wide buffer is reused
+					strtrim((char *)buffer); // RA2: as above
+					Edit_SetText((HWND)lparam, buffer); // RA2: as above
 				}
 				break;
 			}
@@ -724,15 +685,15 @@ void PhoneEntryEdit::Save(void)
 	------------------------------------------------------------------------*/
 	HWND handle = GetDlgItem(_Dialog, IDC_PHONE_NAME);
 	if (handle != 0) {
-		Edit_GetText(handle, Phone->Name, sizeof(Phone->Name));
-		if (strlen( Phone->Name ) != 0) {
-			strupr( Phone->Name );
+		Edit_GetTextW(handle, Phone->Name, sizeof(Phone->Name) / sizeof(Phone->Name[0])); // RA2: the name is read as wide characters
+		if (wcslen( Phone->Name ) > 0) { // RA2: the length is tested as unsigned greater than zero
+			_wcsupr( Phone->Name ); // RA2: as above
 		} else {
 			// if nothing was entered then make if NONAME
-			strcpy( Phone->Name, Fetch_String(TXT_NONAME) );
+			wcscpy( Phone->Name, LS("TXT_NONAME", 757) ); // RA2: as above
 		}
 	}
-	DebugString("Name: %s\n", Phone->Name);
+	DebugString("Name: %ls\n", Phone->Name); // RA2: the name is wide
 
 	handle = GetDlgItem(_Dialog, IDC_PHONE_NUMBER);
 	if (handle != 0) {
@@ -778,7 +739,7 @@ void PhoneEntryEdit::Init(void)
 	bool custom;
 
 	HWND handle = GetDlgItem(_Dialog, IDC_PHONE_NAME);
-	Edit_SetText(handle, Phone->Name);
+	Edit_SetTextW(handle, Phone->Name); // RA2: the name is set as wide characters
 	handle = GetDlgItem(_Dialog, IDC_PHONE_NUMBER);
 	Edit_SetText(handle, Phone->Number);
 
@@ -808,21 +769,11 @@ void PhoneEntryEdit::Init(void)
 }
 
 
-/***************************************************************************
- * Phone_Compare -- for qsort                                              *
- *                                                                         *
- * INPUT:                                                                  *
- *      p1,p2      ptrs to elements to compare                             *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      0 = same, -1 = (*p1) goes BEFORE (*p2), 1 = (*p1) goes AFTER (*p2) *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   02/14/1995 BR : Created.                                              *
- *=========================================================================*/
+/// <summary>
+/// Compares two phone book entries for qsort.
+/// Entries are ordered by name, and by number when the names are the same.
+/// </summary>
+/// <returns>int; 0 = same, negative = (*p1) goes before (*p2), positive = (*p1) goes after (*p2).</returns>
 static int _cdecl Phone_Compare (const void *p1, const void *p2)
 {
 	class PhoneEntryClass *pe1,*pe2;
@@ -831,7 +782,7 @@ static int _cdecl Phone_Compare (const void *p1, const void *p2)
 	pe1 = *((class PhoneEntryClass **)p1);
 	pe2 = *((class PhoneEntryClass **)p2);
 
-	result = strcmp( pe1->Name, pe2->Name );
+	result = wcscmp( pe1->Name, pe2->Name ); // RA2: the names are wide
 
 	// if strings are equal then check the phone number
 
