@@ -766,7 +766,7 @@ class TechnoClass :	public RadioClass,
 		virtual void Plot_On_Radar(void) const;
 		virtual void IronCurtain(int duration) override; // RA2: 0x6D86B0
 		virtual void Update_Radar_Position(bool force_update=false);
-		virtual int RespondMegaEventMission(void * event); // RA2
+		virtual int RespondMegaEventMission(EventClass * event); // RA2: the MegaMission EventClass
 		virtual void ClearMegaMissionData(void); // RA2
 		virtual bool HaveMegaMission(void) const; // RA2
 		virtual bool HaveAttackMoveTarget(void) const; // RA2

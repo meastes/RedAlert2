@@ -432,6 +432,20 @@ class FootClass : public TechnoClass
 		virtual bool Deploy_To_Fire(void) const {return(false);};
 		virtual void AddSensorsAt(Cell cell); // RA2
 		virtual void RemoveSensorsAt(Cell cell); // RA2
+		virtual bool IsParalyzed(void) const override; // RA2: 0x4CD080
+		virtual void IronCurtain(int duration) override; // RA2: 0x4CD3F0
+		virtual bool Crash(ObjectClass * killer) override; // RA2: 0x4CD4B0
+		virtual int RespondMegaEventMission(EventClass * event) override; // RA2: 0x4CD9C0
+		virtual void ClearMegaMissionData(void) override; // RA2: 0x4CDA80
+		virtual bool HaveMegaMission(void) const override; // RA2: 0x4CDAA0
+		virtual bool HaveAttackMoveTarget(void) const override; // RA2: 0x4CDAB0
+		virtual int GetMegaMission(void) const override; // RA2: 0x4CDAC0
+		virtual Coord GetAttackMoveCoords(void) override; // RA2: 0x4CDAD0
+		void Convert_Mega_Target_To_Destination(void); // RA2: 0x4CDB60, no caller in the executable
+		virtual bool MegaMissionIsAttackMove(void) const override; // RA2: 0x4CDBD0
+		virtual bool ContinueMegaMission(void) override; // RA2: 0x4CDBE0
+		virtual void UpdateAttackMove(void) override; // RA2: 0x4CDC60
+		virtual bool RefreshMegaMission(void) override; // RA2: 0x4CDD70
 
 		/*
 		**	Coordinate inquiry functions. These are used for both display and

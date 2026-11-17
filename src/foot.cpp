@@ -5380,6 +5380,507 @@ FootClass * FootClass::Unload_Passenger(void) // RA2: 0x4CCFC0
 
 
 /// <summary>
+/// RA2
+/// Takes a gunner aboard.
+/// A foot object has no gunner seat: the call does nothing here and exists for the types that have one.
+/// </summary>
+/// <param name="gunner">The object that became the gunner.</param>
+void FootClass::ReceiveGunner(FootClass * gunner) // RA2: 0x4CD060, an empty virtual
+{
+}
+
+
+/// <summary>
+/// RA2
+/// Takes a gunner off.
+/// A foot object has no gunner seat: the call does nothing here and exists for the types that have one.
+/// </summary>
+/// <param name="gunner">The object that stopped being the gunner.</param>
+void FootClass::RemoveGunner(FootClass * gunner) // RA2: 0x4CD070, an empty virtual
+{
+}
+
+
+/// <summary>
+/// RA2
+/// Is this object frozen by a paralysis?
+/// </summary>
+/// <returns>bool; Is the paralysis timer still running?</returns>
+bool FootClass::IsParalyzed(void) const // RA2: 0x4CD080
+{
+	return(ParalysisTimer.Value() != 0); // RA2: the paralysis timer (+0x58C) is read through Value(), so a run-out timer counts as zero
+}
+
+
+/// <summary>
+/// RA2
+/// Lets the owner sense the cells around this object (a sensor array effect carried by a unit).
+/// Every cell within the type's SensorsSight is marked as sensed by the owner, cloaked objects standing in
+/// them reconsider whether they can stay hidden, and a building of another house that can be seen is redrawn.
+/// </summary>
+/// <param name="cell">The cell to center on; CELL_NONE means this object's own cell.</param>
+void FootClass::AddSensorsAt(Cell cell) // RA2: 0x4CD0C0
+{
+	int range = TClass->SensorsSight; // RA2: the range is SensorsSight (+0x538) of the type
+	int range_squared = range * range; // RA2: as above
+	HousesType house = House->HeapID; // RA2: as above
+	if (cell == CELL_NONE) { // RA2: as above
+		cell = Center_Coord().As_Cell(); // RA2: as above
+	}
+	for (int y = -range; y < range; y++) { // RA2: as above
+		for (int x = -range; x < range; x++) { // RA2: as above
+			Cell spot = Cell(cell.X + x, cell.Y + y); // RA2: as above
+			if (x * x + y * y < range_squared) { // RA2: as above
+				CellClass * cellptr = &Map[spot]; // RA2: as above
+				cellptr->Sensed_By(house); // RA2: as above
+				for (ObjectClass * occupier = cellptr->Cell_Occupier(); occupier != NULL; occupier = occupier->Next) { // RA2: as above
+					RTTIType rtti = occupier->RTTI; // RA2: as above
+					if (rtti == RTTI_UNIT || rtti == RTTI_INFANTRY || rtti == RTTI_AIRCRAFT) { // RA2: as above
+						((TechnoClass *)occupier)->Try_To_Cloak(); // RA2: as above
+					}
+				}
+				BuildingClass * building = cellptr->Cell_Building(); // RA2: as above
+				if (building != NULL && building->House != PlayerPtr && building->Visual_Character(false, NULL)) { // RA2: as above
+					building->IsToDisplay = true; // RA2: as above
+				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// RA2
+/// Takes back what AddSensorsAt gave the owner: the cells that were sensed by the owner are released again.
+/// </summary>
+/// <param name="cell">The cell to center on; CELL_NONE means this object's own cell.</param>
+void FootClass::RemoveSensorsAt(Cell cell) // RA2: 0x4CD250
+{
+	int range = TClass->SensorsSight; // RA2: the range is SensorsSight (+0x538) of the type
+	int range_squared = range * range; // RA2: as above
+	HousesType house = House->HeapID; // RA2: as above
+	if (cell == CELL_NONE) { // RA2: as above
+		cell = Center_Coord().As_Cell(); // RA2: as above
+	}
+	for (int y = -range; y < range; y++) { // RA2: as above
+		for (int x = -range; x < range; x++) { // RA2: as above
+			Cell spot = Cell(cell.X + x, cell.Y + y); // RA2: as above
+			if (x * x + y * y < range_squared) { // RA2: as above
+				CellClass * cellptr = &Map[spot]; // RA2: as above
+				if (cellptr->Is_Sensed(house)) { // RA2: as above
+					cellptr->Unsensed_By(house); // RA2: as above
+					for (ObjectClass * occupier = cellptr->Cell_Occupier(); occupier != NULL; occupier = occupier->Next) { // RA2: as above
+						RTTIType rtti = occupier->RTTI; // RA2: as above
+						if (rtti == RTTI_UNIT || rtti == RTTI_INFANTRY || rtti == RTTI_AIRCRAFT) { // RA2: as above
+							((TechnoClass *)occupier)->Try_To_Cloak(); // RA2: as above
+						}
+					}
+					BuildingClass * building = cellptr->Cell_Building(); // RA2: as above
+					if (building != NULL) { // RA2: as above
+						if (building->House != PlayerPtr && building->Visual_Character(false, NULL)) { // RA2: tested in a nested if here; the combined test does not match
+							building->IsToDisplay = true; // RA2: as above
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// RA2
+/// Makes this object invulnerable for a while.
+/// An organic object cannot be protected and is killed with a C4 warhead instead; otherwise a parasite
+/// that is feeding on it is shaken off, the paralysis ends and the techno's own effect starts.
+/// </summary>
+/// <param name="duration">How long the protection lasts.</param>
+void FootClass::IronCurtain(int duration) // RA2: 0x4CD3F0
+{
+	if (TClass->Organic) { // RA2: organic types are not protected but killed with the C4 warhead (0x4CD3F0)
+		int damage = TClass->MaxStrength; // RA2: as above
+		Take_Damage(damage, 0, Rule->C4Warhead, NULL, false, false); // RA2: as above
+		return; // RA2: as above
+	}
+	if (ParasiteEatingMe != NULL) { // RA2: as above
+		ParasiteEatingMe->ParasiteImUsing->SuppressionTimer = CDTimerClass<FrameTimerClass>(50); // RA2: as above
+		ParasiteEatingMe->ParasiteImUsing->ExitUnit(); // RA2: as above
+	}
+	ParalysisTimer = CDTimerClass<FrameTimerClass>(0); // RA2: as above
+	TechnoClass::IronCurtain(duration); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Sends this object plummeting out of the sky.
+/// Like AircraftClass::Crash of Tiberian Sun, but for every airborne foot object: the kill is credited,
+/// an attached trigger is sprung, the cargo dies with it, and a vehicle is set rocking.
+/// </summary>
+/// <param name="killer">The object responsible for the kill. This may be NULL.</param>
+/// <returns>bool; Was the object sent into a crash?</returns>
+bool FootClass::Crash(ObjectClass * killer) // RA2: 0x4CD4B0
+{
+	if (HeightAGL > 0) { // RA2: only an airborne object crashes
+		if (Strength > 0) { // RA2: as above
+			if (killer != NULL && Tag != NULL) { // RA2: as above
+				Tag->Spring(TEVENT_FIRST_DAMAGED, this, CELL_NONE, false, NULL); // RA2: as above
+			}
+			if (Tag != NULL && IsActive) { // RA2: as above
+				Tag->Spring(TEVENT_FIRST_DAMAGED_ANY, this, CELL_NONE, false, NULL); // RA2: as above
+			}
+			if (Tag != NULL && IsActive && killer != NULL) { // RA2: as above
+				Tag->Spring(TEVENT_FIRST_DAMAGED_ANY, this, CELL_NONE, false, (TechnoClass *)killer); // RA2: as above
+			}
+			if (!IsActive) { // RA2: as above
+				return(true); // RA2: as above
+			}
+			Record_The_Kill((TechnoClass *)killer); // RA2: as above
+			if (!IsActive) { // RA2: as above
+				return(true); // RA2: as above
+			}
+			Strength = 0; // RA2: as above
+		}
+		IsRocking = true; // RA2: as above
+		Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+		Stun(); // RA2: as above
+		Kill_Cargo((TechnoClass *)killer); // RA2: as above
+		if (Fetch_RTTI() != RTTI_INFANTRY && !ScenarioInit) { // RA2: infantry does not rock
+			RockingSidewaysPerFrame = Random_Double(0.10, 0.25); // RA2: as above
+			if (Random_Pick(0, 1) == 0) { // RA2: as above
+				RockingSidewaysPerFrame = -RockingSidewaysPerFrame; // RA2: as above
+			}
+			RockingForwardsPerFrame = Random_Double(0.0, 0.1); // RA2: as above
+		}
+		Detach_This_From_All(this, false); // RA2: as above
+		return(true); // RA2: as above
+	}
+	return(false); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// The image this object is drawn with.
+/// A disguised object that the player has not detected shows the image of what it imitates, and an
+/// object the player cannot see clearly shows its disguise image too.
+/// </summary>
+/// <returns>Returns with the image data of the object or of its disguise.</returns>
+void const * FootClass::Get_Image_Data(void) const // RA2: 0x4CD650
+{
+	CellClass * cell = &Map[Center_Coord().As_Cell()]; // RA2: the cell under the object decides whether the disguise is seen through
+	if (!House->Is_Ally(PlayerPtr) && IsDisguised() && !cell->Is_Disguise_Sensed(PlayerPtr->HeapID)) { // RA2: as above
+		return(GetDisguise(false)->ImageData); // RA2: as above
+	}
+	if (!IsClearlyVisibleTo(PlayerPtr)) { // RA2: as above
+		return(GetDisguise(true)->ImageData); // RA2: as above
+	}
+	return(ObjectClass::Get_Image_Data()); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Looks for the nearest building of a type that this object can dock at.
+/// </summary>
+/// <param name="type">The building type to look for.</param>
+/// <param name="unk2">Passed on to FindCloserDockBuilding.</param>
+/// <param name="unk3">Passed on to FindCloserDockBuilding.</param>
+/// <returns>Returns with the nearest suitable building, or NULL.</returns>
+BuildingClass * FootClass::FindNearestDockBuilding(BuildingTypeClass * type, unsigned unk2, unsigned unk3) const // RA2: 0x4CD730
+{
+	int distance = -1; // RA2: starts with no best distance (-1)
+	return(FindCloserDockBuilding(type, unk2, unk3, &distance)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Looks for a building of one type that is closer than the one found so far.
+/// Only buildings of the owner that are up, of that type, and either free to take this object or asked
+/// for a free spot count; on the ground the building also has to be in this object's zone.
+/// </summary>
+/// <param name="type">The building type to look for.</param>
+/// <param name="unk2">Unused.</param>
+/// <param name="unk3">1 takes a building whatever its links; anything else needs a free link.</param>
+/// <param name="distance">The distance of the best building found so far, -1 for none. Updated.</param>
+/// <returns>Returns with the best building, or NULL.</returns>
+BuildingClass * FootClass::FindCloserDockBuilding(BuildingTypeClass * type, unsigned unk2, unsigned unk3, int * distance) const // RA2: 0x4CD760
+{
+	BuildingClass * best = NULL; // RA2: the owner must have any building of the type (BQuantity)
+	if (House->BQuantity.Value(type->HeapID) != 0) { // RA2: as above
+		int count = House->Buildings.Count(); // RA2: the count is read once
+		for (int index = 0; index < count; index++) { // RA2: as above
+			BuildingClass * building = House->Buildings[index]; // RA2: as above
+			if (building != NULL && !building->IsInLimbo && building->Class == type && (unk3 == 1 || building->HasFreeLink(this))) { // RA2: as above
+				if (Fetch_RTTI() != RTTI_AIRCRAFT) { // RA2: as above
+					Cell there = building->Center_Coord().As_Cell(); // RA2: as above
+					Cell here = Destination_Coord(NULL).As_Cell(); // RA2: as above
+					if (!Map.Is_Same_Cell_Zone(here, there, TClass->MZone, Is_Moving_Onto_Bridge(NULL), false, false)) { // RA2: as above
+						continue; // RA2: as above
+					}
+				}
+				if (((FootClass *)this)->Transmit_Message(RADIO_CAN_LOAD, building) == RADIO_ROGER) { // RA2: as above
+					int dist = Relative_Distance(building); // RA2: as above
+					if (*distance == -1 || dist < *distance || building->IsLeader) { // RA2: as above
+						best = building; // RA2: as above
+						*distance = dist; // RA2: as above
+					}
+				}
+			}
+		}
+	}
+	return(best); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Looks for the nearest building among several types that this object can dock at.
+/// </summary>
+/// <param name="list">The building types to look through.</param>
+/// <param name="unk2">Passed on to FindCloserDockBuilding.</param>
+/// <param name="unk3">Passed on to FindCloserDockBuilding.</param>
+/// <returns>Returns with the nearest suitable building, or NULL.</returns>
+BuildingClass * FootClass::TryNearestDockBuilding(TypeList<BuildingTypeClass *> * list, unsigned unk2, unsigned unk3) const // RA2: 0x4CD920
+{
+	BuildingClass * best = NULL; // RA2: no building found yet
+	int best_distance = -1; // RA2: as above
+	for (int index = 0; index < list->Count(); index++) { // RA2: as above
+		int distance = -1; // RA2: as above
+		BuildingClass * found = FindCloserDockBuilding((*list)[index], unk2, unk3, &distance); // RA2: as above
+		if (found != NULL) { // RA2: as above
+			if (best == NULL || distance < best_distance || best_distance == -1 || found->IsLeader) { // RA2: as above
+				best = found; // RA2: as above
+				best_distance = distance; // RA2: as above
+			}
+		}
+	}
+	return(best); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Forgets where this object was heading: the follow target and the navigation target are dropped.
+/// </summary>
+void FootClass::Abort_Motion(void) // RA2: 0x4CD9B0
+{
+	FollowTarget = NULL; // RA2: drops the Follow object (+0x490)
+	NavCom = NULL; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Takes a MegaMission event for this object.
+/// Only the attack move mission is handled here: the object remembers the destination (or, with no
+/// destination, the target) that the event carries, as an order to carry out and to come back to after
+/// it has dealt with something on the way. Any other mission clears what was remembered.
+/// </summary>
+/// <param name="event">The MegaMission event.</param>
+/// <returns>Returns with 2 if the order was taken as a destination, 1 as a target, or the event's mission
+/// if the object keeps nothing.</returns>
+int FootClass::RespondMegaEventMission(EventClass * event) // RA2: 0x4CD9C0
+{
+	int mission = event->Data.MegaMission.Mission; // RA2: the byte at +12 of the event is its mission
+	if (mission == MISSION_ATTACK_MOVE) { // RA2: as above
+		bool has_destination = event->Data.MegaMission.Destination.Is_Valid(); // RA2: as above
+		bool has_target = event->Data.MegaMission.Target.Is_Valid(); // RA2: as above
+		if (!CanAttackOnTheMove()) { // RA2: as above
+			return(has_target ? 1 : 2); // RA2: as above
+		}
+		HasAttackMoveTarget = false; // RA2: as above
+		MegaMission = MISSION_ATTACK_MOVE; // RA2: as above
+		if (has_destination) { // RA2: as above
+			MegaDestination = event->Data.MegaMission.Destination.As_Abstract(); // RA2: as above
+			return(2); // RA2: as above
+		}
+		if (has_target) { // RA2: as above
+			MegaTarget = event->Data.MegaMission.Target.As_Abstract(); // RA2: as above
+			return(1); // RA2: as above
+		}
+		ClearMegaMissionData(); // RA2: as above
+	} else { // RA2: as above
+		ClearMegaMissionData(); // RA2: as above
+	}
+	return(mission); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Forgets the MegaMission this object was given.
+/// </summary>
+void FootClass::ClearMegaMissionData(void) // RA2: 0x4CDA80
+{
+	MegaMission = MISSION_NONE; // RA2: -1 (MISSION_NONE) means no mission is stored (+0x4B4)
+	MegaDestination = NULL; // RA2: as above
+	MegaTarget = NULL; // RA2: as above
+	HasAttackMoveTarget = false; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Does this object remember a MegaMission?
+/// </summary>
+/// <returns>bool; Is there a mission stored?</returns>
+bool FootClass::HaveMegaMission(void) const // RA2: 0x4CDAA0
+{
+	return(MegaMission != MISSION_NONE); // RA2: -1 (MISSION_NONE) means no mission is stored (+0x4B4)
+}
+
+
+/// <summary>
+/// RA2
+/// Is this object currently dealing with something it met on its attack move?
+/// </summary>
+/// <returns>bool; Has the attack move been interrupted by a target?</returns>
+bool FootClass::HaveAttackMoveTarget(void) const // RA2: 0x4CDAB0
+{
+	return(HasAttackMoveTarget); // RA2: the flag at +0x4C1
+}
+
+
+/// <summary>
+/// RA2
+/// The MegaMission this object remembers.
+/// </summary>
+/// <returns>Returns with the mission, or MISSION_NONE.</returns>
+int FootClass::GetMegaMission(void) const // RA2: 0x4CDAC0
+{
+	return(MegaMission); // RA2: the mission at +0x4B4
+}
+
+
+/// <summary>
+/// RA2
+/// Where the attack move leads: the remembered destination, else the remembered target.
+/// </summary>
+/// <returns>Returns with the coordinate, or (-1, -1, -1) if there is neither.</returns>
+Coord FootClass::GetAttackMoveCoords(void) // RA2: 0x4CDAD0
+{
+	if (MegaDestination != NULL) { // RA2: the destination wins over the target
+		return(MegaDestination->Center_Coord()); // RA2: as above
+	}
+	if (MegaTarget != NULL) { // RA2: as above
+		return(MegaTarget->Center_Coord()); // RA2: as above
+	}
+	return(Coord(-1, -1, -1)); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Turns the remembered target into a destination: the cell of the target becomes the place to go to.
+/// Nothing in the executable calls this.
+/// </summary>
+void FootClass::Convert_Mega_Target_To_Destination(void) // RA2: 0x4CDB60
+{
+	Cell cell = MegaTarget->Center_Coord().As_Cell(); // RA2: the target must be set; the executable has no null test
+	MegaDestination = &Map[cell]; // RA2: as above
+	MegaTarget = NULL; // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Is the remembered MegaMission an attack move?
+/// </summary>
+/// <returns>bool; Is it MISSION_ATTACK_MOVE?</returns>
+bool FootClass::MegaMissionIsAttackMove(void) const // RA2: 0x4CDBD0
+{
+	return(MegaMission == MISSION_ATTACK_MOVE); // RA2: MISSION_ATTACK_MOVE is 29 in the executable
+}
+
+
+/// <summary>
+/// RA2
+/// Carries on with the remembered MegaMission: moves to the destination, or attacks the target.
+/// </summary>
+/// <returns>bool; Was there something to carry on with?</returns>
+bool FootClass::ContinueMegaMission(void) // RA2: 0x4CDBE0
+{
+	bool result = true; // RA2: the result stays true unless nothing was stored
+	HasAttackMoveTarget = false; // RA2: as above
+	if (MegaDestination != NULL) { // RA2: as above
+		QueueMission(MISSION_MOVE, true); // RA2: as above
+		Assign_Destination(MegaDestination, true); // RA2: as above
+	} else if (MegaTarget != NULL) { // RA2: as above
+		QueueMission(MISSION_ATTACK, true); // RA2: as above
+		Assign_Target(MegaTarget); // RA2: as above
+	} else { // RA2: as above
+		ClearMegaMissionData(); // RA2: as above
+		result = false; // RA2: as above
+	}
+	return(result); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// Looks for something to attack while this object is on its attack move.
+/// An object heading for a destination starts attacking whatever it finds within range; one that was
+/// given a target keeps to it as long as that is in the auxiliary search range.
+/// </summary>
+void FootClass::UpdateAttackMove(void) // RA2: 0x4CDC60
+{
+	if (MegaDestination != NULL) { // RA2: with a destination, the object looks around from its own position
+		if (HasAttackMoveTarget) { // RA2: as above
+			if (InAuxiliarySearchRange(TarCom)) { // RA2: as above
+				return; // RA2: as above
+			}
+			TarCom = NULL; // RA2: as above
+		}
+		Coord coord = PositionCoord; // RA2: as above
+		if (Target_Something_Nearby(coord, THREAT_RANGE)) { // RA2: as above
+			QueueMission(MISSION_ATTACK, true); // RA2: as above
+			HasAttackMoveTarget = true; // RA2: as above
+		}
+	} else {
+		if (MegaTarget != NULL && InAuxiliarySearchRange(MegaTarget)) { // RA2: as above
+			return; // RA2: as above
+		}
+		if (HasAttackMoveTarget && InAuxiliarySearchRange(TarCom)) { // RA2: as above
+			return; // RA2: as above
+		}
+		TarCom = NULL; // RA2: as above
+		Coord coord = PositionCoord; // RA2: as above
+		if (Target_Something_Nearby(coord, THREAT_RANGE)) { // RA2: as above
+			QueueMission(MISSION_ATTACK, true); // RA2: as above
+			HasAttackMoveTarget = true; // RA2: as above
+		} else {
+			TarCom = MegaTarget; // RA2: as above
+		}
+	}
+}
+
+
+/// <summary>
+/// RA2
+/// Takes up the attack move again after it was interrupted.
+/// </summary>
+/// <returns>bool; Is the attack move going on?</returns>
+bool FootClass::RefreshMegaMission(void) // RA2: 0x4CDD70
+{
+	bool result = false; // RA2: only an attack move is refreshed
+	if (MegaMission == MISSION_ATTACK_MOVE) { // RA2: as above
+		if (HasAttackMoveTarget) { // RA2: as above
+			HasAttackMoveTarget = false; // RA2: as above
+			result = ContinueMegaMission(); // RA2: as above
+		} else if (Get_Mission() == MISSION_GUARD || Get_Mission() == MISSION_GUARD) { // RA2: the executable calls Get_Mission twice
+			result = ContinueMegaMission(); // RA2: as above
+		} else {
+			ClearMegaMissionData(); // RA2: as above
+			result = false; // RA2: as above
+		}
+	}
+	return(result); // RA2: as above
+}
+
+
+/// <summary>
 /// Determines if this object is resting on the ground.
 /// A hover driven object floats a short distance above the terrain, but as long as it is
 /// placed down on the map it still counts as being on the ground.
@@ -5397,4 +5898,3 @@ bool FootClass::On_Ground(void) const
 
 	return(IsDown && clsid == CLSID_HoverLocomotion);
 }
-
