@@ -479,8 +479,8 @@ quat,0x00622180,0x00622FB0,tibsun,"functions compiled from src/quat.cpp, without
 unk_00622FB0,0x00622FB0,0x006233A0,unknown,code not assigned to a module
 queue,0x006233A0,0x0062E9E0,tibsun,"functions compiled from src/queue.cpp, without gaps; matched except ?Draw_Sync_Bars@@YIXPAUHWND__@@@Z and ?Extract_Compressed_Events@@YIHPAXH@Z and ?Spread_Units_Around_Cell@@YIXHH@Z and ?Execute_DoList@@YIHHW4HousesType@@PAVConnManClass@@PAV?$CDTimerClass@VFrameTimerClass@@@@PAUFrameSyncStruct@@@Z and ?Print_CRCs@@YIXPAVEventClass@@@Z; ?Execute_DoList@@YIHHW4HousesType@@PAVConnManClass@@PAV?$CDTimerClass@VFrameTimerClass@@@@PAUFrameSyncStruct@@@Z and ?Print_CRCs@@YIXPAVEventClass@@@Z placed at their function starts; ??0FrameSyncStruct@@QAE@XZ not placed; ?Queue_Ipx_Set@@YIXXZ not placed; ?Queue_Ipx_Clear@@YIXXZ not placed"
 unk_0062E9E0,0x0062E9E0,0x0062EDE0,unknown,code not assigned to a module
-radar,0x0062EDE0,0x006340F0,tibsun,"functions compiled from src/radar.cpp, matched, without gaps; two placed by the gap"
-unk_006340F0,0x006340F0,0x00636830,unknown,code not assigned to a module
+radar,0x0062EDE0,0x00634AB0,tibsun,"functions compiled from src/radar.cpp, without gaps; matched except ?Update_Diplomacy_Row@RadarDiplomacy@@QAEXPAUHWND__@@HPAVHouseClass@@@Z; two placed by the gap; inline ??_GRTacticalClass@RadarClass@@UAEPAXI@Z at 0x00634AB0"
+unk_00634AB0,0x00634AB0,0x00636830,unknown,code not assigned to a module
 radio,0x00636830,0x00636F90,tibsun,"functions compiled from src/radio.cpp, matched, without gaps; two placed by the gap"
 unk_00636F90,0x00636F90,0x00638310,unknown,code not assigned to a module
 ramfile,0x00638310,0x00638610,tibsun,"functions compiled from src/ramfile.cpp, matched, without gaps; two placed by definition order; two placed by the gap"
