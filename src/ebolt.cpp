@@ -89,10 +89,45 @@ void EBolt::Draw_Line(Coord start, Coord end, int color, int start_depth, int en
 	CompositeSurface->Draw_Depth_Shaded_Line(TacticalRect, p1, p2, pixel, d1, d2); // RA2: as above
 }
 
+/*
+**	RA2: the executable expands the subtraction and the length here but calls TPoint3D's constructor (0x0041B630) out
+**	of line, which VC6 does only once the expansion is nested deeply enough. The inline chain the original source had is
+**	not known; these six layers stand in for it (placeholders, to be replaced when the real chain is recovered).
+*/
+static inline int Bolt_Length0(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(a.Distance_YZX(b)); // RA2: as above
+} // RA2: as above
+
+static inline int Bolt_Length1(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(Bolt_Length0(a, b)); // RA2: as above
+} // RA2: as above
+
+static inline int Bolt_Length2(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(Bolt_Length1(a, b)); // RA2: as above
+} // RA2: as above
+
+static inline int Bolt_Length3(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(Bolt_Length2(a, b)); // RA2: as above
+} // RA2: as above
+
+static inline int Bolt_Length4(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(Bolt_Length3(a, b)); // RA2: as above
+} // RA2: as above
+
+static inline int Bolt_Length5(Coord const & a, Coord const & b) // RA2: placeholder layer, see above
+{ // RA2: as above
+	return(Bolt_Length4(a, b)); // RA2: as above
+} // RA2: as above
+
 /// <summary>
 /// Draws the bolt as three jagged lines (two in the bolt color, a white core in color 15) by halving the segment up to eight times and moving the midpoints at random.
 /// </summary>
-void EBolt::Draw_Bolt(Coord start, Coord end, int color) // RA2: 0x004B1900; excepted: 2112 bytes against 2160, the executable has an ebp frame and calls the Coord constructor
+void EBolt::Draw_Bolt(Coord start, Coord end, int color) // RA2: 0x004B1900
 {
 	BoltSegment stack[8]; // RA2: as above
 	Coord mids[3]; // RA2: as above
@@ -102,7 +137,7 @@ void EBolt::Draw_Bolt(Coord start, Coord end, int color) // RA2: 0x004B1900; exc
 	bool first = true; // RA2: as above
 	int depth = 0; // RA2: as above
 
-	int length = (start - end).Length_YZX(); // RA2: as above
+	int length = Bolt_Length5(start, end); // RA2: through the placeholder layers above; the executable calls TPoint3D's constructor here
 	if (length != 0) { // RA2: as above
 		int threshold = (length * 102) >> 8; // RA2: as above
 		int deviation = (length * 23) >> 8; // RA2: as above
@@ -124,8 +159,8 @@ void EBolt::Draw_Bolt(Coord start, Coord end, int color) // RA2: 0x004B1900; exc
 				if (first) { // RA2: as above
 					first = false; // RA2: as above
 					double dev = deviation; // RA2: as above
-					for (int k = 0; k < 6; k++) {  double a = Random; a = a * 3.141592653589793; a = a / (k + 7); // RA2: as above
-						offsets[k] = sin(Random * 3.141592653589793 / (k + 7)) * dev; // RA2: as above
+					for (int k = 0; k < 6; k++) { // RA2: as above
+						offsets[k] = fastmath::sin(Random * 3.141592653589793 / (k + 7)) * dev; // RA2: fastmath::sin (0x004BA480) instead of the intrinsic
 					} // RA2: as above
 					int zoff = (offsets[2] + offsets[4] + deviation * 2) >> 1; // RA2: as above
 					for (int m = 0; m < 3; m++) { // RA2: as above
