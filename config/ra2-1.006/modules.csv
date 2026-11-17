@@ -307,8 +307,8 @@ jumpjet,0x0052F350,0x00531320,tibsun,"functions compiled from src/jumpjet.cpp, w
 unk_00531320,0x00531320,0x00532130,unknown,code not assigned to a module
 keyboard,0x00532130,0x00532E80,tibsun,"functions compiled from src/keyboard.cpp, matched, without gaps; ?Stop_Execution@@YIXXZ not placed; ?Noop@WWKeyboardClass@@ABEHXZ not placed"
 unk_00532E80,0x00532E80,0x00533110,unknown,code not assigned to a module
-laser,0x00533110,0x005334D0,tibsun,"functions compiled from src/laser.cpp, matched, without gaps; one placed by the gap; ?Draw_All@LaserDrawClass@@SIXXZ not placed; ?Draw_It@LaserDrawClass@@QAEXXZ not placed"
-unk_005334D0,0x005334D0,0x005348A0,unknown,code not assigned to a module
+laser,0x00533110,0x00534340,tibsun,"functions compiled from src/laser.cpp, without gaps; matched except ?Draw_It@LaserDrawClass@@QAEXXZ; three placed by the gap"
+unk_00534340,0x00534340,0x005348A0,unknown,code not assigned to a module
 layer,0x005348A0,0x00534B50,tibsun,"functions compiled from src/layer.cpp, matched, without gaps"
 lcw,0x00534B50,0x00534EE0,tibsun,"functions compiled from src/lcw.cpp, matched, without gaps"
 lcwpipe,0x00534EE0,0x00535280,tibsun,"functions compiled from src/lcwpipe.cpp, matched, without gaps; one placed by alphabetical order"
