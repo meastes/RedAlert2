@@ -1587,7 +1587,7 @@ address,symbol,evidence
 0x0047E2B0,?Chain_Reaction_Damage@@YIXABVCell@@@Z,"compiled from src/combat.cpp, matched; code at 931 addresses, placed by the gap"
 0x0047E2C0,?Explosion_Damage@@YIXABVCoord@@HPAVTechnoClass@@PBVWarheadTypeClass@@_N@Z,"inferred: referenced by matched src/droppod.cpp (14 references); across all matched code never at another address, and no other symbol here"
 0x0047F4D0,?Combat_Anim@@YIPBVAnimTypeClass@@HPBVWarheadTypeClass@@W4LandType@@ABVCoord@@@Z,"compiled from src/combat.cpp, matched"
-0x0047F600,?Combat_Lighting@@YIXVCoord@@HPBVWarheadTypeClass@@HH@Z,"inferred: referenced by matched src/ion.cpp (7 references); across all matched code never at another address, and no other symbol here"
+0x0047F600,?Combat_Lighting@@YIXVCoord@@HPBVWarheadTypeClass@@HH@Z,"compiled from src/combat.cpp, matched"
 0x0047F6E0,?Wide_Area_Damage@@YIXABVCoord@@HHPAVTechnoClass@@PBVWarheadTypeClass@@@Z,"compiled from src/combat.cpp, matched"
 0x0047F8B0,?Calculate_Projectile_Pitch@@YI_N_NHHHNAAVDirType@@@Z,"compiled from src/combat.cpp, matched"
 0x0047F9B0,?Calculate_Projectile_Angle@@YI_N_NHHHNAAN@Z,"compiled from src/combat.cpp, matched"
