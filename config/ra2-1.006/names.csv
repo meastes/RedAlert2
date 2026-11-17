@@ -15958,6 +15958,7 @@ address,symbol,evidence
 0x00B2A630,?g_PingsSent@@3HA,"inferred: referenced by matched src/queue.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x00B2A634,?g_ShowAllChannels@@3HA,"inferred: referenced by matched src/wonline.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00B2A638,?GameStartTime@@3JA,"inferred: referenced by matched src/stats.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00B2A658,?g_OwnerUser@@3UUser@@A,"inferred: referenced by matched src/wonline.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x00B2A6D8,?PlayerNickname@@3PADA,"inferred: referenced by matched src/mpcoop.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00B2A6F4,?g_Col_GamePrivate@@3HA,"inferred: referenced by matched src/wonline.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00B2A6F8,?g_Col_GameIcon@@3HA,"inferred: referenced by matched src/wonline.cpp (1 reference); across all matched code never at another address, and no other symbol here"
