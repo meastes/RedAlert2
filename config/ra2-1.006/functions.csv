@@ -5888,6 +5888,7 @@ address,size,evidence
 0x0063BB40,80,"function of the Tiberian Sun reconstruction, matched"
 0x0063BB90,864,"code of src/revent.cpp, matched"
 0x0063BEF0,176,"function of the Tiberian Sun reconstruction, matched"
+0x0063BFA0,208,"code of src/revent.cpp, matched"
 0x0063C070,16,"code of src/revent.cpp, matched: too short for the match rule"
 0x0063C080,496,"code of src/revent.cpp, matched"
 0x0063C270,160,"function of the Tiberian Sun reconstruction, matched"
