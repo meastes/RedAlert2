@@ -257,5 +257,5 @@ void __fastcall Planning_Unlist_Node(PlanningNodeClass * node); // RA2: 0x6143E0
 void __fastcall Planning_Queue_Node(PlanningNodeClass * node); // RA2: 0x614650
 void __fastcall Planning_Unlist_Token(PlanningTokenClass * token); // RA2: 0x6144F0
 void __fastcall Planning_Unlist_Techno(TechnoClass * techno); // RA2: 0x614550
-inline int __fastcall Planning_Bright_Color(TechnoClass * techno); // RA2: 0x619D50 (expanded where it is used); the color of the techno's house, brightened
+int __fastcall Planning_Bright_Color(TechnoClass * techno); // RA2: 0x619D50 (also expanded where it is used); the color of the techno's house, brightened
 int __fastcall Planning_Adjusted_Pixel(RGBClass const & color, RGBClass const & target, int ratio); // RA2: 0x619E00

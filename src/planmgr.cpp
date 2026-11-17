@@ -47,6 +47,9 @@
 #include "geometry.h" // RA2: this module holds its own copy of the geometry constants (initialized first, at 0x006101B0)
 #include "mission.h" // RA2: the includes this file needs
 #include "cell.h" // RA2: the includes this file needs
+#include "_map.h" // RA2: Map, the mouse of the tactical view
+#include "_convert.h" // RA2: MouseDrawer
+#include "mouse.h" // RA2: MOUSE_NORMAL
 
 extern Rect __fastcall Get_Title_Screen_Area(void); // RA2: 0x006F1F30
 extern void __fastcall Enqueue_Event(EventClass * event); // RA2: 0x0062E6E0 (queue.cpp); puts the event on the list to run
@@ -1809,7 +1812,9 @@ PlanningNodeClass * __stdcall Planning_Node_At(int x, int y) // RA2: 0x00615D30;
 	if (!PlanningHoverNode) { // RA2: as above
 		return NULL; // RA2: as above
 	}
-	if (PlanningHoverNode->Hit_Test(x, y)) { // RA2: as above
+	Rect box = PlanningHoverNode->Lead_Box_Rect(); // RA2: as above
+	Point2D point(x, y); // RA2: as above
+	if (box.Is_Point_Within(point)) { // RA2: as above
 		return PlanningHoverNode; // RA2: as above
 	}
 	return NULL; // RA2: as above
@@ -1928,20 +1933,16 @@ PlanningNodeClass * __stdcall Planning_Find_Drawn(Coord coord) // RA2: 0x0061621
 	return NULL; // RA2: as above
 }
 
+struct PlanningFirstTarget : public PlanningEventTargets // RA2: a file-local view of an event with its helpers (YR keeps them with the event); it adds no data
+{
+	AbstractClass * First_Target_Object(void) const; // RA2: 0x00617DF0; the object of the first valid target of the order: its target, else its follow target, else its destination
+	int Get_Event_Frame(void) const; // RA2: 0x0061A2D0; the first frame of the cursor an order of this mission shows on the path
+};
+
 void __fastcall Planning_Send_Pair(AbstractClass * source, PlanningNodeClass * node) // RA2: 0x00616280; asks all players to connect the object to the node of the target the first order of the node points at
 {
-	EventClass event = *node->PlanningMembers[0]->Packet; // RA2: as above
-	xTargetClass * target; // RA2: as above
-	if (event.Data.MegaMission.Target.Is_Valid()) { // RA2: as above
-		target = &event.Data.MegaMission.Target; // RA2: as above
-	} else if (event.Data.MegaMission.Follow.Is_Valid()) { // RA2: as above
-		target = &event.Data.MegaMission.Follow; // RA2: as above
-	} else if (event.Data.MegaMission.Destination.Is_Valid()) { // RA2: as above
-		target = &event.Data.MegaMission.Destination; // RA2: as above
-	} else { // RA2: as above
-		return; // RA2: as above
-	}
-	AbstractClass * object = target->As_Abstract(); // RA2: as above
+	EventClass event = node->Get_Event(0); // RA2: as above
+	AbstractClass * object = ((PlanningFirstTarget *)&event)->First_Target_Object(); // RA2: as above
 	if (object) { // RA2: as above
 		EventClass pair(PlayerPtr->HeapID, EventClass::PLAN_CONNECT, TargetClass(source), TargetClass(object)); // RA2: as above
 		Add_Outgoing_Event(pair); // RA2: as above
@@ -2124,7 +2125,13 @@ int __cdecl Planning_Selection_Kind(void) // RA2: 0x00616B40; what the selected 
 		}
 		TechnoClass * candidate = (object != NULL && techno) ? (TechnoClass *)object : NULL; // RA2: as above
 		if (candidate == NULL || !candidate->CanUseWaypoint()) { // RA2: as above
-			kind = Planning_Object_Kind(candidate); // RA2: as above
+			if (candidate != NULL && candidate->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+				kind = 0; // RA2: as above
+			} else if (candidate != NULL && candidate->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+				kind = 1; // RA2: as above
+			} else { // RA2: as above
+				kind = 2; // RA2: as above
+			}
 			break; // RA2: as above
 		}
 	}
@@ -2306,13 +2313,769 @@ void __fastcall Planning_Refuse_Command(int kind) // RA2: 0x00617250; drops the 
 	}
 }
 
-inline int __fastcall Planning_Bright_Color(TechnoClass * techno) // RA2: 0x00619D50 (outside this part); the pixel of the house color brought 100/256 toward white
+void __cdecl Planning_Connect_Selection(void); // RA2: 0x00617AF0
+void __fastcall Planning_Set_Picked_Node(PlanningNodeClass * node); // RA2: 0x00617AD0
+PlanningNodeClass * __fastcall Planning_Get_Picked_Node(void); // RA2: 0x00617AE0
+void __fastcall Planning_Set_Selected_Node(PlanningNodeClass * node); // RA2: 0x00617E20
+void __cdecl Planning_Clear_Selected_Node(void); // RA2: 0x00617E30
+PlanningNodeClass * __fastcall Planning_Selected_Node(void); // RA2: 0x00617A00
+void __fastcall Planning_Draw_Node(PlanningNodeClass * node); // RA2: 0x00619420
+void __fastcall Planning_Draw_Filled_Node(PlanningNodeClass * node); // RA2: 0x00619870
+void __fastcall Planning_Draw_Techno(TechnoClass * techno); // RA2: 0x006182F0
+void __fastcall Planning_Draw_Filled_Techno(TechnoClass * techno); // RA2: 0x00618C00
+int __fastcall Planning_Pixel(RGBClass const * color); // RA2: 0x0061A860
+void __fastcall Planning_Draw_Dot(Point2D center, int color); // RA2: 0x0061A190
+void __fastcall Planning_Fill_Dot(Point2D center, int color); // RA2: 0x0061A210
+void __fastcall Planning_Draw_Midpoint(Point2D start, Point2D end, int color); // RA2: 0x0061A2F0
+void __fastcall Planning_Draw_Midpoint_Shape(Point2D start, Point2D end, int color, int fill, int frame); // RA2: 0x0061A3C0
+void __fastcall Planning_Draw_Thick_Line(Point2D start, Point2D end, int thickness, int color); // RA2: 0x0061A6A0
+void __fastcall Planning_Draw_Dashed_Thick_Line(Point2D start, Point2D end, int thickness, int color); // RA2: 0x0061A6F0
+int __fastcall Planning_Dim_Color(TechnoClass * techno); // RA2: 0x00619CA0
+int __fastcall Planning_Techno_Color(TechnoClass * techno); // RA2: 0x00619E80
+Point2D __fastcall Planning_Event_Pixel(EventClass const * event, AbstractClass * object); // RA2: 0x00619FA0
+Coord __fastcall Planning_Event_Or_Object_Coord(EventClass const & event, AbstractClass * object); // RA2: 0x00619810
+bool __fastcall Planning_Idle_Mover(TechnoClass * techno); // RA2: 0x00618BB0
+extern int Cursor_Start_Frame_76(void); // RA2: 0x006F6760 (uicmnds)
+extern int Cursor_Start_Frame_77(void); // RA2: 0x006F6750 (uicmnds)
+
+bool __stdcall Planning_Left_Press(int x, int y) // RA2: 0x00617340; planning mode's left button press on the tactical view: takes the node under the mouse as the picked one (the path starts there), else refuses a selection or a node planning mode cannot use; true when it took the input
 {
-	RGBClass color = Houses[Planning_House(techno)]->RemapColorRGB; // RA2: as above
-	color.Adjust(100, WhiteColor); // RA2: as above
-	return ((color.Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) // RA2: as above
-		| ((color.Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) // RA2: as above
-		| ((color.Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+	if (!PlanningNodeClass::PlanningModeActive) { // RA2: as above
+		return false; // RA2: as above
+	}
+	PlanningNodeClass * previous = Planning_Get_Picked_Node(); // RA2: as above
+	PlanningNodeClass * node = Planning_Node_At(x, y); // RA2: as above
+	if (node != NULL && node != previous) { // RA2: as above
+		Map.Set_Default_Mouse(MOUSE_NORMAL, true); // RA2: as above
+		Planning_Set_Picked_Node(node); // RA2: as above
+	} else { // RA2: as above
+		PlanningNodeClass * picked = Planning_Pick_Node(x, y); // RA2: as above
+		if (picked != NULL) { // RA2: as above
+			if (Planning_Selection_Node_State(picked) != -1) { // RA2: as above
+				Planning_Refuse("MSG:PlanningModeInvalidNodeX"); // RA2: as above
+				return true; // RA2: as above
+			}
+		} else { // RA2: as above
+			int kind = Planning_Selection_Kind(); // RA2: as above
+			if (kind != -1) { // RA2: as above
+				Planning_Refuse_Selection(kind); // RA2: as above
+				return true; // RA2: as above
+			}
+		}
+	}
+	return previous != NULL || node != NULL; // RA2: as above
 }
 
+bool __stdcall Planning_Left_Release(Point2D point) // RA2: 0x00617680; planning mode's left button release: connects the selected objects to the node when it is the picked one, else drops the picked node; true when it took the input
+{
+	if (!PlanningNodeClass::PlanningModeActive) { // RA2: as above
+		return false; // RA2: as above
+	}
+	PlanningNodeClass * remembered = Planning_Get_Picked_Node(); // RA2: as above
+	PlanningNodeClass * node = Planning_Node_At(point.X, point.Y); // RA2: as above
+	if (node != NULL && node == remembered) { // RA2: as above
+		Map.Set_Default_Mouse(MOUSE_NORMAL, true); // RA2: as above
+		Planning_Connect_Selection(); // RA2: as above
+	} else { // RA2: as above
+		PlanningNodeClass * picked = Planning_Pick_Node(point.X, point.Y); // RA2: as above
+		if (picked != NULL && Planning_Selection_Node_State(picked) != -1) { // RA2: as above
+			return true; // RA2: as above
+		}
+		Planning_Set_Picked_Node(NULL); // RA2: as above
+	}
+	return remembered != NULL || node != NULL; // RA2: as above
+}
+
+void __stdcall Planning_Right_Press(int x, int y) // RA2: 0x00617860; planning mode's right button press: starts a drag, remembering the point when nothing is selected
+{
+	PlanningDragging = true; // RA2: as above
+	PlanningMouseDown = Point2D(-1, -1); // RA2: as above
+	if (PlanningNodeClass::PlanningModeActive && CurrentObject.Count() <= 0) { // RA2: as above
+		PlanningMouseDown = Point2D(x, y); // RA2: as above
+	}
+}
+
+void __stdcall Planning_Right_Release(int x, int y) // RA2: 0x006178A0; planning mode's right button release: a click (not a drag) with nothing selected lets go of the selected node
+{
+	PlanningDragging = false; // RA2: as above
+	if (PlanningNodeClass::PlanningModeActive && CurrentObject.Count() <= 0 && PlanningSelectedNode != NULL && abs(x - PlanningMouseDown.X) <= 3 && abs(y - PlanningMouseDown.Y) <= 3) { // RA2: as above
+		PlanningSelectedNode = NULL; // RA2: as above
+	}
+}
+
+bool __stdcall Planning_Mouse_AI(int x, int y) // RA2: 0x00617900; planning mode's mouse cursor: the plain one over the picked node or when none is picked, else the small one; true when planning mode set it
+{
+	if (!PlanningNodeClass::PlanningModeActive) { // RA2: as above
+		return false; // RA2: as above
+	}
+	if (PlanningDragging) { // RA2: as above
+		return false; // RA2: as above
+	}
+	PlanningNodeClass * remembered = PlanningPickedNode; // RA2: as above
+	PlanningNodeClass * node = Planning_Node_At(x, y); // RA2: as above
+	if (remembered == NULL && node == NULL) { // RA2: as above
+		return false; // RA2: as above
+	}
+	if (remembered == NULL || node == remembered) { // RA2: as above
+		Map.Set_Default_Mouse(MOUSE_NORMAL, true); // RA2: as above
+	} else { // RA2: as above
+		Map.Set_Default_Mouse(MOUSE_NORMAL, false); // RA2: as above
+	}
+	return true; // RA2: as above
+}
+
+PlanningNodeClass * __fastcall Planning_Selected_Node(void) // RA2: 0x00617A00; the planned node the player has selected, if any
+{
+	return PlanningSelectedNode; // RA2: as above
+}
+
+int __fastcall Planning_Selection_Node_State(PlanningNodeClass * node) // RA2: 0x00617A10; how the selected objects relate to a node: 1 for an object whose path has closed a loop, 5 for one whose path lacks the node, 2 and 3 for the last and the second last node of a path, -1 for none
+{
+	int count = CurrentObject.Count(); // RA2: as above
+	for (int i = 0; i < count; i++) { // RA2: as above
+		ObjectClass * object = CurrentObject[i]; // RA2: as above
+		bool techno; // RA2: as above
+		if (object != NULL) { // RA2: as above
+			techno = object->AbstractFlags & 1; // RA2: as above
+		}
+		if (object != NULL && techno) { // RA2: as above
+			PlanningTokenClass * token = ((TechnoClass *)object)->Get_Planning_Token(); // RA2: as above
+			if (token != NULL) { // RA2: as above
+				if (Planning_Token_Looped(token)) { // RA2: as above
+					return 1; // RA2: as above
+				}
+				int index = token->Node_Index(node); // RA2: as above
+				if (index == -1) { // RA2: as above
+					return 5; // RA2: as above
+				}
+				if (index == token->PlanningNodes.Count() - 1) { // RA2: as above
+					return 2; // RA2: as above
+				}
+				if (index == token->PlanningNodes.Count() - 2) { // RA2: as above
+					return 3; // RA2: as above
+				}
+			}
+		}
+	}
+	return -1; // RA2: as above
+}
+
+void __fastcall Planning_Set_Picked_Node(PlanningNodeClass * node) // RA2: 0x00617AD0; sets the node a path is being drawn from
+{
+	PlanningPickedNode = node; // RA2: as above
+}
+
+PlanningNodeClass * __fastcall Planning_Get_Picked_Node(void) // RA2: 0x00617AE0; the node a path is being drawn from
+{
+	return PlanningPickedNode; // RA2: as above
+}
+
+void __cdecl Planning_Connect_Selection(void) // RA2: 0x00617AF0 (called Planning_Connect_Selection by us); lets go of the picked node and asks all players to connect each selected object (and the owners of the last node of its path) to it, or with nothing selected keeps the node as the selected one
+{
+	PlanningNodeClass * selected = Planning_Get_Picked_Node(); // RA2: as above
+	Planning_Set_Picked_Node(NULL); // RA2: as above
+	int count = CurrentObject.Count(); // RA2: as above
+	if (count > 0) { // RA2: as above
+		DynamicVectorClass<TechnoClass *> units; // RA2: as above
+		for (int i = 0; i < count; i++) { // RA2: as above
+			ObjectClass * object = CurrentObject[i]; // RA2: as above
+			bool techno; // RA2: as above
+			if (object != NULL) { // RA2: as above
+				techno = object->AbstractFlags & 1; // RA2: as above
+			}
+			if (object != NULL && techno) { // RA2: as above
+				TechnoClass * unit = (TechnoClass *)object; // RA2: as above
+				PlanningTokenClass * token = unit->Get_Planning_Token(); // RA2: as above
+				if (token != NULL) { // RA2: as above
+					PlanningNodeClass * last = token->Last_Node(); // RA2: as above
+					if (last == NULL) { // RA2: as above
+						units.Add(unit); // RA2: as above
+					} else { // RA2: as above
+						int members = last->PlanningMembers.Count(); // RA2: as above
+						for (int j = 0; j < members; j++) { // RA2: as above
+							TechnoClass * owner = last->Member_Owner(j); // RA2: as above
+							if (units.ID(owner) == -1) { // RA2: as above
+								units.Add(owner); // RA2: as above
+							}
+						}
+					}
+				} else { // RA2: as above
+					units.Add(unit); // RA2: as above
+				}
+			}
+		}
+		int total = units.Count(); // RA2: as above
+		for (int k = 0; k < total; k++) { // RA2: as above
+			Planning_Send_Pair(units[k], selected); // RA2: as above
+		}
+		if (total > 0) { // RA2: as above
+			Planning_Help(3); // RA2: as above
+		}
+	} else { // RA2: as above
+		Planning_Set_Selected_Node(selected); // RA2: as above
+		Planning_Help(4); // RA2: as above
+	}
+}
+
+AbstractClass * PlanningFirstTarget::First_Target_Object(void) const // RA2: 0x00617DF0
+{
+	AbstractClass * object = NULL; // RA2: as above
+	if (Data.MegaMission.Target.Is_Valid()) { // RA2: as above
+		object = Data.MegaMission.Target.As_Abstract(); // RA2: as above
+	} else if (Data.MegaMission.Follow.Is_Valid()) { // RA2: as above
+		object = Data.MegaMission.Follow.As_Abstract(); // RA2: as above
+	} else if (Data.MegaMission.Destination.Is_Valid()) { // RA2: as above
+		object = Data.MegaMission.Destination.As_Abstract(); // RA2: as above
+	}
+	return object; // RA2: as above
+}
+
+void __fastcall Planning_Set_Selected_Node(PlanningNodeClass * node) // RA2: 0x00617E20; sets the node whose members are shown selected
+{
+	PlanningSelectedNode = node; // RA2: as above
+}
+
+void __cdecl Planning_Clear_Selected_Node(void) // RA2: 0x00617E30; forgets the selected node
+{
+	PlanningSelectedNode = NULL; // RA2: as above
+}
+
+void __cdecl Planning_Redraw(void) // RA2: 0x00617E40; rebuilds the list of the drawn nodes: draws the nodes and the paths of the technos that are allies of the player
+{
+	Planning_Clear_Drawn(); // RA2: as above
+	int count = PlanningNodeClass::Unknown1.Count(); // RA2: as above
+	int i; // RA2: as above
+	for (i = 0; i < count; i++) { // RA2: as above
+		PlanningNodeClass * node = PlanningNodeClass::Unknown1[i]; // RA2: as above
+		if (node->Lead_House()->Is_Ally(PlayerPtr)) { // RA2: as above
+			Planning_Draw_Node(node); // RA2: as above
+		}
+	}
+	count = Technos.Count(); // RA2: as above
+	for (i = 0; i < count; i++) { // RA2: as above
+		TechnoClass * techno = Technos[i]; // RA2: as above
+		HouseClass * house = techno->House; // RA2: as above
+		if (house->Is_Ally(PlayerPtr)) { // RA2: as above
+			Planning_Draw_Techno(techno); // RA2: as above
+		}
+	}
+}
+
+void __cdecl Planning_Draw_All(void) // RA2: 0x00617EF0; draws the filled version of the nodes and the paths of the technos that are allies of the player
+{
+	int count = PlanningNodeClass::Unknown1.Count(); // RA2: as above
+	int i; // RA2: as above
+	for (i = 0; i < count; i++) { // RA2: as above
+		PlanningNodeClass * node = PlanningNodeClass::Unknown1[i]; // RA2: as above
+		if (node->Lead_House()->Is_Ally(PlayerPtr)) { // RA2: as above
+			Planning_Draw_Filled_Node(node); // RA2: as above
+		}
+	}
+	for (i = 0; i < count; i++) { // RA2: as above
+		PlanningNodeClass * node = PlanningNodeClass::Unknown1[i]; // RA2: as above
+		if (node->Lead_House()->Is_Ally(PlayerPtr)) { // RA2: as above
+			node->Fill_Lead_Box(node->Node_Color()); // RA2: as above
+		}
+	}
+	int technos = Technos.Count(); // RA2: as above
+	for (i = 0; i < technos; i++) { // RA2: as above
+		TechnoClass * techno = Technos[i]; // RA2: as above
+		if (techno->House->Is_Ally(PlayerPtr)) { // RA2: as above
+			Planning_Draw_Filled_Techno(techno); // RA2: as above
+		}
+	}
+}
+
+void __cdecl Planning_Draw_Remembered(void) // RA2: 0x00618090; outlines the node under the mouse and the selected node in white
+{
+	int color = Planning_Pixel(&WhiteColor); // RA2: as above
+	if (PlanningHoverNode != NULL) { // RA2: as above
+		PlanningHoverNode->Frame_Lead_Box(color); // RA2: as above
+	}
+	if (PlanningSelectedNode != NULL) { // RA2: as above
+		PlanningSelectedNode->Frame_Lead_Box_Outer(color); // RA2: as above
+	}
+}
+
+
+static inline bool Planning_Current_Order(TechnoClass * techno, bool has_nodes) // RA2: no function of its own; whether the techno has an order of its own to draw: it is not guarding or idle, and has planned nodes or is selected
+{
+	if (techno->Get_Mission() == MISSION_GUARD || Planning_Idle_Mover(techno)) { // RA2: as above
+		return false; // RA2: as above
+	}
+	return has_nodes || techno->IsSelected; // RA2: as above
+}
+
+void __fastcall Planning_Draw_Techno(TechnoClass * techno) // RA2: 0x006182F0; draws the order a techno follows now and the first node of its path as outlines
+{
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	Coord here = techno->As_Coord(); // RA2: as above
+	Point2D start = Planning_Coord_Pixel(here); // RA2: as above
+	int color = Planning_Techno_Color(techno); // RA2: as above
+	bool has_nodes = (token == NULL ? 0 : token->PlanningNodes.Count()) > 0; // RA2: as above
+	bool current = Planning_Current_Order(techno, has_nodes); // RA2: as above
+	int thickness = 4; // RA2: as above
+	if (token != NULL && (token->OwnerUnit->CurrentMission == MISSION_WAIT || token->OwnerUnit->MissionQueue == MISSION_WAIT)) { // RA2: as above
+		EventClass event = token->Popped; // RA2: as above
+		Coord target = Planning_Event_Or_Object_Coord(event, techno); // RA2: as above
+		Point2D end = Planning_Coord_Pixel(target); // RA2: as above
+		Planning_Draw_Dot(start, color); // RA2: as above
+		Planning_Draw_Thick_Line(start, end, 3, color); // RA2: as above
+		if (((PlanningFirstTarget &)event).Get_Event_Frame() != -1) { // RA2: as above
+			Planning_Draw_Midpoint(start, end, color); // RA2: as above
+		}
+		Planning_Draw_Dot(end, color); // RA2: as above
+		return; // RA2: as above
+	}
+	if (current) { // RA2: as above
+		bool mega = techno->HaveMegaMission(); // RA2: as above
+		bool move = techno->HaveAttackMoveTarget(); // RA2: as above
+		Coord target = techno->GetAttackCoordinates(); // RA2: as above
+		Point2D end = Planning_Coord_Pixel(target); // RA2: as above
+		if (techno->IsInLimbo) { // RA2: as above
+			Planning_Draw_Dot(end, color); // RA2: as above
+			return; // RA2: as above
+		}
+		Planning_Draw_Dot(start, color); // RA2: as above
+		Planning_Draw_Thick_Line(start, end, 3, color); // RA2: as above
+		int frame = -1; // RA2: as above
+		if (!mega || move) { // RA2: as above
+			if (techno->Get_Mission() == MISSION_GUARD_AREA) { // RA2: as above
+				frame = Cursor_Start_Frame_76(); // RA2: as above
+			}
+		} else if (techno->GetMegaMission() == MISSION_ATTACK_MOVE) { // RA2: as above
+			frame = Cursor_Start_Frame_77(); // RA2: as above
+		}
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint(start, end, color); // RA2: as above
+		}
+		Planning_Draw_Dot(end, color); // RA2: as above
+		if (move) { // RA2: as above
+			Coord next_coord = techno->GetAttackMoveCoords(); // RA2: as above
+			Point2D next = Planning_Coord_Pixel(next_coord); // RA2: as above
+			Planning_Draw_Thick_Line(end, next, 3, color); // RA2: as above
+			if (techno->GetMegaMission() == MISSION_ATTACK_MOVE && Cursor_Start_Frame_77() != -1) { // RA2: as above
+				Planning_Draw_Midpoint(end, next, color); // RA2: as above
+			}
+			Planning_Draw_Dot(next, color); // RA2: as above
+			return; // RA2: as above
+		}
+		if (!has_nodes) { // RA2: as above
+			return; // RA2: as above
+		}
+		start = end; // RA2: as above
+		thickness = 3; // RA2: as above
+	} else if (!has_nodes) { // RA2: as above
+		return; // RA2: as above
+	}
+	PlanningNodeClass * node = token->Node_At(0); // RA2: as above
+	Point2D end = node->Lead_Pixel(); // RA2: as above
+	PlanningBranchClass * branch = node->Branch_Of(techno); // RA2: as above
+	if (branch != NULL) { // RA2: as above
+		EventClass lead = branch->Event; // RA2: as above
+		end = Planning_Event_Pixel(&lead, techno); // RA2: as above
+	}
+	Planning_Draw_Dot(start, color); // RA2: as above
+	Planning_Draw_Thick_Line(start, end, thickness, color); // RA2: as above
+	if (branch != NULL) { // RA2: as above
+		Planning_Draw_Dot(end, color); // RA2: as above
+	}
+	EventClass event = node->Get_Event_For(techno); // RA2: as above
+	if (((PlanningFirstTarget &)event).Get_Event_Frame() != -1) { // RA2: as above
+		Planning_Draw_Midpoint(start, end, color); // RA2: as above
+	}
+}
+
+bool __fastcall Planning_Idle_Mover(TechnoClass * techno) // RA2: 0x00618BB0; whether a techno is on its move mission with nothing to move to or to attack
+{
+	if (techno->Get_Mission() == MISSION_GUARD_AREA) { // RA2: as above
+		bool foot; // RA2: as above
+		if (techno != NULL) { // RA2: as above
+			foot = techno->AbstractFlags & 4; // RA2: as above
+		}
+		if (techno != NULL && foot) { // RA2: as above
+			if (((FootClass *)techno)->NavCom != NULL || techno->TarCom != NULL) { // RA2: as above
+				return false; // RA2: as above
+			}
+		}
+		return true; // RA2: as above
+	}
+	return false; // RA2: as above
+}
+
+void __fastcall Planning_Draw_Filled_Techno(TechnoClass * techno) // RA2: 0x00618C00; draws the order a techno follows now and the first node of its path as dashed lines and filled dots
+{
+	PlanningTokenClass * token = techno->Get_Planning_Token(); // RA2: as above
+	Coord here = techno->As_Coord(); // RA2: as above
+	Point2D start = Planning_Coord_Pixel(here); // RA2: as above
+	int dim = Planning_Dim_Color(techno); // RA2: as above
+	int bright = Planning_Bright_Color(techno); // RA2: as above
+	bool has_nodes = (token == NULL ? 0 : token->PlanningNodes.Count()) > 0; // RA2: as above
+	bool current = Planning_Current_Order(techno, has_nodes); // RA2: as above
+	int thickness = 4; // RA2: as above
+	int color = Planning_Techno_Color(techno); // RA2: as above
+	if (token != NULL && (token->OwnerUnit->CurrentMission == MISSION_WAIT || token->OwnerUnit->MissionQueue == MISSION_WAIT)) { // RA2: as above
+		EventClass event = token->Popped; // RA2: as above
+		Coord target = Planning_Event_Or_Object_Coord(event, techno); // RA2: as above
+		Point2D end = Planning_Coord_Pixel(target); // RA2: as above
+		Planning_Fill_Dot(start, dim); // RA2: as above
+		Planning_Draw_Dashed_Thick_Line(start, end, 3, dim); // RA2: as above
+		int frame = ((PlanningFirstTarget &)event).Get_Event_Frame(); // RA2: as above
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint_Shape(start, end, dim, color, frame); // RA2: as above
+		}
+		Planning_Fill_Dot(end, dim); // RA2: as above
+		return; // RA2: as above
+	}
+	if (current) { // RA2: as above
+		bool mega = techno->HaveMegaMission(); // RA2: as above
+		bool move = techno->HaveAttackMoveTarget(); // RA2: as above
+		Coord target = techno->GetAttackCoordinates(); // RA2: as above
+		Point2D end = Planning_Coord_Pixel(target); // RA2: as above
+		if (techno->IsInLimbo) { // RA2: as above
+			Planning_Fill_Dot(end, dim); // RA2: as above
+			return; // RA2: as above
+		}
+		Planning_Fill_Dot(start, dim); // RA2: as above
+		Planning_Draw_Dashed_Thick_Line(start, end, 3, dim); // RA2: as above
+		int frame = -1; // RA2: as above
+		if (!mega || move) { // RA2: as above
+			if (techno->Get_Mission() == MISSION_GUARD_AREA) { // RA2: as above
+				frame = Cursor_Start_Frame_76(); // RA2: as above
+			}
+		} else if (techno->GetMegaMission() == MISSION_ATTACK_MOVE) { // RA2: as above
+			frame = Cursor_Start_Frame_77(); // RA2: as above
+		}
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint_Shape(start, end, dim, color, frame); // RA2: as above
+		}
+		Planning_Fill_Dot(end, dim); // RA2: as above
+		if (move) { // RA2: as above
+			Coord next_coord = techno->GetAttackMoveCoords(); // RA2: as above
+			Point2D next = Planning_Coord_Pixel(next_coord); // RA2: as above
+			Planning_Draw_Dashed_Thick_Line(end, next, 3, dim); // RA2: as above
+			if (techno->GetMegaMission() == MISSION_ATTACK_MOVE) { // RA2: as above
+				frame = Cursor_Start_Frame_77(); // RA2: as above
+				if (frame != -1) { // RA2: as above
+					Planning_Draw_Midpoint_Shape(end, next, dim, color, frame); // RA2: as above
+				}
+			}
+			Planning_Fill_Dot(next, dim); // RA2: as above
+			return; // RA2: as above
+		}
+		if (!has_nodes) { // RA2: as above
+			return; // RA2: as above
+		}
+		start = end; // RA2: as above
+		thickness = 3; // RA2: as above
+	} else if (!has_nodes) { // RA2: as above
+		return; // RA2: as above
+	}
+	PlanningNodeClass * node = token->Node_At(0); // RA2: as above
+	Point2D end = node->Lead_Pixel(); // RA2: as above
+	PlanningBranchClass * branch = node->Branch_Of(techno); // RA2: as above
+	if (branch != NULL) { // RA2: as above
+		EventClass lead = branch->Event; // RA2: as above
+		end = Planning_Event_Pixel(&lead, techno); // RA2: as above
+	}
+	int dot = token->Reached(0) ? bright : dim; // RA2: as above
+	Planning_Fill_Dot(start, dot); // RA2: as above
+	Planning_Draw_Dashed_Thick_Line(start, end, thickness, dot); // RA2: as above
+	if (branch != NULL) { // RA2: as above
+		Planning_Fill_Dot(end, dot); // RA2: as above
+	}
+	EventClass event = node->Get_Event_For(techno); // RA2: as above
+	int frame = ((PlanningFirstTarget &)event).Get_Event_Frame(); // RA2: as above
+	if (frame != -1) { // RA2: as above
+		Planning_Draw_Midpoint_Shape(start, end, dot, color, frame); // RA2: as above
+	}
+}
+
+void __fastcall Planning_Draw_Node(PlanningNodeClass * node) // RA2: 0x00619420; draws the lines from the nodes before this one (and from its own loop) to it as solid lines, and its box
+{
+	Point2D pixel = node->Lead_Pixel(); // RA2: as above
+	int frame = -1; // RA2: as above
+	if (node->PlanningMembers.Count() > 0) { // RA2: as above
+		EventClass event = node->Get_Event(0); // RA2: as above
+		frame = ((PlanningFirstTarget &)event).Get_Event_Frame(); // RA2: as above
+	}
+	int color = Planning_Techno_Color(node->Member_Owner(0)); // RA2: as above
+	int count = node->PlanningBranches.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		Coord coord = node->PlanningBranches[index]->Get_Coord(); // RA2: as above
+		Point2D start = Planning_Coord_Pixel(coord); // RA2: as above
+		if (coord == Coord(-1, -1, -1)) { // RA2: as above
+			EventClass lead = node->PlanningBranches[index]->Event; // RA2: as above
+			start = Planning_Event_Pixel(&lead, node->Owner_At_Branch(index)); // RA2: as above
+		}
+		Planning_Draw_Thick_Line(start, pixel, 4, color); // RA2: as above
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint(start, pixel, color); // RA2: as above
+		}
+	}
+	if (node->Is_Loop_Alone()) { // RA2: as above
+		Coord coord = node->Loop_Coord(); // RA2: as above
+		Point2D start = Planning_Coord_Pixel(coord); // RA2: as above
+		if (coord == Coord(-1, -1, -1)) { // RA2: as above
+			EventClass lead = node->LoopBranch.Event; // RA2: as above
+			start = Planning_Event_Pixel(&lead, node->Active_Owner()); // RA2: as above
+		}
+		Planning_Draw_Thick_Line(start, pixel, 4, color); // RA2: as above
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint(start, pixel, color); // RA2: as above
+		}
+	}
+	node->Draw_Lead_Box(color); // RA2: as above
+}
+
+Coord __fastcall Planning_Event_Or_Object_Coord(EventClass const & event, AbstractClass * object) // RA2: 0x00619810; where the order of an event points, or where the object is when it points nowhere
+{
+	Coord coord = Planning_Event_Coord(event); // RA2: as above
+	if (coord == Coord(-1, -1, -1) && object != NULL) { // RA2: as above
+		coord = object->As_Coord(); // RA2: as above
+	}
+	return coord; // RA2: as above
+}
+
+void __fastcall Planning_Draw_Filled_Node(PlanningNodeClass * node) // RA2: 0x00619870; draws the lines from the nodes before this one (and from its own loop) to it as dashed lines, and fills its box
+{
+	Point2D pixel = node->Lead_Pixel(); // RA2: as above
+	int frame = -1; // RA2: as above
+	if (node->PlanningMembers.Count() > 0) { // RA2: as above
+		EventClass event = node->Get_Event(0); // RA2: as above
+		frame = ((PlanningFirstTarget &)event).Get_Event_Frame(); // RA2: as above
+	}
+	int color = Planning_Techno_Color(node->Member_Owner(0)); // RA2: as above
+	int count = node->PlanningBranches.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		int branch_color = node->Branch_Color(index); // RA2: as above
+		Coord coord = node->PlanningBranches[index]->Get_Coord(); // RA2: as above
+		Point2D start = Planning_Coord_Pixel(coord); // RA2: as above
+		if (coord == Coord(-1, -1, -1)) { // RA2: as above
+			EventClass lead = node->PlanningBranches[index]->Event; // RA2: as above
+			start = Planning_Event_Pixel(&lead, node->Owner_At_Branch(index)); // RA2: as above
+		}
+		Planning_Draw_Dashed_Thick_Line(start, pixel, 4, branch_color); // RA2: as above
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint_Shape(start, pixel, branch_color, color, frame); // RA2: as above
+		}
+	}
+	if (node->Is_Loop_Alone()) { // RA2: as above
+		int loop_color = node->Loop_Color(); // RA2: as above
+		Coord coord = node->Loop_Coord(); // RA2: as above
+		Point2D start = Planning_Coord_Pixel(coord); // RA2: as above
+		if (coord == Coord(-1, -1, -1)) { // RA2: as above
+			EventClass lead = node->LoopBranch.Event; // RA2: as above
+			start = Planning_Event_Pixel(&lead, node->Active_Owner()); // RA2: as above
+		}
+		Planning_Draw_Dashed_Thick_Line(start, pixel, 4, loop_color); // RA2: as above
+		if (frame != -1) { // RA2: as above
+			Planning_Draw_Midpoint_Shape(start, pixel, loop_color, color, frame); // RA2: as above
+		}
+	}
+	node->Fill_Lead_Box(node->Node_Color()); // RA2: as above
+}
+
+void __fastcall Planning_Fill_Node(PlanningNodeClass * node) // RA2: 0x00619BD0; fills the box of a node in its color
+{
+	node->Fill_Lead_Box(node->Node_Color()); // RA2: as above
+}
+
+int __fastcall Planning_Dim_Color(TechnoClass * techno) // RA2: 0x00619CA0; the pixel of the house color of a techno brought 80/256 toward black
+{
+	RGBClass color = Planning_House_Color(techno); // RA2: as above
+	color.Adjust(0x50, BlackColor); // RA2: as above
+	return ((color.Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) | ((color.Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) | ((color.Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+}
+
+int __fastcall Planning_Bright_Color(TechnoClass * techno) // RA2: 0x00619D50; the pixel of the house color of a techno brought 100/256 toward white
+{
+	RGBClass color = Planning_House_Color(techno); // RA2: as above
+	color.Adjust(100, WhiteColor); // RA2: as above
+	return ((color.Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) | ((color.Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) | ((color.Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+}
+
+int __fastcall Planning_Techno_Color(TechnoClass * techno) // RA2: 0x00619E80; black, or white for a techno that is selected (or a member of the selected node)
+{
+	int plain = Planning_Pixel(&BlackColor); // RA2: as above
+	if (techno == NULL) { // RA2: as above
+		return plain; // RA2: as above
+	}
+	int lighter = Planning_Pixel(&WhiteColor); // RA2: as above
+	if (PlanningSelectedNode != NULL) { // RA2: as above
+		if (PlanningSelectedNode->Find_Member(techno) != -1) { // RA2: as above
+			return lighter; // RA2: as above
+		}
+		return plain; // RA2: as above
+	}
+	if (techno->IsSelected) { // RA2: as above
+		return lighter; // RA2: as above
+	}
+	return plain; // RA2: as above
+}
+
+Point2D __fastcall Planning_Event_Pixel(EventClass const * event, AbstractClass * object) // RA2: 0x00619FA0; the pixel an order points at, or where the object is when it points nowhere; (-1, -1) for no order
+{
+	Point2D pixel(-1, -1); // RA2: as above
+	if (event != NULL) { // RA2: as above
+		EventClass copy = *event; // RA2: as above
+		Coord coord = Planning_Event_Or_Object_Coord(copy, object); // RA2: as above
+		pixel = Planning_Coord_Pixel(coord); // RA2: as above
+	}
+	return pixel; // RA2: as above
+}
+
+int __fastcall Planning_Node_Highlight_Color(PlanningNodeClass * node) // RA2: 0x0061A060 (a member of the node in YR); black, or white for a node whose lead owner is selected (or a member of the selected node)
+{
+	TechnoClass * owner = node->PlanningMembers[0]->Owner; // RA2: as above
+	int result = Planning_Pixel(&BlackColor); // RA2: as above
+	if (owner != NULL) { // RA2: as above
+		int lighter = Planning_Pixel(&WhiteColor); // RA2: as above
+		if (PlanningSelectedNode != NULL) { // RA2: as above
+			if (PlanningSelectedNode->Has_Member(owner)) { // RA2: as above
+				result = lighter; // RA2: as above
+			}
+		} else if (owner->IsSelected) { // RA2: as above
+			result = lighter; // RA2: as above
+		}
+	}
+	return result; // RA2: as above
+}
+
+void __fastcall Planning_Draw_Dot(Point2D center, int color) // RA2: 0x0061A190; draws a 6 by 6 frame around a pixel
+{
+	Rect view; // RA2: as above
+	view = Get_Title_Screen_Area(); // RA2: as above
+	Rect square; // RA2: as above
+	square = Planning_Centered_Rect(center, 6); // RA2: as above
+	CompositeSurface->Draw_Rect(view, square, color); // RA2: as above
+}
+
+void __fastcall Planning_Fill_Dot(Point2D center, int color) // RA2: 0x0061A210; fills a 6 by 6 square around a pixel, less its edge
+{
+	Point2D point = center; // RA2: as above
+	Rect view; // RA2: as above
+	view = Get_Title_Screen_Area(); // RA2: as above
+	Rect square; // RA2: as above
+	square = Planning_Centered_Rect(point, 6); // RA2: as above
+	Planning_Inflate(square, -1); // RA2: as above
+	Surface * surface = CompositeSurface; // RA2: as above
+	surface->Fill_Rect(view, square, color); // RA2: as above
+}
+
+int __fastcall Planning_Guard_Frame(TechnoClass * techno) // RA2: 0x0061A290; the first cursor frame of the guard order of a techno on guard, else -1
+{
+	if (techno->Get_Mission() == MISSION_GUARD_AREA) { // RA2: as above
+		return Cursor_Start_Frame_76(); // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
+int __fastcall Planning_Mega_Frame(TechnoClass * techno) // RA2: 0x0061A2B0; the first cursor frame of the attack move order of a techno, else -1
+{
+	if (techno->GetMegaMission() == MISSION_ATTACK_MOVE) { // RA2: as above
+		return Cursor_Start_Frame_77(); // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
+int PlanningFirstTarget::Get_Event_Frame(void) const // RA2: 0x0061A2D0
+{
+	int mission = (signed char)Data.MegaMission.Mission; // RA2: as above
+	if (mission == MISSION_GUARD_AREA) { // RA2: as above
+		return Cursor_Start_Frame_76(); // RA2: as above
+	}
+	if (mission == MISSION_ATTACK_MOVE) { // RA2: as above
+		return Cursor_Start_Frame_77(); // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
+void __fastcall Planning_Draw_Midpoint(Point2D start, Point2D end, int color) // RA2: 0x0061A2F0; draws a 21 by 21 frame halfway along a line when it is at least 37 pixels long
+{
+	int length = start.Distance_To(end); // RA2: as above
+	if (length >= 37) { // RA2: as above
+		int x = (start.X + end.X) / 2 - 10; // RA2: as above
+		int y = (start.Y + end.Y) / 2 - 10; // RA2: as above
+		Rect view = Get_Title_Screen_Area(); // RA2: as above
+		Rect square(x, y, 21, 21); // RA2: as above
+		CompositeSurface->Draw_Rect(view, square, color); // RA2: as above
+	}
+}
+
+void __fastcall Planning_Draw_Midpoint_Shape(Point2D start, Point2D end, int color, int fill, int frame) // RA2: 0x0061A3C0; draws a framed and filled 21 by 21 box halfway along a line when it is at least 37 pixels long, with a cursor shape in it
+{
+	if (start.Distance_To(end) >= 37) { // RA2: as above
+		int x = (start.X + end.X) / 2; // RA2: as above
+		int y = (start.Y + end.Y) / 2; // RA2: as above
+		int left = x - 10; // RA2: as above
+		int top = y - 10; // RA2: as above
+		Rect view = Get_Title_Screen_Area(); // RA2: as above
+		Rect square(left, top, 21, 21); // RA2: as above
+		Planning_Inflate(square, -1); // RA2: as above
+		CompositeSurface->Draw_Rect(view, square, color); // RA2: as above
+		Planning_Inflate(square, -1); // RA2: as above
+		CompositeSurface->Fill_Rect(view, square, fill); // RA2: as above
+		Point2D point(left, top); // RA2: as above
+		Rect window = view; // RA2: as above
+		ShapeSet const * shape = MouseClass::MouseShapes; // RA2: as above
+		int width = shape->Get_Width(); // RA2: as above
+		int height = shape->Get_Height(); // RA2: as above
+		point.X = x - width / 2 - 1; // RA2: as above
+		point.Y = y - height / 2; // RA2: as above
+		Draw_Shape(*CompositeSurface, *MouseDrawer, shape, frame, point, window, SHAPE_WIN_REL, NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+	}
+}
+
+static bool const PlanningDashes[16] = {true, true, true, true, false, false, false, false, true, true, true, true, false, false, false, false}; // RA2: 0x007EB9F8; the dash pattern of the dashed lines
+
+void __fastcall Planning_Draw_Line(Point2D start, Point2D end, int offset, int color, bool dashed) // RA2: 0x0061A5A0; draws a line on the tactical view moved sideways by offset (clipped to it), dashed or solid
+{
+	bool steep = abs(end.X - start.X) > abs(end.Y - start.Y); // RA2: as above
+	int sideways = steep ? 0 : offset; // RA2: as above
+	int lengthways = steep ? offset : 0; // RA2: as above
+	start.X += sideways; // RA2: as above
+	start.Y += lengthways; // RA2: as above
+	end.X += sideways; // RA2: as above
+	end.Y += lengthways; // RA2: as above
+	Rect area = TacticalRect; // RA2: as above
+	if (Clip_Line_To_Rect(start, end, area)) { // RA2: as above
+		if (dashed) { // RA2: as above
+			int phase = (-(int)timeGetTime() >> 5) & 0xF; // RA2: as above
+			CompositeSurface->Draw_Dashed_Line(start, end, color, (bool *)PlanningDashes, phase); // RA2: as above
+		} else { // RA2: as above
+			CompositeSurface->Draw_Line(start, end, color); // RA2: as above
+		}
+	}
+}
+
+void __fastcall Planning_Draw_Thick_Line(Point2D start, Point2D end, int thickness, int color) // RA2: 0x0061A6A0; draws a solid line thickness pixels wide
+{
+	int last = thickness / 2; // RA2: as above
+	for (int offset = last - thickness + 1; offset <= last; offset++) { // RA2: as above
+		Planning_Draw_Line(start, end, offset, color, false); // RA2: as above
+	}
+}
+
+void __fastcall Planning_Draw_Dashed_Thick_Line(Point2D start, Point2D end, int thickness, int color) // RA2: 0x0061A6F0; draws a dashed line thickness less 2 pixels wide
+{
+	int count = thickness - 2; // RA2: as above
+	int first; // RA2: as above
+	int last; // RA2: as above
+	if (count <= 0) { // RA2: as above
+		first = 0; // RA2: as above
+		last = 0; // RA2: as above
+	} else { // RA2: as above
+		last = count / 2; // RA2: as above
+		first = last - count + 1; // RA2: as above
+	}
+	for (int offset = first; offset <= last; offset++) { // RA2: as above
+		Planning_Draw_Line(start, end, offset, color, true); // RA2: as above
+	}
+}
+
+int __fastcall Planning_Pixel(RGBClass const * color) // RA2: 0x0061A860
+{
+	return ((color->Get_Red() >> DSurface::RedLeft) << DSurface::RedRight) | ((color->Get_Green() >> DSurface::GreenLeft) << DSurface::GreenRight) | ((color->Get_Blue() >> DSurface::BlueLeft) << DSurface::BlueRight); // RA2: as above
+}
 
