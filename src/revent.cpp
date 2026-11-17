@@ -21,6 +21,8 @@
 #include "rules.h"
 #include "vector.h"
 
+Cell EmptyRadarEventCell(0,0); // RA2: at 0x00AB67A8, the empty cell the ring is filled with and compared against (static initializer 0x0063B4A0)
+
 DynamicVectorClass<RadarEventClass *> RadarEventClass::RadarEvents;
 
 Cell LastRadarEventCell(0,0);
@@ -593,4 +595,55 @@ void Record_Event_Cell(Cell const & cell) // RA2: not in TibSun, at 0x0063C6C0
 	RecentRadarEventNewest = (RecentRadarEventNewest + 1) % 8; // RA2: as above
 	RecentRadarEventCells[RecentRadarEventNewest] = cell; // RA2: as above
 	RecentRadarEventCurrent = RecentRadarEventNewest; // RA2: as above
+}
+
+
+/// <summary>
+/// Fetches the newest cell of the ring of recent event cells.
+/// Hands back the empty cell when no event has been recorded yet.
+/// </summary>
+Cell Recall_Radar_Event_Cell(void) // RA2: not in TibSun, at 0x0063C6F0
+{
+	if (RecentRadarEventNewest == -1) { // RA2: as above
+		return EmptyRadarEventCell; // RA2: as above
+	}
+	RecentRadarEventCurrent = RecentRadarEventNewest; // RA2: as above
+	return RecentRadarEventCells[RecentRadarEventNewest]; // RA2: as above
+}
+
+
+/// <summary>
+/// Steps back through the ring of recent event cells.
+/// Each call yields the cell recorded before the previous one; when the ring runs dry it starts again at the newest.
+/// </summary>
+Cell Recall_Previous_Radar_Event_Cell(void) // RA2: not in TibSun, at 0x0063C720
+{
+	if (RecentRadarEventNewest == -1) { // RA2: as above
+		return EmptyRadarEventCell; // RA2: as above
+	}
+	int previous = RecentRadarEventCurrent - 1; // RA2: as above
+	if (previous < 0) { // RA2: as above
+		previous += 8; // RA2: as above
+	}
+	if (RecentRadarEventCells[previous] == EmptyRadarEventCell) { // RA2: as above
+		Cell result = RecentRadarEventCells[RecentRadarEventNewest]; // RA2: as above
+		RecentRadarEventCurrent = RecentRadarEventNewest; // RA2: as above
+		return result; // RA2: as above
+	}
+	Cell result = RecentRadarEventCells[previous]; // RA2: as above
+	RecentRadarEventCurrent = previous; // RA2: as above
+	return result; // RA2: as above
+}
+
+
+/// <summary>
+/// Empties the ring of recent event cells.
+/// </summary>
+void Reset_Radar_Event_Cells(void) // RA2: not in TibSun, at 0x0063C790
+{
+	RecentRadarEventNewest = -1; // RA2: as above
+	RecentRadarEventCurrent = -1; // RA2: as above
+	for (int i = 0; i < 8; i++) { // RA2: as above
+		RecentRadarEventCells[i] = EmptyRadarEventCell; // RA2: as above
+	}
 }
