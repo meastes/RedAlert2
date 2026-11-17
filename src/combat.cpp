@@ -50,6 +50,7 @@
 #include "ccrand.h"
 #include "cell.h"
 #include "globals.h"
+#include "goptions.h" // RA2: Options.DetailLevel gates the combat light
 #include "incdec.h"
 #include "infantry.h"
 #include "infatype.h"
@@ -543,20 +544,34 @@ AnimTypeClass const * Combat_Anim(int damage, WarheadTypeClass const * warhead, 
 /// <param name="coord">The coordinate the blast is centered upon.</param>
 /// <param name="damage">The strength of the blast, which governs the size of the flash.</param>
 /// <param name="forced">Should the flash occur even if the warhead is not a bright one?</param>
-void Combat_Lighting(Coord coord, int damage, WarheadTypeClass const * warhead, bool forced)
+void Combat_Lighting(Coord coord, int damage, WarheadTypeClass const * warhead, int forced, int flags) // RA2: 0x47F600 takes the forced flag as an int and a fifth argument, the light kind flags
 {
-	if (forced || warhead != NULL && warhead->IsBright) {
-		damage *= 64;
-		int size = damage >> 8;
-		if (size >= 63) {
-			size = 63;
-		} else if (size <= 21) {
-			size = 21;
-		}
+	if ((Options.DetailLevel != 0 && FPSCounter::CurrentFrameRate >= Detail::GetMinFrameRate()) || (flags & 0xF) != 0) { // RA2: the detail level and frame rate gate, bypassed by the flags
+		if ((char)forced || warhead != NULL && warhead->IsBright) { // RA2: forced is tested by its low byte
+			int size; // RA2: as above
+			float light = warhead->CombatLightSize; // RA2: the warhead's own light size takes precedence
+			if (light > 0.0f) { // RA2: as above
+				if (light > 1.0f) { // RA2: as above
+					light = 1.0f; // RA2: as above
+				}
+				size = (int)(light * 63.0f); // RA2: as above
+			} else { // RA2: as above
+				damage *= 64; // RA2: as above
+				size = damage >> 8; // RA2: as above
+				if (size >= 63) { // RA2: as above
+					size = 63; // RA2: as above
+				} else if (size <= 21) { // RA2: as above
+					size = 21; // RA2: as above
+				}
+			}
 
-		new SpotLightClass(coord, size);
+			SpotLightClass * spot = new SpotLightClass(coord, size); // RA2: the light is kept to set its flags
+			spot->Disable(flags); // RA2: the flags are ORed into the light
+		}
 	}
 }
+
+
 
 
 /***********************************************************************************************

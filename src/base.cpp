@@ -52,6 +52,7 @@
 #include "builtype.h"
 #include "cell.h"
 #include "overtype.h"
+#include "session.h" // RA2: Session.Type in Next_Buildable_Index
 #include "swizzle.h"
 #include "vector.h"
 
@@ -398,38 +399,26 @@ BaseNodeClass * BaseClass::Next_Buildable(StructType type)
  *=============================================================================================*/
 int BaseClass::Next_Buildable_Index(StructType type)
 {
-	/*
-	**	Loop through all node entries, returning a pointer to the first
-	**	un-built one that matches the requested type.
-	*/
-	for (int i = 0; i < Nodes.Count(); i++) {
-
-		/*
-		**	For STRUCT_NONE, return the first hole found
-		*/
+	for (int i = 0; i < Nodes.Count(); i++) { // RA2: meastes' loop; the executable adds the multiplayer rebuild test below
 		if (type == STRUCT_NONE) {
 			if (!Is_Built(i)) {
-				return(i);
-			}
-
-		} else {
-
-			/*
-			**	For a "real" building type, return the first hold for that type
-			*/
-			if (Nodes[i].Type==type && !Is_Built(i)) {
-				return(i);
-			}
-		}
-	}
-
-
-// If no entry could be found, then create a fake one that will allow
-// placement of the building. Make it static and reuse the next time this
-// routine is called.
-
-	return(-1);
+				if (Session.Type == GAME_NORMAL || !Nodes[i].Placed) { // RA2: byte at node +8 (Placed) tested outside a normal game
+					return(i); // RA2: as above
+				} // RA2: as above
+				if (House->Can_Rebuild_Node(Nodes[i])) { // RA2: HouseClass::Can_Rebuild_Node 0x4F64C0
+					Nodes[i].CellID = CELL_NONE; // RA2: the node's cell is cleared so it is placed anew
+					return(i); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
+		} else { // RA2: as above
+			if (Nodes[i].Type == type && !Is_Built(i)) { // RA2: as above
+				return(i); // RA2: as above
+			} // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	return(-1); // RA2: as above
 }
+
 
 
 /***********************************************************************************************

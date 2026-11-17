@@ -141,6 +141,7 @@
 #include "mono.h"
 #include "overlay.h"
 #include "overtype.h"
+#include "parasite.h" // RA2: Can_Enter_Cell reads the parasite victim
 #include "partsys.h"
 #include "planning.h" // RA2: What_Action asks Planning_Allows_Event_Type
 #include "psystype.h" // RA2: Do_MISSION_UNLOAD reads the behavior of the refinery's damage particle systems
@@ -183,6 +184,30 @@ struct NukeFlash { // RA2: as above
 };
 
 namespace Unsorted { extern bool MoveFeedback; }
+
+/*
+**	RA2: the casts Assign_Destination and the teleport block use: a null pointer gives null, a wrong RTTI gives null, the
+**	virtual Fetch_RTTI is called once.
+*/
+static inline CellClass * Unit_As_Cell(AbstractClass * object) // RA2: as above
+{
+	return(object == NULL ? NULL : (object->Fetch_RTTI() == RTTI_CELL ? (CellClass *)object : NULL)); // RA2: as above
+}
+
+static inline bool Unit_Is_Cell(AbstractClass const * object) // RA2: the null test stays inside the helper
+{
+	return(object != NULL && object->Fetch_RTTI() == RTTI_CELL); // RA2: as above
+}
+
+static inline BuildingClass * Unit_As_Building(AbstractClass * object) // RA2: as above
+{
+	return(object == NULL ? NULL : (object->Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass *)object : NULL)); // RA2: as above
+}
+
+static inline UnitClass * Unit_As_Unit(AbstractClass * object) // RA2: as above
+{
+	return(object == NULL ? NULL : (object->Fetch_RTTI() == RTTI_UNIT ? (UnitClass *)object : NULL)); // RA2: as above
+}
 
 
 char const * const UnitClass::INI_NAME = "Units";
@@ -2120,55 +2145,30 @@ bool UnitClass::Try_To_Deploy(void)
  *=============================================================================================*/
 void UnitClass::Per_Cell_Process(PCPType why)
 {
-	Cell	cell = PositionCell;
+	Cell cell = Get_Cell(); // RA2: no bench timer and no visceroid merging
 
-	if (why == PCP_END || why == PCP_ROTATION) {
-		/*
-		**	Check to see if this is merely the end of a rotation for the MCV as it is
-		**	preparing to deploy. In this case, it should begin its deploy process.
-		*/
-		if (IsDeploying) {
-			Try_To_Deploy();
-			if (!IsActive) return;			// Unit no longer exists -- bail.
-		}
+	if ((why == PCP_END || why == PCP_ROTATION) && IsDeploying) { // RA2: one condition
+		Try_To_Deploy(); // RA2: as above
+		if (!IsActive) return; // RA2: as above
 	}
 
-	BStart(BENCH_PCP);
 	if (why == PCP_END) {
-
-		if (Class->IsSmallVisceroid) {
-			if (NavCom != NULL && NavCom->RTTI == RTTI_UNIT) {
-				UnitClass * unit = static_cast<UnitClass*>(NavCom);
-				if (unit->Class->IsSmallVisceroid) {
-					if (Center_Coord().As_Cell() == NavCom->Center_Coord().As_Cell()) {
-						unit->Class = const_cast<UnitTypeClass *>(Rule->LargeVisceroid);
-						unit->Strength = unit->Class->MaxStrength;
-						Map[unit->LastAdjacencyCell].Adjust_Threat(unit->Owner(), unit->Risk());
-						Delete_Me();
-						BEnd(BENCH_PCP);
-						return;
-					}
-				}
-			}
-		}
-
-		TechnoClass	* whom = Contact_With_Whom();
-		if ((Mission == MISSION_ENTER || Mission == MISSION_PATROL) && whom != NULL) {
-			Cell center = Center_Coord();
-			Cell whom_center = whom->Center_Coord();
-			if (Center_Coord().As_Cell() == whom->Center_Coord().As_Cell() && whom->RTTI == RTTI_BUILDING) {
+		TechnoClass * contact = Radio_Link(0); // RA2: the first radio contact, read once
+		if ((Get_Mission() == MISSION_ENTER || Get_Mission() == MISSION_PATROL) && contact != NULL && contact->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+			Coord center = Center_Coord().As_Cell().As_Coord(); // RA2: the center of this cell
+			Coord contact_center = contact->Docking_Coord(this).As_Cell().As_Coord(); // RA2: the center of the cell of the docking coordinate
+			if (center.As_Cell() == contact_center.As_Cell()) { // RA2: as above
 				IPersistPtr persist(Locomotion);
 				CLSID clsid;
 				persist->GetClassID(&clsid);
-				if (clsid == CLSID_HoverLocomotion && static_cast<BuildingClass *>(whom)->Class->IsCanUnitRepair && NavCom == NULL) {
-					NavCom = whom;
+				if (clsid == CLSID_HoverLocomotion && static_cast<BuildingClass *>(contact)->Class->IsCanUnitRepair && NavCom == NULL) { // RA2: as above
+					NavCom = contact; // RA2: as above
 				}
-				if (whom == NavCom) {
+				if (contact == NavCom) { // RA2: as above
 					BASECLASS::Per_Cell_Process(PCP_END);
 					Transmit_Message(RADIO_IM_IN);
 					Locomotion->Power_Off();
-					BEnd(BENCH_PCP);
-					return;
+					return; // RA2: no bench timer
 				}
 			}
 		}
@@ -2177,182 +2177,156 @@ void UnitClass::Per_Cell_Process(PCPType why)
 		**	If this is a unit that is driving onto a building then the unit must enter
 		**	the building as the final step.
 		*/
-		if (IsTethered && whom != NULL) {
-			if (whom->RTTI == RTTI_BUILDING && Mission == MISSION_ENTER) {
-				if (whom == Map[cell - Cell(0, 1)].Cell_Building()) {
-					switch (Transmit_Message(RADIO_IM_IN, whom)) {
-						case RADIO_ROGER:
-							break;
+		if (IsTethered && contact != NULL && contact->Fetch_RTTI() == RTTI_BUILDING && Get_Mission() == MISSION_ENTER) { // RA2: as above
+			if (contact == Map[cell - Cell(0, 1)].Cell_Building()) { // RA2: as above
+				switch (Transmit_Message(RADIO_IM_IN, contact)) { // RA2: as above
+					case RADIO_ROGER: // RA2: as above
+						break; // RA2: as above
 
-						case RADIO_ATTACH:
-							break;
+					case RADIO_ATTACH: // RA2: as above
+						break; // RA2: as above
 
-						default:
-							Scatter(COORD_NONE, true);
-							break;
-					}
+					default: // RA2: as above
+						Scatter(COORD_NONE, true, false); // RA2: as above
+						break; // RA2: as above
 				}
 			}
 		}
-
-		TechnoClass * techno = Contact_With_Whom();
 
 		/*
 		**	Unit entering a transport vehicle will break radio contact
 		**	and attach itself to the transporter.
 		*/
-		if (Mission == MISSION_ENTER && techno && PositionCell == techno->PositionCell && techno == NavCom) {
-			BASECLASS::Per_Cell_Process(PCP_END);
-			if (Transmit_Message(RADIO_IM_IN) == RADIO_ATTACH) {
-				Limbo();
-				techno->Cargo.Attach(this);
-				Hidden();
+		CellClass * current = Get_Cell_Ptr(); // RA2: the transport is whatever stands on this cell
+		TechnoClass * transport = current->Cell_Building(); // RA2: as above
+		if (transport == NULL) { // RA2: as above
+			transport = Get_Cell_Ptr()->Cell_Aircraft(IsOnBridge); // RA2: as above
+			if (transport == NULL) { // RA2: as above
+				transport = Get_Cell_Ptr()->Cell_Unit(IsOnBridge); // RA2: as above
 			}
-			BEnd(BENCH_PCP);
-			return;
+		}
+		if (transport == this) transport = Dynamic_Cast<TechnoClass *>(transport->Next); // RA2: as above
+		if (Get_Mission() == MISSION_ENTER && transport != NULL && transport != this) { // RA2: as above
+			if (Get_Cell() == transport->Get_Cell() && ContainsLink(transport) && transport->Techno_Type_Class()->MaxPassengers > 0) { // RA2: as above
+				if (Transmit_Message(RADIO_CAN_LOAD, transport) == RADIO_ROGER) { // RA2: as above
+					ArchiveTarget = NULL; // RA2: as above
+					IsOnBridge = false; // RA2: as above
+					Limbo(); // RA2: as above
+					transport->Cargo.Attach(this); // RA2: as above
+					Hidden(); // RA2: as above
+				} else {
+					Assign_Destination(NULL, true); // RA2: as above
+					QueueMission(MISSION_GUARD, false); // RA2: as above
+					Scatter(COORD_NONE, true, true); // RA2: as above
+				}
+				return; // RA2: as above
+			}
 		}
 
 		/*
 		**	When breaking away from a transport object or building, possibly
 		**	scatter or otherwise begin normal unit operations.
 		*/
-		if (IsTethered && (Mission != MISSION_ENTER ||
-				(Dynamic_Cast<TechnoClass *>(NavCom) != NULL && Contact_With_Whom() != NavCom)
+		if (IsTethered && (Get_Mission() != MISSION_ENTER || // RA2: as above
+				(Dynamic_Cast<TechnoClass *>(NavCom) != NULL && Radio_Link(0) != NavCom) // RA2: as above
 				) &&
-				Mission != MISSION_UNLOAD) {
+				Get_Mission() != MISSION_UNLOAD) { // RA2: as above
 
 			bool arrived = NavCom == NULL;
-			if (Is_Target_Cell(NavCom)) {
-				CellClass *cptr = static_cast<CellClass *>(NavCom);
-				if (cptr->CellID == PositionCoord.As_Cell()) {
-					arrived = true;
-				}
+			if (NavCom != NULL && NavCom->Fetch_RTTI() == RTTI_CELL && static_cast<CellClass *>(NavCom)->CellID == Get_Coord().As_Cell()) { // RA2: as above
+				arrived = true; // RA2: as above
 			}
 
-			/*
-			**	Special hack check to make sure that even though it has moved one
-			**	cell, if it is still on the building (e.g., service depot), have
-			**	it scatter again.
-			*/
-			if (Map[(Coord const &)PositionCoord].Cell_Building() == NULL || arrived) {
-				TechnoClass * contact = Contact_With_Whom();
-				if (arrived || contact == NULL || contact->RTTI != RTTI_BUILDING || !static_cast<BuildingClass *>(contact)->Class->IsWeaponsFactory || Map[(Coord const &)PositionCoord].Cell_Building() != contact) {
+			if (Map[Get_Coord()].Cell_Building() == NULL || arrived) { // RA2: as above
+				contact = Radio_Link(0); // RA2: the contact is read again
+				if (arrived || contact == NULL || contact->Fetch_RTTI() != RTTI_BUILDING || !static_cast<BuildingClass *>(contact)->Class->IsWeaponsFactory || Map[Get_Coord()].Cell_Building() != contact) { // RA2: as above
 					RadioMessageType response = Transmit_Message(RADIO_UNLOADED);
 					if (response == RADIO_RUN_AWAY) {
 						if (NavCom != NULL && NavCom != Get_Cell_Ptr()) {
-
-							/*
-							**	Special case hack to allow automatic transition to loading
-							**	onto a transport (or other situation) if the destination
-							**	so indicates.
-							*/
-							TechnoClass * techno = Dynamic_Cast<TechnoClass *>(NavCom);
-							if (techno != NULL) {
-								Transmit_Message(RADIO_DOCKING, techno);
+							AbstractClass * destination = NavCom; // RA2: a destination that is a techno gets the docking message
+							if (destination != NULL && (destination->AbstractFlags & 1)) { // RA2: as above
+								Transmit_Message(RADIO_DOCKING, (TechnoClass *)destination); // RA2: as above
 							}
 						} else {
-							BuildingClass * building = dynamic_cast<BuildingClass *>(contact);
-							if (!House->Is_Human_Player() && building != NULL && building->Class->IsWeaponsFactory) {
-								Cell where = House->Where_To_Go(this);
-								if (where != CELL_NONE) {
-									Assign_Mission(MISSION_MOVE);
-									Assign_Destination(&Map[where]);
-									Commence();
-									ArchiveTarget = &Map[where];
-									Assign_Mission(MISSION_GUARD_AREA);
+							BuildingClass * building; // RA2: the contact as a building, tested by hand
+							if (contact == NULL) { // RA2: as above
+								building = NULL; // RA2: as above
+							} else {
+								building = contact->Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass *)contact : NULL; // RA2: as above
+							}
+							if (!Class->IsToHarvest && !Class->IsToVeinHarvest) { // RA2: as above
+								if (!House->Is_Human_Player() && building != NULL && building->Class->IsWeaponsFactory) { // RA2: as above
+									Cell where = House->Where_To_Go(this); // RA2: as above
+									if (where != CELL_NONE) { // RA2: as above
+										QueueMission(MISSION_MOVE, false); // RA2: QueueMission replaces Assign_Mission
+										Assign_Destination(&Map[where], true); // RA2: as above
+										Commence(); // RA2: as above
+										ArchiveTarget = &Map[where]; // RA2: as above
+										QueueMission(MISSION_GUARD_AREA, false); // RA2: as above
+									} else {
+										ArchiveTarget = NULL; // RA2: as above
+									}
 								} else {
-									ArchiveTarget = NULL;
+									AbstractClass * target = ArchivedTarget; // RA2: as above
+									if (target != NULL && target != NavCom) { // RA2: as above
+										Assign_Destination(target, true); // RA2: as above
+									} else {
+										Abort_Motion(); // RA2: as above
+										Scatter(COORD_NONE, true, false); // RA2: as above
+									}
 								}
 							} else {
-								AbstractClass * target = ArchiveTarget;
-								if (target != NULL && target != NavCom) {
-									Assign_Destination(target);
-								} else {
-									NavCom = NULL;
-									Scatter(COORD_NONE, true);
-								}
+								QueueMission(MISSION_HARVEST, true); // RA2: a harvester goes back to harvesting at once
 							}
 						}
 
-					} else {
-						if (response != RADIO_NEGATIVE && (Class->IsToHarvest || Class->IsToVeinHarvest)) {
-							if (ArchiveTarget != NULL) {
-								Assign_Mission(MISSION_HARVEST);
-								Assign_Destination(ArchiveTarget);
-								ArchiveTarget = NULL;
-							} else {
-
-								/*
-								**	Since there is no place to go, move away to clear
-								**	the pad for another harvester.
-								*/
-								if (NavCom == NULL) {
-									Scatter(COORD_NONE, true);
-								}
-							}
+					} else if (response != RADIO_NEGATIVE && (Class->IsToHarvest || Class->IsToVeinHarvest)) { // RA2: as above
+						if (ArchivedTarget != NULL) { // RA2: as above
+							QueueMission(MISSION_HARVEST, false); // RA2: as above
+							Assign_Destination(ArchivedTarget, true); // RA2: as above
+							ArchiveTarget = NULL; // RA2: as above
+						} else if (NavCom == NULL) { // RA2: as above
+							Scatter(COORD_NONE, true, false); // RA2: as above
 						}
 					}
 				}
 			}
 
-			if (Map[(Coord const &)PositionCoord].Cell_Building() && NavCom == NULL && NavQueue.Count() == 0 && RouteQueue.Count() == 0) {
+			if (Map[Get_Coord()].Cell_Building() && NavCom == NULL && NavQueue.Count() == 0 && RouteQueue.Count() == 0) { // RA2: as above
 				Scatter(COORD_NONE, true, true);
 			}
 		}
 
 		/*
 		**	If this is a loaner unit and is is off the edge of the
-		**	map, then it gets eliminated. That is, unless it is carrying cargo. This means that
-		**	it is probably carrying an incoming reinforcement and it should not be eliminated.
+		**	map, then it gets eliminated.
 		*/
-		if (Edge_Of_World_AI()) {
-			BEnd(BENCH_PCP);
-			return;
-		}
-
-		/*
-		**	The unit performs looking around at this time. If the
-		**	unit moved further than one square during the last track
-		**	move, don't do an incremental look. Do a full look around
-		**	instead.
-		*/
-		if (IsPlanningToLook) {
-			IsPlanningToLook = false;
-			Look(false);
-		} else {
-			Look(true);
-		}
-
-		bool broke_ice = false;
-		if (Scen->Theater == THEATER_SNOW) {
-			if (Class->Weight >= Rule->IceBreakingWeight) { // RA2: no DirtyIceCells (TibSun's use does not compile against RA2's declaration)
-				broke_ice = Map.Break_Ice(&Map[(Coord const &)PositionCoord], this);
-			} else if (Class->Weight >= Rule->IceCrackingWeight) {
-				broke_ice = Map.Crack_Ice(&Map[(Coord const &)PositionCoord], this);
+		if (Get_Mission() == MISSION_GUARD && !Map.In_Radar(Get_Coord()) && IsLocked) { // RA2: no Edge_Of_World_AI; the loaner leaves the map by hand
+			if (Team != NULL) { // RA2: as above
+				Team->IsLeaveMap = true; // RA2: as above
 			}
-			if (broke_ice) {
-				IsSinking = true;
-				Stun();
-				Map.Recalc_Ice_Cells();
-			}
+			Stun(); // RA2: as above
+			Delete_Me(); // RA2: as above
+			return; // RA2: as above
 		}
 
-		/*
-		**	Act on new orders if the unit is at a good position to do so.
-		*/
+		RemoveSight(false, false, false, NULL); // RA2: takes the place of Look (the sight is taken back and revealed again)
+		UpdateSight(false, false, false, NULL); // RA2: as above
+		Map.RevealArea3(Get_Coord(), 0, LastSightRange + 3, 0); // RA2: as above
+
 		if (!IsDumping && Ready_To_Commence()) {
 			Commence();
 		}
 
-		if (Class->IsToHarvest && Mission != MISSION_UNLOAD && CurrentMission != MISSION_ENTER && MissionQueue != MISSION_ENTER && !IsDumping) {
-			RadioClass * radio = Contact_With_Whom();
+		if (Class->IsToHarvest && Get_Mission() != MISSION_UNLOAD && CurrentMission != MISSION_ENTER && MissionQueue != MISSION_ENTER && !IsDumping) { // RA2: as above
+			RadioClass * radio = Radio_Link(0); // RA2: as above
 			if (radio != NULL && radio->What_Am_I() == RTTI_BUILDING && static_cast<BuildingClass *>(radio)->Class->IsRefinery) {
 				Transmit_Message(RADIO_OVER_OUT);
 			}
 		}
 
-		if (Class->IsToVeinHarvest && Mission != MISSION_UNLOAD && CurrentMission != MISSION_ENTER && MissionQueue != MISSION_ENTER && !IsDumping) {
-			RadioClass * radio = Contact_With_Whom();
+		if (Class->IsToVeinHarvest && Get_Mission() != MISSION_UNLOAD && CurrentMission != MISSION_ENTER && MissionQueue != MISSION_ENTER && !IsDumping) { // RA2: as above
+			RadioClass * radio = Radio_Link(0); // RA2: as above
 			if (radio != NULL && radio->What_Am_I() == RTTI_BUILDING && static_cast<BuildingClass *>(radio)->Class->IsWeeder) {
 				Transmit_Message(RADIO_OVER_OUT);
 			}
@@ -2361,24 +2335,21 @@ void UnitClass::Per_Cell_Process(PCPType why)
 		/*
 		**	Certain units require some setup time after they come to a halt.
 		*/
-		if (NavCom == NULL && Path[0] == FACING_NONE) {
-		} // RA2: no IsNoFireWhileMoving (not in RA2's layout)
+		if (NavCom == NULL && Path[0] == FACING_NONE && !Class->MobileFire) { // RA2: a unit that cannot fire on the move rearms
+			Arm = Rearm_Delay(1) / 4; // RA2: as above
+		}
 
-		/*
-		**	If after all is said and done, the unit finishes its move on an impassable cell, then
-		**	it must presume that it is in the case of a unit driving onto a bridge that blows up
-		**	before the unit completes it's move. In such a case the unit should have been destroyed
-		**	anyway, so blow it up now.
-		*/
-		CellClass * cellptr = &Map[(Coord const &)PositionCoord];
+		CellClass * cellptr = &Map[Get_Coord()]; // RA2: as above
 		LandType land = cellptr->Land_Type();
 		if (!Locomotion->Is_Moving() && Can_Enter_Cell(cellptr) == MOVE_NO && (!IsOnBridge || !cellptr->IsUnderBridge) && !IsSinking) {
-			new AnimClass(Combat_Anim(Strength, Rule->C4Warhead, land, PositionCoord), PositionCoord, 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), Get_Explosion_Z(PositionCoord));
-			int damage = Strength;
-			Combat_Lighting(Center_Coord(), damage, Rule->C4Warhead, false);
-			Take_Damage(damage, 0, Rule->C4Warhead, NULL, true);
-			BEnd(BENCH_PCP);
-			return;
+			if (CurrentMission != MISSION_ENTER) { // RA2: a unit still entering something is only scattered
+				new AnimClass(Combat_Anim(Strength, Rule->C4Warhead, land, Get_Coord()), Get_Coord(), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), Get_Explosion_Z(Get_Coord())); // RA2: as above
+				int damage = Strength; // RA2: as above
+				Combat_Lighting(Center_Coord(), damage, Rule->C4Warhead, 0, 0); // RA2: the five argument form
+				Take_Damage(damage, 0, Rule->C4Warhead, NULL, true); // RA2: as above
+				return; // RA2: as above
+			}
+			Scatter(COORD_NONE, true, true); // RA2: as above
 		}
 	}
 
@@ -2400,15 +2371,13 @@ void UnitClass::Per_Cell_Process(PCPType why)
 	/*
 	**	Check to see if crushing of any unfortunate infantry is warranted.
 	*/
-	Overrun_Square(PositionCell, false);
+	Overrun_Square(Get_Cell(), false); // RA2: as above
 
-	if (!IsActive) {
-		BEnd(BENCH_PCP);
-		return;
+	if (IsActive) { // RA2: no bench timer
+		BASECLASS::Per_Cell_Process(why); // RA2: as above
 	}
-	BASECLASS::Per_Cell_Process(why);
-	BEnd(BENCH_PCP);
 }
+
 
 
 /// <summary>
@@ -3641,7 +3610,7 @@ MoveType UnitClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, in
 			}
 		}
 		if (cellptr->Land_Type() != Class->MovementRestrictedTo && cellptr->Land_Type() != LAND_TUNNEL) {
-			if (cellptr->Overlay < OVERLAY_RAIL_BRIDGE1 || cellptr->Overlay > OVERLAY_RAIL_BRIDGE2 || cell_height == cellptr->Height) {
+			if (cellptr->Overlay < 0xED || cellptr->Overlay > 0xEE || cell_height == cellptr->Height) { // RA2: the rail bridge overlays are 0xED and 0xEE (OVERLAY_RAIL_BRIDGE1/2 are TibSun numbers)
 				return(MOVE_NO);
 			}
 		}
@@ -3715,13 +3684,25 @@ MoveType UnitClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, in
 		}
 
 		if (optr->IsWall) {
-
-			/*
-			**	If the blocking wall is crushable (and not owned by this player or one of this players
-			**	allies, then record that it is crushable and let the normal logic take over. The end
-			**	result should cause this unit to consider the cell passable.
-			*/
-		} // RA2: no IsCrushable (TibSun's use does not compile against RA2's declaration)
+			if (optr->IsCrushable && (Class->IsCrusher || Has_Ability(ABILITY_CRUSHER))) { // RA2: a crusher drives over crushable walls of its allies' houses
+				if (House->Is_Ally(cellptr->Owner)) { // RA2: as above
+					if (retval < MOVE_FRIENDLY_DESTROYABLE) retval = MOVE_FRIENDLY_DESTROYABLE; // RA2: as above
+				}
+			} else if (Is_Weapon_Equipped()) { // RA2: a unit with a weapon may shoot the wall down
+				WarheadTypeClass const * warhead = Get_Class_Weapon_Data(0)->Weapon->WarheadPtr; // RA2: as above
+				if (warhead->IsWallDestroyer || (warhead->IsWoodDestroyer && optr->Armor == 6)) { // RA2: as above
+					if (House->Is_Ally(cellptr->Owner)) { // RA2: as above
+						if (retval < MOVE_FRIENDLY_DESTROYABLE) retval = MOVE_FRIENDLY_DESTROYABLE; // RA2: as above
+					} else {
+						if (retval < MOVE_DESTROYABLE) retval = MOVE_DESTROYABLE; // RA2: as above
+					}
+				} else {
+					return(MOVE_NO); // RA2: as above
+				}
+			} else {
+				return(MOVE_NO); // RA2: as above
+			}
+		}
 	}
 
 	/*
@@ -3734,19 +3715,23 @@ MoveType UnitClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, in
 
 		if (const_cast<UnitClass *>(this) != obj) {
 
-			/*
-			**	Always allow entry if trying to move on a cell with
-			**	authorization from the occupier.
-			*/
-			if (obj == Contact_With_Whom() && (IsTethered || (obj->RTTI == RTTI_BUILDING && ((BuildingClass *)obj)->Class->IsCanUnitRepair))) {
+			if (ParasiteImUsing != NULL && ParasiteImUsing->Victim != NULL) { // RA2: a parasite's victim cell is always enterable
+				if (obj->Get_Cell() == ParasiteImUsing->Victim->Get_Cell()) { // RA2: as above
+					return(MOVE_OK); // RA2: as above
+				}
+			}
+
+			TechnoClass * contact = (obj->AbstractFlags & 1) ? (TechnoClass *)obj : NULL; // RA2: the Is_Techno test is inline
+			if (ContainsLink(contact) && obj->Fetch_RTTI() == RTTI_BUILDING && !((BuildingClass *)obj)->Is_Impassable_Cell(cellptr)) { // RA2: a building this unit is linked to lets it through
+				obj = obj->Next; // RA2: as above
+				continue; // RA2: as above
+			}
+
+			if (Class->IsSmallVisceroid && obj->Fetch_RTTI() == RTTI_UNIT && ((UnitClass *)obj)->Class->IsSmallVisceroid) { // RA2: as above
 				return(MOVE_OK);
 			}
 
-			if (Class->IsSmallVisceroid && obj->RTTI == RTTI_UNIT && ((UnitClass *)obj)->Class->IsSmallVisceroid) {
-				return(MOVE_OK);
-			}
-
-			if (obj->RTTI == RTTI_BUILDING) {
+			if (obj->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
 				BuildingClass *bptr = (BuildingClass *)obj;
 
 				if (bptr->Class->IsGate) {
@@ -3764,20 +3749,13 @@ MoveType UnitClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, in
 					continue;
 				}
 
-				/*
-				 * A unit can drive onto the building it is trying to enter (repair
-				 * bay) if that building is in the cell it is entering from.
-				 */
-				if (dir != FACING_NONE && bptr->Class->IsCanUnitRepair && Map[Adjacent_Cell(cellptr->CellID, Facing_Sub(dir, FACING_180))].Cell_Building() == bptr) {
+				if (dir != FACING_NONE && bptr->Class->IsCanUnitRepair && cellptr->Cell_Building() == bptr && !bptr->Is_Impassable_Cell(cellptr)) { // RA2: the repair bay's own cell is open to a unit not coming from nowhere
 					obj = obj->Next;
 					continue;
 				}
 
-				/*
-				 * Various special-purpose buildings do not block movement.
-				 */
 				if (bptr->Class->IsInvisibleInGame) {
-					obj = obj->Next; // RA2: no IsLimpetMine (not in RA2's layout)
+					obj = obj->Next; // RA2: as above
 					continue;
 				}
 				if (bptr->Class->IsLaserFence && (bptr->LaserFenceFrame == 12 || bptr->LaserFenceFrame == 8)) {
@@ -3792,142 +3770,119 @@ MoveType UnitClass::Can_Enter_Cell(CellClass const * cellptr, FacingType dir, in
 					continue;
 				}
 
-				/*
-				 * The bib of a refinery or weeder is a legal destination for a
-				 * harvester that is owned by an ally and is heading for the dock.
-				 */
 				if (bptr->Class->IsBibbed) {
 					if (Map[Adjacent_Cell(cellptr->CellID, FACING_E)].Cell_Building() != bptr) {
 						obj = obj->Next;
 						continue;
 					}
-					if (Class->IsToHarvest && bptr->Class->IsRefinery && House->Is_Ally(bptr->House)) {
-						Cell bcell = bptr->PositionCell;
-						if (cellptr->CellID == bcell + Cell(2, 1)) {
-							obj = obj->Next;
-							continue;
-						}
-					}
-					if (Class->IsToVeinHarvest && bptr->Class->IsWeeder && House->Is_Ally(bptr->House)) {
-						Cell bcell = bptr->PositionCell;
-						if (cellptr->CellID == bcell + Cell(2, 1)) {
-							obj = obj->Next;
-							continue;
-						}
-					}
-				}
+				} // RA2: no harvester dock exception
+
 			}
 
-			/*
-			**	Special check to allow entry into the sea transport this vehicle
-			**	is trying to enter.
-			*/
-			if (Mission == MISSION_ENTER && obj == NavCom && IsTethered) {
+			if (Get_Mission() == MISSION_ENTER && obj == NavCom && obj->Fetch_RTTI() == RTTI_UNIT) { // RA2: the transport this unit is entering
 				return(MOVE_OK);
 			}
 
-			/*
-			**	Guard area should not allow the guarding unit to enter the cell with the
-			**	guarded unit.
-			*/
-			if (Mission == MISSION_GUARD_AREA && ArchiveTarget == obj) {
+			if (Get_Mission() == MISSION_GUARD_AREA && ArchivedTarget == obj) { // RA2: as above
 				return(MOVE_NO);
 			}
 
-			FootClass *foot = dynamic_cast<FootClass *>(obj);
+			FootClass * foot; // RA2: as above
+			if (obj->AbstractFlags & 4) { // RA2: the Is_Foot test is inline
+				foot = (FootClass *)obj; // RA2: as above
+			} else {
+				foot = NULL; // RA2: as above
+			}
 
 			bool is_moving = foot != NULL &&
 					(foot->NavCom || foot->PrimaryFacing.Is_Rotating() || foot->Locomotion->Is_Moving());
 
-			if (House->Is_Ally(obj)) {
+			if (House->Is_Ally((TechnoClass *)obj)) { // RA2: as above
 				if (is_moving) {
 					int face = PrimaryFacing.Current().As_Dir8();
-					DirType d = ((FootClass const *)obj)->PrimaryFacing.Current().Right_180();
-					int techface = d.As_Dir8();
-					DirType direction = ::Direction(PositionCoord, ((ObjectClass *)obj)->PositionCoord);
-					if (face == techface && Distance(((ObjectClass *)obj)->Center_Coord()) <= 2 * CELL_LEPTON - 1 && direction.As_Dir8() == face) {
+					DirType reverse = DirType((unsigned short)(((FootClass *)obj)->PrimaryFacing.Current().Raw + 0x7FFF)); // RA2: the occupier's facing turned around
+					int techface = reverse.As_Dir8(); // RA2: as above
+					int & tech = techface; // RA2: as meastes
+					DirType direction = ::Direction(Get_Coord(), obj->Get_Coord()); // RA2: as above
+					if (face == tech && Center_Coord().Distance_To(obj->Center_Coord()) <= 2 * CELL_LEPTON - 1 && direction.As_Dir8() == face) { // RA2: as above
 						return(MOVE_NO);
 					}
-					if ((foot->IsOccupyingCell && foot->RTTI != RTTI_INFANTRY) || foot->Locomotion->Will_Jump_Tracks()) {
+					if ((foot->IsOccupyingCell && foot->Fetch_RTTI() != RTTI_INFANTRY) || foot->Locomotion->Will_Jump_Tracks()) { // RA2: as above
 						if (retval < MOVE_MOVING_BLOCK) retval = MOVE_MOVING_BLOCK;
 					}
 				} else {
-
-					/*
-					 * An allied object that is not moving blocks the cell outright
-					 * if it is a building; otherwise it only temporarily blocks
-					 * the cell.
-					 */
-					if (obj->RTTI == RTTI_BUILDING) return(MOVE_NO);
-
-				} // RA2: no IsJellyfish (not in RA2's layout)
+					if (obj->Fetch_RTTI() == RTTI_BUILDING) return(MOVE_NO); // RA2: as above
+					if (retval < MOVE_TEMP) retval = MOVE_TEMP; // RA2: any other idle allied object blocks only temporarily
+				}
 			} else {
 
-				/*
-				**	Cloaked enemy objects are not considered if this is a Find_Path()
-				**	call.
-				*/
-				TechnoClass * tech = Dynamic_Cast<TechnoClass *>(obj);
-				if (tech == NULL || tech->Cloak != CLOAKED) {
-
-					/*
-					**	If this unit can crush infantry, and there is an enemy infantry in the
-					**	cell, don't consider the cell impassible. This is true even if the unit
-					**	doesn't contain a legitimate weapon.
-					*/
-					bool crusher = Class->IsCrusher || Has_Ability(ABILITY_CRUSHER);
-				} else { // RA2: no IsCrushable (TibSun's use does not compile against RA2's declaration)
+				TechnoClass const * tech = Dynamic_Cast<TechnoClass const *>((AbstractClass const *)obj); // RA2: the const overload (0x40DBD0)
+				if (tech != NULL && tech->Cloak == CLOAKED) { // RA2: as above
 					if (retval < MOVE_CLOAK) retval = MOVE_CLOAK;
+				} else {
+					ObjectTypeClass const * otype; // RA2: as above
+					if ((Class->IsCrusher || Has_Ability(ABILITY_CRUSHER)) && (otype = obj->Class_Of())->IsCrushable) { // RA2: as above
+						if (!House->Is_Ally((TechnoClass *)obj)) { // RA2: as above
+							crushable = true; // RA2: as above
+						}
+					} else {
+						if (!Get_Class_Weapon_Data(0)->Weapon && !Class->IsTrain) { // RA2: a unit without a weapon cannot enter
+							return(MOVE_NO); // RA2: as above
+						}
+						switch (obj->Fetch_RTTI()) { // RA2: as above
+						case RTTI_TERRAIN: { // RA2: as above
+							int which = What_Weapon_Should_I_Use(obj); // RA2: as above
+							WeaponTypeClass const * weapon = Get_Class_Weapon_Data(which)->Weapon; // RA2: as above
+							if (weapon == NULL || weapon->WarheadPtr == NULL || !weapon->WarheadPtr->IsWoodDestroyer) { // RA2: as above
+								return(MOVE_NO); // RA2: as above
+							}
+						}
+						default: // RA2: as above
+							if (retval < MOVE_DESTROYABLE) retval = MOVE_DESTROYABLE; // RA2: as above
+							break; // RA2: as above
+						case RTTI_BUILDING: // RA2: as above
+							if (((BuildingClass *)obj)->Class->IsBridgeRepairHut) return(MOVE_NO); // RA2: as above
+							if (retval < MOVE_DESTROYABLE) retval = MOVE_DESTROYABLE; // RA2: as above
+							break; // RA2: as above
+						}
+					}
 				}
 			}
 		} else {
-
-			/*
-			 * Ignore this unit itself; clear its own vehicle reservation from
-			 * the cell flags so it isn't considered a blockage.
-			 */
 			vehicle = false;
 			flags &= ~0x20;
 		}
 
-		/*
-		**	Move to next object in chain.
-		*/
 		obj = obj->Next;
 	}
 
-	/*
-	**	If the cell is out and out impassable because of underlying terrain, then
-	**	return this immutable fact.
-	*/
 	if (!bridge && Ground[cellptr->Land_Type()].Cost[Class->Speed] == 0) {
 		return(MOVE_NO);
 	}
 
-	/*
-	**	If some allied object has reserved the cell, then consider the cell
-	**	as blocked by a moving object.
-	*/
+	if (retval == MOVE_OK && !crushable && (flags & 0x3F)) { // RA2: a cell reserved by someone else
+		if (vehicle) { // RA2: as above
+			retval = MOVE_MOVING_BLOCK; // RA2: as above
+		} else if (inftype != HOUSE_NONE && House->Is_Ally(inftype)) { // RA2: as above
+			retval = MOVE_MOVING_BLOCK; // RA2: as above
+		} else if (!Class->IsCrusher && !Has_Ability(ABILITY_CRUSHER)) { // RA2: as above
+			if (Class->IsTrain || (Get_Class_Weapon_Data(0)->Weapon != NULL && Get_Class_Weapon_Data(0)->Weapon->Bullet->IsAntiGround)) { // RA2: as above
+				retval = MOVE_DESTROYABLE; // RA2: as above
+			} else {
+				return(MOVE_NO); // RA2: as above
+			}
+		}
+	}
 
-	/*
-	**	If its ok to move into the cell because we can crush whats in the cell, then
-	**	make sure no one else is already moving into the cell to crush something.
-	*/
-	if (retval == MOVE_OK && crushable && vehicle) { // RA2: no IsJellyfish (not in RA2's layout)
+	if (retval == MOVE_OK && crushable && vehicle) { // RA2: as above
+		if (cellptr->Cell_Unit() == NULL || !((UnitClass *)cellptr->Cell_Unit())->Class->IsCrushable) { // RA2: as above
+			return(MOVE_MOVING_BLOCK); // RA2: as above
+		}
+	}
 
-		/*
-		**	However, if the cell is occupied by a crushable vehicle, then we can
-		**	never be sure if some other friendly vehicle is also trying to crush
-		**	the cell at the same time. In the case of a crushable vehicle in the
-		**	cell, then allow entry.
-		*/
-	} // RA2: no IsCrushable (TibSun's use does not compile against RA2's declaration)
-
-	/*
-	**	Return with the most severe reason why this cell would be impassable.
-	*/
 	return(retval);
 }
+
 
 
 /***********************************************************************************************
@@ -5006,48 +4961,76 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 	**	Abort early if there is anything wrong with the parameters
 	**	or the unit already is assigned the specified destination.
 	*/
-	if (target == NavCom) return;
+	if (Class->BalloonHover && target == NULL && NavCom != NULL && TarCom != NULL) { // RA2: a hovering balloon unit already chasing its target keeps going
+		if (NavCom == TarCom) return; // RA2: as above
+		if (Unit_Is_Cell(NavCom)) { // RA2: as above
+			CellClass * destination = Unit_As_Cell(NavCom); // RA2: as above
+			if (destination->Cell_Occupier() == TarCom) return; // RA2: as above
+		}
+	}
+	if (target == NavCom && !UnlimboingInfantry) return; // RA2: the unlimbo flag lets the same destination through once
+	UnlimboingInfantry = false; // RA2: as above
+	if (Deployed) { // RA2: a deployed unit only stops
+		FootClass::Abort_Motion(); // RA2: as above
+		return; // RA2: as above
+	}
 
 	/*
 	**	Transport vehicles must tell all passengers that are about to load, that they
 	**	cannot proceed. This is accomplished with a radio message to this effect.
 	*/
-	if (In_Radio_Contact() && Class->Max_Passengers() > 0 && Contact_With_Whom()->Fetch_RTTI() == RTTI_INFANTRY) {
-		Transmit_Message(RADIO_OVER_OUT);
+	if (HasAnyLink() && Class->Max_Passengers() > 0 && Radio_Link(0)->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+		if (target != NULL && (target->AbstractFlags & 1) && !ContainsLink((TechnoClass *)target)) { // RA2: only when the destination is a techno that is not linked
+			Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+		}
 	}
 
 	/*
 	 * If tethered to a carryall while sleeping, untether before moving.
 	 */
-	if (target != NULL && In_Radio_Contact() && Mission == MISSION_SLEEP && IsTethered && Contact_With_Whom()->RTTI == RTTI_AIRCRAFT) {
-		AircraftClass * a = (AircraftClass *)Contact_With_Whom();
+	if (target != NULL && HasAnyLink() && Get_Mission() == MISSION_SLEEP && IsTethered && Radio_Link(0)->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+		AircraftClass * a = (AircraftClass *)Radio_Link(0); // RA2: as above
 		if (a->Class->IsCarryall) {
-			a->Assign_Destination(NULL);
+			a->Assign_Destination(NULL, true); // RA2: as above
 			Transmit_Message(RADIO_UNTETHER);
 			Transmit_Message(RADIO_OVER_OUT);
 		}
 	}
 
-	BuildingClass * b = dynamic_cast<BuildingClass *>(target);
+	BuildingClass * b = Unit_As_Building(target); // RA2: the inline RTTI-tested cast, not dynamic_cast
+	if (Get_Mission() == MISSION_UNLOAD || MissionQueue == MISSION_UNLOAD) { // RA2: a refinery being unloaded into loses its dump effects
+		Cell unload_cell = Get_Cell() + AdjacentCell[6]; // RA2: as above
+		BuildingClass * refinery = (BuildingClass *)Map[unload_cell].Cell_Building(); // RA2: as above
+		if (refinery != NULL && Class->IsToHarvest) { // RA2: as above
+			if (refinery->ParticleSystems[5] != NULL) refinery->ParticleSystems[5]->Delete_Me(); // RA2: as above
+			if (refinery->ParticleSystems[6] != NULL) refinery->ParticleSystems[6]->Delete_Me(); // RA2: as above
+			if (refinery->Anims[10] != NULL) refinery->End_Anim((BAnimType)10); // RA2: as above
+		}
+	}
 
 	/*
 	**	Handle entry logic here.
 	*/
-	if (Mission == MISSION_ENTER || MissionQueue == MISSION_ENTER) {
+	if (Get_Mission() == MISSION_ENTER || MissionQueue == MISSION_ENTER) { // RA2: as above
 
 		/*
 		**	If not already in radio contact (presumed with the transport), then
 		**	either try to establish contact if allowed, or just move close and
 		**	wait until radio contact can be established.
 		*/
-		if (!In_Radio_Contact()) {
-			if (b != NULL) {
+		if (!HasAnyLink()) { // RA2: as above
+			TechnoClass * destination_techno = Dynamic_Cast<TechnoClass *>(target); // RA2: as above
+			if (destination_techno != NULL && destination_techno->Fetch_RTTI() == RTTI_UNIT) { // RA2: a unit destination is queued up behind
+				QueueUpToEnter = Unit_As_Unit(target); // RA2: as above
+				ArchiveTarget = NULL; // RA2: as above
+				target = NULL; // RA2: as above
+			} else if (b != NULL && b->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
 
 				/*
 				**	Determine if the transport is already in radio contact. If so, then just move
 				**	toward the transport and try to establish contact at a later time.
 				*/
-				if (b->In_Radio_Contact()) {
+				if (b->HasAnyLink()) { // RA2: as above
 					ArchiveTarget = target;
 
 					/*
@@ -5055,8 +5038,14 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 					**	The refinery must NOT have the navcom assigned by this routine.
 					*/
 					if (b->Class->IsCanUnitRepair) {
-						target = NULL;
-					} // RA2: no NearbyObject (not in RA2's layout)
+						if (HealthRatio < Rule->ConditionGreen) { // RA2: a damaged unit queues up for the repair bay
+							target = NULL; // RA2: as above
+							QueueUpToEnter = b; // RA2: as above
+						} else {
+							Transmit_Message(RADIO_OVER_OUT); // RA2: a healthy one just backs off
+							target = NULL; // RA2: as above
+						}
+					}
 				} else {
 					AbstractClass * oldnav = NavCom;
 					if (Transmit_Message(RADIO_DOCKING, b) != RADIO_ROGER) {
@@ -5071,21 +5060,20 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 					}
 				}
 			} else {
-				TechnoClass * techno = Dynamic_Cast<TechnoClass *>(target);
+				TechnoClass * techno = (target != NULL && (target->AbstractFlags & 1)) ? (TechnoClass *)target : NULL; // RA2: the inline flag-tested techno cast
 				if (techno != NULL) {
 
 					/*
 					**	Determine if the transport is already in radio contact. If so, then just move
 					**	toward the transport and try to establish contact at a later time.
 					*/
-					if (techno->In_Radio_Contact()) {
+					if (techno->HasAnyLink()) { // RA2: as above
 						ArchiveTarget = target;
 					} else {
 						if (Transmit_Message(RADIO_HELLO, techno) == RADIO_ROGER) {
-							if (Transmit_Message(RADIO_DOCKING) == RADIO_ROGER) {
-								return;
+							if (Transmit_Message(RADIO_DOCKING) != RADIO_ROGER) { // RA2: the handshake continues after a successful docking message
+								Transmit_Message(RADIO_OVER_OUT); // RA2: as above
 							}
-							Transmit_Message(RADIO_OVER_OUT);
 						}
 					}
 				}
@@ -5143,43 +5131,35 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 			bool canburrowto = tocell->Can_Burrow_Here();
 			int height = Get_Height_AGL();
 
-			if (isbridge) {
-				if (isunderbridgeto) {
-					int z1 = Map.Zone_Connection_Index(from, 3, 0);
-					if (z1 == Map.Zone_Connection_Index(to, 3, 0) && z1 != -1) {
-						if (!Map.ZoneConnections[z1].IsPassable) {
-							Cell d1 = Map.Get_Zone_Connection_Destination(from, from);
-							Cell d2 = Map.Get_Zone_Connection_Destination(to, to);
-							if (d1.Distance_To(d2) <= 2) {
-								needsswap = true;
-							}
-						} else {
+			if (isbridge && isunderbridgeto) { // RA2: one condition
+				int z1 = Map.Zone_Connection_Index(from, 3, 0); // RA2: as above
+				if (z1 == Map.Zone_Connection_Index(to, 3, 0) && z1 != -1) { // RA2: as above
+					if (!Map.ZoneConnections[z1].IsPassable) { // RA2: as above
+						Cell d1 = Map.Get_Zone_Connection_Destination(from, from); // RA2: as above
+						Cell d2 = Map.Get_Zone_Connection_Destination(to, to); // RA2: as above
+						if ((d1 - d2).Length() <= 2) { // RA2: the cell difference is measured inline
 							needsswap = true;
 						}
+					} else {
+						needsswap = true; // RA2: as above
 					}
 				}
-				if (!needsswap) {
-					useplan = true;
-				}
-			} else if (isunderbridgeto) {
-				useplan = true;
+			}
+			if ((isbridge || isunderbridgeto) && !needsswap) { // RA2: the plan decision is two separate tests
+				useplan = true; // RA2: as above
 			}
 
-			if (((!canburrowfrom && height >= 0) || !canburrowto) && !needsswap || useplan) {
-				target = Plan_Route(*target);
-				surface = true;
+			if (((!canburrowfrom && height >= 0) || !canburrowto) && !needsswap) { // RA2: as above
+				useplan = true; // RA2: as above
 			}
 		}
 
-		/*
-		 * The non-subterranean (and the no-plan subterranean) immediate path clears
-		 * the route queue before surfacing a tunneler that is on its way up.
-		 */
-		if (!surface) {
-			if (immediate) {
-				RouteQueue.Clear();
-				surface = true;
-			}
+		if (useplan) { // RA2: the plan is made here, the immediate branch is separate
+			target = Plan_Route(*target); // RA2: as above
+			surface = true; // RA2: as above
+		} else if (immediate) { // RA2: as above
+			RouteQueue.Clear(); // RA2: as above
+			surface = true; // RA2: as above
 		}
 
 		/*
@@ -5192,53 +5172,99 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 			}
 		}
 
-		/*
-		 * If the locomotor is a tunnel locomotor and the unit is on the ground,
-		 * surface the tunneler by swapping the tunnel locomotor for a drive one.
-		 * (Mirrors BuildingClass weapons-factory exit, building.cpp:6236-6251.)
-		 */
-		if (target != NULL && !Locomotion->Is_Moving()) {
-			IPersistPtr persist(Locomotion);
-			CLSID clsid;
-			persist->GetClassID(&clsid);
-			if (clsid == CLSID_TunnelLocomotion && Get_Height_AGL() == 0) {
-				Coord tc = target->Center_Coord();
-				int gl = Map.Get_Height_GL(tc);
-				if (tc.Z < gl) tc.Z = gl;
+	} else {
+		RouteQueue.Clear(); // RA2: as above
+	}
 
-				bool doswap = needsswap;
-				if (!doswap) {
-					if (!Is_Moving_Onto_Bridge()
-						&& !Map[target->Center_Coord()].IsUnderBridge
-						&& Map[Destination_Coord()].Can_Burrow_Here()
-						&& Map[target->Center_Coord()].Can_Burrow_Here()) {
-						Cell to = target->Center_Coord().As_Cell();
-						if (!Is_Route_Broken(Get_Target_Cell(), to)) {
-							doswap = true;
+	if (Class->Teleporter && !IsImmobilized) { // RA2: a teleporting unit may need a drive locomotor to enter a dock
+		TechnoClass * contact = Radio_Link(0); // RA2: as above
+		IPersistPtr persist(Locomotion); // RA2: as above
+		CLSID tclsid; // RA2: as above
+		persist->GetClassID(&tclsid); // RA2: as above
+		bool drive = true; // RA2: as above
+		if (contact != NULL) { // RA2: as above
+			if (contact->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+				BuildingClass * building = Unit_As_Building(contact); // RA2: as above
+				CellClass * cell = Unit_As_Cell(target); // RA2: as above
+				if (building->Class->IsDockUnload && cell != NULL && cell->Cell_Unit(false) == NULL) { // RA2: as above
+					drive = false; // RA2: as above
+					if (!(tclsid == CLSID_TeleportLocomotion)) { // RA2: as above // RA2: as above
+						IPiggybackPtr piggy(Locomotion); // RA2: as above
+						if (piggy != NULL && piggy->Is_Piggybacking() && piggy->Is_Ok_To_End()) { // RA2: as above
+							piggy->End_Piggyback(&Locomotion); // RA2: as above
+						} else {
+							Locomotion->Stop_Moving(); // RA2: as above
+							Set_Mission(MISSION_NONE); // RA2: as above
+							QueueMission(MISSION_ENTER, false); // RA2: as above
+							IsMoveToSkipped = true; // RA2: as above
+							UnlimboingInfantry = true; // RA2: as above
 						}
-					} else {
-						doswap = true;
-					}
-				}
-
-				if (doswap) {
-					IPiggybackPtr piggy(Locomotion);
-					if (piggy != NULL && piggy->Is_Piggybacking()) {
-						piggy->End_Piggyback(&Locomotion);
-					}
-					ILocomotionPtr walk(CLSID_DriveLocomotion);
-					walk->Link_To_Object(this);
-					piggy = IPiggybackPtr(walk);
-					if (piggy != NULL) {
-						piggy->Begin_Piggyback(Locomotion);
-						Locomotion = walk;
-						Locomotion->Force_New_Slope(Map[Get_Coord()].Ramp);
 					}
 				}
 			}
 		}
-	} else {
-		RouteQueue.Clear();
+		if ((contact == NULL || drive == true) && !(tclsid == CLSID_DriveLocomotion)) { // RA2: as above
+			IPiggybackPtr piggy(Locomotion); // RA2: as above
+			if (piggy != NULL && piggy->Is_Piggybacking() && piggy->Is_Ok_To_End()) { // RA2: as above
+				piggy->End_Piggyback(&Locomotion); // RA2: as above
+			}
+			ILocomotionPtr walk(CLSID_DriveLocomotion); // RA2: as above
+			walk->Link_To_Object(this); // RA2: as above
+			piggy = IPiggybackPtr(walk); // RA2: as above
+			if (piggy != NULL) { // RA2: as above
+				piggy->Begin_Piggyback(Locomotion); // RA2: as above
+				Locomotion = walk; // RA2: as above
+			}
+		}
+	}
+
+	/*
+	 * If the locomotor is a tunnel locomotor and the unit is on the ground,
+	 * surface the tunneler by swapping the tunnel locomotor for a drive one.
+	 * (Mirrors BuildingClass weapons-factory exit, building.cpp:6236-6251.)
+	 */
+	if (target != NULL && !Locomotion->Is_Moving()) { // RA2: as above
+		IPersistPtr persist(Locomotion); // RA2: as above
+		CLSID clsid; // RA2: as above
+		persist->GetClassID(&clsid); // RA2: as above
+		if (clsid == CLSID_TunnelLocomotion && Get_Height_AGL() == 0) { // RA2: as above
+			Coord tc = target->Center_Coord(); // RA2: as above
+			int gl = Map.Get_Height_GL(tc); // RA2: as above
+			if (tc.Z < gl) tc.Z = gl; // RA2: as above
+
+			bool doswap = needsswap; // RA2: as above
+			if (!doswap) { // RA2: as above
+				if (!Is_Moving_Onto_Bridge() // RA2: as above
+					&& !Map[target->Center_Coord()].IsUnderBridge // RA2: as above
+					&& Map[Destination_Coord()].Can_Burrow_Here() // RA2: as above
+					&& Map[target->Center_Coord()].Can_Burrow_Here()) { // RA2: as above
+					Cell to = target->Center_Coord().As_Cell(); // RA2: as above
+					if (!Is_Route_Broken(Get_Target_Cell(), to)) { // RA2: as above
+						doswap = true; // RA2: as above
+					}
+				} else {
+					doswap = true; // RA2: as above
+				}
+			}
+
+			if (doswap) { // RA2: as above
+				IPiggybackPtr piggy(Locomotion); // RA2: as above
+				if (piggy != NULL && piggy->Is_Piggybacking()) { // RA2: as above
+					piggy->End_Piggyback(&Locomotion); // RA2: as above
+				}
+				ILocomotionPtr walk(CLSID_DriveLocomotion); // RA2: as above
+				walk->Link_To_Object(this); // RA2: as above
+				{
+					IPiggybackPtr walk_piggy(walk); // RA2: the drive locomotor's piggyback interface is a named local
+					piggy = (IPiggyback *)walk_piggy; // RA2: as above
+				}
+				if (piggy != NULL) { // RA2: as above
+					piggy->Begin_Piggyback(Locomotion); // RA2: as above
+					Locomotion = walk; // RA2: as above
+					Locomotion->Force_New_Slope(Map[Get_Coord()].Ramp); // RA2: as above
+				}
+			}
+		}
 	}
 
 	/*
@@ -5246,7 +5272,7 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 	**	facility is currently not involved with some other unit (radio or unloading).
 	*/
 	if (b != NULL && b->Class->IsCanUnitRepair) {
-		if (b->In_Radio_Contact() && b->Contact_With_Whom() != this) {
+		if (b->HasAnyLink() && b->Radio_Link(0) != this) { // RA2: as above
 			ArchiveTarget = target;
 		} else {
 
@@ -5275,9 +5301,9 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 	 * A weapons factory that this unit is exiting wants the unit driven to its
 	 * exit cell before anything else; queue the real destination behind it.
 	 */
-	BuildingClass * wf = (BuildingClass *)Contact_With_Whom();
-	if (wf != NULL && wf->Fetch_RTTI() == RTTI_BUILDING && wf->Class->IsWeaponsFactory) {
-		Cell exitcell = wf->Get_Coord().As_Cell() + Cell(3, 1);
+	BuildingClass * wf = (BuildingClass *)Radio_Link(0); // RA2: as above
+	if (wf != NULL && wf->Fetch_RTTI() == RTTI_BUILDING && wf->Class->IsWeaponsFactory && CurrentMission != MISSION_ENTER) { // RA2: not while entering
+		Cell exitcell = wf->Get_Coord().As_Cell() + Cell(5, 1); // RA2: RA2's exit cell is (5, 1)
 		if (target != &Map[exitcell]) {
 			NavQueue.Clear();
 			RouteQueue.Clear();
@@ -5294,14 +5320,14 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 	 */
 	if (b != NULL && Class->Dock.Count() > 0 && b->Class == (BuildingTypeClass *)Class->Dock[0] &&
 		Fetch_RTTI() == RTTI_UNIT && (Class->IsToHarvest || Class->IsToVeinHarvest) &&
-		Mission != MISSION_UNLOAD && b->House->Is_Ally(House) && House->Is_Ally(b->House)) {
+		Get_Mission() != MISSION_UNLOAD) { // RA2: no ally test
 
-		if (Contact_With_Whom() != b && !b->In_Radio_Contact() && Transmit_Message(RADIO_HELLO, b) == RADIO_ROGER &&
-			Mission != MISSION_ENTER && Mission != MISSION_HARVEST) {
-			Assign_Mission(MISSION_ENTER);
+		if (Radio_Link(0) != b && !b->HasAnyLink() && Transmit_Message(RADIO_HELLO, b) == RADIO_ROGER && // RA2: as above
+			Get_Mission() != MISSION_ENTER && Get_Mission() != MISSION_HARVEST) { // RA2: as above
+			QueueMission(MISSION_ENTER, false); // RA2: QueueMission replaces Assign_Mission
 			target = NULL;
 		} else {
-			if (target != NULL && target->Fetch_RTTI() == RTTI_BUILDING && Contact_With_Whom() != target) {
+			if (target != NULL && target->Fetch_RTTI() == RTTI_BUILDING && Radio_Link(0) != target) { // RA2: as above
 				Cell nearby = Map.Nearby_Location(b->Get_Coord().As_Cell(), SPEED_WHEEL, Map.Get_Cell_Zone(b->Get_Coord().As_Cell(), Class->MZone, false), Class->MZone, false, Point2D(1, 1), false, true, false, false);
 				if (nearby != CELL_NONE) {
 					target = &Map[nearby];
@@ -5316,7 +5342,7 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 	 * If the locomotor is unpowered and we are not in an ion storm, power it
 	 * back on when an adjacent friendly repair facility occupies our cell.
 	 */
-	if (!Locomotion->Is_Powered() && !IonStormClass::Is_Ion_Storm_Active()) {
+	if (!Locomotion->Is_Powered() && !House->Ion_Sensitives_Should_Be_Offline()) { // RA2: the house's ion test
 		CellClass * cellptr = Get_Cell_Ptr();
 		if (!cellptr->IsUnderBridge) {
 			ObjectClass * occupier = cellptr->Cell_Occupier();
@@ -5332,6 +5358,7 @@ void UnitClass::Assign_Destination(AbstractClass * target, bool immediate)
 
 	BASECLASS::Assign_Destination(target, immediate);
 }
+
 
 
 /***********************************************************************************************

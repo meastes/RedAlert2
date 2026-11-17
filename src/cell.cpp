@@ -3616,7 +3616,7 @@ crate_money:
 					AnimTypeClass const * anim = Combat_Anim(damage, Rule->C4Warhead, LAND_CLEAR, frag_coord);
 					new AnimClass(anim, frag_coord, 0, 1, // RA2: as above
 						ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ZGRAD), Get_Explosion_Z(frag_coord)); // RA2: as above
-					Combat_Lighting(frag_coord, damage, Rule->C4Warhead, false);
+					Combat_Lighting(frag_coord, damage, Rule->C4Warhead, 0, 0); // RA2: the five argument form
 				}
 				break;
 

@@ -578,21 +578,21 @@ bool WalkLocomotionClass::Mark_Head_To(Coord const & coord)
 		LinkedTo->Clear_Occupy_Bit(LinkedTo->PositionCoord);
 	}
 
-	Coord crd = coord;
+	Coord crd = coord; // RA2: copy of the target coordinate
 	bool any_spot = false;
 
 	if (coord != COORD_NONE) {
-		if (LinkedTo->Mission == MISSION_CAPTURE || LinkedTo->Mission == MISSION_ENTER || LinkedTo->Mission == MISSION_GUARD_AREA || LinkedTo->Mission == MISSION_PATROL) {
-			UnitClass * unit = dynamic_cast<UnitClass *>(LinkedTo->NavCom);
-			if (unit != NULL && unit->PositionCell == coord.As_Cell()) {
+		if (LinkedTo->Get_Mission() == MISSION_CAPTURE || LinkedTo->Get_Mission() == MISSION_EATEN || LinkedTo->Get_Mission() == MISSION_ENTER || LinkedTo->Get_Mission() == MISSION_GUARD_AREA || LinkedTo->Get_Mission() == MISSION_PATROL) { // RA2: also MISSION_EATEN, and the mission is read through the virtual each time
+			ObjectClass * unit = (ObjectClass *)LinkedTo->NavCom; // RA2: virtual Fetch_RTTI instead of dynamic_cast
+			if (unit != NULL && unit->Fetch_RTTI() == RTTI_UNIT && unit->Get_Cell() == coord.As_Cell()) { // RA2: as above
 				any_spot = true;
 			}
-			AircraftClass * aircraft = dynamic_cast<AircraftClass *>(LinkedTo->NavCom);
-			if (aircraft != NULL && aircraft->PositionCell == coord.As_Cell()) {
+			ObjectClass * aircraft = (ObjectClass *)LinkedTo->NavCom; // RA2: as above
+			if (aircraft != NULL && aircraft->Fetch_RTTI() == RTTI_AIRCRAFT && aircraft->Get_Cell() == coord.As_Cell()) { // RA2: as above
 				any_spot = true;
 			}
-			BuildingClass * building = dynamic_cast<BuildingClass *>(LinkedTo->NavCom);
-			if (building != NULL && Map[coord].Cell_Building() == building) {
+			ObjectClass * building = (ObjectClass *)LinkedTo->NavCom; // RA2: as above
+			if (building != NULL && building->Fetch_RTTI() == RTTI_BUILDING && Map[coord].Cell_Building() == building) { // RA2: as above
 				any_spot = true;
 			}
 		}
@@ -618,6 +618,7 @@ bool WalkLocomotionClass::Mark_Head_To(Coord const & coord)
 	LinkedTo->Set_Occupy_Bit(LinkedTo->PositionCoord);
 	return(false);
 }
+
 
 
 /// <summary>

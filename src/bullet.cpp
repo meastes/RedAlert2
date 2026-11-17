@@ -1338,7 +1338,7 @@ void BulletClass::Detonate(Coord const & coord)
 	const AnimTypeClass * anim = Combat_Anim(Strength, Warhead, land, PositionCoord);
 
 	if (IsBright) {
-		Combat_Lighting(blast_coord, Strength, Warhead, true);
+		Combat_Lighting(blast_coord, Strength, Warhead, true, 0); // RA2: the five argument form
 	}
 
 	if (anim != NULL) {

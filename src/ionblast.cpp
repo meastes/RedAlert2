@@ -124,7 +124,7 @@ void IonBlastClass::AI(void)
 		}
 
 		Explosion_Damage(Position, Rule->IonCannonDamage, NULL, Rule->IonCannonWarhead, true);
-		Combat_Lighting(Position, Rule->IonCannonDamage, Rule->IonCannonWarhead, false);
+		Combat_Lighting(Position, Rule->IonCannonDamage, Rule->IonCannonWarhead, 0, 0); // RA2: the five argument form
 	}
 
 	Cell center(Position);
