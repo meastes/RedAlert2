@@ -694,7 +694,8 @@ void SessionOptionsClass::Read(CCINIClass & ini, char const * section, int defau
 {
 	char entry[16]; // RA2: RA2's form of SessionOptionsClass::Read
 
-	MPGameMode = ini.Get_Int(section, "GameMode", First_Game_Mode()->MPModeIndex); // RA2: 0x0066F1F0
+	int mode = First_Game_Mode()->MPModeIndex; // RA2: the executable fetches the default game mode into a local before the first Get_Int (0x0066F1F9)
+	MPGameMode = ini.Get_Int(section, "GameMode", mode); // RA2: as above
 	ScenIndex = ini.Get_Int(section, "ScenIndex", 0); // RA2: as above
 	GameSpeed = ini.Get_Int(section, "GameSpeed", Rule->GameSpeed); // RA2: as above
 	Credits = ini.Get_Int(section, "Credits", Rule->MPMoney); // RA2: as above
@@ -715,7 +716,8 @@ void SessionOptionsClass::Read(CCINIClass & ini, char const * section, int defau
 		SlotData[i][1] = second; // RA2: as above
 		SlotData[i][2] = third; // RA2: as above
 	}
-}	// end of Am_I_Master
+}
+	// end of Am_I_Master
 void SessionClass::Read_MultiPlayer_Settings(void)
 {
 	char * tokenptr; // RA2: RA2's form of SessionClass::Read_MultiPlayer_Settings
@@ -1206,6 +1208,96 @@ static inline bool Next_File(HANDLE handle, WIN32_FIND_DATA & block)
 
 
 
+void __fastcall Read_Map_Header(char const * filename, wchar_t * description, char * digest, char * game_modes, bool * official, int * min_players, int * max_players) // RA2: 0x006707D0, reads the [Basic] and [Digest] sections of a map file
+{
+	CCFileClass file(filename); // RA2: as above
+	if (!file.Is_Available() || !file.Open(FileClass::READ)) { // RA2: as above
+		return; // RA2: as above
+	}
+
+	int percent = 0; // RA2: as above
+	int size; // RA2: as above
+	char * head = NULL; // RA2: as above
+	char * end; // RA2: as above
+	do { // RA2: as above
+		percent += 5; // RA2: reads 5% steps of the file until the [Basic] section is complete
+		size = file.Size() * percent / 100; // RA2: as above
+		if (head) { // RA2: as above
+			delete head; // RA2: as above
+		}
+		head = new char[size + 1]; // RA2: as above
+		if (!head) { // RA2: as above
+			return; // RA2: as above
+		}
+		file.Seek(0, SEEK_SET); // RA2: as above
+		file.Read(head, size); // RA2: as above
+		head[size] = '\0'; // RA2: as above
+		char * start = strstr(head, "[Basic]"); // RA2: as above
+		if (start) { // RA2: as above
+			end = strstr(start + 5, "\n["); // RA2: as above
+			if (end > start) { // RA2: as above
+				break; // RA2: as above
+			}
+		}
+		if (percent >= 100) { // RA2: as above
+			delete head; // RA2: as above
+			return; // RA2: as above
+		}
+	} while (true); // RA2: as above
+	end[1] = '\0'; // RA2: as above
+	DebugString("Read first %d%% of file looking for [Basic] section\n", percent); // RA2: as above
+
+	percent = 0; // RA2: as above
+	char * tail = NULL; // RA2: as above
+	int length; // RA2: as above
+	do { // RA2: as above
+		percent++; // RA2: reads 1% steps from the end of the file until the [Digest] section is complete
+		length = file.Size() * percent / 100; // RA2: as above
+		if (tail) { // RA2: as above
+			delete tail; // RA2: as above
+		}
+		tail = new char[length + 1]; // RA2: as above
+		if (!tail) { // RA2: as above
+			return; // RA2: as above
+		}
+		file.Seek(-length, SEEK_END); // RA2: as above
+		file.Read(tail, length); // RA2: as above
+		tail[length] = '\0'; // RA2: as above
+		if (strstr(tail, "[Digest]")) { // RA2: as above
+			break; // RA2: as above
+		}
+		if (percent >= 100) { // RA2: as above
+			delete head; // RA2: as above
+			delete tail; // RA2: as above
+			return; // RA2: as above
+		}
+	} while (true); // RA2: as above
+	DebugString("Read last  %d%% of file looking for [Digest] section\n", percent); // RA2: as above
+
+	CCINIClass ini; // RA2: as above
+	BufferStraw straw(head, end - head); // RA2: as above
+	ini.Load(straw, false, false); // RA2: as above
+	CCINIClass digest_ini; // RA2: as above
+	BufferStraw digest_straw(tail, strlen(tail) + 1); // RA2: as above
+	digest_ini.Load(digest_straw, false, false); // RA2: as above
+
+	int min = ini.Get_Int("Basic", "MinPlayers", *min_players); // RA2: as above
+	*min_players = min; // RA2: as above
+	int max = ini.Get_Int("Basic", "MaxPlayers", *max_players); // RA2: as above
+	*max_players = max; // RA2: as above
+	ini.Get_String("Basic", "GameMode", "", game_modes, 0x100); // RA2: as above
+	char name[0x40]; // RA2: as above
+	ini.Get_String("Basic", "Name", "No Name", name, 0x40); // RA2: as above
+	Char_To_Wide(description, name, -1); // RA2: as above
+	digest_ini.Get_String("Digest", "1", "No Digest", digest, 0x20); // RA2: as above
+	*official = ini.Get_Bool("Basic", "Official", false); // RA2: as above
+	DebugString("MPR %s (%d/%d): official: %d, desc: %s\n", filename, *min_players, *max_players, *official, name); // RA2: as above
+	DebugString("\t\tGameModes: %s\n", game_modes); // RA2: as above
+	delete head; // RA2: as above
+	delete tail; // RA2: as above
+}
+
+
 /***************************************************************************
  * SessionClass::Read_Scenario_Descriptions -- reads scen. descriptions    *
  *                                                                         *
@@ -1234,7 +1326,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	/*
 	**	Fetch the main multiplayer scenario packet data.
 	*/
-	CCFileClass file("MISSIONSMD.PKT"); // RA2: as above
+	CCFileClass file("MISSIONS.PKT"); // RA2: as above
 	if (file.Is_Available()) {
 		ini.Load(file, false); // RA2: as above
 		Add_Missions(Scenarios, ini, name_buffer); // RA2: as above
@@ -1253,7 +1345,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	/*
 	**	Fetch any scenario packet lists and apply them first.
 	*/
-			if (stricmp(name, "MISSIONSMD.PKT")) { // RA2: as above
+			if (stricmp(name, "MISSIONS.PKT")) { // RA2: as above
 				file.Set_Name(name);
 				ini.Load(file, false); // RA2: as above
 				Add_Missions(Scenarios, ini, name_buffer); // RA2: as above
@@ -1272,7 +1364,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	ini.Clear();
 	file.Close();
 
-	handle = FindFirstFile("*.YRO", &block); // RA2: as above
+	handle = FindFirstFile("*.MMX", &block); // RA2: as above
 	int previous_disk = CD::Get_Required_Disk(); // RA2: as above
 	CD::Set_Required_Disk((DiskID)-2); // RA2: as above
 	while (handle != INVALID_HANDLE_VALUE) {
@@ -1286,7 +1378,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	**	Scan the current directory for any loose .MPR files and build the appropriate entries
 	**	into the scenario list list
 	*/
-			if (stricmp(name, "MISSIONS.YRO")) { // RA2: as above
+			if (stricmp(name, "MISSIONS.MMX")) { // RA2: as above
 				MixFileClass * mix = new MixFileClass(name, &FastKey); // RA2: as above
 				if (mix != NULL) { // RA2: as above
 					ScenarioMixFiles.Add(mix); // RA2: as above
@@ -1328,7 +1420,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 						}
 						ini.Clear();
 					} else {
-						DebugString("Can't see .pkt inside .yro!\n"); // RA2: as above
+						DebugString("Can't see .pkt inside .mmx!\n"); // RA2: as above
 					}
 				}
 			}
@@ -1350,11 +1442,11 @@ void SessionClass::Read_Scenario_Descriptions(void)
 	char digest_buffer[32];
 	wchar_t description[64]; // RA2: as above
 	char game_modes[256]; // RA2: as above
-	bool official = false; // RA2: as above
+	bool official; // RA2: as above
 	int min_players; // RA2: as above
 	int max_players; // RA2: as above
 
-	handle = FindFirstFile("*.YRM", &block); // RA2: as above
+	handle = FindFirstFile("*.MPR", &block); // RA2: as above
 	official = false; // RA2: as above
 	while (handle != INVALID_HANDLE_VALUE) {
 		if ((block.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_TEMPORARY)) == 0) { // RA2: as above
@@ -1384,6 +1476,7 @@ void SessionClass::Read_Scenario_Descriptions(void)
 		FindClose(handle);
 	}
 }
+
 
 
 /***************************************************************************
