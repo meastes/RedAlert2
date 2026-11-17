@@ -2817,35 +2817,34 @@ bool Handle_Connection_Error(void) // RA2: 0x00742EB0, not in TibSun: shows the 
 	return(handled); // RA2: as above
 }
 
-void Close_Wait_Window(unsigned int event) // RA2: 0x0074D780, not in TibSun: takes the events out of what the wait dialog (0xC4) waits for, closes it when none is left, and gives the focus back to the chat line of the top dialog
-{
-	HWND win = WS_Find_Dialog(196); // RA2: as above
-	if (win) {
-		g_ActiveWaitFlags &= ~event;
-		if (g_ActiveWaitFlags == 0) {
-			WS_Destroy_Dialog(win, 0);
-		}
-	}
-	HWND top = WS_Top_Window(); // RA2: as above
-	HWND control = GetDlgItem(top, 1344); // RA2: as above
-	if (control) { // RA2: as above
-		SetFocus(control); // RA2: as above
-	}
-}
-
-void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wait event
-{
-	for (int i = 0; i < EV_COUNT; i++) {
-		ResetEvent(g_WaitEventHandles[i]);
-	}
-}
-
 int __fastcall Request_And_Wait_Server_List(unsigned int flags); // RA2: 0x00751C30, asks for the list of chat servers and waits for it (0 done, 1 failed, 2 quit), not yet defined
 LRESULT CALLBACK Wonline_Account_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x007540A0, the dialog proc of the login dialog (0x10F, 0x11D)
 LRESULT CALLBACK Wonline_Autologin_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00755070, the dialog proc of the dialog (0x112) after a login
 extern bool g_RememberLogin; // RA2: 0x00B2AC74, the login is to be kept in the chat service's list of logins (set by the login dialog)
 int Save_Nickname(char const * name, char const * password, bool mangle, int locale); // RA2: 0x00745320, defined below
 void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0, defined in init.cpp
+
+static inline void Set_Login_Focus(HWND window) // RA2: the login dialog puts the focus on the password box (0x72C) when a nickname is known, else on the name box (0x628); the executable has both SetFocus calls with a merged tail
+{
+	if (g_NickName.length() > 0 && g_LoginPassword.length() == 0) { // RA2: as above
+		SetFocus(GetDlgItem(window, 0x72C)); // RA2: as above
+	} else {
+		SetFocus(GetDlgItem(window, 0x628)); // RA2: as above
+	}
+}
+
+static inline int Fetch_Server_List(void) // RA2: shows "fetching the server list" and requests the list for the product (0x2300 in a tournament session, else 0x2100)
+{
+	{
+		WideWstring fetching(StringTable::LoadString("TXT_FETCHING_SERVLIST", NULL, "D:\\Ra2\\wonline.cpp", 22220)); // RA2: as above
+		Show_Wait_Window(16, fetching, false); // RA2: as above
+	}
+	int sku = 0x2300; // RA2: as above
+	if (Online_Session_State != 2) { // RA2: as above
+		sku = 0x2100; // RA2: as above
+	}
+	return(Request_And_Wait_Server_List(sku)); // RA2: as above
+}
 
 int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to Westwood Online: starts the chat services, fetches the server list, tries the stored login of the auto login persona, else opens the login dialog (the executable's debug text says "Creating login dlg") and connects to the server the persona's profile names; 1 when connected, 0 when not, negative when the server list could not be fetched; NOT matching (unplaced, 1904 bytes against the executable's 1857): the executable calls ArrayList::getPointer 0x00765E60 out of line in the three early expansions of Find_Server_Suffix / Connect_To_Selected_Server (the last two expansions are inline) which our build expands everywhere (about 16 bytes each; wrapper layers around the early calls make the expansions themselves vanish, so the inline budget is not what is wrong); it keeps the zero in ebp and the rc_ptr vtable in ebx where we use ebx; and it expands the derived control destructor (see SimpleWonlineDialogControl)
 {
@@ -2855,22 +2854,15 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 	if (result != 1) { // RA2: as above
 		return(result); // RA2: as above
 	}
-	memset(&g_CurrentChannel, 0, sizeof(g_CurrentChannel)); // RA2: the lists of the last session go
+	{ // RA2: the lists of the last session are cleared before the login
+	memset(&g_CurrentChannel, 0, sizeof(g_CurrentChannel)); // RA2: as above
 	memset(&g_PendingChannel, 0, sizeof(g_PendingChannel)); // RA2: as above
 	g_UserChannels.clear(); // RA2: as above
 	g_GameChannelList.clear(); // RA2: as above
 	g_UserList.clear(); // RA2: as above
 	g_ChannelCount = 0; // RA2: as above
 	result = 0; // RA2: as above
-	{
-		WideWstring fetching(StringTable::LoadString("TXT_FETCHING_SERVLIST", NULL, "D:\\Ra2\\wonline.cpp", 22220)); // RA2: as above
-		Show_Wait_Window(16, fetching, false); // RA2: as above
-	}
-	int sku = 0x2300; // RA2: the SKU of the tournament, or of the game
-	if (Online_Session_State != 2) { // RA2: as above
-		sku = 0x2100; // RA2: as above
-	}
-	int error = Request_And_Wait_Server_List(sku); // RA2: as above
+	int error = Fetch_Server_List(); // RA2: as above
 	switch (error) { // RA2: as above
 	case 0: // RA2: as above
 		break; // RA2: as above
@@ -2891,7 +2883,7 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 			if (persona.length() > 0) { // RA2: as above
 				if (Recall_Stored_Login(persona)) { // RA2: expanded here
 					int index = -1; // RA2: as above
-					if (Online_Session_State == 2 || Online_Session_State == 1) { // RA2: an Internet game
+					if (Is_Tournament_Session_Inline()) { // RA2: an Internet game
 						rc_ptr<PlayerProfile> profile = PlayerProfile::Load(persona); // RA2: as above
 						if (profile.Get()) { // RA2: the server of the persona's profile (Find_Server_Suffix tests the empty name itself)
 							index = Find_Server_Suffix(profile->Name); // RA2: expanded here
@@ -2935,7 +2927,7 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 		Darken_Surface(NULL, true); // RA2: as above
 		HWND window = OwnerDraw::Begin_Dialog(dialog_id, (DLGPROC)Wonline_Account_Dialog_Proc, (LPARAM)&control); // RA2: as above
 		OwnerDraw::Display_Dialog(window); // RA2: as above
-		SetFocus(GetDlgItem(window, (g_NickName.length() > 0 && g_LoginPassword.length() == 0) ? 0x72C : 0x628)); // RA2: the password edit when the name is known
+		Set_Login_Focus(window); // RA2: as above
 		while (!control.Is_Done() && !WOL_Wait_Callback() && !OwnerDraw::Dialog_Message_Handler()) { // RA2: as above
 			Title_Screen_Restore(false); // RA2: as above
 		}
@@ -2953,10 +2945,7 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 			} else {
 				profile = g_PlayerProfile.Get(); // RA2: as above
 			}
-			int found = -1; // RA2: as above
-			if (profile->Name.length() != 0) { // RA2: as above
-				found = Find_Server_Suffix(profile->Name); // RA2: expanded here
-			}
+			int found = Find_Server_Suffix(profile->Name); // RA2: expanded here
 			if (found != -1) { // RA2: as above
 				g_CurrentServerIndex = found; // RA2: as above
 			}
@@ -2968,14 +2957,16 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 			}
 			if (Connect_To_Selected_Server()) { // RA2: expanded here
 				if (g_RememberLogin && saved.Is_Bit1_Clear()) { // RA2: the login is kept for the next time
-					Save_Nickname(g_NickName.get(), g_LoginPassword.get(), g_PlaintextPassword, profile->Locale); // RA2: as above
+					int locale = profile->Locale; // RA2: read before the nickname is saved (0x00742FD0)
+					Save_Nickname(g_NickName.get(), g_LoginPassword.get(), g_PlaintextPassword, locale); // RA2: as above
 					Session.Write_MultiPlayer_Settings(); // RA2: as above
 				}
-				if (saved.Is_Bit0_Clear() && WOL_Get_Auto_Login()) { // RA2: as above
-					Darken_Surface(NULL, true); // RA2: as above
-					SimpleWonlineDialogControl next; // RA2: as above
-					OwnerDraw::Controlled_Dialog(0x112, (DLGPROC)Wonline_Autologin_Dialog_Proc, &next); // RA2: as above
+				if (!saved.Is_Bit0_Clear() || !WOL_Get_Auto_Login()) { // RA2: no auto-login question unless the profile allows it and auto-login is on
+					return(1); // RA2: as above
 				}
+				Darken_Surface(NULL, true); // RA2: as above
+				SimpleWonlineDialogControl next; // RA2: as above
+				OwnerDraw::Controlled_Dialog(0x112, (DLGPROC)Wonline_Autologin_Dialog_Proc, &next); // RA2: as above
 				return(1); // RA2: as above
 			}
 		}
@@ -2985,7 +2976,15 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 		Handle_Connection_Error(); // RA2: as above
 	}
 	g_IgnoreNetStatus = true; // RA2: as above
+	} // RA2: as above
 	return(result); // RA2: as above
+}
+
+void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wait event
+{
+	for (int i = 0; i < EV_COUNT; i++) { // RA2: as above
+		ResetEvent(g_WaitEventHandles[i]); // RA2: as above
+	}
 }
 
 // RA2: declarations for the functions below (placed after Draw_Player_List: declarations above it change its code)
@@ -3535,6 +3534,22 @@ void Set_Wait_Window_Text(LPARAM text) // RA2: 0x0074D750, not in TibSun: change
 	HWND dialog = WS_Find_Dialog(0xC4); // RA2: as above
 	if (dialog != NULL) { // RA2: as above
 		SendDlgItemMessage(dialog, 0x5B2, OD_SETLABEL, 0, text); // RA2: as above
+	}
+}
+
+void Close_Wait_Window(unsigned int event) // RA2: 0x0074D780, not in TibSun: takes the events out of what the wait dialog (0xC4) waits for, closes it when none is left, and gives the focus back to the chat line of the top dialog
+{
+	HWND win = WS_Find_Dialog(196); // RA2: as above
+	if (win) { // RA2: as above
+		g_ActiveWaitFlags &= ~event; // RA2: as above
+		if (g_ActiveWaitFlags == 0) { // RA2: as above
+			WS_Destroy_Dialog(win, 0); // RA2: as above
+		}
+	}
+	HWND top = WS_Top_Window(); // RA2: as above
+	HWND control = GetDlgItem(top, 1344); // RA2: as above
+	if (control) { // RA2: as above
+		SetFocus(control); // RA2: as above
 	}
 }
 
@@ -4163,3 +4178,5 @@ template<> char Dictionary<Wstring, int>::remove(Wstring const & key, int & valu
 	return(retval); // RA2: as above
 }
 #pragma auto_inline(on) // RA2: as above
+
+SimpleWonlineDialogControl::~SimpleWonlineDialogControl(void) {} // RA2: 0x0073C020; defined in this file, so Login_Wonline (0x00742FD0) expands it as the executable does
