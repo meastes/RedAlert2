@@ -35,6 +35,7 @@
 #include "always.h"
 
 #include "fly.h"
+#include "tracker.h" // RA2: AircraftTracker (Take_Off)
 
 #include "_map.h"
 #include "_rand.h"
@@ -183,19 +184,7 @@ boolean STDMETHODCALLTYPE FlyLocomotionClass::Process(void)
 		FlightLevel = LinkedTo->TClass->Flight_Level();
 	}
 
-	if (LinkedTo->TClass->IsHunterSeeker && !LinkedTo->TarCom) {
-		Acquire_Hunter_Seeker_Target();
-		if (LinkedTo->TarCom) {
-			IsLanding = false;
-			FlightLevel = LinkedTo->TClass->Flight_Level();
-			if (LinkedTo->In_Radio_Contact() != NULL) {
-				LinkedTo->Transmit_Message(RADIO_OVER_OUT);
-			}
-			LinkedTo->Assign_Mission(MISSION_ATTACK);
-			LinkedTo->Commence();
-		}
-	}
-
+	// RA2: no hunter-seeker retargeting here (Acquire_Hunter_Seeker_Target is not called from Process)
 	/*
 	**	A Mission change can always occur if the aircraft is landed or flying.
 	*/
@@ -245,6 +234,8 @@ boolean STDMETHODCALLTYPE FlyLocomotionClass::Process(void)
 }
 
 
+
+
 /// <summary>
 /// Assigns a new destination for the aircraft to fly to.
 /// This routine is how the owning object steers the aircraft. A real destination starts
@@ -256,7 +247,7 @@ void STDMETHODCALLTYPE FlyLocomotionClass::Move_To(CoordStruct to)
 {
 	if (((Coord)to).As_Cell() != DestinationCoord.As_Cell() || !IsLanding) {
 
-		if (LinkedTo->StunDuration <= 0 && Is_Powered()) {
+		if (!LinkedTo->IsUnderEMP() && !LinkedTo->IsParalyzed() && !LinkedTo->IsBeingWarpedOut() && !LinkedTo->IsWarpingIn() && Is_Powered()) {
 
 			if ((Coord)to == COORD_NONE) {
 				int landing_altitude = 0;
@@ -292,10 +283,14 @@ void STDMETHODCALLTYPE FlyLocomotionClass::Move_To(CoordStruct to)
 				}
 
 				IsElevating = Is_Locked_To_Straight_Flight();
+				if (LinkedTo->Fetch_RTTI() == RTTI_AIRCRAFT && !((AircraftClass *)LinkedTo)->Class->IsLandable) { // RA2: an aircraft type that cannot land always keeps flying
+					IsElevating = true; // RA2: as above
+				}
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -309,30 +304,50 @@ void STDMETHODCALLTYPE FlyLocomotionClass::Stop_Moving(void)
 	if (Is_Moving()) {
 
 		Cell cell = LinkedTo->PositionCoord.As_Cell();
-		if (!LinkedTo->IsALoaner && !Map.In_Local_Radar(cell) && !LinkedTo->Should_Delete_Off_Map()) {
+		if (!LinkedTo->IsALoaner && !Map.In_Local_Radar(cell, true) && !LinkedTo->Should_Delete_Off_Map()) {
 			cell = Map.Closest_Edge_Cell(cell, true);
 		}
 
-		Cell nearby_cell = Map.Nearby_Location(cell, SPEED_TRACK, -1, MZONE_FLYER);
-		if (nearby_cell != CELL_NONE) {
-
-			Coord dest = nearby_cell.As_Coord();
-			dest.Z = Map.Get_Height_GL(dest);
-			if (Map[nearby_cell].IsUnderBridge) {
-				dest.Z += BRIDGE_LEPTON_HEIGHT;
-			}
-
-			if (!IsLanding) {
-				LinkedTo->Assign_Destination(&Map[dest]);
+		FootClass * linked = LinkedTo; // RA2: an aircraft is sent to a landing zone instead of a nearby flyer cell
+		if (linked && linked->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+			AircraftClass * aircraft = (AircraftClass *)linked; // RA2: as above
+			if (cell == CELL_NONE) { // RA2: as above
+				LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true); // RA2: as above
+			} else {
+				AbstractClass * destination; // RA2: as above
+				if (LinkedTo->Get_Mission() == MISSION_ATTACK) { // RA2: as above
+					destination = aircraft->Good_LZ(); // RA2: as above
+				} else {
+					destination = aircraft->New_LZ(&Map[cell]); // RA2: as above
+				}
+				LinkedTo->Assign_Destination(destination, true); // RA2: as above
+				return; // RA2: as above
 			}
 		} else {
-			if (LinkedTo->Strength > 0) {
-				LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true);
-				DestinationCoord = COORD_NONE;
+			Cell nearby_cell = Map.Nearby_Location(cell, SPEED_TRACK, -1, MZONE_FLYER, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false); // RA2: all arguments given
+			if (nearby_cell != CELL_NONE) {
+
+				Coord dest = nearby_cell.As_Coord();
+				dest.Z = Map.Get_Height_GL(dest);
+				if (Map[nearby_cell].IsUnderBridge) {
+					dest.Z += BRIDGE_LEPTON_HEIGHT;
+				}
+
+				LinkedTo->Assign_Destination(&Map[dest], true); // RA2: assigned at once, then again unless landing, with the second argument true
+				if (!IsLanding) {
+					LinkedTo->Assign_Destination(&Map[dest], true); // RA2: as above
+				}
+				return; // RA2: as above
 			}
+			if (LinkedTo->Strength <= 0) { // RA2: a dead aircraft is left alone
+				return; // RA2: as above
+			}
+			LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true); // RA2: as above
 		}
+		DestinationCoord = COORD_NONE; // RA2: reached by both damage paths
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -354,6 +369,15 @@ void STDMETHODCALLTYPE FlyLocomotionClass::Stop_Moving(void)
  *=============================================================================================*/
 bool FlyLocomotionClass::Landing_Takeoff_AI(void)
 {
+	FootClass * initial = LinkedTo; // RA2: an aircraft whose type cannot land never leaves level flight
+	if (initial && initial->Fetch_RTTI() == RTTI_AIRCRAFT && !((AircraftClass *)initial)->Class->IsLandable) { // RA2: as above
+		IsElevating = true; // RA2: as above
+		IsLanding = false; // RA2: as above
+		IsTakingOff = false; // RA2: as above
+		FlightLevel = LinkedTo->TClass->Flight_Level(); // RA2: as above
+		return(false); // RA2: as above
+	}
+
 	if (LinkedTo->Strength > 0) {
 
 		/*
@@ -406,9 +430,11 @@ bool FlyLocomotionClass::Landing_Takeoff_AI(void)
 					**	This aspect is controlled by the Place_Down and Pick_Up functions.
 					*/
 					if (LinkedTo->In_Which_Layer() == LAYER_GROUND) {
-						LinkedTo->Assign_Destination(NULL);		// Clear the navcom.
+						LinkedTo->Assign_Destination(NULL, true);		// Clear the navcom. // RA2: the second argument is given
 						LinkedTo->Transmit_Message(RADIO_TETHER);
-						LinkedTo->Look();
+						LinkedTo->RemoveSight(false, false, false, NULL); // RA2: sight is taken back and revealed again, instead of Look()
+						LinkedTo->UpdateSight(false, false, false, NULL); // RA2: as above
+						Map.RevealArea3(LinkedTo->PositionCoord, LinkedTo->LastSightRange - 3, LinkedTo->LastSightRange + 3, 0); // RA2: as above
 					} else  {
 						LinkedTo->Transmit_Message(RADIO_UNTETHER);
 
@@ -417,7 +443,7 @@ bool FlyLocomotionClass::Landing_Takeoff_AI(void)
 						**	aircraft is in radio contact with, then assume that radio
 						**	contact is now superfluous. Break radio contact.
 						*/
-						if (LinkedTo->In_Radio_Contact() && LinkedTo->NavCom && LinkedTo->NavCom != LinkedTo->Contact_With_Whom()) {
+						if (LinkedTo->HasAnyLink() && LinkedTo->NavCom && LinkedTo->NavCom != LinkedTo->Radio_Link(0)) { // RA2: a radio link of any kind, tested against the first link
 							LinkedTo->Transmit_Message(RADIO_OVER_OUT);
 						}
 					}
@@ -430,6 +456,8 @@ bool FlyLocomotionClass::Landing_Takeoff_AI(void)
 	}
 	return(false);
 }
+
+
 
 
 /***********************************************************************************************
@@ -504,9 +532,12 @@ bool FlyLocomotionClass::Edge_Of_World_AI(void)
  *=============================================================================================*/
 void FlyLocomotionClass::Movement_AI(void)
 {
-	#define FORCED_DESTRUCTION_DAMAGE 1000
+	Cell here = LinkedTo->Get_Cell(); // RA2: the aircraft tracker is updated whenever the aircraft enters another cell while moving
+	if (here != LinkedTo->LastFlightMapCoords && Is_Moving_Now()) { // RA2: as above
+		AircraftTracker.Update(LinkedTo, LinkedTo->LastFlightMapCoords, here); // RA2: as above
+	}
 
-	if (LinkedTo->Mission == MISSION_ENTER && IsElevating) {
+	if (LinkedTo->Get_Mission() == MISSION_ENTER && IsElevating) { // RA2: through the accessor
 		IsElevating = false;
 	}
 
@@ -519,66 +550,65 @@ void FlyLocomotionClass::Movement_AI(void)
 			Riser += 3;
 		}
 
-		Coord newcoord = LinkedTo->Get_Coord();
-		coord = newcoord;
-		newcoord.Z -= Riser;
+		coord = LinkedTo->Get_Coord();
+		Coord oldcoord = coord; // RA2: the combat animation is looked up at the coordinate before the fall
+		coord.Z -= Riser;
 
-		Map.Get_Height_GL(newcoord);
-		Map[newcoord];
+		Map.Get_Height_GL(coord);
+		Map[coord];
 
-		if (Map.In_Radar(newcoord.As_Cell())) {
+		if (Map.In_Radar(coord.As_Cell())) {
 			Map.Remove(LinkedTo);
 			LinkedTo->Mark(MARK_UP);
-			LinkedTo->Set_Coord(newcoord);
+			LinkedTo->Set_Coord(coord);
 			LinkedTo->Mark(MARK_DOWN);
 			Map.Submit(LinkedTo);
 		}
 
 		if (LinkedTo->HeightAGL <= 0) {
+			AircraftTracker.Remove(LinkedTo); // RA2: the crashed aircraft leaves the tracker
 			LinkedTo->Set_Height_AGL(0);
 
 			int damage = LinkedTo->Strength;
 			if (damage == 0) {
-				Cell cell = newcoord.As_Cell();
-				new AnimClass(Combat_Anim(FORCED_DESTRUCTION_DAMAGE, Rule->C4Warhead, Map[cell].Land_Type(), newcoord), newcoord, 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ZGRAD), Get_Explosion_Z(newcoord));
-				Combat_Lighting(newcoord, FORCED_DESTRUCTION_DAMAGE, Rule->C4Warhead, false);
-				Explosion_Damage(newcoord, FORCED_DESTRUCTION_DAMAGE, NULL, Rule->C4Warhead, true);
+				Cell cell = coord.As_Cell();
+				LinkedTo->FireDeathWeapon(0); // RA2: a dead aircraft fires its death weapon and plays an impact sound instead of exploding
+				int sound; // RA2: as above
+				if (Map[cell].Land_Type() != LAND_WATER) { // RA2: as above
+					sound = LinkedTo->TClass->ImpactLandSound; // RA2: as above
+					if (sound == -1) { // RA2: as above
+						sound = Rule->ImpactLandSound; // RA2: as above
+					}
+				} else {
+					sound = LinkedTo->TClass->ImpactWaterSound; // RA2: as above
+					if (sound == -1) { // RA2: as above
+						sound = Rule->ImpactWaterSound; // RA2: as above
+					}
+				}
+				if (sound != -1) { // RA2: as above
+					VocClass::PlayAt(sound, LinkedTo->Get_Coord(), NULL); // RA2: as above
+				}
 				LinkedTo->Delete_Me();
-			} else {
-				LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true);
-				Cell cell = newcoord.As_Cell();
-
-				new AnimClass(Combat_Anim(damage, Rule->C4Warhead, Map[cell].Land_Type(), newcoord), newcoord, 0, 1, ShapeFlags_Type(SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_ZGRAD), Get_Explosion_Z(newcoord));
-				Combat_Lighting(newcoord, damage, Rule->C4Warhead, false);
-				Explosion_Damage(newcoord, damage, NULL, Rule->C4Warhead, true);
+				return; // RA2: as above
 			}
+
+			LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true);
+			Cell cell = coord.As_Cell();
+
+			new AnimClass(Combat_Anim(damage, Rule->C4Warhead, Map[cell].Land_Type(), oldcoord), coord, 0, 1, ShapeFlags_Type(0x2600), Get_Explosion_Z(coord)); // RA2: animation flags 0x2600, at the lowered coordinate
+			Combat_Lighting(coord, damage, Rule->C4Warhead, 0, 0); // RA2: the light kind flags form
+			Explosion_Damage(coord, damage, NULL, Rule->C4Warhead, true);
 			return;
 		}
 	} else {
-		if (LinkedTo->TClass->IsHunterSeeker && LinkedTo->TarCom != NULL) {
-			AbstractClass * target = LinkedTo->TarCom;
-			coord = target->Center_Coord();
-			if ((target->RTTI == RTTI_UNIT || target->RTTI == RTTI_INFANTRY) && ((FootClass*)target)->CurrentTube >= 0) {
-				coord = ((FootClass*)target)->LastTubeCoord;
-			}
-			int height = Map.Get_Height_GL(coord);
-			if (coord.Z < height) {
-				coord.Z = height;
-			}
-			DestinationCoord = coord;
-			DirType dir = Direction(LinkedTo->Center_Coord(), coord);
-			LinkedTo->PrimaryFacing.Set(dir);
-			LinkedTo->SecondaryFacing.Set(dir);
-		}
-
 		if (LinkedTo->Strength > 0) {
 
 			/*
 			**	If for some strange reason, there is a valid NavCom, but this aircraft is not
 			**	in a movement order, then give it a movement order.
 			*/
-			if (LinkedTo->NavCom != NULL && LinkedTo->Mission == MISSION_GUARD && LinkedTo->MissionQueue == MISSION_NONE) {
-				LinkedTo->Assign_Mission(MISSION_MOVE);
+			if (LinkedTo->NavCom != NULL && LinkedTo->Get_Mission() == MISSION_GUARD && LinkedTo->MissionQueue == MISSION_NONE && !AirportBound) { // RA2: not for an airport-bound aircraft
+				LinkedTo->QueueMission(MISSION_MOVE, false); // RA2: queued instead of assigned
 			}
 		}
 	}
@@ -596,7 +626,7 @@ void FlyLocomotionClass::Movement_AI(void)
 	coord = LinkedTo->Get_Coord();
 	Physics(coord, LinkedTo->PrimaryFacing.Current());
 
-	if (!Map.In_Radar(coord.As_Cell())) {
+	if (!Map.In_Radar(coord.As_Cell()) && LinkedTo->Should_Delete_Off_Map()) { // RA2: only an aircraft that is allowed to leave the map is pulled back in
 		Cell edge = Map.Cell_To_LocalRect(coord.As_Cell());
 		if (edge.X < Map.MapRect.Width / 2) {
 			coord.X += CELL_LEPTON_W / 2;
@@ -604,13 +634,16 @@ void FlyLocomotionClass::Movement_AI(void)
 			coord.X -= CELL_LEPTON_W / 2;
 		}
 
-		if (!Map.In_Radar(coord.As_Cell())) {
+		if (Map.In_Radar(coord.As_Cell())) { // RA2: as above
+			LinkedTo->Set_Coord(coord); // RA2: as above
+		} else {
 			coord = Coord_Scatter(coord, CELL_LEPTON / 4, false);
+			if (Map.In_Radar(coord.As_Cell())) { // RA2: as above
+				LinkedTo->Set_Coord(coord); // RA2: as above
+			}
 		}
-	}
-
-	if (Map.In_Radar(coord.As_Cell())) {
-		LinkedTo->Set_Coord(coord);
+	} else {
+		LinkedTo->Set_Coord(coord); // RA2: any other aircraft takes its new coordinate as it is
 	}
 
 	int bridge_height = 0;
@@ -782,12 +815,9 @@ void FlyLocomotionClass::Movement_AI(void)
 	}
 
 	LinkedTo->Mark(MARK_DOWN);
-
-	BuildingClass * building = Map[LinkedTo->Get_Coord()].Cell_Building();
-	if (building != NULL && building->Class->IsFirestormWall && building->House->FirestormDefenseActivated && !LinkedTo->TClass->IsIgnoresFirestorm) {
-		building->Crossing_Firestorm(LinkedTo, true);
-	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -927,7 +957,7 @@ bool FlyLocomotionClass::Process_Take_Off(void)
 /// </summary>
 static inline Cell Adjacent_Cell_By_Value(Cell const & cell, FacingType dir) // RA2: an adjacent cell by value
 {
-	return(cell + AdjacentCell[(int)dir & 0x07]); // RA2: the facing masked to 0-7
+	return(AdjacentCell[(int)dir & 0x07] + cell); // RA2: the facing masked to 0-7
 }
 
 
@@ -954,20 +984,6 @@ bool FlyLocomotionClass::Process_Landing(void)
 		return(true);
 	}
 
-	if (LinkedTo->TClass->IsHunterSeeker && LinkedTo->TarCom == NULL) {
-		Acquire_Hunter_Seeker_Target();
-		if (LinkedTo->TarCom) {
-			IsLanding = false;
-			FlightLevel = LinkedTo->TClass->Flight_Level();
-			if (LinkedTo->In_Radio_Contact() != NULL) {
-				LinkedTo->Transmit_Message(RADIO_OVER_OUT);
-			}
-			LinkedTo->Assign_Mission(MISSION_ATTACK);
-			LinkedTo->Commence();
-			return(false);
-		}
-	}
-
 	bool has_landed = false;
 
 	int height = LinkedTo->HeightAGL;
@@ -975,14 +991,19 @@ bool FlyLocomotionClass::Process_Landing(void)
 		height -= BRIDGE_LEPTON_HEIGHT;
 	}
 
-	if (LinkedTo->TClass->IsDropship && height == 0) {
-		if (LinkedTo->PitchAngle > 0) {
-			static const double _dropship_pitch_rate = 0.02;
-			LinkedTo->PitchAngle = MAX(0, LinkedTo->PitchAngle - _dropship_pitch_rate);
+	if (LinkedTo->TClass->IsDropship) {
+		if (height == 0 && LinkedTo->PitchAngle > 0) { // RA2: the dropship's pitch is brought back by a fixed rate, never below zero
+			static const double _dropship_pitch_rate = 0.02; // RA2: as above
+			double pitch = LinkedTo->PitchAngle - _dropship_pitch_rate; // RA2: as above
+			if (0.0 > pitch) { // RA2: as above
+				pitch = 0.0; // RA2: as above
+			}
+			LinkedTo->PitchAngle = (float)pitch; // RA2: as above
 		}
+		TargetSpeed = 0; // RA2: as above
+	} else {
+		TargetSpeed = 0; // RA2: as above
 	}
-
-	TargetSpeed = 0;
 
 	int landing_altitude = 0;
 	IFlyControlPtr flyctrl(LinkedTo);
@@ -990,14 +1011,11 @@ bool FlyLocomotionClass::Process_Landing(void)
 		landing_altitude = flyctrl->Landing_Altitude();
 	}
 
-	bool ok = false;
-
-	if (LinkedTo->Can_Enter_Cell(&Map[DestinationCoord]) == MOVE_OK) {
-		ok = true;
-	} else {
+	CellClass * destination = &Map[DestinationCoord]; // RA2: an aircraft bound to an airport needs a link to the building in the cell, any other one a cell it can enter
+	if ((AirportBound && !LinkedTo->ContainsLink((TechnoClass *)destination->Cell_Building())) || (!AirportBound && LinkedTo->Can_Enter_Cell(destination, FACING_NONE, -1, NULL, true) != 0)) { // RA2: as above
 		Take_Off();
 		Cell pos = LinkedTo->PositionCoord.As_Cell();
-		Cell nearby = Map.Nearby_Location(pos, SPEED_TRACK, -1, MZONE_FLYER);
+		Cell nearby = Map.Nearby_Location(pos, SPEED_TRACK, -1, MZONE_FLYER, false, Point2D(1, 1), false, false, false, true, Cell(0, 0), false); // RA2: all arguments given
 		if (nearby != CELL_NONE) {
 			Coord nearby_coord = nearby.As_Coord();
 			nearby_coord.Z = Map.Get_Height_GL(nearby_coord);
@@ -1005,14 +1023,11 @@ bool FlyLocomotionClass::Process_Landing(void)
 				nearby_coord.Z += BRIDGE_LEPTON_HEIGHT;
 			}
 			Move_To(nearby_coord);
-			ok = true;
+		} else {
+			LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true);
+			DestinationCoord = COORD_NONE;
+			return(false);
 		}
-	}
-
-	if (!ok) {
-		LinkedTo->Take_Damage(LinkedTo->Strength, 0, Rule->C4Warhead, NULL, true, true);
-		DestinationCoord = COORD_NONE;
-		return(false);
 	}
 
 	if (!CommencedLanding && height < 300) {
@@ -1021,67 +1036,63 @@ bool FlyLocomotionClass::Process_Landing(void)
 		CommencedLanding = true;
 
 		if (LinkedTo->TClass->IsDropship) {
-			new AnimClass(AnimTypes[AnimTypeClass::From_Name("DROPLAND")], coord);
+			new AnimClass(AnimTypes[AnimTypeClass::From_Name("DROPLAND")], coord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: all arguments given
 		} else if (LinkedTo->RTTI == RTTI_AIRCRAFT && ((AircraftClass*)LinkedTo)->Class->IsCarryall) {
-			new AnimClass(AnimTypes[AnimTypeClass::From_Name("CARYLAND")], coord);
+			new AnimClass(AnimTypes[AnimTypeClass::From_Name("CARYLAND")], coord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
 		}
 
 		if (LinkedTo->Strength > 0) {
-			Sound_Effect(LinkedTo->TClass->AuxSound2, coord);
+			VocClass::PlayAt(LinkedTo->TClass->AuxSound2, coord, NULL); // RA2: positional sound
 		}
 	}
 
-	if (height <= landing_altitude) {
-		if (LinkedTo->PitchAngle <= 0) {
+	if (height <= landing_altitude && LinkedTo->PitchAngle <= 0) {
+		Coord coord = LinkedTo->PositionCoord;
+		if (Map[coord].IsUnderBridge && coord.Z >= Map.Get_Height_GL(coord) + BRIDGE_LEPTON_HEIGHT) { // RA2: as above
+			LinkedTo->IsOnBridge = true;
+		}
 
-			Coord coord = LinkedTo->Get_Coord();
-			if (Map[coord].IsUnderBridge) {
-				if (coord.Z >= BRIDGE_LEPTON_HEIGHT + Map.Get_Height_GL(coord)) {
-					LinkedTo->IsOnBridge = true;
-				}
+		LinkedTo->Set_Height_AGL(landing_altitude); // RA2: through the setter
+		IsLanding = false;
+		IsTakingOff = false;
+		has_landed = true;
+		AircraftTracker.Remove(LinkedTo); // RA2: the aircraft leaves the tracker once it has landed
+		LinkedTo->Set_Speed(0);
+		CurrentSpeed = 0;
+		TargetSpeed = 0;
+
+		int face;
+		if (LinkedTo->LastAdjacencyCell != Cell(0, 0)) {
+			for (face = 0; face < 8; face++) {
+				Cell adjacent = Adjacent_Cell_By_Value(LinkedTo->LastAdjacencyCell, (FacingType)face);
+				CellClass * cptr = &Map[adjacent];
+				cptr->AdjacentObjectCount--;
 			}
-
-			LinkedTo->HeightAGL = landing_altitude;
-			IsLanding = false;
-			IsTakingOff = false;
-			has_landed = true;
-			LinkedTo->Set_Speed(0);
-			CurrentSpeed = 0;
-			TargetSpeed = 0;
-
-			CellClass * cptr;
-			FacingType face;
-			if (LinkedTo->LastAdjacencyCell != Cell(0, 0)) {
-				for (face = FACING_FIRST; face < FACING_COUNT; face++) {
-					Cell adjacent = Adjacent_Cell(LinkedTo->LastAdjacencyCell, face);
-					cptr = &Map[adjacent];
-					cptr->AdjacentObjectCount--;
-				}
-				LinkedTo->LastAdjacencyCell = LinkedTo->PositionCell;
-				for (face = FACING_FIRST; face < FACING_COUNT; face++) {
-					Cell adjacent = Adjacent_Cell(LinkedTo->LastAdjacencyCell, face);
-					cptr = &Map[adjacent];
-					cptr->AdjacentObjectCount++;
-				}
-			} else {
-				LinkedTo->LastAdjacencyCell = LinkedTo->PositionCell;
-				for (face = FACING_FIRST; face < FACING_COUNT; face++) {
-					Cell adjacent = Adjacent_Cell(LinkedTo->LastAdjacencyCell, face);
-					cptr = &Map[adjacent];
-					cptr->AdjacentObjectCount++;
-				}
+			LinkedTo->LastAdjacencyCell = LinkedTo->Get_Cell();
+			for (face = 0; face < 8; face++) {
+				Cell adjacent = Adjacent_Cell_By_Value(LinkedTo->LastAdjacencyCell, (FacingType)face);
+				CellClass * cptr = &Map[adjacent];
+				cptr->AdjacentObjectCount++;
 			}
-
-			if (LinkedTo->Center_Coord().As_Cell() == DestinationCoord.As_Cell() || Map[DestinationCoord.As_Cell()].Cell_Building() == LinkedTo->Contact_With_Whom()) {
-				IsMoving = false;
-				Move_To(COORD_NONE);
-				LinkedTo->Assign_Destination(NULL);
+		} else {
+			LinkedTo->LastAdjacencyCell = LinkedTo->Get_Cell();
+			for (face = 0; face < 8; face++) {
+				Cell adjacent = Adjacent_Cell_By_Value(LinkedTo->LastAdjacencyCell, (FacingType)face);
+				CellClass * cptr = &Map[adjacent];
+				cptr->AdjacentObjectCount++;
 			}
+		}
+
+		if (Cell(LinkedTo->Center_Coord()) == Cell(DestinationCoord) || Map[Cell(DestinationCoord)].Cell_Building() == LinkedTo->Radio_Link(0)) {
+			IsMoving = false;
+			Move_To(COORD_NONE);
+			LinkedTo->Assign_Destination(NULL, true);
 		}
 	}
 
 	return(has_landed);
 }
+
 
 
 /// <summary>
@@ -1095,6 +1106,7 @@ bool FlyLocomotionClass::Process_Landing(void)
 /// <returns>Returns with the distance remaining to the destination.</returns>
 int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 {
+	LinkedTo->Get_Cell(); // RA2: the cell is fetched and not used
 	IFlyControlPtr flyctrl(LinkedTo);
 
 	/*
@@ -1110,9 +1122,21 @@ int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 	 * cell (and this isn't a hunter-seeker), measure to the center of that building instead.
 	 */
 	Coord aim = coord;
-	BuildingClass * building = Map[Coord(coord).As_Cell()].Cell_Building();
+	ObjectClass * building = Map[Coord(coord).As_Cell()].Cell_Building(); // RA2: the building is kept as an object
 	if (building != NULL && !LinkedTo->TClass->IsHunterSeeker) {
-		aim = building->Docking_Coord(LinkedTo); // RA2: the docker is passed
+		if (!LinkedTo->ContainsLink((TechnoClass *)building)) { // RA2: a building the aircraft is not linked to is no aim point; an aircraft heads for a landing zone near it instead
+			FootClass * self = LinkedTo; // RA2: as above
+			if (self != NULL && self->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: as above
+				AbstractClass * dock = ((AircraftClass *)self)->New_LZ(building); // RA2: as above
+				if (dock == NULL) { // RA2: as above
+					aim = COORD_NONE; // RA2: as above
+				} else {
+					aim = dock->Center_Coord(); // RA2: as above
+				}
+			}
+		} else {
+			aim = building->Docking_Coord(LinkedTo); // RA2: the docker is passed
+		}
 	}
 
 	LinkedTo->Get_Height();
@@ -1124,19 +1148,22 @@ int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 	 * Turn the body of the aircraft to face the destination coordinate.
 	 */
 	if (flyctrl == NULL || !flyctrl->Is_Locked()) {
-		DirType dir = Direction(LinkedTo->Center_Coord(), coord);
+		DirType dir;
+		dir.Direction(LinkedTo->Center_Coord(), coord); // RA2: DirType::Direction, not the free function
 
 		bool turn = true;
 		if (flyctrl != NULL && flyctrl->Is_Strafe()) {
-			Coord here = LinkedTo->Center_Coord();
-			if (!(Point2D(here).Distance_To(Coord(coord)) > CELL_LEPTON * 3 ||
-				dir.Is_Complete_Turn(LinkedTo->PrimaryFacing.Current(), DIR_STEP_8))) {
-				turn = false;
+			if ((Point2D(LinkedTo->Center_Coord()) - Point2D(Coord(coord))).Length() <= CELL_LEPTON * 3) { // RA2: within three cells of the destination
+				if (!dir.Is_Complete_Turn(LinkedTo->PrimaryFacing.Current(), DirType(0x2000))) { // RA2: the turn left is more than 45 degrees
+					turn = false;
+				}
 			}
 		}
 
 		if (turn) {
-			LinkedTo->PrimaryFacing.Set_Desired(Direction(LinkedTo->Center_Coord(), coord));
+			DirType desired;
+			desired.Direction(LinkedTo->Center_Coord(), coord); // RA2: as above
+			LinkedTo->PrimaryFacing.Set_Desired(desired); // RA2: as above
 		}
 	}
 
@@ -1170,112 +1197,20 @@ int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 	}
 
 	/*
-	 * A hunter-seeker has special logic as it approaches its target -- it detonates when
-	 * very close, descends smoothly when somewhat close, and otherwise scans ahead to find
-	 * a flight level that clears the terrain in front of it.
-	 */
-	bool flight_level_set = false;
-	if (LinkedTo->TClass->IsHunterSeeker && LinkedTo->TarCom != NULL) {
-		AbstractClass * tarcom = LinkedTo->TarCom;
-		Coord here = LinkedTo->Get_Coord();
-		Coord dst = DestinationCoord;
-		int proximity = (Point2D(here) - Point2D(dst)).Length();
-
-		if (proximity < Rule->HunterSeekerDetonateProximity) {
-
-			/*
-			 * Close enough to detonate. Take the target with it.
-			 */
-			TechnoClass * techno = Dynamic_Cast<TechnoClass *>(tarcom);
-			if (techno != NULL) {
-				WeaponTypeClass * weapon = LinkedTo->Get_Class_Weapon_Data(0)->Weapon;
-				WarheadTypeClass const * warhead = weapon->WarheadPtr;
-				int damage = weapon->Attack;
-
-				techno->Take_Damage(damage, 0, warhead, LinkedTo, true, true);
-				int damage2 = weapon->Attack;
-				LinkedTo->Take_Damage(damage2, 0, warhead, NULL, true, true);
-
-				int attack = weapon->Attack;
-				Combat_Lighting(LinkedTo->Get_Coord(), attack, Rule->C4Warhead, false);
-				Explosion_Damage(LinkedTo->Get_Coord(), attack, NULL, warhead, true);
-				return(0);
-			}
-
-		} else if (proximity < Rule->HunterSeekerDescendProximity) {
-
-			/*
-			 * Descend smoothly toward the target as it gets closer.
-			 */
-			int targetz = tarcom->Center_Coord().Z;
-			int floor = Map.Get_Height_GL(LinkedTo->Get_Coord());
-			int level = floor + LinkedTo->TClass->Flight_Level();
-			float ratio = (float)proximity / Rule->HunterSeekerDescendProximity;
-			int newlevel = (int)((1.0f - ratio) * targetz + level * ratio) - floor;
-			if (newlevel < 10) {
-				newlevel = 10;
-			}
-			FlightLevel = newlevel;
-			flight_level_set = true;
-
-		} else {
-
-			/*
-			 * Look ahead along the current heading to find the highest terrain that needs
-			 * to be cleared, and raise the flight level if necessary.
-			 */
-			Coord scan = LinkedTo->Get_Coord();
-			int floor = Map.Get_Height_GL(scan);
-			if (Map[scan].IsUnderBridge) {
-				floor += BRIDGE_LEPTON_HEIGHT;
-			}
-			int peak = floor;
-
-			for (int look = 10; look != 0; look--) {
-				DirType facing = LinkedTo->PrimaryFacing.Current();
-				int speed = Apparent_Speed();
-				if (speed > 0) {
-					scan = Move_Coord(scan, facing, speed);
-					Map.In_Radar(scan.As_Cell());
-				}
-
-				int height = Map.Get_Height_GL(scan);
-				if (Map[scan].IsUnderBridge) {
-					height += BRIDGE_LEPTON_HEIGHT;
-				}
-				if (height > peak) {
-					peak = height;
-				}
-			}
-
-			if (peak > floor) {
-				FlightLevel = peak + LinkedTo->TClass->Flight_Level();
-				flight_level_set = true;
-			}
-		}
-	}
-
-	/*
 	 * Pick the flight level to head for. An elevating aircraft heads for the destination's
 	 * ground level; dropships ease down as they near their slowdown distance.
 	 */
-	if (!flight_level_set) {
-		if (IsElevating && dist < 3 * CELL_LEPTON) {
-			FlightLevel = DestinationCoord.Z - Map.Get_Height_GL(DestinationCoord);
+	if (IsElevating && dist < 3 * CELL_LEPTON) { // RA2: no hunter-seeker flight level scan, so the flight level is always chosen here
+		FlightLevel = DestinationCoord.Z - Map.Get_Height_GL(DestinationCoord);
+	} else if (LinkedTo->TClass->IsDropship) {
+		if (dist >= LinkedTo->TClass->SlowdownDistance) {
+			FlightLevel = LinkedTo->TClass->Flight_Level();
 		} else {
-			if (LinkedTo->TClass->IsDropship) {
-				if (dist >= LinkedTo->TClass->SlowdownDistance) {
-					FlightLevel = LinkedTo->TClass->Flight_Level();
-				} else {
-					float frac = (float)(dist / LinkedTo->TClass->SlowdownDistance);
-					TechnoTypeClass const * ttype = LinkedTo->TClass;
-					FlightLevel = (int)((LinkedTo->TClass->Flight_Level() / 3) * (1.0f - frac) +
-						ttype->Flight_Level() * frac);
-				}
-			} else {
-				FlightLevel = LinkedTo->TClass->Flight_Level();
-			}
+			float frac = (float)(dist / LinkedTo->TClass->SlowdownDistance);
+			FlightLevel = (int)(LinkedTo->TClass->Flight_Level() * frac + (1.0f - frac) * (LinkedTo->TClass->Flight_Level() / 3)); // RA2: the ratio multiplies the flight level, the remainder the third of it
 		}
+	} else {
+		FlightLevel = LinkedTo->TClass->Flight_Level();
 	}
 
 	/*
@@ -1315,6 +1250,38 @@ int FlyLocomotionClass::Nearing_Target(bool stage_approach, CoordStruct coord)
 
 	return(dist);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /// <summary>
@@ -1415,18 +1382,22 @@ Point2DStruct STDMETHODCALLTYPE FlyLocomotionClass::Shadow_Point(void)
 /// </summary>
 void FlyLocomotionClass::Take_Off(void)
 {
-	if (LinkedTo->StunDuration <= 0) {
-		IsLanding = false;
-		IsTakingOff = true;
+	if (!LinkedTo->IsUnderEMP() && !LinkedTo->IsParalyzed() && !LinkedTo->IsBeingWarpedOut() && !LinkedTo->IsWarpingIn()) { // RA2: four virtual state tests (0x324, 0x328, 0x1BC, 0x1C0) instead of the stun duration
+		IsLanding = false; // RA2: as above
+		IsTakingOff = true; // RA2: as above
+		if (LinkedTo->GetLastFlightMapCoords() == CELL_NONE) { // RA2: files the aircraft in the aircraft tracker if it has no cell there yet
+			AircraftTracker.Add(LinkedTo); // RA2: as above
+		}
 		FlightLevel = LinkedTo->TClass->Flight_Level();
 
 		if (LinkedTo->HeightAGL == 0) {
 			LinkedTo->PrimaryFacing.Set(LinkedTo->SecondaryFacing.Desired());
 		}
 
-		Sound_Effect(LinkedTo->TClass->AuxSound1, LinkedTo->PositionCoord);
+		VocClass::PlayAt(LinkedTo->TClass->AuxSound1, LinkedTo->PositionCoord, NULL); // RA2: positional sound (0x713E60)
 	}
 }
+
 
 
 /// <summary>
