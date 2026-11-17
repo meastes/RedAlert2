@@ -973,3 +973,111 @@ int OptionsClass::Get_Scroll_Method(void) const
 
 
 
+
+
+/*
+**	RA2: a campaign movie the movies dialog lists. Name is the movie file, Label the string table entry shown
+**	and Side the campaign (-1 the intro, 0 Allied, 1 Soviet). The tables are 0x007E8248-0x007E8394.
+*/
+struct MovieEntry { // RA2: as above
+	char const * Name; // RA2: +0x00, the file's base name (the lists end with a null name)
+	char const * Label; // RA2: +0x04, the string table label
+	int Side; // RA2: +0x08, the campaign
+};
+
+MovieEntry IntroMovieEntry = { "A00_F00E", "Name:IntroMovie", -1 }; // RA2: 0x007E8248, the intro movie (its name is the shared string at 0x007DB5F8)
+MovieEntry AlliedMovieList[] = { // RA2: 0x007E8258, the Allied campaign's movies, ended by a null entry
+	{ "A01_F00e", "Name:All01", 0 }, // RA2: as above
+	{ "A02_F00e", "Name:All02", 0 }, // RA2: as above
+	{ "A03_F00e", "Name:All03", 0 }, // RA2: as above
+	{ "A04_F00e", "Name:All04", 0 }, // RA2: as above
+	{ "A05_F00e", "Name:All05", 0 }, // RA2: as above
+	{ "A06_F00e", "Name:All06", 0 }, // RA2: as above
+	{ "A07_F00e", "Name:All07", 0 }, // RA2: as above
+	{ "A08_F00e", "Name:All08", 0 }, // RA2: as above
+	{ "A09_F00e", "Name:All09", 0 }, // RA2: as above
+	{ "A10_F00e", "Name:All10", 0 }, // RA2: as above
+	{ "A11_F00e", "Name:All11", 0 }, // RA2: as above
+	{ "A12_F00e", "Name:All12", 0 }, // RA2: as above
+	{ NULL, NULL, 0 } // RA2: as above
+};
+MovieEntry SovietMovieList[] = { // RA2: 0x007E82F8, the Soviet campaign's movies, ended by a null entry
+	{ "S01_F00e", "Name:Sov01", 1 }, // RA2: as above
+	{ "S02_F00e", "Name:Sov02", 1 }, // RA2: as above
+	{ "S03_F00e", "Name:Sov03", 1 }, // RA2: as above
+	{ "S04_F00e", "Name:Sov04", 1 }, // RA2: as above
+	{ "S05_F00e", "Name:Sov05", 1 }, // RA2: as above
+	{ "S06_F00e", "Name:Sov06", 1 }, // RA2: as above
+	{ "S07_F00e", "Name:Sov07", 1 }, // RA2: as above
+	{ "S08_F00e", "Name:Sov08", 1 }, // RA2: as above
+	{ "S09_F00e", "Name:Sov09", 1 }, // RA2: as above
+	{ "S10_F00e", "Name:Sov10", 1 }, // RA2: as above
+	{ "S11_F00e", "Name:Sov11", 1 }, // RA2: as above
+	{ "S12_F00e", "Name:Sov12", 1 }, // RA2: as above
+	{ NULL, NULL, 0 } // RA2: as above
+};
+
+
+/// <summary>
+/// Finds a movie in a list by its file name; -1 when it is not there.
+/// </summary>
+inline int Movie_Index(MovieEntry const * movies, char const * name) // RA2: not in TibSun
+{
+	for (int index = 0; movies->Name != NULL; index++, movies++) { // RA2: as above
+		if (stricmp(name, movies->Name) == 0) { // RA2: as above
+			return(index); // RA2: as above
+		}
+	}
+	return(-1); // RA2: as above
+}
+
+
+/// <summary>
+/// Notes that a campaign movie has been seen, so that the movies dialog lists it from now on.
+/// </summary>
+void OptionsClass::Unlock_Movie(char const * name) // RA2: 0x005DA3F0, not in TibSun
+{
+	int index = Movie_Index(SovietMovieList, name); // RA2: the Soviet list is searched first
+	if (index > LastUnlockedSovMovie) { // RA2: as above
+		LastUnlockedSovMovie = index; // RA2: as above
+	}
+	index = Movie_Index(AlliedMovieList, name); // RA2: then the Allied one
+	if (index > LastUnlockedAllMovie) { // RA2: as above
+		LastUnlockedAllMovie = index; // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Puts one movie's name into the list box, with the movie as the item's data.
+/// </summary>
+inline void Add_Movie(HWND list, MovieEntry const * movie) // RA2: not in TibSun
+{
+	if (movie->Name != NULL && movie->Label != NULL) { // RA2: as above
+		int index = SendMessage(list, OD_ADDSTRINGW, 0, (LPARAM)StringTable::LoadString(movie->Label, NULL, RA2_SOURCE, 1248)); // RA2: as above
+		if (index != LB_ERR) { // RA2: as above
+			SendMessage(list, LB_SETITEMDATA, index, (LPARAM)movie); // RA2: as above
+		}
+	}
+}
+
+
+/// <summary>
+/// Fills the movies dialog's list box with the intro and each campaign's movies that have been unlocked.
+/// </summary>
+void OptionsClass::Fill_Movie_List(HWND list) // RA2: 0x005DA470, not in TibSun
+{
+	Add_Movie(list, &IntroMovieEntry); // RA2: the intro is always listed
+	if (LastUnlockedSovMovie >= 0) { // RA2: as above
+		int count = LastUnlockedSovMovie + 1; // RA2: as above
+		for (MovieEntry * movie = SovietMovieList; movie->Name != NULL && count > 0; movie++, count--) { // RA2: as above
+			Add_Movie(list, movie); // RA2: as above
+		}
+	}
+	if (LastUnlockedAllMovie >= 0) { // RA2: as above
+		int count = LastUnlockedAllMovie + 1; // RA2: as above
+		for (MovieEntry * movie = AlliedMovieList; movie->Name != NULL && count > 0; movie++, count--) { // RA2: as above
+			Add_Movie(list, movie); // RA2: as above
+		}
+	}
+}
