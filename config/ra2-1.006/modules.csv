@@ -103,7 +103,9 @@ unk_00463EF0,0x00463EF0,0x004644E0,unknown,code not assigned to a module
 bullettype,0x004644E0,0x00465180,tibsun,"functions compiled from src/bullettype.cpp, matched, without gaps; five placed by the gap"
 unk_00465180,0x00465180,0x00465450,unknown,code not assigned to a module
 campaign,0x00465450,0x00465970,tibsun,"functions compiled from src/campaign.cpp, matched, without gaps; four placed by the gap"
-unk_00465970,0x00465970,0x00467DB0,unknown,code not assigned to a module
+unk_00465970,0x00465970,0x00465BF0,unknown,code not assigned to a module
+campscor,0x00465BF0,0x00467B00,source,"functions compiled from src/campscor.cpp, without gaps; matched except ?Presentation@CampaignScoreClass@@UAEXV?$DynamicVectorClass@PAUMPlayerScoreType@@@@H_NHPBG@Z; five placed by the gap"
+unk_00467B00,0x00467B00,0x00467DB0,unknown,code not assigned to a module
 capmgr,0x00467DB0,0x00468380,source,"functions compiled from src/capmgr.cpp, matched, without gaps; three placed by the gap"
 unk_00468380,0x00468380,0x00468960,unknown,code not assigned to a module
 cargo,0x00468960,0x00468AC0,tibsun,"functions compiled from src/cargo.cpp, matched, without gaps; one placed by the gap"
