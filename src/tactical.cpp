@@ -103,6 +103,19 @@ bool PassabilityPrint = false;
 Rect TacticalDimensions(0,0,0,0);	/// <summary>
 /// RA2
 /// </summary>
+static inline bool Is_Techno_Object(ObjectClass const * object) // RA2: as above
+{
+	if (object == NULL) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	unsigned char flag = object->AbstractFlags & 1; // RA2: as above
+	return(flag != 0); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
 static inline bool Is_Foot_Object(ObjectClass const * object)
 {
 	if (object == NULL) {
@@ -899,16 +912,9 @@ void Tactical::Render_Buildings(Rect const & xpanrect, Rect const & ypanrect, bo
 			Point2D pixel;
 			Coord_To_Pixel(coord, pixel);
 
-			Rect rect;
-			rect.X = pixel.X - ISO_TILE_PIXEL_W / 2;
-			rect.Y = pixel.Y;
-			rect.Width = ISO_TILE_PIXEL_W;
-			rect.Height = ISO_TILE_PIXEL_H;
-
-			Rect cliprect = rect;
-
-			rect.Y += TacticalRect.Y;
-			cliprect.Y += TacticalRect.Y;
+			Rect rect = Rect(pixel.X - ISO_TILE_PIXEL_W / 2, pixel.Y, ISO_TILE_PIXEL_W, ISO_TILE_PIXEL_H); // RA2: one constructed rectangle, shifted once, then copied
+			rect.Y += TacticalRect.Y; // RA2: as above
+			Rect cliprect = rect; // RA2: as above
 
 			Draw_Buildings(true, rect, cliprect);
 		}
@@ -921,10 +927,10 @@ void Tactical::Render_Buildings(Rect const & xpanrect, Rect const & ypanrect, bo
 		for (i = DirtyAreas.Count() - 1; i >= 0; i--) {
 			Rect redraw = DirtyAreas[i].Area;
 			redraw.Y += TacticalRect.Y;
-			Rect inter = Intersect(TacticalRect, redraw);
-			if (inter.Is_Valid()) {
-				Rect cliprect = inter;
-				Draw_Buildings(true, inter, cliprect);
+			redraw = Intersect(TacticalRect, redraw); // RA2: the intersection goes back into redraw
+			if (redraw.Is_Valid()) { // RA2: as above
+				Rect cliprect = redraw; // RA2: as above
+				Draw_Buildings(true, redraw, cliprect); // RA2: as above
 			}
 		}
 	}
@@ -943,6 +949,7 @@ void Tactical::Render_Buildings(Rect const & xpanrect, Rect const & ypanrect, bo
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -967,16 +974,9 @@ void Tactical::Render_Terrain(Rect const & xpanrect, Rect const & ypanrect, bool
 			Point2D pixel;
 			Coord_To_Pixel(coord, pixel);
 
-			Rect rect;
-			rect.X = pixel.X - ISO_TILE_PIXEL_W / 2;
-			rect.Y = pixel.Y;
-			rect.Width = ISO_TILE_PIXEL_W;
-			rect.Height = ISO_TILE_PIXEL_H;
-
-			Rect cliprect = rect;
-
-			rect.Y += TacticalRect.Y;
-			cliprect.Y += TacticalRect.Y;
+			Rect rect = Rect(pixel.X - ISO_TILE_PIXEL_W / 2, pixel.Y, ISO_TILE_PIXEL_W, ISO_TILE_PIXEL_H); // RA2: one constructed rectangle, shifted once, then copied
+			rect.Y += TacticalRect.Y; // RA2: as above
+			Rect cliprect = rect; // RA2: as above
 
 			Draw_Terrain(true, rect, cliprect);
 		}
@@ -989,11 +989,10 @@ void Tactical::Render_Terrain(Rect const & xpanrect, Rect const & ypanrect, bool
 		for (i = DirtyAreas.Count() - 1; i >= 0; i--) {
 			Rect redraw = DirtyAreas[i].Area;
 			redraw.Y += TacticalRect.Y;
-			Rect inter = Intersect(TacticalRect, redraw);
-
-			if (inter.Is_Valid()) {
-				Rect cliprect = inter;
-				Draw_Terrain(true, inter, cliprect);
+			redraw = Intersect(TacticalRect, redraw); // RA2: the intersection goes back into redraw
+			if (redraw.Is_Valid()) { // RA2: as above
+				Rect cliprect = redraw; // RA2: as above
+				Draw_Terrain(true, redraw, cliprect); // RA2: as above
 			}
 		}
 	}
@@ -1012,6 +1011,7 @@ void Tactical::Render_Terrain(Rect const & xpanrect, Rect const & ypanrect, bool
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1416,82 +1416,107 @@ void Tactical::Draw_Screen_Text(wchar_t const * text) // RA2: wide text
 void Tactical::Draw_Placement(bool drawtrans)
 {
 	Cell start = Cell(0, 0);
+	Cell dims; // RA2: declared up front, the copy of the cursor below uses it as well
 
-	if (Map.PendingObject == NULL) {
-		return;
-	}
+	if (Map.PendingObject != NULL) { // RA2: the first footprint is only handled when there is a pending object, the copy of the cursor below does not depend on it
+		Point2D mouse = MouseCursor->Get_Mouse_Point(); // RA2: as above
+		if (!TacticalRect.Is_Point_Within(mouse)) { // RA2: as above
+			return; // RA2: as above
+		}
 
-	Point2D mouse = MouseCursor->Get_Mouse_Point();
-	if (!TacticalRect.Is_Point_Within(mouse)) {
-		return;
-	}
+		/*
+		 * Work out the footprint to mark. A gate reaches a cell further out on every side
+		 * than the cells it actually occupies, so that the player can see what it will join.
+		 */
+		if (Map.PendingObject->Fetch_RTTI() == RTTI_BUILDINGTYPE && ((BuildingTypeClass *)Map.PendingObject)->IsGate) { // RA2: as above
+			dims = Cell(3, 3); // RA2: as above
+			start = Cell(-1, -1); // RA2: as above
+		} else {
+			dims = Map.Get_Occupy_Dimensions(Map.CursorSize); // RA2: as above
+		}
 
-	/*
-	 * Work out the footprint to mark. A gate reaches a cell further out on every side
-	 * than the cells it actually occupies, so that the player can see what it will join.
-	 */
-	Cell dims;
-	if (Map.PendingObject->Fetch_RTTI() == RTTI_BUILDINGTYPE && ((BuildingTypeClass *)Map.PendingObject)->IsGate) {
-		dims = Cell(3, 3);
-		start = Cell(-1, -1);
-	} else {
-		dims = Map.Get_Occupy_Dimensions(Map.CursorSize);
-	}
+		/*
+		 * Mark every cell of the footprint, remembering whether they all accepted the object.
+		 */
+		bool all_valid = true; // RA2: as above
+		for (int cx = start.X; cx < dims.X; cx++) { // RA2: as above
+			for (int cy = start.Y; cy < dims.Y; cy++) { // RA2: as above
+				Cell cell = Cell(cx, cy) + Map.ZoneCell + Map.ZoneOffset; // RA2: as above
+				Coord coord = Coord_Whole(Coord(cell)); // RA2: as above
+				Point2D pixel; // RA2: as above
+				Coord_To_Pixel(coord, pixel); // RA2: as above
+				pixel.X = ISO_TILE_PIXEL_W / -2 + pixel.X; // RA2: as above
+				if (Map.In_Radar(cell)) { // RA2: as above
+					CellClass * cellptr = &Map[cell]; // RA2: as above
+					all_valid = cellptr->Draw_Placement_Cursor(pixel, TacticalRect, drawtrans) && all_valid; // RA2: as above
+				}
+			}
+		}
 
-	/*
-	 * Mark every cell of the footprint, remembering whether they all accepted the object.
-	 */
-	bool all_valid = true;
-	for (int cx = start.X; cx < dims.X; cx++) {
-		for (int cy = start.Y; cy < dims.Y; cy++) {
-			Cell cell = Cell(cx, cy) + Map.ZoneCell + Map.ZoneOffset;
-			Coord coord = Coord_Whole(Coord(cell));
+		RTTIType rtti = Map.PendingObject->Fetch_RTTI(); // RA2: as above
+
+		/*
+		 * The map editor moves the real object under the cursor and draws it there, so that
+		 * the designer sees the artwork rather than just the cursor.
+		 */
+		if (Debug_Map && Map.PendingObjectPtr != NULL) { // RA2: as above
+			Coord coord = Coord(start + Map.ZoneCell + Map.ZoneOffset, 0); // RA2: as above
+			if (rtti == RTTI_BUILDINGTYPE) { // RA2: as above
+				coord = Coord_Whole(coord); // RA2: as above
+			}
+			coord.Z = Map.Get_Height_GL(coord); // RA2: as above
+			Map.PendingObjectPtr->Set_Coord(coord); // RA2: as above
 			Point2D pixel;
 			Coord_To_Pixel(coord, pixel);
-			pixel.X = ISO_TILE_PIXEL_W / -2 + pixel.X;
-			if (Map.In_Radar(cell)) {
-				CellClass * cellptr = &Map[cell];
-				all_valid = cellptr->Draw_Placement_Cursor(pixel, TacticalRect, drawtrans) && all_valid;
+			if (rtti != RTTI_ISOTILETYPE) { // RA2: as above
+				Map.PendingObjectPtr->Editor_Draw_It(pixel, TacticalRect); // RA2: as above
+			}
+		}
+
+		/*
+		 * A wall, a fence or a firestorm post joins up with its neighbours, so the run it
+		 * would connect into is previewed as well. Only do so where the object could
+		 * actually be placed.
+		 */
+		if (all_valid && Map.PendingObjectPtr != NULL && Map.PendingObjectPtr->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+			BuildingClass * bptr = (BuildingClass *)Map.PendingObjectPtr; // RA2: as above
+			if (bptr->Class->IsLaserFencePost) { // RA2: as above
+				Draw_Fence_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset); // RA2: as above
+			} else if (bptr->Class->IsFirestormWall) { // RA2: as above
+				Draw_Firestorm_Wall_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset); // RA2: as above
+			} else if (bptr->Class->ToOverlay != NULL && bptr->Class->ToOverlay->IsWall) { // RA2: as above
+				Draw_Wall_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset); // RA2: as above
 			}
 		}
 	}
 
-	RTTIType rtti = Map.PendingObject->Fetch_RTTI();
-
 	/*
-	 * The map editor moves the real object under the cursor and draws it there, so that
-	 * the designer sees the artwork rather than just the cursor.
+	 * A second cursor footprint, the copy of the placement cursor, is marked the same way
+	 * (outside of the map editor).
 	 */
-	if (Debug_Map && Map.PendingObjectPtr != NULL) {
-		Coord coord = Coord(start + Map.ZoneCell + Map.ZoneOffset, 0);
-		if (rtti == RTTI_BUILDINGTYPE) {
-			coord = Coord_Whole(coord);
+	if (!Debug_Map && Map.CopyPendingObject != NULL) { // RA2: the copy of the placement cursor, 0x6A5BBF onwards
+		if (Map.CopyPendingObject->Fetch_RTTI() == RTTI_BUILDINGTYPE && ((BuildingTypeClass *)Map.CopyPendingObject)->IsGate) { // RA2: as above
+			dims = Cell(3, 3); // RA2: as above
+			start = Cell(-1, -1); // RA2: as above
+		} else {
+			dims = Map.Get_Occupy_Dimensions(Map.CopyCursorSize); // RA2: as above
 		}
-		coord.Z = Map.Get_Height_GL(coord);
-		Map.PendingObjectPtr->Set_Coord(coord);
-		Point2D pixel;
-		Coord_To_Pixel(coord, pixel);
-		if (rtti != RTTI_ISOTILETYPE) {
-			Map.PendingObjectPtr->Editor_Draw_It(pixel, TacticalRect);
-		}
-	}
-
-	/*
-	 * A wall, a fence or a firestorm post joins up with its neighbours, so the run it
-	 * would connect into is previewed as well. Only do so where the object could
-	 * actually be placed.
-	 */
-	if (all_valid && Map.PendingObjectPtr != NULL && Map.PendingObjectPtr->Fetch_RTTI() == RTTI_BUILDING) {
-		BuildingClass * bptr = (BuildingClass *)Map.PendingObjectPtr;
-		if (bptr->Class->IsLaserFencePost) {
-			Draw_Fence_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset);
-		} else if (bptr->Class->IsFirestormWall) {
-			Draw_Firestorm_Wall_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset);
-		} else if (bptr->Class->ToOverlay != NULL && bptr->Class->ToOverlay->IsWall) {
-			Draw_Wall_Placement(drawtrans, Cell(start.X, start.Y) + Map.ZoneCell + Map.ZoneOffset);
+		for (int cx = start.X; cx < dims.X; cx++) { // RA2: as above
+			for (int cy = start.Y; cy < dims.Y; cy++) { // RA2: as above
+				Cell cell = Cell(cx, cy) + Map.CopyZoneCell + Map.CopyZoneOffset; // RA2: as above
+				Coord coord = Coord_Whole(Coord(cell)); // RA2: as above
+				Point2D pixel; // RA2: as above
+				Coord_To_Pixel(coord, pixel); // RA2: as above
+				pixel.X = ISO_TILE_PIXEL_W / -2 + pixel.X; // RA2: as above
+				if (Map.In_Radar(cell)) { // RA2: as above
+					CellClass * cellptr = &Map[cell]; // RA2: as above
+					cellptr->Draw_Placement_Cursor(pixel, TacticalRect, drawtrans); // RA2: as above
+				}
+			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1547,8 +1572,8 @@ void Tactical::Draw_Fence_Placement(bool drawtrans, Cell cell)
 								  : (SHAPE_NONZERO_ALPHA | SHAPE_WIN_REL | SHAPE_CENTER | SHAPE_TRANSLUCENT75);
 			Cell drawcell = Adjacent_Cell(cell, facing);
 			for (int i = count; i > 0; i--) {
-				int yoff = -1 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
-				int zoff = -2 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
+				int yoff = -1 - 15 * Map[drawcell].Height; // RA2: the per level pixel height is the constant 15 here
+				int zoff = -2 - 15 * Map[drawcell].Height; // RA2: as above
 				Coord coord = Coord_Whole(Coord(drawcell));
 				Point2D pixel;
 				Coord_To_Pixel(coord, pixel);
@@ -1561,6 +1586,7 @@ void Tactical::Draw_Fence_Placement(bool drawtrans, Cell cell)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1609,8 +1635,8 @@ void Tactical::Draw_Firestorm_Wall_Placement(bool drawtrans, Cell cell)
 								  : (SHAPE_NONZERO_ALPHA | SHAPE_WIN_REL | SHAPE_CENTER | SHAPE_TRANSLUCENT75);
 			Cell drawcell = Adjacent_Cell(cell, facing);
 			for (int i = count; i > 0; i--) {
-				int yoff = -1 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
-				int zoff = -2 - LEVEL_PIXEL_H_1 * Map[drawcell].Height;
+				int yoff = -1 - 15 * Map[drawcell].Height; // RA2: the per level pixel height is the constant 15 here
+				int zoff = -2 - 15 * Map[drawcell].Height; // RA2: as above
 				Coord coord = Coord_Whole(Coord(drawcell));
 				Point2D pixel;
 				Coord_To_Pixel(coord, pixel);
@@ -1623,6 +1649,7 @@ void Tactical::Draw_Firestorm_Wall_Placement(bool drawtrans, Cell cell)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1671,22 +1698,27 @@ void Tactical::Draw_Wall_Placement(bool drawtrans, Cell cell)
 		if (found && count > 0) {
 			int flags = drawtrans ? (SHAPE_ZERO_ALPHA | SHAPE_WIN_REL | SHAPE_CENTER | SHAPE_TRANSLUCENT75)
 								  : (SHAPE_NONZERO_ALPHA | SHAPE_WIN_REL | SHAPE_CENTER | SHAPE_TRANSLUCENT75);
-			Cell drawcell = Adjacent_Cell(cell, facing);
-			for (int i = count; i > 0; i--) {
-				int yoff = -1 - 15 * Map[drawcell].Height; // RA2: the per level pixel height is the constant 15 here
-				int zoff = -2 - 15 * Map[drawcell].Height; // RA2: as above
+			Cell drawcell = cell; // RA2: copied first, then stepped like the scan cell
+			drawcell = Adjacent_Cell(drawcell, facing); // RA2: as above
+			for (int i = 0; i < count; i++) { // RA2: counted up, the entry test stays in front of the first cell
+				int height = 15 * Map[drawcell].Height; // RA2: as above
+				int zoff = 15 * Map[drawcell].Height; // RA2: as above
+				Point2D offset(0, -1 - height); // RA2: as above
+				zoff = -2 - zoff; // RA2: as above
 				Coord coord = Coord_Whole(Coord(drawcell));
 				Point2D pixel;
 				Coord_To_Pixel(coord, pixel);
+				pixel.X -= ISO_TILE_PIXEL_W / 2; // RA2: the pixel is first moved to the tile's left corner, then back by the same amount
 				Point2D point;
-				point.X = ISO_TILE_PIXEL_W / -2 + pixel.X + ISO_TILE_PIXEL_W / 2;
-				point.Y = pixel.Y + yoff;
+				point.X = pixel.X + ISO_TILE_PIXEL_W / 2; // RA2: as above
+				point.Y = pixel.Y + offset.Y; // RA2: as above
 				Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)DisplayClass::PlacementShapes, 0, point, TacticalRect, (ShapeFlags_Type)flags, 0, zoff);
-				drawcell = Adjacent_Cell(drawcell, facing);
+				drawcell = Adjacent_Cell(drawcell, (FacingType)index); // RA2: the loop's own step names the direction by the loop index rather than the local
 			}
 		}
 	}
 }
+
 
 
 
@@ -2192,47 +2224,51 @@ void Tactical::Draw_Overlays(Rect const & area)
 /// <param name="area">The region of the tactical view to draw the shroud and fog within.</param>
 void Tactical::Draw_Shroud(Rect const & area)
 {
-	Coord lepton = Coord(Pixel_To_Lepton(Point2D(TacPixelX, TacPixelY) + area.Top_Left() - TacticalRect.Top_Left()), 0);
+	Point2D const viewport(TacPixelX, TacPixelY); // RA2: the view origin is a constant of its own
+	Point2D lp = Pixel_To_Lepton(viewport + area.Top_Left() - TacticalRect.Top_Left()); // RA2: the start position is built from its two numbers by the three number Coord constructor, which the executable calls
+	Coord lepton(lp.X, lp.Y, 0); // RA2: as above
 	if (lepton.Y < 0) lepton.Y = 0;
 	if (lepton.X < 0) lepton.X = 0;
 
 	Cell origin = Map[lepton].CellID;
-
 	int ycount = area.Height / (ISO_TILE_PIXEL_H / 2) + 17;
 	int xcount = area.Width / ISO_TILE_PIXEL_W + 4;
-
-	Cell base(origin.X - 2, origin.Y);
+	Cell base = origin; // RA2: copied, then moved two cells left
+	base.X -= 2; // RA2: as above
+	Cell scan = base; // RA2: the scan cell is declared up front and reused
 
 	if (MainWindow != NULL) {
 		int ix, iy;
 		for (iy = 0; iy < ycount; iy++) {
 			Cell step(iy / 2, (iy + 1) / 2);
-			Cell cell = base + step;
+			scan = base + step; // RA2: as above
 
 			for (ix = xcount; ix > 0; ix--) {
-				if (Map.In_Radar(cell)) {
-					CellClass * cellptr = &Map[cell];
+				if (Map.In_Radar(scan)) { // RA2: as above
+					CellClass * cellptr = &Map[scan]; // RA2: as above
 
-					Coord coord = Coord_Whole(Coord(cell));
+					Coord coord = Coord_Whole(Coord(scan)); // RA2: as above
 					Point2D pixel;
 					Coord_To_Pixel(coord, pixel);
-					pixel.X += ISO_TILE_PIXEL_W / -2;
+					pixel.X -= ISO_TILE_PIXEL_W / 2; // RA2: as above
 
 					Rect cellrect(pixel.X, TacticalRect.Y + pixel.Y, ISO_TILE_PIXEL_W, ISO_TILE_PIXEL_H);
 					Rect inter = Intersect(cellrect, area);
 					Rect drawrect = Intersect(TacticalRect, inter);
 
 					if (drawrect.Is_Valid()) {
-						cellptr->Draw_Shroud_And_Fog(pixel + TacticalRect.Top_Left(), drawrect);
+						Point2D origin(TacticalRect.X, TacticalRect.Y); // RA2: the rectangle origin is a point of its own
+						cellptr->Draw_Shroud_And_Fog(pixel + origin, drawrect); // RA2: as above
 					}
 				}
-				cell += Cell(1, -1);
+				scan += Cell(1, -1); // RA2: as above
 			}
 		}
 	}
 
 	AlphaShapeClass::Draw_All(area);
 }
+
 
 
 /// <summary>
@@ -2867,103 +2903,123 @@ void Tactical::Draw_Render_Hooks(ObjectClass * object, Rect const & cliprect)
 /// <param name="forced">Forwarded to each object's Render to force a full redraw.</param>
 void Tactical::Draw_Objects(bool forced)
 {
+	/*
+	 * The visible area, taken from three corners of the view and widened to the lepton
+	 * rectangle that every object has to lie in to be drawn at all.
+	 */
+	int width = TacticalRect.Width; // RA2: the view is measured once, into locals
+	int pixelx = TacPixelX; // RA2: as above
+	int pixely = TacPixelY; // RA2: as above
+	int height = TacticalRect.Height; // RA2: as above
+	Point2D top = Pixel_To_Lepton(Point2D(pixelx + width / 2, pixely - height)); // RA2: the corners of the culling rectangle
+	Point2D right = Pixel_To_Lepton(Point2D(pixelx + width * 2, pixely + height / 2)); // RA2: as above
+	Point2D left = Pixel_To_Lepton(Point2D(pixelx - width, pixely + height / 2)); // RA2: as above
+	Rect view(top.X, top.Y, (right.X - top.X) * 2, (left.Y - top.Y) * 2); // RA2: as above
+	Coord position; // RA2: one position variable, reused for every object
+
 	for (int layer = LAYER_FIRST; layer < LAYER_COUNT; layer++) {
 		for (int index = 0; index < DisplayClass::Layer[layer].Count(); index++) {
 			ObjectClass * obj = DisplayClass::Layer[layer][index];
-			RTTIType rtti = obj->RTTI;
+			obj->IsVisible = false; // RA2: visibility is worked out afresh every frame
 
-			if (rtti == RTTI_BUILDING || (rtti == RTTI_TERRAIN && !((TerrainClass *)obj)->Is_Animating())) {
-
-				/*
-				 * Buildings and terrain that is standing still get their decorations drawn
-				 * here, but only the building renders its body. Terrain that never moves was
-				 * already laid into the cached tile surface by the background pass, so
-				 * drawing it a second time would merely cost time.
-				 */
-				Draw_Render_Hooks(obj,TacticalRect);
-				if (rtti == RTTI_BUILDING) {
-					obj->Render(TacticalRect, forced, true);
-				}
-			}
-			else if (rtti == RTTI_TERRAIN) {
-
-				/*
-				 * Terrain that is animating changes from frame to frame, so it cannot be
-				 * cached and must render here. Under the fog it stays hidden -- the fog
-				 * layer shows it as the player last saw it.
-				 */
-				if (MainWindow && !Debug_Map && Map.Is_Fogged(obj->PositionCoord)) {
-					continue;
-				}
-				obj->Render(TacticalRect, forced, false);
-			}
-			else if (rtti == RTTI_ANIM) {
-
-				/*
-				 * Animations render like anything else, with one exception. An animation
-				 * that lifts the fog when it plays is held back while its cell is still
-				 * fogged, so that it cannot betray what is standing underneath it. The
-				 * animations that belong to a building are exempt, since the building has
-				 * already given itself away.
-				 */
-				AnimClass * anim = (AnimClass *)obj;
-				if (MainWindow && !Debug_Map && Map.Is_Fogged(anim->Center_Coord())
-					&& !anim->IsBuildingAnim && anim->Class->IsShouldFogRemove) {
-					continue;
-				}
-				anim->Render(TacticalRect, forced, false);
-			}
-			else {
-
-				/*
-				 * Everything else is a mobile object, and mobile objects are drawn between
-				 * their two decoration hooks so that the shadow and the selection box end
-				 * up on the correct side of the body.
-				 */
-				if (rtti == RTTI_UNIT || rtti == RTTI_AIRCRAFT || rtti == RTTI_INFANTRY) {
-
-					/// The results of both calls are discarded.
-					obj->Destination_Coord();
-					obj->PositionCoord;
-
-					/*
-					 * A unit that has slipped back under the fog of war is not drawn at
-					 * all. What the player remembers of it is drawn by the fog layer.
-					 */
-					if (MainWindow && !Debug_Map && Scen->Special.IsFogOfWar && Map.Is_Fogged(obj->PositionCoord)) {
+			if (Is_Foot_Object(obj)) { // RA2: the kinds of object are told apart by their abstract flags
+				position = obj->Get_Coord(); // RA2: as above
+				if (view.Is_Point_Within(Point2D(position.X, position.Y))) { // RA2: as above
+					obj->Destination_Coord(0); // RA2: the result is discarded
+					if (Scen->Special.IsFogOfWar && Map.Is_Fogged(position)) { // RA2: as above
 						continue;
 					}
+					Point2D pixel; // RA2: as above
+					if (TacticalMap->Coord_To_Pixel(obj->Center_Coord(), pixel)) { // RA2: as above
+						obj->IsVisible = true; // RA2: as above
+						obj->Draw_Pre_Render(pixel, TacticalRect); // RA2: as above
+						obj->Render(TacticalRect, forced, false); // RA2: as above
+					}
 				}
-
-				Point2D pixel;
-				if (TacticalMap->Coord_To_Pixel(obj->Center_Coord(), pixel)) {
-					obj->Draw_Pre_Render(pixel, TacticalRect);
-					obj->Render(TacticalRect, forced, false);
-					obj->Draw_Post_Render(pixel, TacticalRect);
+			} else if (Is_Techno_Object(obj)) { // RA2: as above
+				position = obj->Get_Coord(); // RA2: as above
+				if (view.Is_Point_Within(Point2D(position.X, position.Y))) { // RA2: as above
+					obj->IsVisible = true; // RA2: as above
+					Draw_Render_Hooks(obj, TacticalRect); // RA2: as above
+					obj->Render(TacticalRect, forced, true); // RA2: as above
+				}
+			} else {
+				RTTIType rtti = obj->Fetch_RTTI(); // RA2: as above
+				if (rtti == RTTI_ANIM) { // RA2: as above
+					position = obj->Center_Coord(); // RA2: as above
+					if (view.Is_Point_Within(Point2D(position.X, position.Y))) { // RA2: as above
+						AnimClass * anim = (AnimClass *)obj; // RA2: as above
+						obj->IsVisible = true; // RA2: as above
+						if (!anim->IsBuildingAnim && anim->Class->IsShouldFogRemove && Map.Is_Fogged(obj->Center_Coord())) { // RA2: an animation that lifts the fog is held back while its cell is fogged
+							continue; // RA2: as above
+						}
+						obj->Render(TacticalRect, forced, false); // RA2: as above
+					}
+				} else if (rtti == RTTI_TERRAIN) { // RA2: as above
+					if (((TerrainClass *)obj)->Class->IsAnimated || ((TerrainClass *)obj)->IsCrumbling) { // RA2: Is_Animating is expanded here
+						position = obj->Get_Coord(); // RA2: as above
+						if (view.Is_Point_Within(Point2D(position.X, position.Y))) { // RA2: as above
+							if (Map.Is_Fogged(position)) { // RA2: as above
+								continue; // RA2: as above
+							}
+							obj->IsVisible = true; // RA2: as above
+							obj->Render(TacticalRect, forced, false); // RA2: as above
+						}
+					}
+				} else {
+					position = obj->Get_Coord(); // RA2: as above
+					if (view.Is_Point_Within(Point2D(position.X, position.Y))) { // RA2: as above
+						Point2D pixel; // RA2: as above
+						if (TacticalMap->Coord_To_Pixel(obj->Center_Coord(), pixel)) { // RA2: as above
+							obj->IsVisible = true; // RA2: as above
+							obj->Draw_Pre_Render(pixel, TacticalRect); // RA2: as above
+							obj->Render(TacticalRect, forced, false); // RA2: as above
+						}
+					}
 				}
 			}
 		}
 
-		if (layer == LAYER_GROUND) {
-
-			/*
-			 * The ground layer is finished, so the pieces that hang off a building -- its
-			 * turret, its sand bags, whatever art is attached to it -- are laid over the
-			 * top of it now, before the layers above the ground are drawn.
-			 */
+		if (layer == LAYER_GROUND) { // RA2: the overlays of the buildings are laid over the finished ground layer
 			for (int bindex = 0; bindex < Buildings.Count(); bindex++) {
 				BuildingClass * bptr = Buildings[bindex];
-				if (bptr->IsDown) {
+				if (bptr->IsDown && bptr->IsVisible) { // RA2: only buildings that were found visible above
 					Point2D pixel;
-					if (Coord_To_Pixel(bptr->Render_Coord(), pixel)) {
+					if (TacticalMap->Coord_To_Pixel(bptr->Render_Coord(), pixel)) { // RA2: as above
 						Rect rect = TacticalRect;
+						if (rect.X > TacticalRect.X) pixel.X += TacticalRect.X - rect.X; // RA2: as above
+						if (rect.Y > TacticalRect.Y) pixel.Y += TacticalRect.Y - rect.Y; // RA2: as above
 						bptr->Draw_Overlays(pixel, rect);
 					}
 				}
 			}
 		}
 	}
+
+	/*
+	 * Second pass over the visible mobile objects, now that everything under them is down:
+	 * their post render hooks (selection boxes and the like).
+	 */
+	for (int layer2 = LAYER_FIRST; layer2 < LAYER_COUNT; layer2++) { // RA2: a pass of its own
+		int count = DisplayClass::Layer[layer2].Count(); // RA2: as above
+		for (int index2 = 0; index2 < count; index2++) { // RA2: as above
+			ObjectClass * obj2 = DisplayClass::Layer[layer2][index2]; // RA2: as above
+			if (obj2->IsVisible && obj2 != NULL && Is_Techno_Object(obj2)) { // RA2: as above
+				if (Is_Foot_Object(obj2)) { // RA2: as above
+					obj2->Destination_Coord(0); // RA2: the result is discarded
+					if (MainWindow && !Debug_Map && Scen->Special.IsFogOfWar && Map.Is_Fogged(obj2->Get_Coord())) { // RA2: as above
+						continue; // RA2: as above
+					}
+				}
+				Point2D pixel; // RA2: as above
+				if (TacticalMap->Coord_To_Pixel(obj2->Center_Coord(), pixel)) { // RA2: as above
+					obj2->Draw_Post_Render(pixel, TacticalRect); // RA2: as above
+				}
+			}
+		}
+	}
 }
+
 
 
 /// <summary>
@@ -3608,7 +3664,7 @@ void Tactical::Draw_Rally_Points(bool inshroud)
 	};
 
 	int phase = (0x7FFFFFFF - Frame) % TICKS_PER_SECOND;
-	int shadow = DSurface::Build_Hicolor_Pixel(BlackColor.Get_Red(), BlackColor.Get_Green(), BlackColor.Get_Blue()); // RA2: a black shadow line is drawn under the colored ones
+	int shadow = DSurface::Build_Hicolor_Pixel(((RGBStruct const &)BlackColor).Red, ((RGBStruct const &)BlackColor).Green, ((RGBStruct const &)BlackColor).Blue); // RA2: a black shadow line is drawn under the colored ones; the gun values are read straight from the stored bytes
 
 	for (int index = CurrentObject.Count() - 1; index >= 0; index--) {
 		ObjectClass * object = CurrentObject[index];
@@ -3617,11 +3673,12 @@ void Tactical::Draw_Rally_Points(bool inshroud)
 		 * Only selected, active buildings of the player that can move units to a rally point
 		 * and have one assigned show a rally line.
 		 */
-		if (object->What_Am_I() == RTTI_BUILDING && object->IsActive && object->IsSelected) { // RA2: one condition instead of the tests that continue
+		if (object->Fetch_RTTI() == RTTI_BUILDING && object->IsActive && object->IsSelected) { // RA2: one condition instead of the tests that continue, and the type is asked through Fetch_RTTI (vtable +0x2C, no argument)
 			BuildingClass * building = (BuildingClass *)object;
 			if (building->House == PlayerPtr && building->Is_Move_Override() && building->ArchiveTarget != NULL) { // RA2: Is_Move_Override replaces the ToBuild and mission tests
+				Coord center = building->Center_Coord(); // RA2: the center is kept in a local of its own before it is projected
 				Point2D start;
-				Coord_To_Pixel(building->Center_Coord(), start);
+				Coord_To_Pixel(center, start); // RA2: as above
 				start += Point2D(TacticalRect.X, TacticalRect.Y);
 
 				Coord rally = building->ArchiveTarget->Center_Coord();
@@ -3641,8 +3698,8 @@ void Tactical::Draw_Rally_Points(bool inshroud)
 					LogicalSurface->Draw_Masked_Dashed_Line(start, end, shadow, _pattern, phase, inshroud); // RA2: as above
 				}
 
-				RGBClass & rgb = building->House->RemapColorRGB; // RA2: the line is drawn in the owner's color, twice, one pixel apart
-				int color = DSurface::Build_Hicolor_Pixel(rgb.Get_Red(), rgb.Get_Green(), rgb.Get_Blue()); // RA2: as above
+				RGBStruct & rgb = (RGBStruct &)building->House->RemapColorRGB; // RA2: the line is drawn in the owner's color, twice, one pixel apart; its gun values are read straight from the stored bytes, not through the int accessors
+				int color = DSurface::Build_Hicolor_Pixel(rgb.Red, rgb.Green, rgb.Blue); // RA2: as above
 				start.Y--; // RA2: as above
 				end.Y--; // RA2: as above
 				if (Clip_Line_To_Rect(start, end, TacticalRect)) {
@@ -3658,6 +3715,21 @@ void Tactical::Draw_Rally_Points(bool inshroud)
 	}
 }
 
+
+
+
+/// <summary>
+/// RA2: the four translation table entries the dashed line drawer animates, saved and restored as one block.
+/// </summary>
+enum { RA2_MOUSE_WAYPOINT = 60 }; // RA2: the waypoint cursor is number 60 (0x3C) in the executable's mouse list; main's MOUSE_WAYPOINT is 36
+
+struct DashEntries // RA2: as above
+{
+	int Entry[4]; // RA2: as above
+};
+
+static ShapeSet const * WaypointMouseShapes; // RA2: the waypoint cursor shapes, fetched on first use
+static wchar_t WaypointText[4]; // RA2: the wide waypoint number text
 
 
 /*
@@ -3685,8 +3757,8 @@ static bool Draw_WaypointPoint_Line_Style[8] = {
 void Tactical::Draw_Waypoints(bool inshroud)
 {
 	int phase = (0x7FFFFFFF - Frame) % TICKS_PER_SECOND;
-	int frame = Map.Get_Mouse_Start_Frame(MOUSE_WAYPOINT);
-	frame += WaypointAnimCounter % Map.Get_Mouse_Frame_Count(MOUSE_WAYPOINT);
+	int start_frame = Map.Get_Mouse_Start_Frame((MouseType)RA2_MOUSE_WAYPOINT); // RA2: the start frame is read first and added after the modulus
+	int frame = WaypointAnimCounter % Map.Get_Mouse_Frame_Count((MouseType)RA2_MOUSE_WAYPOINT) + start_frame; // RA2: as above
 
 	if (Debug_Map) {
 		return;
@@ -3697,13 +3769,13 @@ void Tactical::Draw_Waypoints(bool inshroud)
 	 * drawer's translation table to make the line "march". Preserve those entries up front
 	 * and restore them once every path has been drawn.
 	 */
-	int * dashtable = (int *)((unsigned short *)MouseDrawer->Get_Translate_Table() + 1);
-	int dashsave0 = dashtable[0];
-	int dashsave1 = dashtable[1];
-	int dashsave2 = dashtable[2];
-	int dashsave3 = dashtable[3];
+	DashEntries * dashtable = (DashEntries *)((unsigned short *)MouseDrawer->Get_Translate_Table() + 1); // RA2: the four entries are one 16 byte block copied as a whole
+	DashEntries dashsave = *(DashEntries *)((unsigned short *)MouseDrawer->Get_Translate_Table() + 1); // RA2: as above, the block is addressed afresh rather than through the pointer
 
-	ShapeSet const * mouseshapes = (ShapeSet const *)MixFileClass::Retrieve("MOUSE.SHP");
+	if (WaypointMouseShapes == NULL) { // RA2: the mouse shapes are fetched once and kept in a file scope pointer
+		WaypointMouseShapes = (ShapeSet const *)MixFileClass::Retrieve("MOUSE.SHP"); // RA2: as above
+	}
+	Point2D offset(0, TacticalRect.Y + 1); // RA2: the cursor is drawn one pixel above the line's end
 	int coloridx = (Scen->Theater != THEATER_SNOW) ? LTGREY : BLACK;
 
 	for (PathType path = PATH_FIRST; path < PATH_COUNT; path++) {
@@ -3723,25 +3795,21 @@ void Tactical::Draw_Waypoints(bool inshroud)
 			 * The waypoint cursor itself is drawn only when the waypoint lies within the
 			 * (generously padded) view and on the requested side of the shroud.
 			 */
-			bool onscreen = false;
-			if (Coord_To_Pixel(waypoint->Location, pixel)) {
-				if (inshroud) {
-					onscreen = Map.Is_Shrouded(waypoint->Location);
-				} else {
-					onscreen = !Map.Is_Shrouded(waypoint->Location);
-				}
+			bool onscreen; // RA2: as above
+			if (Coord_To_Pixel(waypoint->Location, pixel) && ((inshroud && Map.Is_Shrouded(waypoint->Location)) || (!inshroud && !Map.Is_Shrouded(waypoint->Location)))) { // RA2: one combined condition
+				onscreen = true; // RA2: as above
+			} else {
+				onscreen = false; // RA2: as above
 			}
 
 			pixel.Y += TacticalRect.Y;
 
 			if (onscreen) {
-				Point2D cursor(pixel.X, pixel.Y - (TacticalRect.Y + 1));
-				Draw_Shape(*LogicalSurface, *MouseDrawer, mouseshapes, frame, cursor, TacticalRect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL));
+				Draw_Shape(*LogicalSurface, *MouseDrawer, WaypointMouseShapes, frame, pixel - offset, TacticalRect, (ShapeFlags_Type)(SHAPE_CENTER | SHAPE_WIN_REL)); // RA2: as above
 
-				static wchar_t buffer[4]; // RA2: wide
-				swprintf(buffer, L"%d", index); // RA2: as above
-				Point2D label(pixel.X - 1, pixel.Y - (TacticalRect.Y + 1) - 25);
-				Simple_Text_Print(buffer, *LogicalSurface, TacticalRect, label, ColorSchemes[coloridx], 0, (TextPrintType)(TPF_CENTER | TPF_EFNT), 1);
+				swprintf(WaypointText, L"%d", index); // RA2: wide, into a file scope buffer
+				Point2D label = pixel - offset + Point2D(-1, -25); // RA2: the label position is built from the cursor position
+				Simple_Text_Print(WaypointText, *LogicalSurface, TacticalRect, label, ColorSchemes[coloridx], 0, (TextPrintType)(TPF_CENTER | TPF_EFNT), 1); // RA2: as above
 			}
 
 			/*
@@ -3754,11 +3822,10 @@ void Tactical::Draw_Waypoints(bool inshroud)
 				nextpixel.Y += TacticalRect.Y;
 
 				if (Clip_Line_To_Rect(pixel, nextpixel, TacticalRect)) {
-					unsigned color = MouseDrawer->Convert_Pixel(3);
 					if (path == PlayerPtr->SelectedPath) {
-						phase = LogicalSurface->Draw_Masked_Dashed_Line(pixel, nextpixel, color, Draw_WaypointPoint_Line_Style, phase, inshroud);
+						phase = LogicalSurface->Draw_Masked_Dashed_Line(pixel, nextpixel, MouseDrawer->Convert_Pixel(3), Draw_WaypointPoint_Line_Style, phase, inshroud); // RA2: the color is converted inside each call
 					} else {
-						LogicalSurface->Draw_Masked_Line(pixel, nextpixel, color, inshroud);
+						LogicalSurface->Draw_Masked_Line(pixel, nextpixel, MouseDrawer->Convert_Pixel(3), inshroud); // RA2: as above
 					}
 				}
 			}
@@ -3768,11 +3835,9 @@ void Tactical::Draw_Waypoints(bool inshroud)
 	/*
 	 * Restore the translation table entries the dashed-line drawer animated.
 	 */
-	dashtable[0] = dashsave0;
-	dashtable[1] = dashsave1;
-	dashtable[2] = dashsave2;
-	dashtable[3] = dashsave3;
+	*dashtable = dashsave; // RA2: restored as one block
 }
+
 
 
 /// <summary>
@@ -3859,9 +3924,10 @@ void Tactical::Debug_Draw_Occupation_Flags(void)
 		Rect inter = Intersect(render, TacticalRect);
 		if (inter.Is_Valid()) {
 			Coord coord = cellptr->Cell_Coord();
-			Point2D abspixel = Coord_To_Pixel_Absolute(coord);
+			Point2D pixel; // RA2: the pixel is relative to the view, through Coord_To_Pixel
+			Coord_To_Pixel(coord, pixel); // RA2: as above
 
-			Rect rect(Point2D(0, TacticalRect.Y) + (abspixel - Point2D(TacPixelX + 2, TacPixelY + 2)), 4, 4);
+			Rect rect = Rect(pixel.X - 2, TacticalRect.Y + pixel.Y - 2, 4, 4); // RA2: the marker square is built directly from the pixel
 
 			/*
 			 * The occupation bits of the ground...
@@ -3883,21 +3949,22 @@ void Tactical::Debug_Draw_Occupation_Flags(void)
 			 * ...and those of the bridge deck above it, plotted a level higher.
 			 */
 			if (cellptr->BridgeFlag.Occupy.NE) {
-				LogicalSurface->Fill_Rect(rect + Point2D(10, -(CELL_PIXEL_H / 4) * BRIDGE_CELL_HEIGHT), color);
+				LogicalSurface->Fill_Rect(rect + Point2D(10, -60), color); // RA2: the bridge deck is plotted 60 pixels higher, as plain numbers
 			}
 			if (cellptr->BridgeFlag.Occupy.SE) {
-				LogicalSurface->Fill_Rect(rect + Point2D(0, 6 - (CELL_PIXEL_H / 4) * BRIDGE_CELL_HEIGHT), color);
+				LogicalSurface->Fill_Rect(rect + Point2D(0, -66), color); // RA2: the bridge deck is plotted 60 pixels higher, as plain numbers
 			}
 			if (cellptr->BridgeFlag.Occupy.SW) {
-				LogicalSurface->Fill_Rect(rect + Point2D(-10, -(CELL_PIXEL_H / 4) * BRIDGE_CELL_HEIGHT), color);
+				LogicalSurface->Fill_Rect(rect + Point2D(-10, -60), color); // RA2: the bridge deck is plotted 60 pixels higher, as plain numbers
 			}
 			if (cellptr->BridgeFlag.Occupy.Building || cellptr->BridgeFlag.Occupy.Monolith || cellptr->BridgeFlag.Occupy.Vehicle) {
-				LogicalSurface->Fill_Rect(rect + Point2D(0, -(CELL_PIXEL_H / 4) * BRIDGE_CELL_HEIGHT), color);
+				LogicalSurface->Fill_Rect(rect + Point2D(0, -60), color); // RA2: the bridge deck is plotted 60 pixels higher, as plain numbers
 			}
 		}
 		cellptr = Map.Iterate();
 	}
 }
+
 
 
 /// <summary>

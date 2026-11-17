@@ -68,10 +68,13 @@
 
 #include "rcptr.h" // RA2
 #include "_theater.h" // RA2
+#include "_keyboar.h" // RA2: Keyboard->Clear in Map_Seed_Dialog_Proc
+#include "keyboard.h" // RA2: as above
 
 #define RA2_SOURCE "D:\\Ra2\\MapGen.cpp" // RA2: the file name RA2 passes to StringTable::LoadString
 
 rc_ptr<WDTTerritory> Find_WDT_Territory(int index); // RA2: 0x769690, the tour's territory with this index (not in this module)
+void __fastcall Send_Map_Preview(MapPreviewClass * preview); // RA2: 0x5C7EF0, sends the preview to the guests (defined in netshare.cpp)
 
 
 
@@ -3392,6 +3395,14 @@ void Clean_Up_RMCache(void)
 /// <param name="callback">Progress callback to run while the map is being built.</param>
 void Do_Random_Map(HWND dialog, bool (*callback)())
 {
+	rc_ptr<WDTTerritory> territory; // RA2: a tour game limits the player count, found as in Fixup_WDT_Settings
+	if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: as above
+		territory = Find_WDT_Territory(Session.TournamentTerritory); // RA2: as above
+	}
+	if (territory.Get() != NULL) { // RA2: as above
+		RandomMapGen.SeedData.NumPlayers = 4; // RA2: as above
+	}
+
 	char *digest = CalcRandomMapDigest(); // RA2: no IsWDT, WDTTerritory (TibSun's use does not compile against RA2's declaration)
 	char name[128];
 	memset(name, 0, sizeof(name));
@@ -3399,8 +3410,7 @@ void Do_Random_Map(HWND dialog, bool (*callback)())
 	strncat(name, digest, sizeof(name));
 	delete digest;
 	strncat(name, ".mmp", sizeof(name));
-	DebugString("Cache filename is %s\n", name);
-	CCFileClass cfile(name);
+	CCFileClass cfile(name); // RA2: no DebugString of the cache file name
 
 	if (cfile.Is_Available()) {
 		if (RandomMapGen.MapPreview == NULL) {
@@ -3421,10 +3431,13 @@ void Do_Random_Map(HWND dialog, bool (*callback)())
 	RMGCallback = callback;
 	RandomMapGen.SeedData.Callback = callback;
 	if (RandomMapGen.SeedData.Seed == -1) {
-		RandomMapGen.SeedData.Seed = Sim_Random_Pick(0U, 65535U);
+		RandomMapGen.SeedData.Seed = NonCriticalRandomNumber(0, 65535); // RA2: the non-critical generator, 0x6388A0
 	}
 	RandomMapGen.Generate_Random_Map(true, dialog);
 	RandomMapGen.MapPreview->Create_Preview();
+	if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends the preview to the other players
+		Send_Map_Preview(RandomMapGen.MapPreview); // RA2: 0x5C7EF0
+	}
 
 	if (RandomMapGen.MapSeeder != NULL) {
 		delete RandomMapGen.MapSeeder;
@@ -3433,8 +3446,8 @@ void Do_Random_Map(HWND dialog, bool (*callback)())
 	RandomMapGen.MapSeeder = new MapSeedClass;
 	memcpy(RandomMapGen.MapSeeder, &RandomMapGen.SeedData, sizeof(RandomMapGen.SeedData));
 
-	Scen->Set_Scenario_Name(Fetch_String(TXT_RANDOM_MAP_DESCRIPTION));
-	Title_Screen_Restore();
+	Scen->Set_Scenario_Name("RandomMap"); // RA2: a literal, not Fetch_String(TXT_RANDOM_MAP_DESCRIPTION)
+	Title_Screen_Restore(false); // RA2: the argument is spelled out
 
 	if (RandomMapGen.MapPreview != NULL) {
 		if (RandomMapGen.MapPreview->Get_Preview_Surface() != NULL) {
@@ -3460,6 +3473,12 @@ void Do_Random_Map(HWND dialog, bool (*callback)())
 
 
 
+
+static int MapSeedSelection = -1; // RA2: 0x7E0ADC
+static bool MapSeedPreviewFlag = true; // RA2: 0x7E0AE0
+namespace OwnerDraw { bool __fastcall Is_Control_Disabled(HWND control); } // RA2: 0x5E4720, defined in ownrdraw.cpp
+
+
 /// <summary>
 /// Dialog procedure for the random map generator ("Map Seed") dialog.
 /// Handles previewing, generating, saving, loading and deleting random maps, and randomizing
@@ -3471,173 +3490,288 @@ void Do_Random_Map(HWND dialog, bool (*callback)())
 /// <param name="wparam">Message-specific first parameter.</param>
 /// <param name="lparam">Message-specific second parameter.</param>
 /// <returns>TRUE if the message was processed, FALSE otherwise.</returns>
-BOOL CALLBACK Map_Seed_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+BOOL CALLBACK Map_Seed_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: RA2's form (0x577BD0); near miss, 5 bytes short: after LoadOptionsClass::Load the exe normalizes the result (test al, al / setne al / test al, al), which no source form tried reproduces
 {
-	static int _unused = -1;
-
-	BOOL result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-	if (result) {
-		return(result);
+	BOOL result = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam); // RA2: as above
+	if (result) { // RA2: as above
+		return(result); // RA2: as above
 	}
 
-	LONG * state = (LONG *)GetWindowLongA(window, DWL_USER);
+	LONG * state = (LONG *)GetWindowLongA(window, DWL_USER); // RA2: as above
 
-	switch (message) {
-
-		/*
-		 * Repaint the map preview, if one exists.
-		 */
-		case WM_PAINT:
-			if (RandomMapGen.MapPreview != NULL) {
-				RandomMapGen.MapPreview->Blit_Preview(window);
-			}
-			ValidateRect(window, NULL);
-			return(0);
+	switch (message) { // RA2: as above
 
 		/*
-		 * Initialize the dialog controls from the current seed settings.
+		 * Repaint the map preview, if one exists, and the progress screen over it.
 		 */
-		case WM_INITDIALOG: {
-			_unused = -1;
-			HWND handle = GetDlgItem(window, IDC_MAPGEN_PREVIEW);
-			if (Debug_Map) {
-				EnableWindow(handle, false);
-			} else {
-				EnableWindow(handle, true);
+		case WM_PAINT: // RA2: the preview is skipped when its frame control is disabled, and the progress screen is drawn over it
+			if (RandomMapGen.MapPreview != NULL) { // RA2: as above
+				HWND frame = GetDlgItem(window, IDC_PREVIEW_FRAME); // RA2: as above
+				if (!OwnerDraw::Is_Control_Disabled(frame)) { // RA2: as above
+					RandomMapGen.MapPreview->Blit_Preview(window); // RA2: as above
+				}
 			}
-			if (RandomMapGen.SeedData.Seed == -1) {
-				RandomMapGen.SeedData.Seed = Sim_Random_Pick(0U, 65535U);
+			if (Progress.Has_Dialog()) { // RA2: as above
+				Progress.Display_Progress(Point2D(-1, -1)); // RA2: as above
 			}
-			RandomMapGen.SeedData.Set_Settings(window);
+			ValidateRect(window, NULL); // RA2: as above
+			return(0); // RA2: as above
 
-			bool enable = RandomMapGen.SeedData.Files_Present();
-			handle = GetDlgItem(window, IDC_MAPGEN_LOAD_MAP);
-			if (handle != NULL) {
-				EnableWindow(handle, enable);
+		/*
+		 * A change of the player count scroll bar invalidates the saved preview.
+		 */
+		case WM_HSCROLL: // RA2: the player count slider
+			if (lparam != 0 && GetDlgCtrlID((HWND)lparam) == IDC_MAPGEN_PLAYERS) { // RA2: as above
+				HWND handle = GetDlgItem(window, 0x6C5); // RA2: the generate button
+				if (handle != NULL) { // RA2: as above
+					EnableWindow(handle, false); // RA2: as above
+				}
+				handle = GetDlgItem(window, 0x6C3); // RA2: the save button
+				if (handle != NULL) { // RA2: as above
+					EnableWindow(handle, false); // RA2: as above
+				}
+				RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+				InvalidateRect(window, NULL, false); // RA2: as above
+				return(0); // RA2: as above
 			}
-			handle = GetDlgItem(window, IDC_MAPGEN_DELETE_MAP);
-			if (handle == NULL) {
-				return(0);
-			}
-			EnableWindow(handle, enable);
-			return(0);
-		}
+			break; // RA2: as above
 
 		case WM_COMMAND:
-			switch (LOWORD(wparam)) {
-
-				/*
-				 * Generate the map and accept the dialog.
-				 */
-				case IDOK:
-					RandomMapGen.SeedData.Get_Settings(window);
-					if (Debug_Map) {
-						RandomMapGen.Generate_Random_Map(false, window);
-						Scen->Set_Scenario_Name(Fetch_String(TXT_RANDOM_MAP_DESCRIPTION));
-						Write_Scenario_INI("RandMap.Map", true);
-					} else {
-						if (RandomMapGen.MapPreview == NULL || RandomMapGen.MapPreview->Get_Preview_Surface() == NULL) {
-							RandomMapGen.Generate_Random_Map(true, window);
-							if (Debug_Map) {
-								Scen->Set_Scenario_Name(Fetch_String(TXT_RANDOM_MAP_DESCRIPTION));
-								Write_Scenario_INI("RandMap.Map", true);
-							}
-						}
-					}
-					*state = 1;
-					return(1);
+			switch (LOWORD(wparam)) { // RA2: as above
 
 				/*
 				 * Cancel the dialog.
 				 */
-				case IDCANCEL:
+				case 0x5C0: // RA2: the cancel button
 					*state = 2;
-					return(1);
+					return(1); // RA2: as above
 
 				/*
-				 * Load a saved map seed.
+				 * A change of any of the choices invalidates the saved preview.
 				 */
-				case IDC_MAPGEN_LOAD_MAP:
-					RandomMapGen.SeedData.Get_Settings(window);
-					if (RandomMapGen.SeedData.LoadOptionsClass::Load() == true) {
-						PostMessageA(window, WM_COMMAND, MAKEWPARAM(IDC_MAPGEN_PREVIEW, BN_CLICKED), (LPARAM)GetDlgItem(window, IDC_MAPGEN_PREVIEW));
+				case IDC_MAPGEN_TIME_OF_DAY: // RA2: the choices
+				case 0x405: // RA2: as above
+				case 0x406: // RA2: as above
+				case 0x407: // RA2: as above
+				case 0x408: // RA2: as above
+					if (HIWORD(wparam) == CBN_SELCHANGE) { // RA2: as above
+						HWND handle = GetDlgItem(window, 0x6C5); // RA2: as above
+						if (handle != NULL) { // RA2: as above
+							EnableWindow(handle, false); // RA2: as above
+						}
+						handle = GetDlgItem(window, 0x6C3); // RA2: as above
+						if (handle != NULL) { // RA2: as above
+							EnableWindow(handle, false); // RA2: as above
+						}
+						RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+						InvalidateRect(window, NULL, false); // RA2: as above
+						return(0); // RA2: as above
 					}
-					RandomMapGen.SeedData.Set_Settings(window);
-					return(0);
+					break; // RA2: as above
+
+				/*
+				 * Build and display a preview of the current map seed.
+				 */
+				case IDC_MAPGEN_PREVIEW: // RA2: the controls are disabled while the map is made
+					MouseCursor->Hide_Mouse(); // RA2: as above
+					if (MapSeedPreviewFlag) { // RA2: as above
+						RandomMapGen.PreviewStale = true; // RA2: as above
+					} else {
+						RandomMapGen.PreviewStale = false; // RA2: as above
+						MapSeedPreviewFlag = true; // RA2: as above
+					}
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x405), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_TIME_OF_DAY), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x407), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x406), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x408), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_PLAYERS), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_SURPRISE), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_PREVIEW), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C2), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C3), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C4), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C5), false); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x5C0), false); // RA2: as above
+					wcscpy(RandomMapGen.SeedData.MapDescription, StringTable::LoadString("TXT_RANDOM_MAP_DESCRIPTION", NULL, RA2_SOURCE, 3793)); // RA2: the description is reset
+					RandomMapGen.Generate_Random_Map(true, window); // RA2: as above
+					RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x405), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_TIME_OF_DAY), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x407), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x406), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x408), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_PLAYERS), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_SURPRISE), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, IDC_MAPGEN_PREVIEW), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C2), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C3), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C4), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x6C5), true); // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x5C0), true); // RA2: as above
+					if (RandomMapGen.MapSeeder != NULL) { // RA2: as above
+						delete RandomMapGen.MapSeeder; // RA2: as above
+					}
+					RandomMapGen.MapSeeder = new MapSeedClass; // RA2: as above
+					memcpy(RandomMapGen.MapSeeder, &RandomMapGen.SeedData, sizeof(MapSeedClass)); // RA2: as above
+					MouseCursor->Show_Mouse(); // RA2: as above
+					Keyboard->Clear(); // RA2: as above
+					PostMessageA(window, WM_PAINT, 0, 0); // RA2: as above
+					return(0); // RA2: as above
+
+				/*
+				 * Randomize the generator settings.
+				 */
+				case IDC_MAPGEN_SURPRISE: { // RA2: the settings are drawn here, not by Randomize
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					RandomMapGen.SeedData.Set_Settings(window); // RA2: as above
+					RandomMapGen.SeedData.Biome = (unsigned int)NonCriticalRandomNumber(0, 100) >= 50; // RA2: as above
+					RandomMapGen.SeedData.MapType = NonCriticalRandomNumber(1, 4); // RA2: as above
+					RandomMapGen.SeedData.Time = NonCriticalRandomNumber(0, 3); // RA2: as above
+					RandomMapGen.SeedData.Resources = NonCriticalRandomNumber(0, 3); // RA2: as above
+					RandomMapGen.SeedData.Width = NonCriticalRandomNumber(0, 3); // RA2: as above
+					RandomMapGen.SeedData.Height = RandomMapGen.SeedData.Width; // RA2: as above
+					RandomMapGen.SeedData.Randomize_For_Map_Type(RandomMapGen.SeedData.MapType); // RA2: as above
+					wcscpy(RandomMapGen.SeedData.MapDescription, StringTable::LoadString("TXT_RANDOM_MAP_DESCRIPTION", NULL, RA2_SOURCE, 3793)); // RA2: as above
+					RandomMapGen.SeedData.Seed = NonCriticalRandomNumber(0, 65535); // RA2: as above
+					RandomMapGen.SeedData.Fixup_Settings(); // RA2: as above
+					RandomMapGen.SeedData.Set_Settings(window); // RA2: as above
+					delete RandomMapGen.MapPreview; // RA2: the old preview is dropped
+					RandomMapGen.MapPreview = NULL; // RA2: as above
+					HWND handle = GetDlgItem(window, 0x6C5); // RA2: as above
+					if (handle != NULL) { // RA2: as above
+						EnableWindow(handle, false); // RA2: as above
+					}
+					handle = GetDlgItem(window, 0x6C3); // RA2: as above
+					if (handle != NULL) { // RA2: as above
+						EnableWindow(handle, false); // RA2: as above
+					}
+					InvalidateRect(window, NULL, false); // RA2: as above
+					return(0); // RA2: as above
+				}
 
 				/*
 				 * Save the current map seed.
 				 */
-				case IDC_MAPGEN_SAVE_MAP: {
-					RandomMapGen.SeedData.Get_Settings(window);
-					RandomMapGen.SeedData.MapDescription[0] = '\0';
-					RandomMapGen.SeedData.LoadOptionsClass::Save(RandomMapGen.SeedData.MapDescription);
+				case 0x6C3: { // RA2: the save button
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					RandomMapGen.SeedData.LoadOptionsClass::Save(RandomMapGen.SeedData.MapDescription); // RA2: as above
 
-					bool enable = RandomMapGen.SeedData.Files_Present();
-					HWND handle = GetDlgItem(window, IDC_MAPGEN_LOAD_MAP);
-					if (handle != NULL) {
-						EnableWindow(handle, enable);
+					bool enable = RandomMapGen.SeedData.Files_Present(); // RA2: as above
+					HWND handle = GetDlgItem(window, 0x6C2); // RA2: the load button
+					if (handle != NULL) { // RA2: as above
+						EnableWindow(handle, enable); // RA2: as above
 					}
-					handle = GetDlgItem(window, IDC_MAPGEN_DELETE_MAP);
-					if (handle == NULL) {
-						return(0);
+					handle = GetDlgItem(window, 0x6C4); // RA2: the delete button
+					if (handle == NULL) { // RA2: as above
+						return(0); // RA2: as above
 					}
-					EnableWindow(handle, enable);
-					return(0);
+					EnableWindow(handle, enable); // RA2: as above
+					return(0); // RA2: as above
+				}
+
+				/*
+				 * Load a saved map seed.
+				 */
+				case 0x6C2: { // RA2: the load button
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					bool loaded = RandomMapGen.SeedData.LoadOptionsClass::Load(); // RA2: held in a local
+					if (loaded) { // RA2: as above
+						MapSeedPreviewFlag = false; // RA2: the next preview starts fresh
+						PostMessageA(window, WM_COMMAND, MAKEWPARAM(IDC_MAPGEN_PREVIEW, BN_CLICKED), (LPARAM)GetDlgItem(window, IDC_MAPGEN_PREVIEW)); // RA2: as above
+					}
+					while (MouseCursor->Get_Mouse_State() != 0) { // RA2: the mouse is shown again
+						MouseCursor->Show_Mouse(); // RA2: as above
+					}
+					RandomMapGen.SeedData.Set_Settings(window); // RA2: as above
+					return(0); // RA2: as above
 				}
 
 				/*
 				 * Delete the saved map seed.
 				 */
-				case IDC_MAPGEN_DELETE_MAP: {
-					RandomMapGen.SeedData.Get_Settings(window);
-					RandomMapGen.SeedData.LoadOptionsClass::Delete();
+				case 0x6C4: { // RA2: the delete button
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					RandomMapGen.SeedData.LoadOptionsClass::Delete(); // RA2: as above
 
-					bool enable = RandomMapGen.SeedData.Files_Present();
-					HWND handle = GetDlgItem(window, IDC_MAPGEN_LOAD_MAP);
-					if (handle != NULL) {
-						EnableWindow(handle, enable);
+					bool enable = RandomMapGen.SeedData.Files_Present(); // RA2: as above
+					HWND handle = GetDlgItem(window, 0x6C2); // RA2: as above
+					if (handle != NULL) { // RA2: as above
+						EnableWindow(handle, enable); // RA2: as above
 					}
-					handle = GetDlgItem(window, IDC_MAPGEN_DELETE_MAP);
-					if (handle == NULL) {
-						return(0);
+					handle = GetDlgItem(window, 0x6C4); // RA2: as above
+					if (handle == NULL) { // RA2: as above
+						return(0); // RA2: as above
 					}
-					EnableWindow(handle, enable);
-					return(0);
+					EnableWindow(handle, enable); // RA2: as above
+					return(0); // RA2: as above
 				}
 
 				/*
-				 * Build and display a preview of the current map seed.
+				 * Generate the map and accept the dialog.
 				 */
-				case IDC_MAPGEN_PREVIEW:
-					RandomMapGen.SeedData.Get_Settings(window);
-					RandomMapGen.Generate_Random_Map(true, window);
-					RandomMapGen.MapPreview->Create_Preview();
-					if (RandomMapGen.MapSeeder != NULL) {
-						delete RandomMapGen.MapSeeder;
+				case 0x6C5: // RA2: the generate button
+					RandomMapGen.SeedData.Get_Settings(window); // RA2: as above
+					if (Debug_Map) { // RA2: as above
+						RandomMapGen.Generate_Random_Map(false, window); // RA2: as above
+						Scen->Set_Scenario_Name("Random Map"); // RA2: a literal
+						Write_Scenario_INI("RandMap.Map", true); // RA2: as above
+					} else {
+						if (RandomMapGen.MapPreview == NULL || RandomMapGen.MapPreview->Get_Preview_Surface() == NULL) { // RA2: as above
+							RandomMapGen.Generate_Random_Map(true, window); // RA2: as above
+							if (Debug_Map) { // RA2: as above
+								Scen->Set_Scenario_Name("Random Map"); // RA2: as above
+								Write_Scenario_INI("RandMap.Map", true); // RA2: as above
+							}
+						}
 					}
-					RandomMapGen.MapSeeder = new MapSeedClass;
-					memcpy(RandomMapGen.MapSeeder, &RandomMapGen.SeedData, sizeof(MapSeedClass));
-					PostMessageA(window, WM_PAINT, 0, 0);
-					return(0);
-
-				/*
-				 * Randomize the generator settings.
-				 */
-				case IDC_MAPGEN_SURPRISE:
-					RandomMapGen.SeedData.Get_Settings(window);
-					RandomMapGen.SeedData.Randomize();
-					RandomMapGen.SeedData.Set_Settings(window);
-					return(0);
-
-				default:
-					return(0);
+					*state = 1;
+					return(1); // RA2: as above
 			}
+			break; // RA2: the other commands fall out to the bottom
 
-		default:
-			return(0);
+		/*
+		 * Initialize the dialog controls from the current seed settings.
+		 */
+		case 0x497: { // RA2: RA2's own message to set the dialog up (WM_USER + 0x97)
+			MapSeedSelection = -1; // RA2: a file scope variable at 0x7E0ADC
+			HWND handle = GetDlgItem(window, IDC_MAPGEN_PREVIEW); // RA2: as above
+			if (Debug_Map) { // RA2: as above
+				EnableWindow(handle, false); // RA2: as above
+			} else {
+				EnableWindow(handle, true); // RA2: as above
+			}
+			if (RandomMapGen.SeedData.Seed == -1) { // RA2: as above
+				RandomMapGen.SeedData.Seed = Scen->RandomNumber(0, 65535); // RA2: the scenario's own generator
+				RandomMapGen.PreviewStale = true; // RA2: as above
+			}
+			MapSeedPreviewFlag = true; // RA2: a file scope variable at 0x7E0AE0
+			RandomMapGen.SeedData.Set_Settings(window); // RA2: as above
+
+			bool enable = RandomMapGen.SeedData.Files_Present(); // RA2: as above
+			handle = GetDlgItem(window, 0x6C2); // RA2: as above
+			if (handle != NULL) { // RA2: as above
+				EnableWindow(handle, enable); // RA2: as above
+			}
+			handle = GetDlgItem(window, 0x6C4); // RA2: as above
+			if (handle != NULL) { // RA2: as above
+				EnableWindow(handle, enable); // RA2: as above
+			}
+			handle = GetDlgItem(window, 0x6C5); // RA2: as above
+			if (handle != NULL) { // RA2: as above
+				EnableWindow(handle, false); // RA2: as above
+			}
+			handle = GetDlgItem(window, 0x6C3); // RA2: as above
+			if (handle != NULL) { // RA2: as above
+				EnableWindow(handle, false); // RA2: as above
+			}
+			return(0); // RA2: as above
+		}
 	}
+	return(0); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -4432,56 +4566,58 @@ inline double Sample_Truncated_Normal_Inline(double mean, double scale, double l
 /// Reads the random map generator's settings from RMG.INI's General section: the tiberium limits, the level light
 /// and theater ambient light lists, the vegetation limits, the tree count and the buildings that light ore patches.
 /// </summary>
-void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960
+void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960; near miss, the exe keeps the addresses of the second and third list in registers instead of the first
 {
-	CCFileClass file("RMG.INI");
-	CCINIClass * ini = new CCINIClass;
-	ini->Load(file, false);
+	static char const * section = "General"; // RA2: the section name is a static pointer (0x7E0BE4), read for every key
+	CCFileClass file("RMG.INI"); // RA2: as above
+	CCINIClass * ini = new CCINIClass; // RA2: as above
+	ini->Load(file, false); // RA2: as above
 
-	RMGLevelLightSettings.Clear();
-	RMGVegetationMinimums.Clear();
-	RMGVegetationMaximums.Clear();
-	TemperateOrePatchLamps.Clear();
-	SnowOrePatchLamps.Clear();
-	TemperateAmbientLight.Clear();
-	SnowAmbientLight.Clear();
+	RMGLevelLightSettings.Clear(); // RA2: as above
+	RMGVegetationMinimums.Clear(); // RA2: as above
+	RMGVegetationMaximums.Clear(); // RA2: as above
+	TemperateOrePatchLamps.Clear(); // RA2: as above
+	SnowOrePatchLamps.Clear(); // RA2: as above
+	TemperateAmbientLight.Clear(); // RA2: as above
+	SnowAmbientLight.Clear(); // RA2: as above
 
-	RMGMinimumTiberium = ini->Get_Int("General", "RMGMinimumTiberium", RMGMinimumTiberium);
-	RMGMaximumTiberium = ini->Get_Int("General", "RMGMaximumTiberium", RMGMaximumTiberium);
-	RMGLevelLightSettings = ini->Get_IntList("General", "RMGLevelLightSettings", RMGLevelLightSettings);
-	RMGVegetationMinimums = ini->Get_IntList("General", "RMGVegetationMinimums", RMGVegetationMinimums);
-	RMGVegetationMaximums = ini->Get_IntList("General", "RMGVegetationMaximums", RMGVegetationMaximums);
-	TemperateAmbientLight = ini->Get_IntList("General", "TemperateAmbientLight", TemperateAmbientLight);
-	SnowAmbientLight = ini->Get_IntList("General", "SnowAmbientLight", SnowAmbientLight);
-	TemperateAmbientRed = ini->Get_IntList("General", "TemperateAmbientRed", TemperateAmbientRed);
-	TemperateAmbientGreen = ini->Get_IntList("General", "TemperateAmbientGreen", TemperateAmbientGreen);
-	TemperateAmbientBlue = ini->Get_IntList("General", "TemperateAmbientBlue", TemperateAmbientBlue);
-	SnowAmbientRed = ini->Get_IntList("General", "SnowAmbientRed", SnowAmbientRed);
-	SnowAmbientGreen = ini->Get_IntList("General", "SnowAmbientGreen", SnowAmbientGreen);
-	SnowAmbientBlue = ini->Get_IntList("General", "SnowAmbientBlue", SnowAmbientBlue);
-	MaxTrees = ini->Get_Int("General", "MaxTrees", MaxTrees);
+	RMGMinimumTiberium = ini->Get_Int(section, "RMGMinimumTiberium", RMGMinimumTiberium); // RA2: as above
+	RMGMaximumTiberium = ini->Get_Int(section, "RMGMaximumTiberium", RMGMaximumTiberium); // RA2: as above
+	RMGLevelLightSettings = ini->Get_IntList(section, "RMGLevelLightSettings", RMGLevelLightSettings); // RA2: as above
+	RMGVegetationMinimums = ini->Get_IntList(section, "RMGVegetationMinimums", RMGVegetationMinimums); // RA2: as above
+	RMGVegetationMaximums = ini->Get_IntList(section, "RMGVegetationMaximums", RMGVegetationMaximums); // RA2: as above
+	TemperateAmbientLight = ini->Get_IntList(section, "TemperateAmbientLight", TemperateAmbientLight); // RA2: as above
+	SnowAmbientLight = ini->Get_IntList(section, "SnowAmbientLight", SnowAmbientLight); // RA2: as above
+	TemperateAmbientRed = ini->Get_IntList(section, "TemperateAmbientRed", TemperateAmbientRed); // RA2: as above
+	TemperateAmbientGreen = ini->Get_IntList(section, "TemperateAmbientGreen", TemperateAmbientGreen); // RA2: as above
+	TemperateAmbientBlue = ini->Get_IntList(section, "TemperateAmbientBlue", TemperateAmbientBlue); // RA2: as above
+	SnowAmbientRed = ini->Get_IntList(section, "SnowAmbientRed", SnowAmbientRed); // RA2: as above
+	SnowAmbientGreen = ini->Get_IntList(section, "SnowAmbientGreen", SnowAmbientGreen); // RA2: as above
+	SnowAmbientBlue = ini->Get_IntList(section, "SnowAmbientBlue", SnowAmbientBlue); // RA2: as above
+	MaxTrees = ini->Get_Int(section, "MaxTrees", MaxTrees); // RA2: as above
 
-	char buffer[1024];
-	if (ini->Get_String("General", "TemperateOrePatchLamps", "", buffer, sizeof(buffer))) {
-		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) {
-			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name);
-			if (lamp != NULL) {
-				TemperateOrePatchLamps.Add(lamp);
+	char buffer[1024]; // RA2: as above
+	if (ini->Get_String(section, "TemperateOrePatchLamps", "", buffer, sizeof(buffer))) { // RA2: as above
+		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) { // RA2: as above
+			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name); // RA2: as above
+			if (lamp != NULL) { // RA2: as above
+				TemperateOrePatchLamps.Add(lamp); // RA2: as above
 			}
 		}
 	}
-	if (ini->Get_String("General", "SnowOrePatchLamps", "", buffer, sizeof(buffer))) {
-		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) {
-			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name);
-			if (lamp != NULL) {
-				SnowOrePatchLamps.Add(lamp);
+	if (ini->Get_String(section, "SnowOrePatchLamps", "", buffer, sizeof(buffer))) { // RA2: as above
+		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) { // RA2: as above
+			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name); // RA2: as above
+			if (lamp != NULL) { // RA2: as above
+				SnowOrePatchLamps.Add(lamp); // RA2: as above
 			}
 		}
 	}
 
-	delete ini;
-	file.Close();
+	delete ini; // RA2: as above
+	file.Close(); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -4494,8 +4630,11 @@ void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960
 /// <param name="full_init">Should the scenario be rebuilt from scratch and the preview redrawn
 /// between phases?</param>
 /// <param name="dialog">The map generator dialog to repaint as the preview is refreshed.</param>
-void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
+void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog) // RA2: RA2's form (0x57A0D0): no ice smoothing, veinholes, lights or urban areas; RMG.INI read here; the preview goes to the guests of a tour game
 {
+	int index; // RA2: counters shared by the loops below
+	CellClass * cptr; // RA2: as above
+
 	if (RMGCallback != NULL) RMGCallback();
 
 	RMGRandom = Random2Class(SeedData.Seed);
@@ -4503,11 +4642,16 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (!Scen->IsReadingScenario) {
+	bool show_progress = !Scen->IsReadingScenario; // RA2: kept in a local, the progress screen is closed again at the end
+	if (show_progress) { // RA2: the local flag
 		Progress.Initialize(100, 1, dialog); // RA2: the dialog window
 		Progress.Set_Graphic_Data("PROGBAR2.SHP");
 		Progress.Set_Layout(Point2D(-1, -1), NULL, false, true); // RA2: the layout is set apart
 		Progress.Display_Progress();
+		HWND control = GetDlgItem(dialog, 0x638); // RA2: a control of the dialog, shown while the map is made
+		if (control != NULL) { // RA2: as above
+			ShowWindow(control, SW_SHOW); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
@@ -4518,44 +4662,56 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	ScenarioInit++;
+	ScenarioInit++; // RA2: as above
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
+	Read_RMG_INI(); // RA2: RMG.INI is read here, not in the constructor
+
 	DebugString("RMG: Seeding water\n");
 
-	if (SeedData.WaterAmount != 0) {
-		Seed_Water();
+	if (SeedData.MapType == 3 || SeedData.MapType == 4) { // RA2: the inland and mountainous maps keep their water apart from the land
+		if (SeedData.WaterAmount != 0) { // RA2: as above
+			Seed_Water(); // RA2: as above
+		}
+	} else {
+		Seed_Land(); // RA2: the other maps lay land down first
 	}
+
+	Vary_Water_Tiles(); // RA2: 0x57DE10
 
 	Update_Progress(55);
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (SeedData.Biome == BIOME_TUNDRA) {
-		DebugString("RMG: Smooting ice\n");
-		Smooth_Ice();
-	}
-
-	Update_Progress(60);
+	Update_Progress(60); // RA2: no ice smoothing
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
@@ -4570,29 +4726,34 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	DebugString("RMG: Making regions\n");
 
-	if (SeedData.Biome != BIOME_TUNDRA) {
-		MapRegionClass::Make_Ice_Regions();
+	if (SeedData.MapType == 4 || SeedData.MapType == 3) { // RA2: as above
+		MapRegionClass::Make_Ice_Regions(); // RA2: as above
+		MapRegionClass::Make_Regions(); // RA2: as above
+		Fixup_Cliff_Corners(); // RA2: 0x5831C0
+		Map.Build_All_Cliffs(0, -1); // RA2: as above
+		Vary_Cliff_Runs(); // RA2: 0x582FD0
 	}
-	MapRegionClass::Make_Regions();
-	Map.Build_All_Cliffs(0, -1);
 
 	Update_Progress(70);
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
+	Scatter_Green_Tiles(); // RA2: 0x57CF20
+
 	DebugString("RMG: Recalculating cell attributes\n");
-	Map.Reset_Iterator();
-	CellClass *cptr = Map.Iterate();
-	while (cptr != NULL) {
-		cptr->Recalc_Attributes();
-		cptr = Map.Iterate();
+	Map.Reset_Iterator(); // RA2: as above
+	for (cptr = Map.Iterate(); cptr != NULL; cptr = Map.Iterate()) { // RA2: as above
+		cptr->Recalc_Attributes(-1); // RA2: as above
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
@@ -4609,12 +4770,9 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 		}
 	}
 
-	DebugString("RMG: Adding lights\n");
-	Generate_Lights();
-
-	DebugString("RMG: Adding veinholes\n");
-	if (Scen->Theater == THEATER_TEMPERATE) {
-		Generate_Veinholes();
+	DebugString("RMG: Adding tech buildings\n"); // RA2: the neutral buildings stand in for the lights and urban areas
+	if (SeedData.MapType != 0) { // RA2: as above
+		Generate_Neutral_Buildings(); // RA2: 0x58AD90
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
@@ -4622,52 +4780,63 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 	DebugString("RMG: Creating tiberium\n");
 	Create_Tiberium();
 
-	if (RMGCallback != NULL) RMGCallback(); // RA2: no TiberiumLayoutCells (each region keeps its own StartCells)
+	if (RMGCallback != NULL) RMGCallback(); // RA2: as above
+
+	if (RMGCellData != NULL) { // RA2: the work cells are reset for the next stage
+		int size = MapCellStride * MapCellStride; // RA2: as above
+		for (index = 0; index < size; index++) { // RA2: as above
+			RMGCellData[index].RegionID = -1; // RA2: as above
+			RMGCellData[index].SpreadID = -1; // RA2: as above
+		}
+	}
+
+	for (index = MapRegionClass::MapRegions.Count() - 1; index >= 0; index--) { // RA2: the regions are dropped here as well as at the end
+		MapRegionClass * region = MapRegionClass::MapRegions[index]; // RA2: as above
+		if (region != NULL) { // RA2: as above
+			delete region; // RA2: as above
+		}
+	}
+
+	MapRegionClass::TotalCount = 0; // RA2: as above
 
 	DebugString("RMG: Recalculating cell attributes\n");
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL) {
-		cptr->Recalc_Attributes();
-		cptr = Map.Iterate();
+	Map.Reset_Iterator(); // RA2: as above
+	for (cptr = Map.Iterate(); cptr != NULL; cptr = Map.Iterate()) { // RA2: as above
+		cptr->Recalc_Attributes(-1); // RA2: as above
 	}
 
 	Update_Progress(80);
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	DebugString("RMG: Generating urban areas\n");
-
-	if (SeedData.Biome == BIOME_TEMPERATE || SeedData.Biome == BIOME_DESERT || SeedData.Biome == BIOME_MUTATED) {
-		Generate_Urban_Areas();
-	} else {
-		Generate_Rural_Areas();
-	}
-
-	Update_Progress(85);
+	Update_Progress(85); // RA2: no urban or rural areas
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
 	DebugString("RMG: Recalculating cell attributes\n");
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL) {
-		cptr->Recalc_Attributes();
-		cptr = Map.Iterate();
+	Map.Reset_Iterator(); // RA2: as above
+	for (cptr = Map.Iterate(); cptr != NULL; cptr = Map.Iterate()) { // RA2: as above
+		cptr->Recalc_Attributes(-1); // RA2: as above
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
@@ -4679,16 +4848,19 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
 	DebugString("RMG: Creating LATs, rocks etc\n");
 
-	if (SeedData.Biome == BIOME_DESERT || SeedData.Biome == BIOME_TEMPERATE || SeedData.Biome == BIOME_MUTATED) {
+	if (SeedData.Biome == 0) { // RA2: only the temperate biome
 		Seed_Vegetation();
 		Generate_Vegetation();
 	} else {
@@ -4702,9 +4874,12 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	if (full_init) {
-		RandomMapGen.MapPreview->Create_Preview();
-		SendMessage(dialog, WM_PAINT, 0, 0);
+	if (full_init) { // RA2: as above
+		RandomMapGen.MapPreview->Create_Preview(); // RA2: as above
+		SendMessage(dialog, WM_PAINT, 0, 0); // RA2: as above
+		if (Session.Type == GAME_INTERNET && Session.TournamentState == 2) { // RA2: a tour game sends each new preview to the guests
+			Send_Map_Preview(RandomMapGen.MapPreview); // RA2: as above
+		}
 	}
 
 	ScenarioInit--;
@@ -4712,17 +4887,14 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 	if (RMGCallback != NULL) RMGCallback();
 
 	DebugString("RMG: Recalculating cell attributes\n");
-	Map.Reset_Iterator();
-	cptr = Map.Iterate();
-	while (cptr != NULL) {
-		cptr->Recalc_Attributes();
-		cptr = Map.Iterate();
+	Map.Reset_Iterator(); // RA2: as above
+	for (cptr = Map.Iterate(); cptr != NULL; cptr = Map.Iterate()) { // RA2: as above
+		cptr->Recalc_Attributes(-1); // RA2: as above
 	}
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	VeinholeMonsterClass::Init_Vein_Growth_System(true);
-	TiberiumClass::Init_Tiberium_Growth_System();
+	TiberiumClass::Init_Tiberium_Growth_System(); // RA2: no veinhole growth system
 	TiberiumClass::Init_Tiberium_Spread_System();
 
 	DebugString("RMG: Cleanup\n");
@@ -4735,8 +4907,8 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 		RMGCellData = NULL;
 	}
 
-	for (int i = MapRegionClass::MapRegions.Count() - 1; i >= 0; i--) {
-		MapRegionClass * region = MapRegionClass::MapRegions[i];
+	for (index = MapRegionClass::MapRegions.Count() - 1; index >= 0; index--) { // RA2: as above
+		MapRegionClass * region = MapRegionClass::MapRegions[index]; // RA2: as above
 		if (region != NULL) {
 			delete region;
 		}
@@ -4752,8 +4924,16 @@ void MapGeneratorClass::Generate_Random_Map(bool full_init, HWND dialog)
 
 	DebugString("RMG: Done\n");
 
-	Progress.Clear_Dialog(); // RA2: 0x6203D0, the window is forgotten
+	if (show_progress) { // RA2: the progress screen is closed again
+		HWND control = GetDlgItem(dialog, 0x638); // RA2: as above
+		if (control != NULL) { // RA2: as above
+			ShowWindow(control, SW_HIDE); // RA2: as above
+		}
+		Update_Progress(0); // RA2: as above
+		Progress.Clear_Dialog(); // RA2: 0x6203D0, the window is forgotten
+	}
 }
+
 
 
 /// <summary>
@@ -4795,87 +4975,62 @@ void MapGeneratorClass::Cleanup(void)
 /// objects, houses and theater data -- which is what the generator dialog does between previews.
 /// </summary>
 /// <param name="full_init">Should the whole scenario and theater be rebuilt from scratch?</param>
-void MapGeneratorClass::Init_Map(bool full_init)
+void MapGeneratorClass::Init_Map(bool full_init) // RA2: RA2's form (0x57AE00): the sizes, lighting and theater come from RA2's own tables, the map is rebuilt in RA2's order
 {
-	int biome = SeedData.Biome;
+	int index; // RA2: shared by the loops below
+	int size_index = SeedData.NumPlayers - 2; // RA2: as above
+	float width_frac = SeedData.Width * (1.0f / 3.0f); // RA2: as above
+	float height_frac = SeedData.Height * (1.0f / 3.0f); // RA2: as above
 
-	char const *_theaters[BIOME_COUNT] = {
-		"SNOW",
-		"SNOW",
-		"TEMPERATE",
-		"TEMPERATE",
-		"TEMPERATE",
-	};
+	Read_RMG_INI(); // RA2: RMG.INI is read first
 
-	char const *_fills[BIOME_COUNT] = {
-		"Clear",
-		"Clear",
-		"Clear",
-		"Clear",
-		"Clear"
-	};
-
-	double _tod_values[TIME_OF_DAY_COUNT] = {
-		0.75,
-		1.0,
-		0.75,
-		0.5
-	};
-
-	double tod = _tod_values[SeedData.Time];
-
-	TheaterType _biome_to_theater[BIOME_COUNT] = {
-		THEATER_SNOW,
-		THEATER_SNOW,
-		THEATER_TEMPERATE,
-		THEATER_TEMPERATE,
-		THEATER_TEMPERATE,
-	};
-
-	double _tod_scales[2] = {
-		1.0,
-		0.75
-	};
-
-	double scale = _tod_scales[_biome_to_theater[biome]];
+	if (SeedData.MapType != 3 && SeedData.MapType != 4) { // RA2: only the maps with land are cut down to a size
+		width_frac = width_frac < 1.2 ? width_frac : 1.2; // RA2: as above
+		height_frac = height_frac < 1.2 ? height_frac : 1.2; // RA2: as above
+	}
 
 	/*
 	 * Interpolate the local map dimensions between the minimum and maximum size
 	 * tables (indexed by player count) by the requested Width/Height fraction.
 	 */
-	static const int _width_min[] = {50, 65, 75, 85, 100, 120, 135};
-	static const int _width_max[] = {100, 115, 128, 140, 160, 170, 175};
-	static const int _height_min[] = {50, 65, 75, 85, 100, 120, 135};
-	static const int _height_max[] = {100, 115, 128, 140, 160, 170, 175};
+	static const int _width_min[] = {70, 70, 70, 80, 90, 100, 100}; // RA2: the tables at 0x7A5B6C
+	static const int _width_max[] = {80, 80, 80, 90, 100, 110, 120}; // RA2: 0x7A5B88
+	static const int _height_min[] = {70, 70, 70, 80, 90, 100, 100}; // RA2: 0x7A5BA4
+	static const int _height_max[] = {80, 80, 80, 90, 100, 110, 120}; // RA2: 0x7A5BC0
 
-	int size_index = SeedData.NumPlayers - 2;
-	float width_frac = SeedData.Width * (1.0f / 3.0f);
-	float height_frac = SeedData.Height * (1.0f / 3.0f);
 	LocalWidth = (int)(_width_min[size_index] * (1.0f - width_frac) + _width_max[size_index] * width_frac);
 	LocalHeight = (int)(_height_min[size_index] * (1.0f - height_frac) + _height_max[size_index] * height_frac);
 
-	CCINIClass ini;
-
 	Rect size(0, 0, LocalWidth + 4, LocalHeight + 12);
 	Rect lsize(2, 5, LocalWidth, LocalHeight);
+
+	CellHeight = 4; // RA2: as above
+
+	CCINIClass ini; // RA2: as above
 
 	ini.Clear();
 
 	CellHeight = 4;
 
-	ini.Put_String("Map", "Theater", _theaters[biome]);
+	ini.Put_String("Map", "Theater", Theaters[SeedData.Biome].Name); // RA2: the biome is the theater
 	ini.Put_Rect("Map", "Size", size);
 	ini.Put_Rect("Map", "LocalSize", lsize);
 	ini.Put_Int("Map", "Level", CellHeight, 0);
-	ini.Put_String("Map", "Fill", _fills[biome]);
 	ini.Put_String(HouseTypes[HOUSE_GOOD]->IniName, "TechLevel", "0");
 	ini.Put_String("Basic", "Player", HouseTypes[HOUSE_GOOD]->IniName);
-	ini.Put_Float("Lighting", "Ambient", tod * scale);
+	double ambient = (SeedData.Biome == 0 ? TemperateAmbientLight[SeedData.Time] : SnowAmbientLight[SeedData.Time]) * 0.01; // RA2: the ambient light comes from RMG.INI
+	ini.Put_Float("Lighting", "Ambient", ambient); // RA2: as above
 	ini.Put_Float("Lighting", "RedTint", 1.0);
 	ini.Put_Float("Lighting", "GreenTint", 1.0);
 	ini.Put_Float("Lighting", "BlueTint", 1.0);
 	ini.Put_Float("Lighting", "Ground", 0.0);
-	ini.Put_Float("Lighting", "Level", 0.01);
+	ini.Put_Float("Lighting", "Level", (double)(RMGLevelLightSettings[SeedData.Time] / 100)); // RA2: as above
+	ini.Put_Float("Lighting", "IonAmbient", ambient); // RA2: the ion storm lighting is written too
+	ini.Put_Float("Lighting", "IonRed", 0.3); // RA2: as above
+	ini.Put_Float("Lighting", "IonGreen", 0.4); // RA2: as above
+	ini.Put_Float("Lighting", "IonBlue", 0.75); // RA2: as above
+	ini.Put_Float("Lighting", "IonGround", 0.0); // RA2: as above
+	ini.Put_Float("Lighting", "IonLevel", 0.0); // RA2: as above
 
 	if (!Scen->IsReadingScenario) {
 		Progress.Set_Progress_Percent(0, 1);
@@ -4893,13 +5048,12 @@ void MapGeneratorClass::Init_Map(bool full_init)
 		}
 		Read_Scenario_INI(ini, true);
 		Fill_In_Data();
-		Cell c;
-		c.Y = Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2;
-		c.X = c.Y + 1;
+		Cell c(Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2 + 1, Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2); // RA2: built from both coordinates at once
 		Scen->Set_Waypoint(WAYPT_REINF, c);
 		Scen->Set_Waypoint(Scen->Home, Scen->Get_Waypoint_Cell(WAYPT_REINF));
 		Map[Scen->Get_Waypoint_Cell(Scen->Home)].IsWaypoint = true;
 		Map.Set_Tactical_Position(Scen->Get_Waypoint_Coord(Scen->Home));
+		ScenarioInit--; // RA2: closed in this branch
 	} else {
 
 		Scen->Reset();
@@ -4909,12 +5063,12 @@ void MapGeneratorClass::Init_Map(bool full_init)
 
 		Update_Progress(2);
 
+		int theater = SeedData.Biome; // RA2: the biome is the theater
 		bool changed = true;
-		TheaterType last = Scen->Theater;
-		TheaterType theater = _biome_to_theater[SeedData.Biome];
+		int last = Scen->Theater; // RA2: as above
 
 		if (MapSeeder != NULL) {
-			last = _biome_to_theater[MapSeeder->Biome];
+			last = MapSeeder->Biome; // RA2: as above
 			if (MapSeeder->Width == SeedData.Width && MapSeeder->Height == SeedData.Height && last == theater
 					&& MapSeeder->NumPlayers == SeedData.NumPlayers) {
 				changed = false;
@@ -4929,7 +5083,7 @@ void MapGeneratorClass::Init_Map(bool full_init)
 		 * (possibly reloaded) isometric tile types.
 		 */
 		if (MapSeeder == NULL || theater != last || changed) {
-			for (int index = AbstractTypes.Count() - 1; index >= 0; index--) {
+			for (index = AbstractTypes.Count() - 1; index >= 0; index--) { // RA2: the counter is shared
 				if (AbstractTypes[index]->What_Am_I() == RTTI_ISOTILETYPE) {
 					AbstractTypes.Delete_Index(index);
 				}
@@ -4941,8 +5095,8 @@ void MapGeneratorClass::Init_Map(bool full_init)
 
 			if (RMGCallback != NULL) RMGCallback();
 
-			for (int tile_index = 0; tile_index < IsometricTileTypes.Count(); tile_index++) {
-				AbstractTypes.Add(IsometricTileTypes[tile_index]);
+			for (index = 0; index < IsometricTileTypes.Count(); index++) { // RA2: as above
+				AbstractTypes.Add(IsometricTileTypes[index]); // RA2: as above
 			}
 		}
 
@@ -4979,9 +5133,7 @@ void MapGeneratorClass::Init_Map(bool full_init)
 			delete Terrains[Terrains.Count() - 1];
 		}
 
-		VeinholeMonsterClass::Reset();
-
-		if (RMGCallback != NULL) RMGCallback();
+		if (RMGCallback != NULL) RMGCallback(); // RA2: no veinhole reset
 
 		Map.Reset_Iterator();
 		CellClass *cptr = Map.Iterate();
@@ -5008,13 +5160,11 @@ void MapGeneratorClass::Init_Map(bool full_init)
 		if (RMGCallback != NULL) RMGCallback();
 
 		Scen->Clear_All_Waypoints();
-		Cell c;
-		c.Y = Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2;
-		c.X = c.Y + 1;
+		Cell c(Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2 + 1, Map.PlayRect.Width / 2 + Map.PlayRect.Height / 2); // RA2: built from both coordinates at once
 		Scen->Set_Waypoint(WAYPT_REINF, c);
-		Scen->Set_Waypoint(Scen->Home, Scen->Get_Waypoint_Cell(WAYPT_REINF));
-		Map[Scen->Get_Waypoint_Cell(Scen->Home)].IsWaypoint = true;
-		Map.Set_Tactical_Position(Scen->Get_Waypoint_Coord(Scen->Home));
+		Scen->Set_Waypoint(WAYPT_HOME, Scen->Get_Waypoint_Cell(WAYPT_REINF)); // RA2: the home waypoint itself, not Scen->Home
+		Map[Scen->Get_Waypoint_Cell(WAYPT_HOME)].IsWaypoint = true; // RA2: as above
+		Map.Set_Tactical_Position(Scen->Get_Waypoint_Coord(WAYPT_HOME)); // RA2: as above
 
 		Update_Progress(25);
 
@@ -5023,8 +5173,8 @@ void MapGeneratorClass::Init_Map(bool full_init)
 		ScenarioInit++;
 
 		if (theater != Scen->Theater) {
-			Init_Theater(theater);
-			Scen->Theater = theater;
+			Init_Theater((TheaterType)theater); // RA2: as above
+			Scen->Theater = (TheaterType)theater; // RA2: as above
 		}
 
 		Update_Progress(30);
@@ -5042,16 +5192,11 @@ void MapGeneratorClass::Init_Map(bool full_init)
 
 		if (MapSeeder == NULL || theater != last || changed) {
 
-			HouseClass *hptr;
 			if (Houses.Count() == 0) {
-				hptr = new HouseClass(HouseTypes[HOUSE_GOOD]);
-				hptr->Read_INI(ini);
-				hptr = new HouseClass(HouseTypes[HOUSE_BAD]);
-				hptr->Read_INI(ini);
-				hptr = new HouseClass(HouseTypes[HOUSE_NEUTRAL]);
-				hptr->Read_INI(ini);
-				hptr = new HouseClass(HouseTypes[HOUSE_MUTANT]);
-				hptr->Read_INI(ini);
+				for (index = 0; index < HouseTypes.Count(); index++) { // RA2: a house for every house type
+					HouseClass * hptr = new HouseClass(HouseTypes[index]); // RA2: as above
+					hptr->Read_INI(ini); // RA2: as above
+				}
 			}
 
 			if (RMGCallback != NULL) RMGCallback();
@@ -5084,14 +5229,16 @@ void MapGeneratorClass::Init_Map(bool full_init)
 			IsometricTileTypeClass::Load_Tiles(0, 1);
 		}
 		LastTheater = Scen->Theater;
+		ScenarioInit--; // RA2: closed in this branch
 	}
 
-	ScenarioInit--;
 	Update_Progress(40);
 
 	if (RMGCallback != NULL) RMGCallback();
 
-	delete RMGCellData;
+	if (RMGCellData != NULL) { // RA2: the old cells are only freed when there are some
+		delete [] RMGCellData; // RA2: as above
+	}
 
 	RMGCellData = new MapRegionClass::CellData[MapCellStride * MapCellStride];
 
@@ -5112,19 +5259,31 @@ void MapGeneratorClass::Init_Map(bool full_init)
 
 	SeededWaterAmount = 0;
 	WorkingRegionID = 0;
-	PlaceWaterfall = (float)Random_Fraction() < 0.25f;
+	static const float _waterfall_chance = 0.25f; // RA2: a static constant (0x7A5B68), loaded from memory
+	PlaceWaterfall = Random_Fraction() < _waterfall_chance; // RA2: the fraction is not narrowed to float
 	Map.Clear_Radar();
 	Map.Set_Local_Dimensions(lsize);
 	Map.Init_Radar();
 	Map.Compute_Radar_Image();
 
-	Scen->AmbientLight = tod * 100.0;
-	Scen->LevelLight = 1;
-
-
+	Scen->AmbientLight = SeedData.Biome == 0 ? TemperateAmbientLight[SeedData.Time] : SnowAmbientLight[SeedData.Time]; // RA2: the lighting comes from RMG.INI
+	Scen->LevelLight = RMGLevelLightSettings[SeedData.Time]; // RA2: as above
+	Scen->RedTint = SeedData.Biome == 0 ? TemperateAmbientRed[SeedData.Time] : SnowAmbientRed[SeedData.Time]; // RA2: as above
+	Scen->GreenTint = SeedData.Biome == 0 ? TemperateAmbientGreen[SeedData.Time] : SnowAmbientGreen[SeedData.Time]; // RA2: as above
+	Scen->BlueTint = SeedData.Biome == 0 ? TemperateAmbientBlue[SeedData.Time] : SnowAmbientBlue[SeedData.Time]; // RA2: as above
+	Scen->IonAmbientLight = 87; // RA2: the ion storm lighting
+	Scen->IonRedTint = 30; // RA2: as above
+	Scen->IonGreenTint = 40; // RA2: as above
+	Scen->IonBlueTint = 75; // RA2: as above
+	Scen->IonGroundLight = 0; // RA2: as above
+	Scen->IonLevelLight = 0; // RA2: as above
 
 	Update_Progress(50); // RA2: no UseTransitions (not in RA2's layout)
+	if (wcslen(SeedData.MapDescription) == 0) { // RA2: an empty description gets the default one
+		wcscpy(SeedData.MapDescription, StringTable::LoadString("TXT_RANDOM_MAP_DESCRIPTION", NULL, RA2_SOURCE, 6581)); // RA2: as above
+	}
 }
+
 
 
 /// <summary>
@@ -5926,7 +6085,7 @@ void MapGeneratorClass::Clear_Region_Cells(int id, int new_id, int cell_height, 
 /// <param name="cell">The cell to grow the lake from, or Cell(0,0) to let the routine choose
 /// one.</param>
 /// <returns>bool; Was a lake of usable size seeded?</returns>
-bool MapGeneratorClass::Seed_Lake(const Cell & cell) // RA2: RA2's form of Seed_Lake (0x57E100); near miss, the inlined Get_Spread_Score is scheduled differently
+bool MapGeneratorClass::Seed_Lake(const Cell & cell) // RA2: RA2's form of Seed_Lake (0x57E100)
 {
 	bool success = true;
 
@@ -6105,6 +6264,7 @@ bool MapGeneratorClass::Seed_Lake(const Cell & cell) // RA2: RA2's form of Seed_
 
 
 
+
 /// <summary>
 /// Fetches how much water this map is meant to hold.
 /// The figure follows from the water setting the player chose, the biome, and the size of the
@@ -6142,12 +6302,9 @@ double MapGeneratorClass::Get_Spread_Score(const Cell & cell1, const Cell & cell
 	int y = cell1.Y - cell2.Y;
 	float dist = fastmath::sqrt(x * x + y * y);
 
-	float random_value = _random_range * (float)Random_Fraction();
-	float step_term = (spread_step * _step_weight);
-	float dist_term = (dist * scale);
-
-	return(random_value + dist_term - step_term);
+	return(_random_range * Random_Fraction() + dist * scale - spread_step * _step_weight); // RA2: one expression, the random term first
 }
+
 
 
 /// <summary>
@@ -6161,7 +6318,7 @@ double MapGeneratorClass::Get_Spread_Score(const Cell & cell1, const Cell & cell
 /// <param name="start_angle">Initial heading angle in radians (used when cell is given).</param>
 /// <param name="is_branch">True when invoked recursively as a branch sub-call.</param>
 /// <returns>True if enough water was painted, false otherwise.</returns>
-bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool is_branch)
+bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool is_branch) // RA2: RA2's form (0x57ECF0): one water tile, the draws inline, the shores built before the region grows; near miss, 32 bytes short: same instructions but a frame 8 bytes smaller and the zero constant kept in another register
 {
 	bool orig_subcall = is_branch;
 	bool success = true;
@@ -6205,10 +6362,11 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 		width_d = 1.0;
 	}
 	int width_top = (int)width_d;
-	double width = (double)Pick_Random_UInt(1, width_top);
-	int half = (int)width / 2;
-	double width_hi = (double)half + width;
-	double width_lo = width - (double)half;
+	double start_width = (double)Pick_Random_UInt(1, width_top); // RA2: the first width is kept apart from the running one
+	double width = start_width; // RA2: as above
+	int half = (int)start_width / 2; // RA2: as above
+	double width_hi = (double)half + start_width; // RA2: as above
+	double width_lo = start_width - (double)half; // RA2: as above
 
 	int length = (int)Pick_Random_UInt(35, 125);
 
@@ -6227,8 +6385,6 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 		int span = (int)(width + 0.5);
 		bool x_run = true;
 		bool y_run = true;
-		bool any_x = true;
-		bool any_y = true;
 
 		double offset_x = (double)(span - 1) * step_x * 0.5;
 		double px = cur_x - offset_x;
@@ -6241,36 +6397,35 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 			while (true) {
 				if (My_In_Radar(Cell((int)px, (int)py))) {
 					pcell = Cell((int)px, (int)py);
-					if (Get_Cell_Data_Region(pcell) == 0
+					if (MapRegionClass::CellData::Get_Region(pcell) == 0 // RA2: as above
 							&& Map[pcell].Is_Tile_Clear()
-							|| Get_Cell_Data_Region(pcell) == WorkingRegionID) {
+							|| MapRegionClass::CellData::Get_Region(pcell) == WorkingRegionID) { // RA2: as above
 
-						Set_Cell_Data_Region(pcell, WorkingRegionID);
+						if (RMGCellData != NULL) { // RA2: as above
+							MapRegionClass::Get_Cell_Data(pcell).RegionID = WorkingRegionID; // RA2: as above
+						}
 						CellClass * cellptr = &Map[Cell((int)px, (int)py)];
-						int tile_index = Pick_Random_UInt(0, 5);
-						cellptr->ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index);
-						int subtile = Pick_Random_UInt(0, 3);
-						cellptr->SubTile = subtile;
+						cellptr->ITType = IsometricTileTypeClass::WaterSet; // RA2: always the first water tile
+						cellptr->SubTile = 0; // RA2: as above
 					} else {
 						success = false;
 					}
 				}
 
-				if ((unsigned int)(int)(px + step_x) != (unsigned int)(int)px) {
+				double next_x = px + step_x; // RA2: the next position is formed first
+				if ((int)px != (int)next_x) { // RA2: as above
 					x_run = false;
-					any_x = false;
-				} else {
-					x_run = any_x;
-				}
-				if ((unsigned int)(int)(py + step_y) != (unsigned int)(int)py) {
-					any_y = false;
 				}
 
-				px += step_x;
-				py += step_y;
+				double next_y = py + step_y; // RA2: as above
+				if ((int)py != (int)next_y) { // RA2: as above
+					y_run = false; // RA2: as above
+				}
+
+				px = next_x; // RA2: as above
+				py = next_y; // RA2: as above
 				i--;
 				if (i == 0) {
-					y_run = any_y;
 					break;
 				}
 			}
@@ -6313,9 +6468,18 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 			if (success) {
 				if (!is_branch && waterfall_count == 0) {
 					is_branch = true;
-					double branch_base = cur_angle + M_PI_2;
-					double branch_angle = Sample_Truncated_Normal(branch_base, DEG_TO_RAD(30),
-							cur_angle + DEG_TO_RAD(30), cur_angle + DEG_TO_RAD(150));
+					double branch_mean = cur_angle + M_PI_2; // RA2: the truncated draw is open coded
+					double branch_lo = cur_angle + DEG_TO_RAD(30); // RA2: as above
+					double branch_hi = cur_angle + DEG_TO_RAD(150); // RA2: as above
+					double branch_deviation = DEG_TO_RAD(30); // RA2: as above
+					if (branch_mean - branch_deviation > branch_hi || branch_mean + branch_deviation < branch_lo) { // RA2: as above
+						branch_deviation = (branch_hi - branch_lo) * 0.5; // RA2: as above
+						branch_mean = branch_deviation + branch_lo; // RA2: as above
+					}
+					double branch_angle; // RA2: as above
+					do { // RA2: as above
+						branch_angle = RMGGaussian() * branch_deviation + branch_mean; // RA2: as above
+					} while (branch_angle < branch_lo || branch_angle > branch_hi); // RA2: as above
 
 					Cell branch_cell((int)px, (int)py);
 					success = Seed_River(branch_cell, branch_angle, true);
@@ -6330,8 +6494,18 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 		}
 
 		if (half > 0) {
-			double delta_width = Sample_Truncated_Normal(0.0, 0.5,
-					width_lo - width, width_hi - width);
+			double step_hi = width_hi - width; // RA2: the truncated draw is open coded
+			double step_lo = width_lo - width; // RA2: as above
+			double step_dev = 0.5; // RA2: as above
+			double step_mean = 0.0; // RA2: as above
+			if (step_mean - step_dev > step_hi || step_mean + step_dev < step_lo) { // RA2: as above
+				step_dev = (step_hi - step_lo) * 0.5; // RA2: as above
+				step_mean = step_dev + step_lo; // RA2: as above
+			}
+			double delta_width; // RA2: as above
+			do { // RA2: as above
+				delta_width = RMGGaussian() * step_dev + step_mean; // RA2: as above
+			} while (delta_width < step_lo || delta_width > step_hi); // RA2: as above
 			width += delta_width;
 		}
 
@@ -6355,14 +6529,26 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 	}
 
 	if (!orig_subcall && success) {
-		success = Map.Build_All_Shores(WorkingRegionID);
+		success = Map.Build_All_Shores(WorkingRegionID, false); // RA2: the two-argument form
+		if (success) { // RA2: the shore is grown out and the cells still clear are made green
+			success = Grow_Region(WorkingRegionID, 1, Rect(0, 0, MAP_CELL_W, MAP_CELL_H), 0, 0); // RA2: as above
+			int region_id = WorkingRegionID; // RA2: as above
+			Map.Reset_Iterator(); // RA2: as above
+			CellClass * cptr = Map.Iterate(); // RA2: as above
+			while (cptr != NULL) { // RA2: as above
+				if (MapRegionClass::CellData::Get_Region(cptr->CellID) == region_id && (cptr->ITType == ISOTILE_CLEAR || cptr->ITType == ISOTILE_INVALID)) { // RA2: as above
+					cptr->ITType = IsometricTileTypeClass::GreenTile; // RA2: as above
+				} // RA2: as above
+				cptr = Map.Iterate(); // RA2: as above
+			} // RA2: as above
+		}
 	}
 
 	bool raised = false;
 
 	if (waterfall_count == 0 && success && CellHeight == 4 && !orig_subcall) {
 
-		if (Random_Fraction() < 0.7 && SeedData.Biome != BIOME_TUNDRA) {
+		if (Random_Fraction() < 0.7) { // RA2: no biome test
 
 			Rect bounds(0, 0, MAP_CELL_W, MAP_CELL_H);
 			if (Grow_Water_Region(WorkingRegionID, 0.01f, bounds, seed_cell, true)) {
@@ -6373,7 +6559,7 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 					CellClass * cptr = Map.Iterate();
 					while (cptr != NULL) {
 						Cell c = cptr->CellID;
-						int rid = Get_Cell_Data_Region(c);
+						int rid = MapRegionClass::CellData::Get_Region(c); // RA2: the grid accessor
 						if (rid != region_id) {
 							cptr->Height += 4;
 						}
@@ -6405,7 +6591,7 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 		return(true);
 	}
 
-	Clear_Region_Cells(WorkingRegionID, 0, -1, ISOTILE_CLEAR); // RA2: the fourth argument
+	Clear_Region_Cells(WorkingRegionID, 0, -1, ISOTILE_CLEAR); // RA2: the fourth argument (RA2's wipe takes a tile)
 
 	if (waterfall_count > 0) {
 		Clear_Region_Cells(WorkingRegionID - 1, 0, -1, ISOTILE_CLEAR); // RA2: as above
@@ -6413,6 +6599,7 @@ bool MapGeneratorClass::Seed_River(const Cell & cell, double start_angle, bool i
 
 	return(false);
 }
+
 
 
 /// <summary>
@@ -6471,414 +6658,385 @@ void MapGeneratorClass::Increase_Height_Of_ID(int id, char cell_height)
 /// <param name="head_x">The river head X, carried past the waterfall on success.</param>
 /// <param name="head_y">The river head Y, carried past the waterfall on success.</param>
 /// <returns>bool; Was the waterfall placed?</returns>
-bool MapGeneratorClass::Place_Waterfall(int region_id, Cell const & cell1, Cell const & cell2, int direction, bool & placed, double & head_x, double & head_y)
+bool MapGeneratorClass::Place_Waterfall(int region_id, Cell const & cell1, Cell const & cell2, int direction, bool & placed, double & head_x, double & head_y) // RA2: RA2's form (0x57FF20): the areas are rectangles; near miss, 2 bytes differ (the south case adds the base to the offset, the exe adds the offset to the base)
 {
-	placed = false;
+	placed = false; // RA2: RA2's form
 
-	int pre_x = 0;
-	int pre_y = 0;
-	int pre_w = 0;
-	int pre_h = 0;
+	Rect pre(0,0,0,0); // RA2: RA2's form
 
-	int seed_x = 0;
-	int seed_y = 0;
-	int seed_w = 0;
-	int seed_h = 0;
+	Rect seed(0,0,0,0); // RA2: RA2's form
+	Rect patch(0,0,0,0); // RA2: RA2's form
+	Rect bounds_rect(0,0,0,0); // RA2: RA2's form
+	Cell center; // RA2: left uninitialized
 
-	int patch_x = 0;
-	int patch_y = 0;
-	int patch_w = 0;
-	int patch_h = 0;
+	switch (direction) { // RA2: RA2's form
+		case FACING_N: { // RA2: RA2's form
+			pre=Rect(cell1.X - 2,cell1.Y - 12,cell2.X - cell1.X + 5,12); // RA2: RA2's form
 
-	Rect bounds_rect(0, 0, 0, 0);
-	Cell center(0, 0);
+			seed=Rect(cell1.X,cell1.Y - 4,cell2.X - cell1.X + 1,4); // RA2: RA2's form
 
-	switch (direction) {
-		case FACING_N: {
-			int dx = cell2.X - cell1.X;
-			int width = dx + 1;
-			pre_x = cell1.X - 2;
-			pre_y = cell1.Y - 12;
-			pre_w = dx + 5;
-			pre_h = 12;
+			patch=Rect(cell1.X,cell1.Y - 12,cell2.X - cell1.X + 1,8); // RA2: RA2's form
 
-			seed_x = cell1.X;
-			seed_y = cell1.Y - 4;
-			seed_w = width;
-			seed_h = 4;
-
-			patch_x = cell1.X;
-			patch_y = cell1.Y - 12;
-			patch_w = width;
-			patch_h = 8;
-
-			bounds_rect = Rect(0, seed_y, MAP_CELL_W, MAP_CELL_H - seed_y);
-			center = Cell(cell1.X, seed_y);
-			break;
+			bounds_rect = Rect(0, seed.Y, MAP_CELL_W, MAP_CELL_H - seed.Y); // RA2: RA2's form
+			center = Cell(seed.X, seed.Y); // RA2: RA2's form
+			break; // RA2: RA2's form
 		}
-		case FACING_S: {
-			int dx = cell1.X - cell2.X;
-			int width = dx + 1;
-			pre_x = cell2.X - 2;
-			pre_y = cell2.Y + 1;
-			pre_w = dx + 5;
-			pre_h = 12;
+		case FACING_S: { // RA2: RA2's form
+			pre=Rect(cell2.X - 2,cell2.Y + 1,cell1.X - cell2.X + 5,12); // RA2: RA2's form
 
-			seed_x = cell2.X;
-			seed_y = cell2.Y + 1;
-			seed_w = width;
-			seed_h = 4;
+			seed=Rect(cell2.X,cell2.Y + 1,cell1.X - cell2.X + 1,4); // RA2: RA2's form
 
-			patch_x = cell2.X;
-			patch_y = cell2.Y + 5;
-			patch_w = width;
-			patch_h = 8;
+			patch=Rect(cell2.X,cell2.Y + 5,cell1.X - cell2.X + 1,8); // RA2: RA2's form
 
-			bounds_rect = Rect(0, 0, MAP_CELL_W, patch_y - 1);
-			center = Cell(cell2.X, cell2.Y + 1);
-			break;
+			bounds_rect = Rect(0, 0, MAP_CELL_W, patch.Y - 1); // RA2: RA2's form
+			center = Cell(seed.X, seed.Y); // RA2: RA2's form
+			break; // RA2: RA2's form
 		}
-		case FACING_E: {
-			int dy = cell2.Y - cell1.Y;
-			int width = dy + 1;
-			pre_x = cell1.X + 1;
-			pre_y = cell1.Y - 2;
-			pre_w = 12;
-			pre_h = dy + 5;
+		case FACING_E: { // RA2: RA2's form
+			pre=Rect(cell1.X + 1,cell1.Y - 2,12,cell2.Y - cell1.Y + 5); // RA2: RA2's form
 
-			seed_x = cell1.X + 1;
-			seed_y = cell1.Y;
-			seed_w = 4;
-			seed_h = width;
+			seed=Rect(cell1.X + 1,cell1.Y,4,cell2.Y - cell1.Y + 1); // RA2: RA2's form
 
-			patch_x = cell1.X + 5;
-			patch_y = cell1.Y;
-			patch_w = 8;
-			patch_h = width;
+			patch=Rect(cell1.X + 5,cell1.Y,8,cell2.Y - cell1.Y + 1); // RA2: RA2's form
 
-			bounds_rect = Rect(0, 0, patch_x - 1, MAP_CELL_H);
-			center = Cell(cell1.X + 5, cell1.Y);
-			break;
+			bounds_rect = Rect(0, 0, patch.X - 1, MAP_CELL_H); // RA2: RA2's form
+			center = Cell(patch.X, patch.Y); // RA2: RA2's form
+			break; // RA2: RA2's form
 		}
-		case FACING_W: {
-			int dy = cell1.Y - cell2.Y;
-			int width = dy + 1;
-			pre_x = cell2.X - 12;
-			pre_y = cell2.Y - 2;
-			pre_w = 12;
-			pre_h = dy + 5;
+		case FACING_W: { // RA2: RA2's form
+			pre=Rect(cell2.X - 12,cell2.Y - 2,12,cell1.Y - cell2.Y + 5); // RA2: RA2's form
 
-			seed_x = cell2.X - 4;
-			seed_y = cell2.Y;
-			seed_w = 4;
-			seed_h = width;
+			seed=Rect(cell2.X - 4,cell2.Y,4,cell1.Y - cell2.Y + 1); // RA2: RA2's form
 
-			patch_x = cell2.X - 12;
-			patch_y = cell2.Y;
-			patch_w = 8;
-			patch_h = width;
+			patch=Rect(cell2.X - 12,cell2.Y,8,cell1.Y - cell2.Y + 1); // RA2: RA2's form
 
-			bounds_rect = Rect(seed_x, 0, MAP_CELL_W - seed_x, MAP_CELL_H);
-			center = Cell(seed_x, cell2.Y);
-			break;
+			bounds_rect = Rect(seed.X, 0, MAP_CELL_W - seed.X, MAP_CELL_H); // RA2: RA2's form
+			center = Cell(seed.X, seed.Y); // RA2: RA2's form
+			break; // RA2: RA2's form
 		}
-		default:
-			break;
+		default: // RA2: RA2's form
+			break; // RA2: RA2's form
 	}
 
-	int yy;
-	int xx;
+	int yy; // RA2: RA2's form
+	int xx; // RA2: RA2's form
 
-	for (yy = pre_y; yy < pre_y + pre_h; yy++) {
-		for (xx = pre_x; xx < pre_x + pre_w; xx++) {
-			if (My_In_Radar(Cell(xx, yy))) {
-				if (Get_Cell_Data_Region(Cell(xx, yy)) != 0) {
-					return(true);
+	for (yy = pre.Y; yy < pre.Y + pre.Height; yy++) { // RA2: RA2's form
+		for (xx = pre.X; xx < pre.X + pre.Width; xx++) { // RA2: RA2's form
+			if (My_In_Radar(Cell(xx, yy))) { // RA2: RA2's form
+				if (MapRegionClass::CellData::Get_Region(Cell(xx, yy)) != 0) { // RA2: RA2's form
+					return(true); // RA2: RA2's form
 				}
 
-				if (!Map[Cell(xx, yy)].Is_Tile_Clear()) {
-					return(true);
+				if (!Map[Cell(xx, yy)].Is_Tile_Clear()) { // RA2: RA2's form
+					return(true); // RA2: RA2's form
 				}
 			}
 		}
 	}
 
-	for (yy = seed_y; yy < seed_y + seed_h; yy++) {
-		for (xx = seed_x; xx < seed_x + seed_w; xx++) {
-			if (My_In_Radar(Cell(xx, yy))) {
-				int tile_index = Pick_Random_UInt(0, 5);
-				Map[Cell(xx, yy)].ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index);
+	for (yy = seed.Y; yy < seed.Y + seed.Height; yy++) { // RA2: RA2's form
+		for (xx = seed.X; xx < seed.X + seed.Width; xx++) { // RA2: RA2's form
+			if (My_In_Radar(Cell(xx, yy))) { // RA2: RA2's form
+				int tile_index = Pick_Random_UInt(0, 5); // RA2: RA2's form
+				Map[Cell(xx, yy)].ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index); // RA2: RA2's form
 
-				int subtile = Pick_Random_UInt(0, 3);
-				Map[Cell(xx, yy)].SubTile = subtile;
+				int subtile = Pick_Random_UInt(0, 3); // RA2: RA2's form
+				Map[Cell(xx, yy)].SubTile = subtile; // RA2: RA2's form
 
-				Set_Cell_Data_Region(Cell(xx, yy), region_id);
+				if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(Cell(xx, yy)).RegionID=region_id; // RA2: RA2's form
+							}
 			}
 		}
 	}
 
-	bool success = Grow_Water_Region(WorkingRegionID, 0.003f, bounds_rect, center, false);
-	if (success) {
-		success = Map.Build_All_Shores(WorkingRegionID);
-		if (success) {
-			success = Grow_Region(WorkingRegionID, 2, bounds_rect, 0, 0);
-			if (success) {
-				int region = WorkingRegionID;
-				Map.Reset_Iterator();
-				CellClass * cptr = Map.Iterate();
-				while (cptr != NULL) {
-					Cell c = cptr->CellID;
-					int other_region = Get_Cell_Data_Region(c);
-					if (other_region == region) {
-						cptr->Height += 4;
+	bool success = Grow_Water_Region(WorkingRegionID, 0.003f, bounds_rect, center, false); // RA2: RA2's form
+	if (success) { // RA2: RA2's form
+		success = Map.Build_All_Shores(WorkingRegionID, false); // RA2: RA2's form
+		if (success) { // RA2: RA2's form
+			success = Grow_Region(WorkingRegionID, 2, bounds_rect, 0, 0); // RA2: RA2's form
+			if (success) { // RA2: RA2's form
+				int region = WorkingRegionID; // RA2: RA2's form
+				Map.Reset_Iterator(); // RA2: RA2's form
+				CellClass * cptr = Map.Iterate(); // RA2: RA2's form
+				while (cptr != NULL) { // RA2: RA2's form
+					Cell c = cptr->CellID; // RA2: RA2's form
+					int other_region = MapRegionClass::CellData::Get_Region(c); // RA2: RA2's form
+					if (other_region == region) { // RA2: RA2's form
+						cptr->Height += 4; // RA2: RA2's form
 					}
-					cptr = Map.Iterate();
+					cptr = Map.Iterate(); // RA2: RA2's form
 				}
 
-				for (yy = patch_y; yy < patch_y + patch_h; yy++) {
-					for (xx = patch_x; xx < patch_x + patch_w; xx++) {
-						if (My_In_Radar(Cell(xx, yy))) {
-							int tile_index = Pick_Random_UInt(0, 5);
-							Map[Cell(xx, yy)].ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index);
+				for (yy = patch.Y; yy < patch.Y + patch.Height; yy++) { // RA2: RA2's form
+					for (xx = patch.X; xx < patch.X + patch.Width; xx++) { // RA2: RA2's form
+						if (My_In_Radar(Cell(xx, yy))) { // RA2: RA2's form
+							int tile_index = Pick_Random_UInt(0, 5); // RA2: RA2's form
+							Map[Cell(xx, yy)].ITType = (IsometricTileType)(IsometricTileTypeClass::WaterSet + tile_index); // RA2: RA2's form
 
-							int subtile = Pick_Random_UInt(0, 3);
-							Map[Cell(xx, yy)].SubTile = subtile;
+							int subtile = Pick_Random_UInt(0, 3); // RA2: RA2's form
+							Map[Cell(xx, yy)].SubTile = subtile; // RA2: RA2's form
 
-							Set_Cell_Data_Region(Cell(xx, yy), region_id);
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(Cell(xx, yy)).RegionID=region_id; // RA2: RA2's form
+							}
 						}
 					}
 				}
 
-				bool place_ok = true;
-				IsometricTileType tile = ISOTILE_CLEAR;
+				bool place_ok = true; // RA2: RA2's form
+				
+				switch (direction) { // RA2: RA2's form
+					case FACING_E: { // RA2: RA2's form
+						Cell base(patch.X, patch.Y + patch.Height); // RA2: RA2's form
+						int height = Map[base + Cell(2, 0)].Height; // RA2: RA2's form
 
-				switch (direction) {
-					case FACING_E: {
-						Cell base(patch_x, patch_y + patch_h);
-						int height = Map[base + Cell(2, 0)].Height;
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast];
-						Map.Set_Cursor_Pos(base);
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + WATERFALL_EAST_COUNT - 1]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base - Cell(0, patch.Height + 2)); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + WATERFALL_EAST_COUNT - 1];
-						Map.Set_Cursor_Pos(base - Cell(0, patch_h + 2));
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Cell top = base + Cell(0, 2); // RA2: RA2's form
+						Cell bottom = base - Cell(0, patch.Height + 3); // RA2: RA2's form
 
-						Cell top = base + Cell(0, 2);
-						Cell bottom = base - Cell(0, patch_h + 3);
-
-						if (My_In_Radar(top)) {
-							Map[top].ITType = ISOTILE_NONE;
-							Map[top].Height += 4;
-							Map[top].SubTile = 0;
-							Set_Cell_Data_Region(top, WorkingRegionID);
-						}
-
-						if (My_In_Radar(bottom)) {
-							Map[bottom].ITType = ISOTILE_NONE;
-							Map[bottom].Height += 4;
-							Map[bottom].SubTile = 0;
-							Set_Cell_Data_Region(bottom, WorkingRegionID);
-						}
-
-						int seg = 0;
-						int remaining = patch_h;
-						while (seg < patch_h) {
-							if (remaining % 2) {
-								Map.Set_Cursor_Pos(base - Cell(0, seg + 1));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + 1];
-								seg++;
-								remaining--;
-							} else {
-								Map.Set_Cursor_Pos(base - Cell(0, seg + 2));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + 2];
-								seg += 2;
-								remaining -= 2;
+						if (My_In_Radar(top)) { // RA2: RA2's form
+							Map[top].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[top].Height += 4; // RA2: RA2's form
+							Map[top].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(top).RegionID=WorkingRegionID; // RA2: RA2's form
 							}
-							Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
 						}
-						break;
+
+						if (My_In_Radar(bottom)) { // RA2: RA2's form
+							Map[bottom].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[bottom].Height += 4; // RA2: RA2's form
+							Map[bottom].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(bottom).RegionID=WorkingRegionID; // RA2: RA2's form
+							}
+						}
+
+						int seg = 0; // RA2: RA2's form
+						if (seg < patch.Height) { // RA2: RA2's form
+						int remaining = patch.Height; // RA2: RA2's form
+						do { // RA2: RA2's form
+							if (remaining % 2) { // RA2: RA2's form
+								Map.Set_Cursor_Pos(base - Cell(0, seg + 1)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + 1]; // RA2: RA2's form
+								seg++; // RA2: RA2's form
+								remaining--; // RA2: RA2's form
+							} else {
+								Map.Set_Cursor_Pos(base - Cell(0, seg + 2)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallEast + 2]; // RA2: RA2's form
+								seg += 2; // RA2: RA2's form
+								remaining -= 2; // RA2: RA2's form
+							}
+							Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
+						} while (seg < patch.Height); // RA2: as above
+						}
+						break; // RA2: RA2's form
 					}
 
-					case FACING_W: {
-						Cell base(seed_x - 2, patch_y + patch_h);
-						int height = Map[base - Cell(2, 0)].Height;
+					case FACING_W: { // RA2: RA2's form
+						Cell base(seed.X - 2, patch.Y + patch.Height); // RA2: RA2's form
+						int height = Map[base - Cell(2, 0)].Height; // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest];
-						Map.Set_Cursor_Pos(base);
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + WATERFALL_WEST_COUNT - 1];
-						Map.Set_Cursor_Pos(base - Cell(0, patch_h + 2));
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + WATERFALL_WEST_COUNT - 1]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base - Cell(0, patch.Height + 2)); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map[base - Cell(0, 1)].ITType = ISOTILE_NONE;
-						Map[base + Cell(0, patch_w + 2)].ITType = ISOTILE_NONE;
+						Map[base - Cell(0, 1)].ITType = ISOTILE_NONE; // RA2: RA2's form
+						Map[base + Cell(0, patch.Width + 2)].ITType = ISOTILE_NONE; // RA2: RA2's form
 
-						for (int i = 0; i < patch_h + 2; i++) {
-							Map[base - Cell(0, i)].Height -= 4;
+						for (int i = 0; i < patch.Height + 2; i++) { // RA2: RA2's form
+							Map[base - Cell(0, i)].Height -= 4; // RA2: RA2's form
 						}
 
-						Cell top = base + Cell(1, 2);
-						Cell bottom = base - Cell(-1, patch_h + 3);
+						Cell top = base + Cell(1, 2); // RA2: RA2's form
+						Cell bottom = base - Cell(-1, patch.Height + 3); // RA2: RA2's form
 
-						if (My_In_Radar(top)) {
-							Map[top].ITType = ISOTILE_NONE;
-							Map[top].Height += 4;
-							Map[top].SubTile = 0;
-							Set_Cell_Data_Region(top, WorkingRegionID);
-						}
-
-						if (My_In_Radar(bottom)) {
-							Map[bottom].ITType = ISOTILE_NONE;
-							Map[bottom].Height += 4;
-							Map[bottom].SubTile = 0;
-							Set_Cell_Data_Region(bottom, WorkingRegionID);
-						}
-
-						int seg = 0;
-						int remaining = patch_h;
-						while (seg < patch_h) {
-							if (remaining % 2) {
-								Map.Set_Cursor_Pos(base - Cell(-1, seg + 1));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + 1];
-								seg++;
-								remaining--;
-							} else {
-								Map.Set_Cursor_Pos(base - Cell(-1, seg + 2));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + 2];
-								seg += 2;
-								remaining -= 2;
+						if (My_In_Radar(top)) { // RA2: RA2's form
+							Map[top].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[top].Height += 4; // RA2: RA2's form
+							Map[top].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(top).RegionID=WorkingRegionID; // RA2: RA2's form
 							}
-							Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
 						}
-						break;
+
+						if (My_In_Radar(bottom)) { // RA2: RA2's form
+							Map[bottom].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[bottom].Height += 4; // RA2: RA2's form
+							Map[bottom].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(bottom).RegionID=WorkingRegionID; // RA2: RA2's form
+							}
+						}
+
+						int seg = 0; // RA2: RA2's form
+						if (seg < patch.Height) { // RA2: RA2's form
+						int remaining = patch.Height; // RA2: RA2's form
+						do { // RA2: RA2's form
+							if (remaining % 2) { // RA2: RA2's form
+								Map.Set_Cursor_Pos(base - Cell(-1, seg + 1)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + 1]; // RA2: RA2's form
+								seg++; // RA2: RA2's form
+								remaining--; // RA2: RA2's form
+							} else {
+								Map.Set_Cursor_Pos(base - Cell(-1, seg + 2)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallWest + 2]; // RA2: RA2's form
+								seg += 2; // RA2: RA2's form
+								remaining -= 2; // RA2: RA2's form
+							}
+							Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
+						} while (seg < patch.Height); // RA2: as above
+						}
+						break; // RA2: RA2's form
 					}
 
-					case FACING_S: {
-						Cell base(patch_x - 2, patch_y);
-						int height = Map[base + Cell(0, 2)].Height;
+					case FACING_S: { // RA2: RA2's form
+						Cell base(patch.X - 2, patch.Y); // RA2: RA2's form
+						int height = Map[base + Cell(0, 2)].Height; // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth];
-						Map.Set_Cursor_Pos(base);
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + WATERFALL_SOUTH_COUNT - 1];
-						Map.Set_Cursor_Pos(base + Cell(patch_w + 2, 0));
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + WATERFALL_SOUTH_COUNT - 1]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base + Cell(patch.Width + 2, 0)); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Cell left = base - Cell(1, 0);
-						Cell right = base + Cell(patch_w + 4, 0);
+						Cell left = base + Cell(-1, 0); // RA2: RA2's form
+						Cell right = base + Cell(patch.Width + 4, 0); // RA2: RA2's form
 
-						if (My_In_Radar(left)) {
-							Map[left].ITType = ISOTILE_NONE;
-							Map[left].Height += 4;
-							Map[left].SubTile = 0;
-							Set_Cell_Data_Region(left, WorkingRegionID);
-						}
-
-						if (My_In_Radar(right)) {
-							Map[right].ITType = ISOTILE_NONE;
-							Map[right].Height += 4;
-							Map[right].SubTile = 0;
-							Set_Cell_Data_Region(right, WorkingRegionID);
-						}
-
-						int seg = 0;
-						int remaining = patch_w;
-						while (seg < patch_w) {
-							if (remaining % 2) {
-								Map.Set_Cursor_Pos(base + Cell(seg + 2, 0));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + 1];
-								seg++;
-								remaining--;
-							} else {
-								Map.Set_Cursor_Pos(base + Cell(seg + 2, 0));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + 2];
-								seg += 2;
-								remaining -= 2;
+						if (My_In_Radar(left)) { // RA2: RA2's form
+							Map[left].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[left].Height += 4; // RA2: RA2's form
+							Map[left].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(left).RegionID=WorkingRegionID; // RA2: RA2's form
 							}
-							Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
 						}
-						break;
+
+						if (My_In_Radar(right)) { // RA2: RA2's form
+							Map[right].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[right].Height += 4; // RA2: RA2's form
+							Map[right].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(right).RegionID=WorkingRegionID; // RA2: RA2's form
+							}
+						}
+
+						int seg = 0; // RA2: RA2's form
+						if (seg < patch.Width) { // RA2: RA2's form
+						int remaining = patch.Width; // RA2: RA2's form
+						do { // RA2: RA2's form
+							if (remaining % 2) { // RA2: RA2's form
+								Map.Set_Cursor_Pos(base + Cell(seg + 2, 0)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + 1]; // RA2: RA2's form
+								seg++; // RA2: RA2's form
+								remaining--; // RA2: RA2's form
+							} else {
+								Map.Set_Cursor_Pos(base + Cell(seg + 2, 0)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallSouth + 2]; // RA2: RA2's form
+								seg += 2; // RA2: RA2's form
+								remaining -= 2; // RA2: RA2's form
+							}
+							Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
+						} while (seg < patch.Width); // RA2: as above
+						}
+						break; // RA2: RA2's form
 					}
 
-					case FACING_N: {
-						Cell base(seed_x - 2, seed_y - 2);
-						int height = Map[base - Cell(0, 2)].Height;
+					case FACING_N: { // RA2: RA2's form
+						Cell base(seed.X - 2, seed.Y - 2); // RA2: RA2's form
+						int height = Map[base - Cell(0, 2)].Height; // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth];
-						Map.Set_Cursor_Pos(base);
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + WATERFALL_NORTH_COUNT - 1];
-						Map.Set_Cursor_Pos(base + Cell(patch_w + 2, 0));
-						Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
+						Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + WATERFALL_NORTH_COUNT - 1]; // RA2: RA2's form
+						Map.Set_Cursor_Pos(base + Cell(patch.Width + 2, 0)); // RA2: RA2's form
+						Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
 
-						Map[base + Cell(1, 0)].ITType = ISOTILE_NONE;
-						Map[base + Cell(patch_w + 2, 0)].ITType = ISOTILE_NONE;
+						Map[base + Cell(1, 0)].ITType = ISOTILE_NONE; // RA2: RA2's form
+						Map[base + Cell(patch.Width + 2, 0)].ITType = ISOTILE_NONE; // RA2: RA2's form
 
-						for (int i = 0; i < patch_w + 2; i++) {
-							Map[base + Cell(i + 1, 0)].Height -= 4;
+						for (int i = 0; i < patch.Width + 2; i++) { // RA2: RA2's form
+							Map[base + Cell(i + 1, 0)].Height -= 4; // RA2: RA2's form
 						}
 
-						Cell left = base + Cell(-1, 1);
-						Cell right = base + Cell(patch_w + 4, 1);
+						Cell left = base + Cell(-1, 1); // RA2: RA2's form
+						Cell right = base + Cell(patch.Width + 4, 1); // RA2: RA2's form
 
-						if (My_In_Radar(left)) {
-							Map[left].ITType = ISOTILE_NONE;
-							Map[left].Height += 4;
-							Map[left].SubTile = 0;
-							Set_Cell_Data_Region(left, WorkingRegionID);
-						}
-
-						if (My_In_Radar(right)) {
-							Map[right].ITType = ISOTILE_NONE;
-							Map[right].Height += 4;
-							Map[right].SubTile = 0;
-							Set_Cell_Data_Region(right, WorkingRegionID);
-						}
-
-						int seg = 0;
-						int remaining = patch_w;
-						while (seg < patch_w) {
-							int column = seg + 2;
-							if (remaining % 2) {
-								Map.Set_Cursor_Pos(base + Cell(column, 1));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + 1];
-								seg++;
-								remaining--;
-							} else {
-								Map.Set_Cursor_Pos(base + Cell(column, 1));
-								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + 2];
-								seg += 2;
-								remaining -= 2;
+						if (My_In_Radar(left)) { // RA2: RA2's form
+							Map[left].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[left].Height += 4; // RA2: RA2's form
+							Map[left].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(left).RegionID=WorkingRegionID; // RA2: RA2's form
 							}
-							Map.Pick_Random_Tile_Variant(tile, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok);
 						}
-						break;
+
+						if (My_In_Radar(right)) { // RA2: RA2's form
+							Map[right].ITType = ISOTILE_NONE; // RA2: RA2's form
+							Map[right].Height += 4; // RA2: RA2's form
+							Map[right].SubTile = 0; // RA2: RA2's form
+							if (RMGCellData != NULL) { // RA2: RA2's form
+								MapRegionClass::Get_Cell_Data(right).RegionID=WorkingRegionID; // RA2: RA2's form
+							}
+						}
+
+						int seg = 0; // RA2: RA2's form
+						if (seg < patch.Width) { // RA2: RA2's form
+						int remaining = patch.Width; // RA2: RA2's form
+						do { // RA2: RA2's form
+							if (remaining % 2) { // RA2: RA2's form
+								Map.Set_Cursor_Pos(base + Cell(seg + 2, 1)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + 1]; // RA2: RA2's form
+								seg++; // RA2: RA2's form
+								remaining--; // RA2: RA2's form
+							} else {
+								Map.Set_Cursor_Pos(base + Cell(seg + 2, 1)); // RA2: RA2's form
+								Map.PendingObject = IsometricTileTypes[IsometricTileTypeClass::WaterfallNorth + 2]; // RA2: RA2's form
+								seg += 2; // RA2: RA2's form
+								remaining -= 2; // RA2: RA2's form
+							}
+							Map.Pick_Random_Tile_Variant(ISOTILE_CLEAR, ISOTILE_NONE + 1, height, WorkingRegionID, place_ok, false); // RA2: RA2's form
+						} while (seg < patch.Width); // RA2: as above
+						}
+						break; // RA2: RA2's form
 					}
 
-					default:
-						break;
+					default: // RA2: RA2's form
+						break; // RA2: RA2's form
 				}
 			}
 		}
 	}
 
-	int x_offsets[4] = { 0, 12, 0, -12 };
-	int y_offsets[4] = { -12, 0, 12, 0 };
+	int x_offsets[4] = { 0, 12, 0, -12 }; // RA2: RA2's form
+	int y_offsets[4] = { -12, 0, 12, 0 }; // RA2: RA2's form
 
-	if (success) {
-		int index = direction / 2;
-		head_x += (double)x_offsets[index];
-		head_y += (double)y_offsets[index];
+	if (success) { // RA2: RA2's form
+		head_x += (double)x_offsets[direction / 2]; // RA2: RA2's form
+		head_y += (double)y_offsets[direction / 2]; // RA2: RA2's form
 	}
 
-	placed = success;
-	return(success);
+	placed = success; // RA2: RA2's form
+	return(success); // RA2: RA2's form
 }
+
 
 
 /// <summary>
