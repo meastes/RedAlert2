@@ -559,7 +559,9 @@ unk_006802D0,0x006802D0,0x006809D0,unknown,code not assigned to a module
 unk_006809D0,0x006809D0,0x006809F0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_006809F0,0x006809F0,0x006816B0,unknown,code not assigned to a module
 unk_006816B0,0x006816B0,0x006816D0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_006816D0,0x006816D0,0x006846E0,unknown,code not assigned to a module
+unk_006816D0,0x006816D0,0x006827F0,unknown,code not assigned to a module
+skirmish,0x006827F0,0x006846C0,tibsun,"functions compiled from src/skirmish.cpp, without gaps; matched except ?Skirmish_On_WM_COMMAND@@YIXPAUHWND__@@H0H@Z"
+unk_006846C0,0x006846C0,0x006846E0,unknown,code not assigned to a module
 slider,0x006846E0,0x00684D50,tibsun,"functions compiled from src/slider.cpp, matched, without gaps"
 unk_00684D50,0x00684D50,0x00684FC0,unknown,code not assigned to a module
 smartdeform,0x00684FC0,0x00686F40,tibsun,"functions compiled from src/smartdeform.cpp, matched, without gaps"
