@@ -90,3 +90,84 @@ void Get_CPU_Type(int & cpu_type, bool & mmx, char * vendor_id, int vendor_id_le
 		strncpy(vendor_id, vendor_ptr, vendor_id_length);
 	}
 }
+
+
+extern "C" { // RA2: as above
+	extern char CPUModel; // RA2: 0x008015A4 (between CPUType and VendorID), the CPU model number, read as a signed byte
+}
+
+/***********************************************************************************************
+ * Get_CPU_Type -- the CPU class as a CPUType value                                            *
+ *=============================================================================================*/
+#pragma auto_inline(off) // RA2: Get_CPU_Type_Name (0x004D2B80) calls this one out of line
+int Get_CPU_Type(void) // RA2: not in TibSun (0x004D2A60); classifies the result of the detection code above
+{
+	int family; // RA2: as above
+	bool mmx; // RA2: as above
+	char vendor[64]; // RA2: as above
+
+	Get_CPU_Type(family, mmx, vendor, sizeof(vendor)); // RA2: as above
+
+	if (family == 0 || CPUModel == 0) { // RA2: as above
+		return CPU_UNKNOWN; // RA2: as above
+	}
+
+	if (stricmp(vendor, "AuthenticAMD") == 0) { // RA2: as above
+		return CPU_AMD; // RA2: as above
+	}
+	if (stricmp(vendor, "CyrixInstead") == 0) { // RA2: as above
+		return CPU_CYRIX; // RA2: as above
+	}
+
+	switch (family) { // RA2: as above
+		case 4: // RA2: as above
+			return CPU_486; // RA2: as above
+
+		case 5: // RA2: as above
+			return CPU_PENTIUM; // RA2: as above
+
+		case 6: // RA2: as above
+			switch (CPUModel) { // RA2: as above
+				case 3: // RA2: as above
+				case 5: // RA2: as above
+					return CPU_PII; // RA2: as above
+
+				case 6: // RA2: as above
+					return CPU_CELERON; // RA2: as above
+
+				case 7: // RA2: as above
+				case 8: // RA2: as above
+				case 10: // RA2: as above
+					return CPU_PIII; // RA2: as above
+
+				default: // RA2: as above
+					return CPU_PPRO; // RA2: as above
+			}
+
+		default: // RA2: as above
+			return CPU_PIV; // RA2: as above
+	}
+}
+
+#pragma auto_inline(on) // RA2: as above
+
+char const * Get_CPU_Type_Name(void) // RA2: not in TibSun (0x004D2B80)
+{
+	static char const * const names[CPU_COUNT] = { // RA2: the table at 0x007D8838
+		"486", // RA2: as above
+		"Pentium", // RA2: as above
+		"Pentium Pro", // RA2: as above
+		"Pentium II", // RA2: as above
+		"Pentium III", // RA2: as above
+		"Celeron", // RA2: as above
+		"Pentium 4", // RA2: as above
+		"AMD", // RA2: as above
+		"Cyrix" // RA2: as above
+	};
+
+	int type = Get_CPU_Type(); // RA2: as above
+	if (type > CPU_UNKNOWN && type < CPU_COUNT) { // RA2: as above
+		return names[type]; // RA2: as above
+	}
+	return "Unknown"; // RA2: as above
+}
