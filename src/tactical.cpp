@@ -179,6 +179,8 @@ Tactical::Tactical(void) :
 
 	ScreenText[0] = '\0';
 
+	EndGameGraphicsFrame = -1; // RA2: the constructor stores -1 at +0xA4 just before building the matrices
+
 	CoordToPixelMatrix.Make_Identity();
 	CoordToPixelMatrix.Rotate_X(RAD_60);
 	CoordToPixelMatrix.Rotate_Z(RAD_45);
