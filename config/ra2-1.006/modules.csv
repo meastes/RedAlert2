@@ -371,8 +371,8 @@ unk_0059D590,0x0059D590,0x0059EB60,unknown,code not assigned to a module
 motlib,0x0059EB60,0x0059EDC0,tibsun,"functions compiled from src/motlib.cpp, matched, without gaps; one placed by the gap; ?Clear@MotionLibrary@@QAEXXZ not placed"
 unk_0059EDC0,0x0059EDC0,0x0059EDE0,unknown,code not assigned to a module
 unk_0059EDE0,0x0059EDE0,0x0059F020,unknown,code not assigned to a module
-mouse,0x0059F020,0x0059F530,tibsun,"functions compiled from src/mouse.cpp, matched, without gaps; ?Load@MouseClass@@UAEJPAUIStream@@@Z not placed; ?Save@MouseClass@@UAEJPAUIStream@@@Z not placed; ?Free_Mouse_Shapes@@YIXXZ not placed; ?Get_Mouse_Start_Frame@MouseClass@@QBEHW4MouseType@@@Z not placed; ?Get_Mouse_Frame_Count@MouseClass@@QBEHW4MouseType@@@Z not placed"
-unk_0059F530,0x0059F530,0x005A0250,unknown,code not assigned to a module
+mouse,0x0059F020,0x0059FF60,tibsun,"functions compiled from src/mouse.cpp, matched, without gaps; two placed by the gap"
+unk_0059FF60,0x0059FF60,0x005A0250,unknown,code not assigned to a module
 movie,0x005A0250,0x005A0B50,tibsun,"functions compiled from src/movie.cpp, matched, without gaps"
 unk_005A0B50,0x005A0B50,0x005A0DC0,unknown,code not assigned to a module
 movies,0x005A0DC0,0x005A1F00,tibsun,"functions compiled from src/movies.cpp, matched, without gaps; 14 placed by the gap"
