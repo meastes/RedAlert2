@@ -208,6 +208,7 @@
 
 extern HouseClass * ObserverHouse; // RA2: 0x00A72D28, the house of the observer (the player with team -1), as stats.cpp declares it
 extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted (as super.cpp declares it)
+int __fastcall Sidebar_Which_Tab_By_Category(RTTIType, int, bool); // RA2: 0x681940, the sidebar tab of a kind and build category (defined in sidebar.cpp)
 
 ThreatType __fastcall Quarry_To_Threat(int quarry); // RA2: 0x6220E0, a script quarry as a threat type
 
@@ -2370,10 +2371,11 @@ bool HouseClass::Is_Ally(AbstractClass const * target) const
  *   08/08/1995 JLB : Breaks off combat when ally commences.                                   *
  *   10/17/1995 JLB : Added reveal base when allied.                                           *
  *=============================================================================================*/
-void HouseClass::Make_Ally(HousesType house)
+void HouseClass::Make_Ally(HousesType house, bool announce) // RA2: 0x4E5640 forwards the announce flag
 {
-	Make_Ally(Houses[house]);
+	Make_Ally(Houses[house], announce); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2478,10 +2480,11 @@ void HouseClass::Make_Ally(HouseClass * house, bool announce) // RA2: the execut
  *   05/08/1995 JLB : Created.                                                                 *
  *   07/27/1995 JLB : Making war is a bilateral action.                                        *
  *=============================================================================================*/
-void HouseClass::Make_Enemy(HousesType house)
+void HouseClass::Make_Enemy(HousesType house, bool announce) // RA2: 0x4E5A50 forwards the announce flag
 {
-	Make_Enemy(Houses[house]);
+	Make_Enemy(Houses[house], announce); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -2633,6 +2636,9 @@ ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, boo
 {
 	int result = true;
 	FactoryClass * fptr;
+	int category = Build_Category(type, id); // RA2: the factory is found by kind, ship flag and build category
+	bool was_pending = Is_Production_Pending(type, naval, category); // RA2: the pending state is remembered, then cleared
+	Assign_Production_Pending(type, naval, category, false); // RA2: as above
 	TechnoTypeClass const * tech = Fetch_Techno_Type(type, id);
 
 	BuildingClass *who = tech->Who_Can_Build_Me(false, true, true, this);
@@ -2650,7 +2656,7 @@ ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, boo
 		}
 	}
 
-	fptr = Fetch_Factory(type);
+	fptr = Fetch_Factory(type, naval, category); // RA2: as above
 
 	if (fptr == NULL) {
 		fptr = new FactoryClass;
@@ -2672,7 +2678,7 @@ ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, boo
 		}
 	}
 
-	Set_Factory(type, fptr);
+	Set_Factory(fptr, type, naval, category); // RA2: as above
 
 	bool has_suspended = false;
 	if (fptr->IsSuspended) {
@@ -2690,9 +2696,21 @@ ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, boo
 
 	if (result) {
 		if (fptr->QueuedObjects.Count() && !resume && !has_suspended) {
-			Map.Column[1].Flag_To_Redraw();
+			Map.Flag_Tab_To_Redraw(SidebarClass::Which_Tab(type, id, false)); // RA2: only the tab of the kind is redrawn
 		} else {
+			bool suspended = fptr->IsSuspended; // RA2: a human player's factory that was suspended resumes where the pending production left off
 			fptr->Start(onhold);
+
+			if (!suspended && Session.Type != GAME_NORMAL && IsHuman) { // RA2: as above
+				int duration = fptr->Object->TClass->Time_To_Build(); // RA2: as above
+				int stage = (int)(((unsigned)Session.MaxAhead * (unsigned)Session.DesiredFrameRate / 60) * 54) / duration; // RA2: as above
+				if (stage >= 53) { // RA2: as above
+					stage = 53; // RA2: as above
+				}
+				if (was_pending) { // RA2: as above
+					fptr->Set_Stage(stage); // RA2: as above
+				}
+			}
 
 			/*
 			**	Link this factory to the sidebar so that proper graphic feedback
@@ -2717,11 +2735,12 @@ ProdFailType HouseClass::Begin_Production(RTTIType type, int id, bool naval, boo
 		DebugString("IsSuspended\t= %d\n", fptr->IsSuspended);
 
 		delete fptr;
-		Set_Factory(type, NULL);
+		Set_Factory(NULL, type, naval, category); // RA2: as above
 	}
 
 	return(PROD_CANT);
 }
+
 
 
 /***********************************************************************************************
@@ -2788,7 +2807,8 @@ ProdFailType HouseClass::Suspend_Production(RTTIType type)
  *=============================================================================================*/
 ProdFailType HouseClass::Abandon_Production(RTTIType type, int id, bool naval) // RA2: naval
 {
-	FactoryClass * fptr = Fetch_Factory(type);
+	int category = Build_Category(type, id); // RA2: the factory is found by kind, ship flag and build category
+	FactoryClass * fptr = Fetch_Factory(type, naval, category); // RA2: as above
 
 	/*
 	**	If there is no factory to abandon, then return with a failure code.
@@ -2797,34 +2817,25 @@ ProdFailType HouseClass::Abandon_Production(RTTIType type, int id, bool naval) /
 		return(PROD_CANT);
 	}
 
-	if (fptr->QueuedObjects.Count() > 0 && id >= 0) {
+	if (fptr->QueuedObjects.Count() > 0 && id >= 0 && category == 0) { // RA2: only objects without a build category are taken out of the queue
 		TechnoTypeClass const * tech = Fetch_Techno_Type(type, id);
 		if (fptr->Remove_From_Queue(tech)) {
-			Map.Column[1].Flag_To_Redraw();
+			Map.Flag_Tab_To_Redraw(SidebarClass::Which_Tab(type, id, false)); // RA2: only the tab of the kind is redrawn
 			return(PROD_OK);
 		}
 	}
 
-	bool abandon = false;
-	if (id == -1) {
-		abandon = true;
-	}
-	if (!abandon) {
-		TechnoClass *obj = fptr->Object;
-		if (obj != NULL && id == obj->Class_Of()->Fetch_Heap_ID()) {
-			abandon = true;
+	if (category == 0 && id != -1) { // RA2: the abandoned object must be the one in production
+		if (fptr->Object == NULL || id != fptr->Object->Class_Of()->Fetch_Heap_ID()) { // RA2: as above
+			return(PROD_OK); // RA2: as above
 		}
-	}
-
-	if (!abandon) {
-		return(PROD_OK);
 	}
 
 	/*
 	**	Tell the sidebar that it needs to be redrawn because of this.
 	*/
 	if (PlayerPtr == this) {
-		Map.Abandon_Production(type, fptr);
+		Map.Abandon_Production(type, id, fptr); // RA2: the sidebar takes the object id too
 
 		if (type == RTTI_BUILDINGTYPE || type == RTTI_BUILDING) {
 			Map.PendingObjectPtr = 0;
@@ -2839,7 +2850,7 @@ ProdFailType HouseClass::Abandon_Production(RTTIType type, int id, bool naval) /
 	*/
 	fptr->Abandon();
 	if (fptr->QueuedObjects.Count() == 0) {
-		Set_Factory(type, NULL);
+		Set_Factory(NULL, type, naval, category); // RA2: as above
 		delete fptr;
 	} else {
 		fptr->Resume_Queue();
@@ -2847,6 +2858,7 @@ ProdFailType HouseClass::Abandon_Production(RTTIType type, int id, bool naval) /
 
 	return(PROD_OK);
 }
+
 
 
 /***********************************************************************************************
@@ -4391,6 +4403,7 @@ int HouseClass::Expert_AI(void)
 
 
 
+
 /// <summary>
 /// Determines how urgently this house should sell off its base.
 /// This routine is part of the computer's emergency handling. A house that still holds
@@ -4520,6 +4533,7 @@ UrgencyType HouseClass::Check_Raise_Money(void)
 	}
 	return(urgency);
 }
+
 
 
 
@@ -5556,7 +5570,7 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
 	int value = 0;
 	Cell center = coord.As_Cell(); // RA2: the units are looked for on the cells around the coordinate, not in the house's unit list
 
-	int count = MapClass::RadiusCount[11]; // RA2: the scan covers the offsets of the whole RadiusOffset table (radius 11, the table's last entry)
+	int count = MapClass::RadiusCount[11]; // RA2: the scan covers the offsets of the whole RadiusOffset table (the entry after radius 10 is its total)
 	for (int index = 0; index < count; index++) { // RA2: as above
 		UnitClass * unit = Map[center + MapClass::RadiusOffset[index]].Cell_Unit(true); // RA2: as above
 
@@ -5576,6 +5590,7 @@ AbstractClass * HouseClass::Find_Juicy_Target(Coord const & coord) const
 	}
 	return(NULL);
 }
+
 
 
 
@@ -5878,14 +5893,16 @@ void HouseClass::Assign_Production_Pending(RTTIType type, bool naval, int catego
  * HISTORY:                                                                                    *
  *   07/09/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
-void HouseClass::Set_Factory(RTTIType rtti, FactoryClass * factory)
+void HouseClass::Set_Factory(FactoryClass * factory, RTTIType rtti, bool naval, int category) // RA2: 0x4EB8C0, argument order as the executable; ships and defenses have their own primary factory
 {
-	assert(rtti != RTTI_NONE);
-
 	switch (rtti) {
 		case RTTI_UNIT:
 		case RTTI_UNITTYPE:
-			UnitFactory = factory;
+			if (naval) { // RA2: as above
+				Primary_ForShips = factory; // RA2: as above
+			} else { // RA2: as above
+				UnitFactory = factory; // RA2: as above
+			}
 			break;
 
 		case RTTI_INFANTRY:
@@ -5895,7 +5912,11 @@ void HouseClass::Set_Factory(RTTIType rtti, FactoryClass * factory)
 
 		case RTTI_BUILDING:
 		case RTTI_BUILDINGTYPE:
-			BuildingFactory = factory;
+			if (category == 5) { // RA2: as above
+				Primary_ForDefenses = factory; // RA2: as above
+			} else { // RA2: as above
+				BuildingFactory = factory; // RA2: as above
+			}
 			break;
 
 		case RTTI_AIRCRAFT:
@@ -5904,6 +5925,7 @@ void HouseClass::Set_Factory(RTTIType rtti, FactoryClass * factory)
 			break;
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -6630,12 +6652,13 @@ Cell HouseClass::Random_Cell_In_Zone(ZoneType zone) const
 /// This is a convenience for the cases where the house to befriend is known only through one
 /// of the objects that belong to it.
 /// </summary>
-void HouseClass::Make_Ally(ObjectClass * object)
+void HouseClass::Make_Ally(ObjectClass * object, bool announce) // RA2: 0x4ECF50 forwards the announce flag
 {
 	if (object) {
-		Make_Ally(object->Owner_HouseClass());
+		Make_Ally(object->Owner_HouseClass(), announce); // RA2: as above
 	}
 }
+
 
 
 /// <summary>
@@ -6643,12 +6666,13 @@ void HouseClass::Make_Ally(ObjectClass * object)
 /// This is a convenience for the cases where the offending house is known only through one
 /// of the objects that belong to it.
 /// </summary>
-void HouseClass::Make_Enemy(ObjectClass * object)
+void HouseClass::Make_Enemy(ObjectClass * object, bool announce) // RA2: 0x4ECF80 forwards the announce flag
 {
 	if (object) {
-		Make_Enemy(object->Owner_HouseClass());
+		Make_Enemy(object->Owner_HouseClass(), announce); // RA2: as above
 	}
 }
+
 
 
 /// <summary>
@@ -7735,6 +7759,7 @@ found: // RA2: the shared exit of both searches; the structured form (a flag and
 
 	return(true);
 }
+
 
 
 
@@ -8923,17 +8948,25 @@ void HouseClass::Activate_Threat_Node(void)
 /// is suspended until it may proceed again.
 /// </summary>
 /// <param name="rtti">Which of the house's factories to bring up to date.</param>
-void HouseClass::Update_Factories(RTTIType rtti)
+void HouseClass::Update_Factories(RTTIType rtti, bool naval, int category) // RA2: 0x4F3170, takes the ship flag and the build category too
 {
 	FactoryClass * factory = NULL;
 
 	switch (rtti) {
 		case RTTI_BUILDINGTYPE:
-			factory = BuildingFactory;
+			if (category == 5) { // RA2: defenses have their own primary factory
+				factory = Primary_ForDefenses; // RA2: as above
+			} else {
+				factory = BuildingFactory; // RA2: as above
+			}
 			break;
 
 		case RTTI_UNITTYPE:
-			factory = UnitFactory;
+			if (naval) { // RA2: so have ships
+				factory = Primary_ForShips; // RA2: as above
+			} else {
+				factory = UnitFactory; // RA2: as above
+			}
 			break;
 
 		case RTTI_INFANTRYTYPE:
@@ -8960,11 +8993,7 @@ void HouseClass::Update_Factories(RTTIType rtti)
 				if (factory->Object->TClass->Who_Can_Build_Me(true, true, true, this) == NULL) {
 					factory->Suspend(false);
 					if (PlayerPtr == this) {
-						Map.SidebarClass::IsToRedraw = true;
-						Map.IsToBlitSidebar = true;
-						Map.Flag_To_Redraw();
-						Map.Column[0].Flag_To_Redraw();
-						Map.Column[1].Flag_To_Redraw();
+						Map.Flag_Tab_To_Redraw(Sidebar_Which_Tab_By_Category(rtti, category, naval)); // RA2: only the tab of the kind is redrawn
 					}
 				} else {
 					if (factory->IsSuspended && !factory->IsOnHold) {
@@ -8978,6 +9007,31 @@ void HouseClass::Update_Factories(RTTIType rtti)
 		}
 	}
 }
+
+
+
+/// <summary>
+/// Records that another house has spied upon this house's radar.
+/// When it is the player doing the spying, this routine also reveals the map around
+/// everything this house owns, since a spied radar hands its owner a look at the entire
+/// force.
+/// </summary>
+/// <param name="house">The house that performed the spying.</param>
+void HouseClass::Update_Spied_Radar(HouseClass * house) // RA2: 0x4F3320
+{
+	RadarSpied |= 1 << house->Class->House; // RA2: as above
+	if (house == PlayerPtr) { // RA2: as above
+		for (int index = 0; index < Technos.Count(); index++) { // RA2: as above
+			TechnoClass * obj = Technos[index]; // RA2: as above
+			if (obj && !obj->IsInLimbo && obj->House == this) { // RA2: as above
+				Map.RevealArea1(obj->PositionCoord, obj->TClass->SightRange, this, false, false, false, true, true); // RA2: the executable calls RevealArea1 (0x549C50) with both trailing flags set, not TibSun's Sight_From
+			}
+		}
+		Map.Flag_To_Redraw(GS_REDRAW_ALL); // RA2: as above
+	}
+}
+
+
 
 
 /// <summary>
@@ -10548,28 +10602,4 @@ FactoryClass * HouseClass::Fetch_Factory(RTTIType rtti) const // RA2: no such fu
 			break;
 	}
 	return(factory);
-}
-
-
-
-
-/// <summary>
-/// Records that another house has spied upon this house's radar.
-/// When it is the player doing the spying, this routine also reveals the map around
-/// everything this house owns, since a spied radar hands its owner a look at the entire
-/// force.
-/// </summary>
-/// <param name="house">The house that performed the spying.</param>
-void HouseClass::Update_Spied_Radar(HouseClass * house) // RA2: no such function; TibSun's, so it sits unplaced at the end
-{
-	RadarSpied |= 1 << house->Class->House;
-	if (house == PlayerPtr) {
-		for (int index = 0; index < Technos.Count(); index++) {
-			TechnoClass * obj = Technos[index];
-			if (obj && !obj->IsInLimbo && obj->House == this) {
-				Map.Sight_From(obj->PositionCoord, obj->TClass->SightRange, this);
-			}
-		}
-		Map.Flag_To_Redraw(GS_REDRAW_ALL);
-	}
 }

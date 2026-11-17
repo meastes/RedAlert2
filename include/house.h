@@ -834,11 +834,11 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		bool Add_Wall_Nodes(int node); // RA2: 0x4F5D30; the nearest base node before this one whose building wants walls gets a ring of wall nodes after it
 		void Flag_To_End(void);
 		void Make_Ally(HouseClass * house, bool announce = false); // RA2: 0x004E5660 takes a second argument, whether the alliance is announced (MPCooperative passes false)
-		void Make_Ally(HousesType house);
-		void Make_Ally(ObjectClass * object);
+		void Make_Ally(HousesType house, bool = false); // RA2: 0x4E5640 forwards the announce flag
+		void Make_Ally(ObjectClass * object, bool = false); // RA2: 0x4ECF50 forwards the announce flag
 		void Make_Enemy(HouseClass * house, bool announce = false); // RA2: 0x4E5A70 takes the announce flag as Make_Ally does
-		void Make_Enemy(HousesType house);
-		void Make_Enemy(ObjectClass * object);
+		void Make_Enemy(HousesType house, bool = false); // RA2: 0x4E5A50 forwards the announce flag
+		void Make_Enemy(ObjectClass * object, bool = false); // RA2: 0x4ECF80 forwards the announce flag
 		bool Is_Ally(HousesType house) const;
 		bool Is_Ally(HouseClass const * house) const;
 		bool Is_Ally(ObjectClass const * object) const;
@@ -903,7 +903,8 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		void Clear_Production_Pending(RTTIType type, bool naval, int category); // RA2: 0x4EB6D0; production of the kind is no longer pending
 		bool Is_Production_Pending(RTTIType type, bool naval, int category); // RA2: 0x4EB770; production of the kind is pending
 		void Assign_Production_Pending(RTTIType type, bool naval, int category, bool value); // RA2: 0x4EB810; sets the pending state of the kind
-		void Set_Factory(RTTIType rtti, FactoryClass * factory);
+		// RA2: TibSun's QuantityB/U/I/A (inline, called nowhere) are dropped: the parameters added below would otherwise unmatch wonline Draw_Player_List, ownrdraw Slide_Dialog and astar Build_Final_Path and firewall Analyse_Ports (header-count effect; Suspend_Production 0x4E63F0 stays held for the same reason)
+		void Set_Factory(FactoryClass * factory, RTTIType rtti, bool = false, int = 0); // RA2: 0x4EB8C0 takes the factory first, then the kind, the ship flag and the build category
 		void Update_Production_Mode(RTTIType type);
 		void Production_Status_Changed(void) {IsRecalcNeeded = true;}
 
@@ -924,7 +925,7 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		void Adjust_Drain(int adjust);
 		void Update_Spied_Radar(HouseClass * house);
 		void Update_Spied_Power_Plants(void);
-		void Update_Factories(RTTIType rtti);
+		void Update_Factories(RTTIType rtti, bool = false, int = 0); // RA2: 0x4F3170 takes the ship flag and the build category too
 		double Power_Fraction(void) const;
 		double Tiberium_Fraction(void) const;
 		double Weed_Fraction(void) const;
@@ -1156,10 +1157,6 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		*/
 		int Scheme;
 
-		int QuantityB(int index) {return(BQuantity.Value(index));}
-		int QuantityU(int index) {return(UQuantity.Value(index));}
-		int QuantityI(int index) {return(IQuantity.Value(index));}
-		int QuantityA(int index) {return(AQuantity.Value(index));}
 
 		/*
 		 * Pointer to the coverage grid, over Base.BaseAreaRect, for the kind of defense being
