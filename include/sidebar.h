@@ -181,7 +181,6 @@ class SidebarClass : public PowerClass
 					SelectClass(NoInitClass const & x) : ControlClass(x) {};
 
 					void Set_Owner(StripClass & strip, int index);
-					bool Is_Hovered(void) const; // RA2: 0x681690, the mouse is over the button and input is on
 
 					StripClass * Strip;
 					int Index;

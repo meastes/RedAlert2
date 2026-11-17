@@ -710,7 +710,6 @@ class TechnoClass :	public RadioClass,
 		virtual void Reload(void); // RA2
 		void Start_Reload_Timer(void); // RA2: 0x6C8300
 		virtual void Reacquire_Target(void) {} // RA2: inline (one copy, 0x41B400); infantry looks for a new target
-		void Become_Untargetable(void); // RA2: 0x6D7C80
 		virtual Coord GetAttackCoordinates(void) const; // RA2
 		void Draw_Link_Line(Coord start, Coord end, RGBClass color) const; // RA2: 0x6D0990
 		void Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool shadow) const; // RA2: 0x6D0DC0
@@ -729,6 +728,8 @@ class TechnoClass :	public RadioClass,
 		void Update_Iron_Tint(void); // RA2: 0x6D8820
 		void UpdateThreatInCell(CellClass * cell); // RA2: 0x6D9610
 		void Shorten_Targeting_Timer(void); // RA2: 0x6D96A0; a TargetingTimer above 10 frames restarts at Random(4, 8)
+		void Set_Targeting_Timer(int delay); // RA2: 0x6D9670; TargetingTimer becomes a fresh timer of the delay
+		void Draw_Behind_Marker(Point2D const & point, Rect const * window); // RA2: 0x6D9080; creates the behind animation or draws the fallback brackets
 		void Set_Planning_Token(PlanningTokenClass * token); // RA2: 0x6D1420
 		PlanningTokenClass * Get_Planning_Token(void); // RA2: 0x6D1430
 		void Select_Planning_Members(void); // RA2: 0x6145E0; when planning mode is active (guarded against re-entry), selects every member of the last node of this object's planning token

@@ -11193,6 +11193,142 @@ int TechnoClass::Get_Max_Speed(void) const
 }
 
 
+/// <summary>
+/// Hands back the mission code a mega event carries (a signed byte at +12 of the event).
+/// </summary>
+/// <param name="event">The mega event.</param>
+/// <returns>The signed byte at offset 12 of the event.</returns>
+int TechnoClass::RespondMegaEventMission(EventClass * event) // RA2: 0x6D8EB0 (vtable slot)
+{
+	return(((char *)event)[12]); // RA2: the executable reads one signed byte at +12 of its argument
+}
+
+
+/// <summary>
+/// Drops the mega mission data of this object. The base class holds none.
+/// </summary>
+void TechnoClass::ClearMegaMissionData(void) // RA2: 0x6D8EC0 (vtable slot), a single ret
+{
+}
+
+
+/// <summary>
+/// Tells whether this object follows a mega mission. The base class never does.
+/// </summary>
+/// <returns>Always false here.</returns>
+bool TechnoClass::HaveMegaMission(void) const // RA2: 0x6D8ED0 (vtable slot)
+{
+	return(false); // RA2: the executable returns zero
+}
+
+
+/// <summary>
+/// Tells whether this object has an attack-move target. The base class has none.
+/// </summary>
+/// <returns>Always false here.</returns>
+bool TechnoClass::HaveAttackMoveTarget(void) const // RA2: 0x6D8EE0 (vtable slot)
+{
+	return(false); // RA2: the executable returns zero
+}
+
+
+/// <summary>
+/// Returns the mega mission of this object; -1 stands for none.
+/// </summary>
+/// <returns>Always -1 here.</returns>
+int TechnoClass::GetMegaMission(void) const // RA2: 0x6D8EF0 (vtable slot)
+{
+	return(-1); // RA2: the executable returns -1
+}
+
+
+/// <summary>
+/// Returns the coordinate of the attack-move target; (-1, -1, -1) stands for none.
+/// </summary>
+/// <returns>The invalid coordinate here.</returns>
+Coord TechnoClass::GetAttackMoveCoords(void) // RA2: 0x6D8F00 (vtable slot)
+{
+	return(Coord(-1, -1, -1)); // RA2: the executable returns the coordinate (-1, -1, -1)
+}
+
+
+/// <summary>
+/// Tells whether the type of this object lets it follow waypoints.
+/// </summary>
+/// <returns>What the type's CanUseWaypoint says.</returns>
+bool TechnoClass::CanUseWaypoint(void) const // RA2: 0x6D8F20 (vtable slot)
+{
+	return(Techno_Type_Class()->CanUseWaypoint()); // RA2: two virtual calls, the type and then its CanUseWaypoint
+}
+
+
+/// <summary>
+/// Tells whether the type of this object lets it attack while it moves.
+/// </summary>
+/// <returns>What the type's CanAttackMove says.</returns>
+bool TechnoClass::CanAttackOnTheMove(void) const // RA2: 0x6D8F40 (vtable slot)
+{
+	return(Techno_Type_Class()->CanAttackMove()); // RA2: two virtual calls, the type and then its CanAttackMove
+}
+
+
+/// <summary>
+/// Turns a plain move or attack order into the attack-move order while the force key is held.
+/// </summary>
+/// <param name="action">The action the cursor offers.</param>
+/// <returns>The attack-move action for a move or an attack under the force key, else the action itself.</returns>
+ActionType __fastcall Attack_Move_Action(ActionType action, int, int) // RA2: 0x6D8F60, a fastcall with one unused register and one unused stack argument (called at 0x49B5B5 in DisplayClass::Mouse_Left_Up)
+{
+	bool force = Can_Force_Order(); // RA2: the force key is asked first
+	if (action == ACTION_MOVE) { // RA2: action 1 becomes 62
+		if (force) { // RA2: as above
+			return(ACTION_ATTACK_MOVE_NAV); // RA2: as above
+		}
+	} else if (action == ACTION_ATTACK && force) { // RA2: action 5 becomes 63
+		return(ACTION_ATTACK_MOVE_TAR); // RA2: as above
+	}
+	return(action); // RA2: as above
+}
+
+
+/// <summary>
+/// Tells whether the mega mission of this object is an attack-move. The base class has none.
+/// </summary>
+/// <returns>Always false here.</returns>
+bool TechnoClass::MegaMissionIsAttackMove(void) const // RA2: 0x6D8F90 (vtable slot)
+{
+	return(false); // RA2: the executable returns zero
+}
+
+
+/// <summary>
+/// Continues the mega mission of this object. The base class has none.
+/// </summary>
+/// <returns>Always false here.</returns>
+bool TechnoClass::ContinueMegaMission(void) // RA2: 0x6D8FA0 (vtable slot)
+{
+	return(false); // RA2: the executable returns zero
+}
+
+
+/// <summary>
+/// Runs the attack-move update of this object. The base class has none.
+/// </summary>
+void TechnoClass::UpdateAttackMove(void) // RA2: 0x6D8FB0 (vtable slot), a single ret
+{
+}
+
+
+/// <summary>
+/// Refreshes the mega mission of this object. The base class has none.
+/// </summary>
+/// <returns>Always false here.</returns>
+bool TechnoClass::RefreshMegaMission(void) // RA2: 0x6D8FC0 (vtable slot)
+{
+	return(false); // RA2: the executable returns zero
+}
+
+
 
 
 
@@ -11255,12 +11391,137 @@ void TechnoClass::Set_Talker(TechnoClass * techno, TalkType bubble)
 		TalkBubbleType = bubble;
 		TalkBubbleOwner = techno;
 		TalkBubbleTimer = Rule->TalkBubbleTime;
-		Map.Sight_From(techno->Center_Coord(), 2, PlayerPtr);
+		Map.RevealArea1(techno->Center_Coord(), 2, PlayerPtr, false, false, false, true, true); // RA2: the executable calls RevealArea1 (0x549C50) with both trailing flags set, not Sight_From
 	} else {
 		TalkBubbleType = TALK_NONE;
 		TalkBubbleOwner = NULL;
 		TalkBubbleTimer = 0;
 	}
+}
+
+
+/// <summary>
+/// Marks an object that stands behind something that covers it. The rules may name an
+/// animation for this; it is created at the object and attached to it. Without one a
+/// pair of square brackets is drawn around the point instead.
+/// </summary>
+/// <param name="point">Where the object is on the screen.</param>
+/// <param name="window">The window being drawn (the executable does not read it).</param>
+void TechnoClass::Draw_Behind_Marker(Point2D const & point, Rect const * window) // RA2: 0x6D9080 (meastes: unknown_6d9080; the name follows its caller AI)
+{
+	if (Visual_Character(false, NULL) == VISUAL_NORMAL && BehindAnim == NULL) { // RA2: only an object that is shown normally and has no marker yet
+		if (Rule->Behind != NULL) { // RA2: the rules name the behind animation
+			BehindAnim = new AnimClass(Rule->Behind, Center_Coord(), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: the flags are 0x600
+			if (BehindAnim != NULL) { // RA2: as above
+				if (Fetch_RTTI() != RTTI_BUILDING) { // RA2: as above
+					AnimPtrTracker.Delete(this); // RA2: as above
+					AnimPtrTracker.Add(this); // RA2: as above
+				}
+				BehindAnim->Attach_To(this); // RA2: as above
+				if (!Options.IsShowHidden) { // RA2: Options+0x1B (0xA40B33); without it the marker is made invisible
+					BehindAnim->Make_Invisible(); // RA2: the executable sets the byte at +381 of the animation
+				}
+			}
+		} else {
+			int color = NormalDrawer->Convert_Pixel(12); // RA2: the first pass is drawn in the palette colour 12
+			Point2D origin = point; // RA2: the brackets are drawn around a copy of the point
+			int outside; // RA2: as above
+			int inside; // RA2: as above
+			if (Frame & 8) { // RA2: the brackets pulse with the frame number
+				outside = 12; // RA2: as above
+				inside = 8; // RA2: as above
+			} else {
+				outside = 10; // RA2: as above
+				inside = 6; // RA2: as above
+			}
+			for (int pass = 0; pass < 2; pass++) { // RA2: the second pass is drawn one pixel lower right in the player's colour
+				LogicalSurface->Draw_Line(origin + Point2D(-outside, -outside), origin + Point2D(-inside, -outside), color); // RA2: the executable draws ten lines per pass
+				LogicalSurface->Draw_Line(origin + Point2D(inside, -outside), origin + Point2D(outside, -outside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(outside, -outside), origin + Point2D(outside, -inside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(outside, inside), origin + Point2D(outside, outside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(outside, outside), origin + Point2D(inside, outside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(-inside, outside), origin + Point2D(-outside, outside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(-outside, outside), origin + Point2D(-outside, inside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(-outside, -inside), origin + Point2D(-outside, -outside), color); // RA2: as above
+				LogicalSurface->Draw_Line(origin + Point2D(-4, 0), origin + Point2D(4, 0), color); // RA2: the cross in the middle
+				LogicalSurface->Draw_Line(origin + Point2D(0, -4), origin + Point2D(0, 4), color); // RA2: as above
+				origin.X++; // RA2: as above
+				origin.Y++; // RA2: as above
+				RGBClass rgb = ColorSchemes[PlayerPtr->Scheme]->HSV; // RA2: the scheme's colour (ColorScheme+776) converted to RGB
+				color = DSurface::Build_Hicolor_Pixel(rgb); // RA2: as a hicolor pixel
+			}
+		}
+	}
+}
+
+
+/// <summary>
+/// Puts the risk of this object into the threat of a cell for the owner's house.
+/// </summary>
+/// <param name="cell">The cell, or NULL for none.</param>
+void TechnoClass::Add_Cell_Threat(CellClass * cell) // RA2: 0x6D95A0
+{
+	if (cell != NULL) { // RA2: as above
+		ThreatPosed = Risk(); // RA2: the risk is kept in ThreatPosed
+		cell->Adjust_Threat(Owner(), ThreatPosed); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Takes back the threat this object has put into a cell.
+/// </summary>
+/// <param name="cell">The cell, or NULL for none.</param>
+void TechnoClass::Remove_Cell_Threat(CellClass * cell) // RA2: 0x6D95D0
+{
+	if (cell != NULL) { // RA2: as above
+		cell->Adjust_Threat(Owner(), -(int)ThreatPosed); // RA2: what ThreatPosed holds is taken off again
+		ThreatPosed = 0; // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Renews the threat this object has put into a cell: the old amount goes, the current risk comes.
+/// </summary>
+/// <param name="cell">The cell, or NULL for none.</param>
+void TechnoClass::UpdateThreatInCell(CellClass * cell) // RA2: 0x6D9610
+{
+	if (cell != NULL) { // RA2: as above
+		Remove_Cell_Threat(cell); // RA2: both calls are expanded in the executable
+		Add_Cell_Threat(cell); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Starts the targeting timer anew with the given delay.
+/// </summary>
+/// <param name="delay">The number of frames until the next scan.</param>
+void TechnoClass::Set_Targeting_Timer(int delay) // RA2: 0x6D9670 (no caller found in the executable; the name is mine)
+{
+	TargetingTimer = delay; // RA2: the executable builds a timer of the delay and stores it (+0x148), the middle field comes from an unset temporary
+}
+
+
+/// <summary>
+/// Brings the next scan for a target closer when it is more than 10 frames away.
+/// </summary>
+void TechnoClass::Shorten_Targeting_Timer(void) // RA2: 0x6D96A0
+{
+	if (TargetingTimer.Value() > 10 && ScenarioInit == 0) { // RA2: the next scan comes soon
+		TargetingTimer = Random_Pick(4, 8); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// Tells whether the targeting timer has run out.
+/// </summary>
+/// <returns>True when no frames remain.</returns>
+bool TechnoClass::TargetingTimerFinished(void) // RA2: 0x6D9710 (YR's name)
+{
+	return(TargetingTimer.Value() == 0); // RA2: as above
 }
 
 
