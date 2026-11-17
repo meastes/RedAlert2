@@ -68,6 +68,7 @@
 #include "infatype.h" // RA2
 static FootClass * _Create_Group(TeamTypeClass const * teamtype); // RA2: defined after its first caller
 static bool _Pop_Group_Out_Of_Object(FootClass * group, TechnoClass * object); // RA2: defined after its first caller
+void Record_Event_Cell(Cell const & cell); // RA2: 0x63C6C0, the ring of recent event cells (used by Do_Reinforcements before its definition)
 
 
 
@@ -163,74 +164,80 @@ static TechnoClass * _Who_Can_Pop_Out_Of(Cell origin)
  *   06/19/1995 JLB : Announces reinforcements.                                                *
  *   02/15/1996 JLB : Recognizes team reinforcement location.                                  *
  *=============================================================================================*/
-bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
+/// <summary>
+/// RA2: the drop-pod reinforcement: a PDPLANE paradrop plane (a loaner) is created at the house's edge (or the
+/// team's transport origin), told to approach the target cell and carries the group as cargo. The executable has
+/// no separate copy: it is inlined into Do_Reinforcements.
+/// </summary>
+static inline int _Place_Reinforcement(TechnoClass * plane, Cell const & dest) // RA2: not in TibSun, YR's helper
 {
-	assert(teamtype != 0);
+	ScenarioInit++; // RA2: as above
+	Coord location(dest); // RA2: as above
+	int placed = plane->Unlimbo(location, DIR_N); // RA2: as above
+	ScenarioInit--; // RA2: as above
+	return(placed); // RA2: as above
+}
 
-	bool delete_when_done = false;
 
-	/*
-	**	perform some preliminary checks for validity.
-	*/
-	if (!teamtype || !teamtype->TaskForce->ClassCount) return(false);
+static bool _Create_Paradrop(TeamTypeClass const * teamtype, FootClass * object, Cell origin) // RA2: not in TibSun
+{
+	Cell dest; // RA2: as above
+	TechnoTypeClass const * ptype = (TechnoTypeClass *)AircraftTypes[AircraftTypeClass::From_Name("PDPLANE")]; // RA2: as above
+	ScenarioInit++; // RA2: as above
+	AircraftClass * plane = (AircraftClass *)ptype->Create_One_Of(object->House); // RA2: as above
+	ScenarioInit--; // RA2: as above
+	if (plane) { // RA2: as above
+		plane->IsALoaner = true; // RA2: as above
+		if (teamtype->IsUseTransportOrigin) { // RA2: as above
+			dest = teamtype->Get_Transport_Origin(); // RA2: as above
+		} else { // RA2: as above
+			int source = object->House->Control.Edge; // RA2: as above
+			if (source < 0 || source > 3) source = SOURCE_NORTH; // RA2: a bad edge falls back to north
+			dest = Map.Calculated_Cell((SourceType)source, CELL_NONE, CELL_NONE, SPEED_WINGED, true, MZONE_NORMAL); // RA2: as above
+		} // RA2: as above
+		plane->QueueMission(MISSION_PARADROP_APPROACH, false); // RA2: as above
+		plane->Assign_Destination(NULL, true); // RA2: as above
+		plane->Assign_Target(&Map[origin]); // RA2: as above
+		int placed = _Place_Reinforcement(plane, dest); // RA2: as above
+		if (placed) { // RA2: as above
+			plane->Passenger = true; // RA2: as above
+			plane->Cargo.Attach(object); // RA2: as above
+			plane->Commence(); // RA2: as above
+			return(true); // RA2: as above
+		} else { // RA2: as above
+			delete plane; // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	return(false); // RA2: as above
+}
 
-	AircraftTypeClass const * dshp = AircraftTypes[AircraftTypeClass::From_Name("DSHP")];
-	if (teamtype->TaskForce->ClassCount == 1 && teamtype->TaskForce->Members[0].Class == dshp && teamtype->House->CurrentDropship < 3) {
 
-		if (!PlayerPtr->DropshipLoadouts[PlayerPtr->CurrentDropship].EntryCount) {
-			return(NULL);
-		}
+bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp) // RA2: as above
+{
+	if (!teamtype || !teamtype->TaskForce->ClassCount) return(false); // RA2: no dropship case, no assert
 
-		TaskForceClass * dropship_taskforce = new TaskForceClass;
-		dropship_taskforce->Members[0] = EnlistedMemberClass(1, dshp);
-
-		int classcount;
-		for (classcount = 1; classcount <= PlayerPtr->DropshipLoadouts[PlayerPtr->CurrentDropship].EntryCount; classcount++) {
-			TechnoTypeClass const * obj = teamtype->House->DropshipLoadouts[teamtype->House->CurrentDropship].Fetch(classcount - 1);
-			dropship_taskforce->Members[classcount] = EnlistedMemberClass(1, obj);
-		}
-		dropship_taskforce->ClassCount = classcount;
-
-		TeamTypeClass * dropship_teamtype = new TeamTypeClass;
-		static char name[24];
-		strcpy(name, dropship_teamtype->IniName);
-		memcpy(dropship_teamtype, teamtype, sizeof(TeamTypeClass));
-		dropship_teamtype->TaskForce = dropship_taskforce;
-		dropship_teamtype->IniName = TStringID<24>(name);
-		dropship_teamtype->GivenName = TStringID<48>(name);
-
-		dropship_teamtype->IsDropship = true;
-		teamtype->House->CurrentDropship++;
-		teamtype = dropship_teamtype;
-		delete_when_done = true;
-	}
-
-	/*
-	**	HACK ALERT!
-	**	Give this team an attack waypoint mission that will attack the waypoint location of this
-	**	team if there are no team missions previously assigned.
-	*/
-	ScriptTypeClass * script = teamtype->Script;
-	int count = script->MissionCount;
-	if (script->MissionCount == 0) {
-		TeamMissionClass tmission(TMISSION_ATT_WAYPT, 0);
-		if (count < MAX_TEAM_MISSIONS) {
-			script->MissionList[count] = tmission;
-			script->MissionCount++;
-		}
-	}
+	if (teamtype->Script == NULL || teamtype->Script->MissionCount == 0) { // RA2: the missing-script default is a GUARD mission (TMISSION 5), as in Do_Chrono_Reinforcements
+		TeamMissionClass tmission(TMISSION_GUARD, 0); // RA2: as above
+		if (teamtype->Script == NULL) { // RA2: as above
+			((TeamTypeClass *)teamtype)->Script = new ScriptTypeClass(NULL); // RA2: as above
+		} // RA2: as above
+		ScriptTypeClass * script = teamtype->Script; // RA2: as above
+		int count = script->MissionCount; // RA2: as above
+		if (count < MAX_TEAM_MISSIONS) { // RA2: as above
+			script->MissionList[count] = tmission; // RA2: as above
+			script->MissionCount++; // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
 
 	bool drop_pod = false;
-	if (teamtype->IsDroppod) {
-		if (teamtype->TaskForce->Has_Only_Infantry()) {
-			drop_pod = true;
-		}
+	if (teamtype->IsDroppod) { // RA2: no Has_Only_Infantry test
+		drop_pod = true; // RA2: as above
 	}
 
 	FootClass * object = _Create_Group(teamtype);
 
 	/// this dereferences the object before the NULL check below
-	object->Team->IsDeleteTypeWhenDone = delete_when_done;
+	object->Team->IsDeleteTypeWhenDone = false; // RA2: never a deleted dropship team type
 
 	/*
 	**	Bail on this reinforcement if no reinforcements could be created.
@@ -240,10 +247,13 @@ bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 		return(false);
 	}
 
-	Cell origin = teamtype->Get_Origin();
-	if (wp != -1) {
-		origin = Scen->Get_Waypoint_Cell(wp);
-	}
+	bool atwaypoint = wp != -1; // RA2: kept in a local
+	Cell origin; // RA2: as above
+	if (atwaypoint) { // RA2: as above
+		origin = Scen->Get_Waypoint_Cell(wp); // RA2: as above
+	} else { // RA2: as above
+		origin = teamtype->Get_Origin(); // RA2: as above
+	} // RA2: as above
 
 	/*
 	**	Special case code to handle infantry types that run from a building. This presumes
@@ -261,16 +271,25 @@ bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 		}
 	}
 
+	bool onmap = atwaypoint && Map.In_Local_Radar(origin, true); // RA2: only a waypoint arrival on the radar map counts as on the map
+
+	bool ok; // RA2: as above
+	if (!drop_pod) { // RA2: as above
+		ok = Create_Reinforcement(teamtype, object, origin, onmap); // RA2: as above
+	} else { // RA2: as above
+		ok = _Create_Paradrop(teamtype, object, origin); // RA2: a drop pod team arrives by paradrop plane
+	} // RA2: as above
+
 	/*
 	**	Announce when the reinforcements have arrived.
 	*/
-	if (Create_Reinforcement(teamtype, object, origin, wp != -1) && teamtype->House->Is_Ally(PlayerPtr)) {
-		LastRadarEventCell = origin;
-		Speak(VOX_REINFORCEMENTS);
+	if (ok && teamtype->House->Is_Ally(PlayerPtr)) { // RA2: no radar-event assignment and no VOX_REINFORCEMENTS here, RA2 records the event cell
+		Record_Event_Cell(origin); // RA2: as above
 	}
 
 	return(true);
 }
+
 
 
 /***********************************************************************************************
@@ -481,10 +500,8 @@ inline bool _Can_Burrow(FootClass * object)
 bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Cell const & xcell, bool atwaypoint)
 {
 	bool drop_pod = false;
-	if (teamtype->IsDroppod) {
-		if (teamtype->TaskForce->Has_Only_Infantry()) {
-			drop_pod = true;
-		}
+	if (teamtype->IsDroppod) { // RA2: no Has_Only_Infantry test
+		drop_pod = true; // RA2: as above
 	}
 
 	bool burrow = _Can_Burrow(object);
@@ -500,15 +517,14 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 		**	map using their own power. First order of business is to determine where they
 		**	should arrive from.
 		*/
-		SourceType source = teamtype->House->Control.Edge;
-		if (source == SOURCE_NONE) {
-			source = SOURCE_NORTH;
+		int source = teamtype->House->Control.Edge; // RA2: an int; the cell is kept (no Calculated_Cell)
+		if (source == -1) { // RA2: as above
+			source = 0; // RA2: as above
 		}
 
 		eface = (FacingType)(source << 1);
-		cell = Map.Calculated_Cell(source, cell, CELL_NONE, object->TClass->Speed);
 	} else {
-		cell = Map.Nearby_Location(cell, object->TClass->Speed);
+		cell = Map.Nearby_Location(cell, object->Techno_Type_Class()->Speed); // RA2: the virtual Techno_Type_Class
 	}
 
 	Cell newcell = cell;
@@ -519,7 +535,7 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 	if (newcell != CELL_NONE) {
 		while (newcell != CELL_NONE && object != NULL) {
 			DirType desiredfacing(eface);
-			if (object->RTTI == RTTI_AIRCRAFT) {
+			if (object->Fetch_RTTI() == RTTI_AIRCRAFT) { // RA2: the virtual Fetch_RTTI
 				desiredfacing = DirType(DirType(eface).As_Int() - DirType(FACING_135).As_Int() - 1).Snap_To_8();
 			}
 
@@ -532,17 +548,19 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 			bool placed = false;
 
 			if (drop_pod) {
-				object->PositionCoord = newcell;
-				object->Assign_Destination(&Map[newcell]);
+				object->Set_Coord(Coord(newcell)); // RA2: Set_Coord of the cell's coordinate, not PositionCoord = cell
+				object->Assign_Destination(&Map[newcell], true); // RA2: as above
 				object->Locomotion->Move_To(newcell.As_Coord());
-				object->Look();
+				object->UpdateSight(false, false, false, NULL); // RA2: UpdateSight (+1048) instead of Look
+				Coord coord = object->PositionCoord; // RA2: the position is copied and the area around it revealed
+				Map.RevealArea3(coord, 0, object->LastSightRange + 3, 0); // RA2: as above
 				placed = true;
 			} else if (burrow) {
 				Coord coord = Map[newcell].Cell_Coord() - Coord(0, 0, 400);
 				placed = object->Unlimbo(coord, desiredfacing.As_Dir256());
 				if (placed) {
 					object->PositionCoord += Coord(0, 0, -CELL_LEPTON - object->Height);
-					object->Assign_Destination(&Map[newcell]);
+					object->Assign_Destination(&Map[newcell], true); // RA2: as above
 					object->Set_Speed(1);
 					object->Locomotion->Move_To(newcell.As_Coord());
 				}
@@ -558,8 +576,8 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 				**	object will be guard. The team handler will assign the proper
 				**	mission that it should follow.
 				*/
-				if (object->RTTI != RTTI_AIRCRAFT) {
-					object->Assign_Mission(MISSION_GUARD);
+				if (object->Fetch_RTTI() != RTTI_AIRCRAFT) { // RA2: the virtual Fetch_RTTI
+					object->QueueMission(MISSION_GUARD, false); // RA2: the virtual QueueMission, not Assign_Mission
 					object->Commence();
 				}
 
@@ -571,7 +589,7 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 					*/
 					FacingType adj;
 					for (adj = FACING_N; adj < FACING_COUNT; adj++) {
-						Cell trycell = (Cell)Adjacent_Cell(newcell, adj);
+						Cell trycell = newcell + AdjacentCell[(int)adj & 0x07]; // RA2: the inline table form, the cell first (a plain sum, no Cell copy)
 						if (Map.In_Radar(trycell)) {
 							newcell = trycell;
 							break;
@@ -590,7 +608,7 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 				*/
 				FacingType adj;
 				for (adj = FACING_N; adj < FACING_COUNT; adj++) {
-					Cell trycell = (Cell)Adjacent_Cell(newcell, adj);
+					Cell trycell = Cell(newcell + AdjacentCell[(int)adj & 0x07]); // RA2: the inline table form, the cell first
 					if (!Map.In_Radar(trycell) && object->Can_Enter_Cell(&Map[trycell], adj) == MOVE_OK) {
 						newcell = trycell;
 						break;
@@ -664,6 +682,7 @@ bool Create_Reinforcement(TeamTypeClass const * teamtype, FootClass * object, Ce
 
 
 
+
 /***********************************************************************************************
  * _Pop_Group_Out_Of_Object -- Process popping the group out of the object.                    *
  *                                                                                             *
@@ -715,7 +734,7 @@ static bool _Pop_Group_Out_Of_Object(FootClass * group, TechnoClass * object)
 			case RTTI_AIRCRAFT:
 				object->Cargo.Attach((FootClass *)todo);
 				todo->Hidden();
-				object->Assign_Mission(MISSION_UNLOAD);
+				object->QueueMission(MISSION_UNLOAD, false); // RA2: the virtual QueueMission (+464), not Assign_Mission
 				++quantity;
 				break;
 
@@ -819,8 +838,6 @@ int Create_Air_Reinforcement(HouseClass * house, AircraftType air, int number, M
 }
 
 
-void Record_Event_Cell(Cell const & cell); // RA2: 0x63C6C0, the ring of recent event cells
-
 
 /// <summary>
 /// RA2: brings a team in by chrono warp at its origin (or the waypoint): each member is placed next to the point
@@ -867,7 +884,7 @@ bool Do_Chrono_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 
 		Coord coord = Map[origin].Center_Coord();
 		if (!isunit) {
-			coord.X += ((object->Ammo & 3) - 2) << 6;
+			coord.X += ((object->Ammo & 3) - 2) << 8; // RA2: the x offset is scaled by 256, the y offset by 64 (shl 8 / shl 6)
 			coord.Y += ((object->Ammo & 0xC) - 4) << 6;
 		}
 		object->Ammo--;
@@ -940,6 +957,7 @@ bool Do_Chrono_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 	}
 	return(true);
 }
+
 
 
 /***********************************************************************************************
