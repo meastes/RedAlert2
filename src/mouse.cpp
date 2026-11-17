@@ -76,6 +76,8 @@ ShapeSet const * MouseClass::MouseShapes;
 */
 CDTimerClass<SystemTimerClass> MouseClass::Timer = 0;
 
+bool MouseShapesLoaded; // RA2: set when the mouse shapes were loaded rather than retrieved
+
 
 /***********************************************************************************************
  * MouseClass::MouseClass -- Default constructor for the mouse handler class.                  *
@@ -161,19 +163,18 @@ void MouseClass::Revert_Mouse_Shape(void)
  *=============================================================================================*/
 void MouseClass::Mouse_Small(bool wsmall)
 {
-	MouseStruct const * control = &MouseControl[CurrentMouseShape];
-
 	if (IsSmall == wsmall) {
 		return;
 	}
 
-	IsSmall	= wsmall;
+	IsSmall	= wsmall; // RA2: the control pointer is gone (no unused load of MouseControl)
 
-	int frame = Get_Mouse_Current_Frame(CurrentMouseShape, wsmall);
+	int frame = Get_Mouse_Start_Frame(CurrentMouseShape, wsmall); // RA2: 0x59F090 calls the start frame (0x59F170) and adds Frame below
 	Point2D hotspot = Get_Mouse_Hotspot(CurrentMouseShape);
 
-	MouseCursor->Set_Cursor(hotspot, MouseShapes, frame);
+	MouseCursor->Set_Cursor(hotspot, MouseShapes, frame + Frame); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -205,16 +206,9 @@ int MouseClass::Get_Mouse_Start_Frame(MouseType mouse, bool wsmall) const // RA2
 /// <returns>Returns with the shape frame number to display.</returns>
 int MouseClass::Get_Mouse_Current_Frame(MouseType mouse, bool wsmall) const
 {
-	MouseStruct const * control = &MouseControl[mouse];
-
-	if (wsmall) {
-		if (control->SmallFrame != -1) {
-			return(control->SmallFrame + Frame);
-		}
-	}
-
-	return(control->StartFrame + Frame);
+	return(Frame + Get_Mouse_Start_Frame(mouse, wsmall)); // RA2: 0x59F1A0 is Frame plus the start frame (0x59F170)
 }
+
 
 
 /// <summary>
@@ -331,11 +325,13 @@ void MouseClass::AI(KeyNumType &input, Point2D const & xy)
 		Frame %= control->FrameCount;
 		Timer = control->FrameRate;
 
-		MouseCursor->Set_Cursor(Get_Mouse_Hotspot(CurrentMouseShape), MouseShapes, Get_Mouse_Current_Frame(CurrentMouseShape, IsSmall));
+		int start = Get_Mouse_Start_Frame(CurrentMouseShape, IsSmall); // RA2: start frame plus Frame (meastes 0x59F390)
+		MouseCursor->Set_Cursor(Get_Mouse_Hotspot(CurrentMouseShape), MouseShapes, start + Frame); // RA2: as above
 	}
 
 	BASECLASS::AI(input, xy);
 }
+
 
 
 /***********************************************************************************************
@@ -357,21 +353,9 @@ void MouseClass::One_Time(void)
 {
 	BASECLASS::One_Time();
 
-	/*
-	**	Override the mouse shape file with the one in the current directory, but only if there
-	**	is an override file available.
-	*/
-	#ifdef _DEBUG
-		RawFileClass file("MOUSE.SHP");
-		if (file.Is_Available()) {
-			MouseShapes = (ShapeSet const *)Load_Alloc_Data(file);
-		} else {
-			MouseShapes = (ShapeSet const *)MFCD::Retrieve("MOUSE.SHP");
-		}
-	#else
-		MouseShapes = (ShapeSet const *)MFCD::Retrieve("MOUSE.SHP");
-	#endif
+	MouseShapes = (ShapeSet const *)Load_Alloc_Data("MOUSE.SHP", MouseShapesLoaded); // RA2: 0x59F4F0 loads MOUSE.SHP with the allocated flag at 0xA70FA4 (no RawFileClass override, no MFCD::Retrieve)
 }
+
 
 
 /***********************************************************************************************
@@ -714,9 +698,6 @@ HRESULT MouseClass::Save(IStream * stream)
 
 
 
-
-
-bool MouseShapesLoaded; // RA2: set when the mouse shapes were loaded rather than retrieved
 
 
 /// <summary>
