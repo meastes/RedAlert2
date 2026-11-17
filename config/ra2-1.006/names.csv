@@ -9414,6 +9414,7 @@ address,symbol,evidence
 0x0079CB54,??_7?$VectorClass@PAVNeuronClass@@@@6B@,"inferred: referenced by matched src/brain.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0079CB74,??_7BrainClass@@6B@,"inferred: referenced by matched src/brain.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0079CB88,?INI_NAME@BuildingClass@@0QBDB,"inferred: referenced by matched src/building.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x0079D074,??_7?$VectorClass@PAVInfantryClass@@@@6B@,"inferred: referenced by matched src/building.cpp; written by the inlined ~VectorClass of the Overpowerers and Occupants lists in BuildingClass::~BuildingClass"
 0x0079D0AC,??_7?$VectorClass@PBVParticleSystemTypeClass@@@@6B@,"inferred: referenced by matched src/techtype.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x0079D17C,??_7?$DynamicVectorClass@PAVFoggedObjectClass@@@@6B@,"inferred: referenced by matched src/cell.cpp (3 references); across all matched code never at another address, and no other symbol here"
 0x0079D1CC,??_7BuildingTypeClass@@6BINoticeSource@@@,"inferred: referenced by matched src/builtype.cpp (3 references); across all matched code never at another address, and no other symbol here"

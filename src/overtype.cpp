@@ -75,6 +75,9 @@
 #include "swizzle.h"
 #include "tracker.h"
 
+void Generic_Theater_Name(char * name); // RA2: 0x5D7C20 (objtype.cpp)
+void Theater_Name_Fixup(char * name, TheaterType theater); // RA2: 0x5D7BD0 (objtype.cpp)
+
 
 /***********************************************************************************************
  * OverlayTypeClass::OverlayTypeClass -- Constructor for overlay type objects.                 *
@@ -293,27 +296,35 @@ void OverlayTypeClass::Init(TheaterType theater)
 	for (int index = 0; index < OverlayTypes.Count(); index++) {
 		OverlayTypeClass & overlay = *OverlayTypes[index];
 
-		char fullname[_MAX_FNAME+_MAX_EXT];
 		if (!overlay.DemandLoad) {
+			char fullname[_MAX_FNAME+_MAX_EXT]; // RA2: declared inside the not-DemandLoad branch
 			if (overlay.IsTheater) {
 				_makepath(fullname, NULL, NULL, overlay.GraphicName, Theaters[theater].Suffix);
 				overlay.ImageData = MFCD::Retrieve(fullname);
+				if (overlay.ImageData == NULL) { // RA2: a missing art file retries with the generic theater letter
+					Generic_Theater_Name(fullname); // RA2: as above
+					overlay.ImageData = MFCD::Retrieve(fullname); // RA2: as above
+				}
 
 			} else if (overlay.IsNewTheater) {
 				_makepath(fullname, NULL, NULL, overlay.GraphicName, ".SHP");
-				overlay.Theater_Naming_Convention(fullname, theater);
+				Theater_Name_Fixup(fullname, theater); // RA2: the free function at 0x5D7BD0 (was the member Theater_Naming_Convention)
 				overlay.ImageData = MFCD::Retrieve(fullname);
+				if (overlay.ImageData == NULL) { // RA2: as above
+					Generic_Theater_Name(fullname); // RA2: as above
+					overlay.ImageData = MFCD::Retrieve(fullname); // RA2: as above
+				}
 			}
 		} else {
-			if (overlay.IsTheater || overlay.IsNewTheater) {
-				if (overlay.ImageData != NULL) {
-					delete [] (char*) overlay.ImageData;
-					overlay.ImageData = NULL;
-				}
+			if ((overlay.IsTheater || overlay.IsNewTheater) && overlay.ImageData != NULL && overlay.ImageAllocated) { // RA2: only an image the type owns is freed
+				delete [] (char*) overlay.ImageData; // RA2: as above
+				overlay.ImageData = NULL; // RA2: as above
+				overlay.ImageAllocated = false; // RA2: the image is no longer owned
 			}
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -360,11 +371,13 @@ bool OverlayTypeClass::Read_INI(CCINIClass const & ini)
 		IsChainReaction = ini.Get_Bool(IniName, "ChainReaction", IsChainReaction);
 		IsDrawFlat = ini.Get_Bool(IniName, "DrawFlat", IsDrawFlat);
 		IsARock = ini.Get_Bool(IniName, "IsARock", IsARock);
+		IsRubble = ini.Get_Bool(IniName, "IsRubble", IsRubble); // RA2: a further key read after IsARock (+0x284)
 
 		return(true);
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -435,7 +448,7 @@ HRESULT STDMETHODCALLTYPE OverlayTypeClass::Load(IStream * stream)
 				_makepath(fullname, NULL, NULL, GraphicName, Theaters[Scen->Theater].Suffix);
 			} else {
 				_makepath(fullname, NULL, NULL, GraphicName, ".SHP");
-				Theater_Naming_Convention(fullname, Scen->Theater);
+				Theater_Name_Fixup(fullname, Scen->Theater); // RA2: the free function at 0x5D7BD0 (was the member Theater_Naming_Convention)
 			}
 
 			ImageData = MFCD::Retrieve(fullname);
@@ -445,6 +458,7 @@ HRESULT STDMETHODCALLTYPE OverlayTypeClass::Load(IStream * stream)
 	}
 	return(result);
 }
+
 
 
 /// <summary>

@@ -50,9 +50,14 @@
 #include "theme.h"
 #include "audio.h" // RA2
 #include "audplay.h" // RA2
+#include "audsrc.h" // RA2: AudioFormat for Scan (auddsnd.h declares the same struct differently)
 #include "goptions.h" // RA2
+#include "cd.h" // RA2: Play_Song asks CD for the current disk
 
 int __fastcall AudioDeviceAvailable(void); // RA2: 0x00406F30
+AudioDevice * __fastcall AudioGetDevice(void); // RA2: 0x00406F40, as auddsnd.h declares it
+extern AudioAttribs * AudioScoreAttribs; // RA2: as auddsnd.h declares it
+extern AudioAttribs * AudioFadeAttribs; // RA2: as above
 
 #include "ccfile.h"
 #include "ccini.h"
@@ -80,6 +85,7 @@ ThemeControl::ThemeControl(void) :
 	Owner(-1)
 {
 	Name[0] = '\0';
+	Sound[0] = '\0'; // RA2: Init_Themes 0x6E7890 clears +0x100 as well
 	Fullname[0] = '\0';
 
 }
@@ -141,7 +147,16 @@ void ThemeClass::Init_Themes(CCINIClass const & ini)
 			ctrl->Fill_In(ini);
 		}
 	}
+	if (AudioGetDevice() != 0) { // RA2: the music stream is created here (0x6E7A14)
+		Stream = AudioStreamerCreate(AudioGetDevice(), 20000); // RA2: as above
+		if (Stream != 0) { // RA2: as above
+			AudioStreamerSetName(Stream, "Music Stream"); // RA2: as above
+			AudioStreamerSetAttribs(Stream, AudioScoreAttribs); // RA2: as above
+			AudioStreamerSetFadeAttribs(Stream, AudioFadeAttribs); // RA2: as above
+		}
+	}
 }
+
 
 
 /// <summary>
@@ -185,15 +200,25 @@ void ThemeClass::Free_Themes(void)
  *=============================================================================================*/
 void ThemeClass::Scan(void)
 {
-	char name[_MAX_FNAME+_MAX_EXT];
-
-	if (ScoresPresent && Audio_Available() && !Debug_Quiet) {
-		for (ThemeType theme = THEME_FIRST; theme < Themes.Count(); theme++) {
-			_makepath(name, NULL, NULL, Themes[theme]->Name, ".AUD");
-			Themes[theme]->Available = CCFileClass(name).Is_Available();
+	if (ScoresPresent && AudioDeviceAvailable() && !Debug_Quiet) { // RA2: RA2's form
+		for (int theme = 0; theme < Themes.Count(); theme++) { // RA2: as above
+			char name[_MAX_FNAME+_MAX_EXT]; // RA2: as above
+			_makepath(name, NULL, NULL, Themes[theme]->Sound, ".WAV"); // RA2: the score's sound file, .WAV
+			CCFileClass file(name); // RA2: Scan at 0x6E7AF0 keeps the file open to read its length
+			Themes[theme]->Available = file.Is_Available(); // RA2: as above
+			if (Themes[theme]->Available) { // RA2: as above
+				AudioFormat format; // RA2: as above
+				AudioFormatInit(&format); // RA2: as above
+				file.Open(1); // RA2: as above
+				int size; // RA2: as above
+				if (AudioFormatReadWaveFile(&file, &format, &size)) { // RA2: as above
+					Themes[theme]->Duration = (int)(AudioFormatTime(&format, size) / 1000); // RA2: the length in seconds
+				}
+			}
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -426,14 +451,25 @@ void ThemeClass::Queue_Song(ThemeType theme)
  *=============================================================================================*/
 int ThemeClass::Play_Song(ThemeType theme)
 {
-	if (ScoresPresent && Audio_Available() && !Debug_Quiet) {
-		Stop(false);
+	if (ScoresPresent && AudioDeviceAvailable() && !Debug_Quiet) { // RA2: RA2's form (0x6E7EB0)
+		if (Still_Playing() && Score == theme) { // RA2: a score that already plays is left alone
+			return(Current); // RA2: as above
+		}
+		Stop(false); // RA2: Stop is expanded in place
+		IsFading = false; // RA2: the new score does not fade
 		if (theme != THEME_NONE && theme != THEME_QUIET) {
 			if (theme > THEME_NONE && Volume > 0) {
 				Score = theme;
-				Audio.StreamLowImpact = true;
-				Current = Audio.File_Stream_Sample_Vol(Theme_File_Name(theme), Volume, true);
-				Audio.StreamLowImpact = false;
+				int disk = CD::Is_Override_Swap() ? 0 : CD::Get_Current_Disk(0); // RA2: the disk that holds the score
+				if (Stream != 0 && disk > -1) { // RA2: as above
+					AudioStreamerPlayWAV(Stream, Theme_File_Name(theme), true); // RA2: the streamer plays the file
+					Current = theme; // RA2: the handle is the score number
+				} else { // RA2: as above
+					Current = THEME_NONE; // RA2: as above
+					if (Stream != 0 && disk <= -1 && Pending == THEME_NONE) { // RA2: no disk, so the score waits
+						Theme.Queue_Song(theme); // RA2: as above
+					}
+				}
 				DebugString("Theme::PlaySong(%d) - %s\n", Score, IsRepeat == true || Themes[theme]->Repeat == true ? "Repeating" : "Playing");
 				if (IsRepeat == true || Themes[theme]->Repeat == true) {
 					Pending = theme;
@@ -443,8 +479,9 @@ int ThemeClass::Play_Song(ThemeType theme)
 			}
 		}
 	}
-	return(Current);
+	return(Current); // RA2: the handle, not return(expr)
 }
+
 
 
 /***********************************************************************************************
