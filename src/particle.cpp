@@ -67,7 +67,6 @@ inline Vector3 Slope_Vector(Vector3 & vector, Coord const & coord, double length
 }
 
 
-namespace Unsorted { extern bool ArmageddonMode; } // RA2: declared as RA2's code uses it
 namespace FPSCounter { extern unsigned CurrentFrameRate; } // RA2: declared as RA2's code uses it
 namespace Detail { unsigned GetMinFrameRate(void); } // RA2: declared as RA2's code uses it
 
@@ -266,7 +265,8 @@ void ParticleClass::Gas_Behavior_AI(void)
 		Vector3 position(coord.X, coord.Y, coord.Z);
 		Vector3 & velocity = GasVelocity;
 		velocity = Vector3(0, 0, -2);
-		velocity.Z -= Rule->Gravity;
+		double gravity = Rule->Gravity; // RA2: the gravity is read into a local first
+		velocity.Z -= gravity; // RA2: as above
 
 		Coord old_coord(position.X, position.Y, position.Z);
 		position += velocity;
@@ -310,7 +310,14 @@ void ParticleClass::Gas_Behavior_AI(void)
 			}
 		}
 
-		if (height_gl > position.Z || start_under_bridge || end_under_bridge || blocked) {
+		if (position.Z < (float)height_gl || start_under_bridge || end_under_bridge || blocked) { // RA2: the position is compared as a float and decides the whole block
+			if (start_under_bridge) { // RA2: the position is moved onto the bridge, below it or onto the ground before the slope is applied
+				position.Z = height_bridge; // RA2: as above
+			} else if (end_under_bridge) { // RA2: as above
+				position.Z = height_bridge - 20; // RA2: as above
+			} else if ((float)(height_gl - 100) < position.Z) { // RA2: as above
+				position.Z = (float)height_gl; // RA2: as above
+			}
 			Slope_Vector(velocity, coord2, 1);
 		}
 
@@ -323,50 +330,33 @@ void ParticleClass::Gas_Behavior_AI(void)
 
 	RemainingDC--;
 
-	if (Class->BehavesLike != BEHAVIOR_WEAKGAS && RemainingDC == 0) {
-		if (Class->Damage) {
-			RemainingDC = Class->MaxDC;
-			ObjectClass * occupier = Map[Get_Coord()].Cell_Occupier();
-			while (occupier) {
-				Coord delta = Get_Coord() - occupier->Get_Coord();
-				ObjectClass * next = occupier->Next;
-				Coord ocoord = occupier->Get_Coord();
-				ResultType result = RESULT_NONE;
-				if (occupier->IsActive) {
-					if (occupier->Strength > 0) {
-						int damage = Class->Damage;
-						result = occupier->Take_Damage(damage, TacticalMap->Z_Lepton_To_Pixel(abs(delta.X) + abs(delta.Y)), Class->Warhead, 0, 0, 0);
-					}
-				}
-				occupier = next;
-
-				if (result == RESULT_DESTROYED) {
-					if (Scen->IsTiberiumDeathToVisceroid) {
-						UnitClass * visc = new UnitClass(Rule->SmallVisceroid, House_From_HousesType(HouseTypeClass::From_Name("Neutral")));
-						if (visc) {
-							Coord coord = Map[ocoord].Cell_Coord();
-							if (!Map[coord].Flag.Occupy.Vehicle) {
-								ScenarioInit++;
-								visc->Unlimbo(coord, DIR_N);
-								ScenarioInit--;
-							}
-						}
-					}
+	if (RemainingDC == 0 && Class->Damage) { // RA2: no WEAKGAS test and no Visceroid spawn
+		RemainingDC = Class->MaxDC; // RA2: as above
+		ObjectClass * occupier = Map[Get_Coord()].Cell_Occupier(); // RA2: as above
+		while (occupier) { // RA2: as above
+			Coord delta = Get_Coord() - occupier->Get_Coord(); // RA2: as above
+			ObjectClass * next = occupier->Next; // RA2: as above
+			if (occupier->IsActive) { // RA2: as above
+				if (occupier->Strength > 0) { // RA2: as above
+					int damage = Class->Damage; // RA2: as above
+					occupier->Take_Damage(damage, TacticalMap->Z_Lepton_To_Pixel(abs(delta.X) + abs(delta.Y)), Class->Warhead, 0, 0, 0); // RA2: the result is not kept
 				}
 			}
+			occupier = next; // RA2: as above
 		}
 	}
-	if (((Class->MaxEC - RemainingEC + Fetch_ID()) % (Class->StateAIAdvance + (Fetch_ID() & 1))) == 0) {
+	if ((Fetch_ID() + (Class->MaxEC - RemainingEC)) % ((Fetch_ID() & 1) + Class->StateAIAdvance) == 0) { // RA2: Fetch_ID first, then the EC difference; the divisor adds the ID bit first
 		StateAI++;
 	}
 	if (StateAI == Class->EndStateAI) {
 		if (Class->DeleteOnStateLimit) {
 			IsToDie = true;
-		} else {
-			StateAI = 0;
+			return; // RA2: returns here
 		}
+		StateAI = 0; // RA2: as above
 	}
 }
+
 
 
 /// <summary>
@@ -380,7 +370,7 @@ void ParticleClass::Railgun_Behavior_AI(void)
 	Vector3 direction(MovementDirection.X, MovementDirection.Y, MovementDirection.Z);
 	float speed = Speed;
 	Vector3 velocity = speed * direction;
-	Speed += Random_Double(-0.5, 0.5) * 0.1;
+	Speed += (Random_Pick(0, 0x7ffffffe) * 4.656612877414201e-10 - 0.5) * 0.1; // RA2: the random double written out: scale, minus 0.5, times 0.1, then added to Speed
 	PrecisePosition += velocity;
 	Coord pos(PrecisePosition.X, PrecisePosition.Y, PrecisePosition.Z);
 	PositionCoord = pos;
@@ -394,6 +384,7 @@ void ParticleClass::Railgun_Behavior_AI(void)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -632,11 +623,11 @@ void ParticleClass::Behavior_AI(void)
 /// <param name="cliprect">The clipping rectangle to draw within.</param>
 void ParticleClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 {
-	if (FPSCounter::CurrentFrameRate < Detail::GetMinFrameRate() && Class->Damage == 0) { // RA2: no drawing below the minimum frame rate for a particle that does no damage
+	if (FPSCounter::CurrentFrameRate < Detail::GetMinFrameRate()) { // RA2: no drawing below the minimum frame rate, whatever the damage
 		return; // RA2: returns before drawing
 	}
 	if (Options.DetailLevel != 0 || Class->BehavesLike != BEHAVIOR_SMOKE && Class->BehavesLike != BEHAVIOR_SPARK) {
-		if (Unsorted::ArmageddonMode || MainWindow == 0 || !Scen->Special.IsFogOfWar || !Map.Is_Fogged((Coord const &)PositionCoord)) { // RA2: ArmageddonMode, not Debug_Map
+		if (Debug_Map || MainWindow == 0 || !Scen->Special.IsFogOfWar || !Map.Is_Fogged((Coord const &)PositionCoord)) { // RA2: ArmageddonMode, not Debug_Map
 
 			if (Class->BehavesLike != BEHAVIOR_SPARK && Class->BehavesLike != BEHAVIOR_RAILGUN) {
 				int height_offset = -15 - TacticalMap->Z_Lepton_To_Pixel(Height);
@@ -688,6 +679,7 @@ void ParticleClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 		}
 	}
 }
+
 
 
 /// <summary>

@@ -144,19 +144,24 @@ TeamTypeClass::TeamTypeClass(char const * name) :
 	IsLooseRecruit(false),
 	IsSuicide(false),
 	IsDroppod(false),
+	IsUseTransportOrigin(false), // RA2: byte +0xB1 cleared with the flags
 	IsDropship(false),
 	OnTransOnly(false),
 	RecruitPriority(7),
-	MaxAllowed(0),
+	MaxAllowed(-1), // RA2: +0xB8 starts at -1
 	Fear(0),
 	House(NULL),
 	TechLevel(0),
 	Tag(NULL),
 	Origin(-1),
+	TransportOrigin(-1), // RA2: +0xD0 starts at -1
 	Number(0),
 	Script(NULL),
 	TaskForce(NULL),
 	Scope(SCOPE_LOCAL),
+	TaskForceMZone(9), // RA2: +0xE4 starts at 9
+	IsReachCheckNeeded(true), // RA2: +0xE8 starts true
+	HasNavalTransport(false), // RA2: +0xE9 cleared
 	AvoidThreats(false),
 	IsIonImmune(false),
 	TransportsReturnOnUnload(false),
@@ -167,7 +172,9 @@ TeamTypeClass::TeamTypeClass(char const * name) :
 	TeamTypes.Add(this);
 
 	HeapID = TeamTypes.ID(this);
+	AbstractTypePtrTracker.Add(this); // RA2: also registered in the abstract type pointer tracker
 }
+
 
 
 /// <summary>
@@ -322,11 +329,22 @@ SUGGESTED_TEAM_LIST TeamTypeClass::Suggested_New_Team(HouseClass * house, bool)
 
 		if (team_count < Rule->TotalAITeamCap[house->Difficulty]) {
 			DiscreteDistributionClass<AITriggerTypeClass> trigdist;
+			bool exclusive = false; // RA2: set once a trigger of weight 5000 has been seen
 			for (i = 0; i < AITriggerTypes.Count(); i++) {
 				if (AITriggerTypes[i] != NULL) {
 					AITriggerTypeClass *trig = AITriggerTypes[i];
 					if (trig->Process(house, enemy, skip_base_defense) == true) {
-						trigdist.Add(trig, trig->Get_Current_Weight());
+						int weight = (int)trig->Get_Current_Weight(); // RA2: the weight is truncated to an int first
+						if (weight == 5000) { // RA2: an infinite weight trigger excludes all others
+							if (!exclusive) { // RA2: as above
+								exclusive = true; // RA2: as above
+								trigdist.Clear(); // RA2: as above
+								DebugString("Infinite weight AIT hit; clearing distribution.\n"); // RA2: as above
+							}
+						} else if (exclusive) { // RA2: as above
+							continue; // RA2: as above
+						}
+						trigdist.Add(trig, weight); // RA2: as above
 					}
 				}
 			}
@@ -370,6 +388,8 @@ SUGGESTED_TEAM_LIST TeamTypeClass::Suggested_New_Team(HouseClass * house, bool)
 
 	return(best);
 }
+
+
 
 
 /***********************************************************************************************
@@ -572,6 +592,7 @@ bool TeamTypeClass::Read_INI(CCINIClass const & ini)
 		IsPrebuilt = ini.Get_Bool(IniName, "Prebuild", IsPrebuilt);
 		IsReinforcable = ini.Get_Bool(IniName, "Reinforce", IsReinforcable);
 		IsDroppod = ini.Get_Bool(IniName, "Droppod", IsDroppod);
+		IsUseTransportOrigin = ini.Get_Bool(IniName, "UseTransportOrigin", IsUseTransportOrigin); // RA2: new key, +0xB1
 		IsRecruiter = ini.Get_Bool(IniName, "Recruiter", IsRecruiter);
 		IsWhiner = ini.Get_Bool(IniName, "Whiner", IsWhiner);
 		IsSuicide = ini.Get_Bool(IniName, "Suicide", IsSuicide);
@@ -600,6 +621,10 @@ bool TeamTypeClass::Read_INI(CCINIClass const & ini)
 			Origin = Waypoint_From_Name(waypt);
 		}
 
+		if (ini.Get_String(IniName, "TransportWaypoint", Waypoint_To_Name(TransportOrigin), waypt, sizeof(waypt)) > 0) { // RA2: a second waypoint key, into +0xD0
+			TransportOrigin = Waypoint_From_Name(waypt); // RA2: as above
+		}
+
 		Script = TGet_Class(ini, IniName, "Script", Script);
 		TaskForce = TGet_Class(ini, IniName, "TaskForce", TaskForce);
 
@@ -607,6 +632,7 @@ bool TeamTypeClass::Read_INI(CCINIClass const & ini)
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -645,6 +671,7 @@ bool TeamTypeClass::Write_INI(CCINIClass & ini) const
 		ini.Put_Bool(IniName, "Prebuild", IsPrebuilt);
 		ini.Put_Bool(IniName, "Reinforce", IsReinforcable);
 		ini.Put_Bool(IniName, "Droppod", IsDroppod);
+		ini.Put_Bool(IniName, "UseTransportOrigin", IsUseTransportOrigin); // RA2: new key, +0xB1
 		ini.Put_Bool(IniName, "Whiner", IsWhiner);
 		ini.Put_Bool(IniName, "LooseRecruit", IsLooseRecruit);
 		ini.Put_Bool(IniName, "Aggressive", IsAggressive);
@@ -666,6 +693,7 @@ bool TeamTypeClass::Write_INI(CCINIClass & ini) const
 		}
 
 		ini.Put_String(IniName, "Waypoint", Waypoint_To_Name(Origin));
+		ini.Put_String(IniName, "TransportWaypoint", Waypoint_To_Name(TransportOrigin)); // RA2: a second waypoint key, from +0xD0
 
 		/*
 		**	Record the # of missions, and each mission name & argument value.
@@ -685,6 +713,7 @@ bool TeamTypeClass::Write_INI(CCINIClass & ini) const
 	}
 	return(false);
 }
+
 
 
 /// <summary>
