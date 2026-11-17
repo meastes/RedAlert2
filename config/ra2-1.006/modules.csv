@@ -449,7 +449,8 @@ unk_00607DF0,0x00607DF0,0x00608440,unknown,code not assigned to a module
 particle,0x00608440,0x0060A7E0,tibsun,"functions compiled from src/particle.cpp, without gaps; matched except ?Gas_Behavior_AI@ParticleClass@@QAEXXZ and ?Spark_Behavior_AI@ParticleClass@@QAEXXZ; five placed by the gap; ?Web_Behavior_AI@ParticleClass@@QAEXXZ not placed"
 unk_0060A7E0,0x0060A7E0,0x0060AA70,unknown,code not assigned to a module
 partsys,0x0060AA70,0x0060D010,tibsun,"functions compiled from src/partsys.cpp, without gaps; matched except ?Spark_AI@ParticleSystemClass@@AAEXXZ and ?Smoke_AI@ParticleSystemClass@@AAEXXZ and ?Railgun_AI@ParticleSystemClass@@AAEXXZ and ?Fire_AI@ParticleSystemClass@@AAEXXZ; two placed by the gap; ?Fire_AI@ParticleSystemClass@@AAEXXZ and ?Railgun_AI@ParticleSystemClass@@AAEXXZ and ?Smoke_AI@ParticleSystemClass@@AAEXXZ and ?Spark_AI@ParticleSystemClass@@AAEXXZ placed where matched code calls them; ?Fetch_RTTI@ParticleSystemClass@@UBE?AW4RTTIType@@XZ not placed; ?Class_Of@ParticleSystemClass@@UBEPBVObjectTypeClass@@XZ not placed; ?Web_AI@ParticleSystemClass@@AAEXXZ not placed"
-unk_0060D010,0x0060D010,0x0060EA60,unknown,code not assigned to a module
+unk_0060D010,0x0060D010,0x0060D970,unknown,code not assigned to a module
+phoneed,0x0060D970,0x0060EA60,tibsun,"functions compiled from src/phoneed.cpp, matched, without gaps"
 pipe,0x0060EA60,0x0060EB20,tibsun,"functions compiled from src/pipe.cpp, matched, without gaps"
 pixelfx,0x0060EB20,0x0060ED10,source,"functions compiled from src/pixelfx.cpp, matched, without gaps; ??1PixelFXClass@@UAE@XZ not placed"
 unk_0060ED10,0x0060ED10,0x0060ED40,unknown,code not assigned to a module
