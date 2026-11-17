@@ -200,6 +200,44 @@ int BuildingTypeClass::SizeHeight[BSIZE_COUNT] = {
 };
 
 
+// RA2: the build category names and values (table at 0x7CFC40, six rows; the exe's order is DontCare, Tech, Power, Resource, Infrastructure, Combat)
+static struct { // RA2: as above
+	char const * Name; // RA2: as above
+	int Value; // RA2: as above
+} _buildcats[6] = { // RA2: as above
+	{ "DontCare", 0 }, // RA2: as above
+	{ "Tech", 1 }, // RA2: as above
+	{ "Power", 3 }, // RA2: as above
+	{ "Resource", 2 }, // RA2: as above
+	{ "Infrastructure", 4 }, // RA2: as above
+	{ "Combat", 5 } // RA2: as above
+};
+
+
+// RA2: Name_From_BuildCat 0x457A50 (new in RA2): linear search of the six rows by value, row 0 if none is found
+char const * __fastcall Name_From_BuildCat(int value) // RA2: as above
+{
+	for (int index = 0; index < 6; index++) { // RA2: as above
+		if (_buildcats[index].Value == value) { // RA2: as above
+			return(_buildcats[index].Name); // RA2: as above
+		}
+	}
+	return(_buildcats[0].Name); // RA2: as above
+}
+
+
+// RA2: BuildCat_From_Name 0x457A80 (new in RA2): case-insensitive linear search of the six rows by name, 0 if none is found
+int __fastcall BuildCat_From_Name(char const * name) // RA2: as above
+{
+	for (int index = 0; index < 6; index++) { // RA2: as above
+		if (strcmpi(_buildcats[index].Name, name) == 0) { // RA2: as above
+			return(_buildcats[index].Value); // RA2: as above
+		}
+	}
+	return(0); // RA2: as above
+}
+
+
 /***********************************************************************************************
  * BuildingTypeClass::BuildingTypeClass -- This is the constructor for the building types.     *
  *                                                                                             *
