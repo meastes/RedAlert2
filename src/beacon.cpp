@@ -59,6 +59,7 @@ Rect BeaconRect(0, 0, 0, 0); // RA2: 0x0084E8A0; a rectangle nothing in this mod
 
 extern Rect const __fastcall Intersect(Rect const & bounding_rect, Rect const & draw_rect, int * x, int * y); // RA2: 0x0041FDF0, the compiled copy of rect.h's Intersect that the callers do not expand
 extern char * __fastcall Wide_To_Narrow(wchar_t const * wide); // RA2: 0x006FA120, a static buffer
+extern wchar_t * __fastcall Narrow_To_Wide(char const * narrow); // RA2: 0x006FA180, a static buffer
 
 ShapeSet const * BeaconArt; // RA2: 0x0084E98C; PBEACON.SHP, the marker on the tactical view
 ShapeSet const * RadarBeaconArt; // RA2: 0x0084E990; RDRBEACN.SHP, the marker on the radar
@@ -86,6 +87,20 @@ struct BeaconPacket {
 	char Rest[456 - 0x3D]; // RA2: the packet is 456 bytes on the stack
 };
 #pragma pack(pop)
+
+#pragma pack(push, 1) // RA2: as above
+/*
+**	RA2: the packet that tells the other players about the text of a beacon (command 0x22); sent as 0x1C7 bytes.
+*/
+struct BeaconTextPacket { // RA2: as above
+	int Command; // RA2: +0x00
+	char Name[43]; // RA2: +0x04; the sender's name
+	char Slot; // RA2: +0x2F; the slot of the beacon, found in the house's list
+	char House; // RA2: +0x30
+	wchar_t Text[128]; // RA2: +0x31; the text, or an empty string
+	char Rest[456 - 0x131]; // RA2: the packet is 456 bytes on the stack
+};
+#pragma pack(pop) // RA2: as above
 
 /// <summary>
 /// Makes an empty beacon: no position, not active, not being edited and without text.
@@ -539,4 +554,92 @@ void BeaconManagerClass::Remove_All_Beacons(int house) // RA2: 0x0042EBE0
 			}
 		}
 	}
+}
+
+/// <summary>
+/// Sets the text of a beacon: the one being edited when house and slot are both -1, else the one in the slot. A text the player typed is sent to the other players when it is done.
+/// </summary>
+void BeaconManagerClass::EditBeaconMessage(wchar_t const * text, int house, int slot, bool done) // RA2: 0x0042EC20
+{
+	bool edited; // RA2: as above
+	BeaconClass * beacon; // RA2: as above
+	edited = house == -1 && slot == -1; // RA2: as above
+	if (edited) { // RA2: as above
+		beacon = FindSelected(-1); // RA2: as above
+	} else {
+		beacon = Beacons[house][slot]; // RA2: as above
+	}
+	if (beacon) { // RA2: as above
+		beacon->Set_Text(text); // RA2: as above
+		if (Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH) { // RA2: the network games
+			if (edited && beacon->HouseID == PlayerPtr->HeapID && done) { // RA2: the player's own beacon is announced
+				BeaconTextPacket packet; // RA2: as above
+				packet.Command = 0x22; // RA2: as above
+				strcpy(packet.Name, Wide_To_Narrow(Session.Players[0]->Name)); // RA2: as above
+				if (text) { // RA2: as above
+					wcsncpy(packet.Text, text, 128); // RA2: as above
+				} else {
+					wcscpy(packet.Text, Narrow_To_Wide("")); // RA2: as above
+				}
+				packet.House = (char)PlayerPtr->HeapID; // RA2: as above
+				packet.Slot = -1; // RA2: as above
+				for (int index = 0; index < 3; index++) { // RA2: as above
+					if (Beacons[packet.House][index] == beacon) { // RA2: as above
+						packet.Slot = (char)index; // RA2: as above
+					}
+				}
+				if (packet.Slot != -1) { // RA2: as above
+					for (int player = 1; player < Session.Players.Count(); player++) { // RA2: as above
+						DebugString("Sending beacon text to %s\n", Session.Players[player]); // RA2: as above
+						Ipx.Send_Global_Message(&packet, 0x1C7, 1, &Session.Players[player]->Address, 0, 0); // RA2: as above
+					}
+				}
+			} else if (beacon->HouseID != PlayerPtr->HeapID && beacon->Is_Visible_To_Player()) { // RA2: an ally's beacon: radar event
+				Coord coord = beacon->BeaconCoord; // RA2: as above
+				Submit_Radar_Event((RadarEventType)11, Cell(coord.X / 256, coord.Y / 256)); // RA2: as above
+			}
+		}
+	}
+}
+
+/// <summary>
+/// Marks the beacons of allies on the radar, during the lit phase of the animation.
+/// </summary>
+void BeaconManagerClass::Draw_On_Radar(Surface * surface, Rect bounds) // RA2: 0x0042EED0
+{
+	if (AllocatedCount && Frame % RadarBeaconAnimPeriod < BeaconManager.RadarBeaconFrameCount + 1) { // RA2: the frame count is read from the global manager directly, as BeaconClass::Draw_On_Radar does
+		for (int house = 0; house < 8; house++) { // RA2: as above
+			for (int slot = 0; slot < 3; slot++) { // RA2: as above
+				BeaconClass * beacon = Beacons[house][slot]; // RA2: as above
+				if (beacon && (beacon->IsActive) && PlayerPtr->Is_Ally((HousesType)beacon->HouseID) && Houses[beacon->HouseID]->Is_Ally(PlayerPtr) && !Houses[beacon->HouseID]->IsDefeated) { // RA2: the visibility test of Is_Visible_To_Player, open-coded
+					beacon->Draw_On_Radar(surface, bounds, false); // RA2: as above
+				}
+			}
+		}
+	}
+}
+
+/// <summary>
+/// Whether a visible beacon of an ally exists and the radar animation is in its lit phase.
+/// </summary>
+bool BeaconManagerClass::Is_Flashing(void) // RA2: 0x0042EFD0
+{
+	if (AllocatedCount) { // RA2: as above
+		bool found = false; // RA2: as above
+		for (int house = 0; house < 8; house++) { // RA2: as above
+			int slot = 0; // RA2: as above
+			do { // RA2: as above
+				BeaconClass * beacon = Beacons[house][slot]; // RA2: as above
+				if (beacon && (beacon->IsActive) && PlayerPtr->Is_Ally((HousesType)beacon->HouseID) && Houses[beacon->HouseID]->Is_Ally(PlayerPtr) && !Houses[beacon->HouseID]->IsDefeated) { // RA2: the visibility test of Is_Visible_To_Player, open-coded
+					found = true; // RA2: as above
+					break; // RA2: as above
+				}
+				slot++; // RA2: as above
+			} while (slot < 3); // RA2: as above
+		}
+		if (found && Frame % RadarBeaconAnimPeriod < BeaconManager.RadarBeaconFrameCount + 1) { // RA2: the frame count is read from the global manager directly, as BeaconClass::Draw_On_Radar does
+			return(true); // RA2: as above
+		}
+	}
+	return(false); // RA2: as above
 }
