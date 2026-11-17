@@ -35,21 +35,12 @@
 #include "gadget.h"
 #include "goptions.h"
 
-extern int GameSpeedNames[OptionsClass::MAX_SPEED_SETTING];
-extern int GameScrollSpeedNames[OptionsClass::MAX_SCROLL_SETTING];
-extern int GameDetailLevelNames[OptionsClass::MAX_DETAIL_SETTING];
-extern int GameDifficultyNames[OptionsClass::MAX_DIFFICULTY_SETTING];
 
 class GameControlsClass
 {
 	public:
 		GameControlsClass(void) {};
 		void Dialog(void);
-
-		static int GetDifficultyLabel(int difficulty)
-		{
-			return(GameDifficultyNames[difficulty]);
-		}
 
 	private:
 		void Set(void);

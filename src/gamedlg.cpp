@@ -37,6 +37,8 @@
 
 #include "_map.h"
 #include "_tooltip.h"
+#include "audio.h" // RA2: AudioDeviceAvailable
+#include "stringtable.h" // RA2: StringTable::LoadString
 #include "cctooltip.h"
 #include "data.h"
 #include "dbgprint.h"
@@ -51,45 +53,41 @@
 
 #include "special.hh"
 
-namespace Unsorted { extern int MuteSWLaunches; }
+extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted (as the other files declare it)
 namespace Game { extern int SpecialDialog; }
 
 
-int GameSpeedNames[OptionsClass::MAX_SPEED_SETTING] = {
-	TXT_SLOWEST,
-	TXT_SLOWER,
-	TXT_SLOW,
-	TXT_MEDIUM,
-	TXT_FAST,
-	TXT_FASTER,
-	TXT_FASTEST
+char const * const Game_Speed_Labels[OptionsClass::MAX_SPEED_SETTING] = { // RA2: string-table labels (the table holds the names, not ids)
+	"TXT_SLOWEST", // RA2: as above
+	"TXT_SLOWER", // RA2: as above
+	"TXT_SLOW", // RA2: as above
+	"TXT_MEDIUM", // RA2: as above
+	"TXT_FAST", // RA2: as above
+	"TXT_FASTER", // RA2: as above
+	"TXT_FASTEST" // RA2: as above
 };
 
-int GameScrollSpeedNames[OptionsClass::MAX_SCROLL_SETTING] = {
-	TXT_SLOWEST,
-	TXT_SLOWER,
-	TXT_SLOW,
-	TXT_MEDIUM,
-	TXT_FAST,
-	TXT_FASTER,
-	TXT_FASTEST
+char const * const Game_Scroll_Labels[OptionsClass::MAX_SCROLL_SETTING] = { // RA2: string-table labels (the table holds the names, not ids)
+	"TXT_SLOWEST", // RA2: as above
+	"TXT_SLOWER", // RA2: as above
+	"TXT_SLOW", // RA2: as above
+	"TXT_MEDIUM", // RA2: as above
+	"TXT_FAST", // RA2: as above
+	"TXT_FASTER", // RA2: as above
+	"TXT_FASTEST" // RA2: as above
 };
 
-int GameDetailLevelNames[OptionsClass::MAX_DETAIL_SETTING] = {
-	TXT_LOW,
-	TXT_MEDIUM,
-	TXT_HIGH
-};
-
-int GameDifficultyNames[OptionsClass::MAX_DIFFICULTY_SETTING] = {
-	TXT_EASY,
-	TXT_NORMAL,
-	TXT_HARD
+char const * const Game_Detail_Labels[OptionsClass::MAX_DETAIL_SETTING] = { // RA2: string-table labels (the table holds the names, not ids)
+	"TXT_LOW", // RA2: as above
+	"TXT_MEDIUM", // RA2: as above
+	"TXT_HIGH" // RA2: as above
 };
 
 
 BOOL CALLBACK Game_Controls_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
-void Game_Controls_Dialog_On_COMMAND(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+void __fastcall Game_Controls_Command(HWND window, int message, HWND control, unsigned code); // RA2: replaces Game_Controls_Dialog_On_COMMAND
+extern char const * const Difficulty_Labels[3]; // RA2: 0x007D8404, as init.cpp declares it
+extern bool GameControlsShown; // RA2: 0x00A40D84, set by -SPEEDCONTROL, as init.cpp declares it
 
 /***********************************************************************************************
  * OptionsClass::Process -- Handles all the options graphic interface.                         *
@@ -212,7 +210,7 @@ void GameControlsClass::Set(void)
 /// This routine gives the ownerdraw layer first refusal on every message. Anything it
 /// leaves alone is used to prime the sliders and check boxes from the current options, to
 /// track the label alongside a slider the player is dragging, and to route commands on to
-/// Game_Controls_Dialog_On_COMMAND.
+/// Game_Controls_Command.
 /// </summary>
 /// <returns>Returns with a non-zero value if the message was consumed by the ownerdraw
 /// layer.</returns>
@@ -222,97 +220,116 @@ BOOL CALLBACK Game_Controls_Dialog_Proc(HWND window, UINT message, WPARAM wparam
 	int index;
 
 	int rc = OwnerDraw::Default_Dialog_Proc(window, message, wparam, lparam);
-	if (rc == 0) {
-		switch (message) {
-			case WM_INITDIALOG:
-				handle = GetDlgItem(window, IDC_GAME_SPEED_SLIDER);
-				if (handle) {
-					SendMessage(handle, OD_TRACKNUMBERS, 0, 0);
-					Slider_SetRange(handle, 0, (OptionsClass::MAX_SPEED_SETTING-1));
-					Slider_SetPos(handle, (OptionsClass::MAX_SPEED_SETTING-1) - Options.GameSpeed);
-				}
-
-				handle = GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER);
-				if (handle) {
-					SendMessage(handle, OD_TRACKNUMBERS, 0, 0);
-					Slider_SetRange(handle, 0, (OptionsClass::MAX_SCROLL_SETTING-1));
-					Slider_SetPos(handle, (OptionsClass::MAX_SCROLL_SETTING-1) - Options.ScrollRate);
-				}
-
-				handle = GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER);
-				if (handle) {
-					SendMessage(handle, OD_TRACKNUMBERS, 0, 0);
-					Slider_SetRange(handle, 0, (OptionsClass::MAX_DETAIL_SETTING-1));
-					Slider_SetPos(handle, Options.DetailLevel);
-				}
-
-				handle = GetDlgItem(window, IDC_SIDEBAR_TEXT);
-				if (handle) {
-					Button_SetCheck(handle, Options.SidebarCameoText != false);
-				}
-
-				handle = GetDlgItem(window, IDC_TARGET_LINES);
-				if (handle) {
-					Button_SetCheck(handle, Options.ActionLines != false);
-				}
-
-				handle = GetDlgItem(window, IDC_TOOLTIPS);
-				if (handle) {
-					Button_SetCheck(handle, Options.ToolTips != false);
-				}
-
-				handle = GetDlgItem(window, IDC_SCROLL_COASTING);
-				if (handle) {
-					Button_SetCheck(handle, Options.ScrollMethod == 0);
-				}
-
-				if (GameActive == true) {
-					handle = GetDlgItem(window, IDC_OPT_SOUND_BTN);
-					if (handle) {
-						EnableWindow(handle, Audio_Available());
-					}
-				} else {
-					handle = GetDlgItem(window, IDC_DIFFICULTY_SLIDER);
-					if (handle) {
-						SendMessage(handle, OD_TRACKNUMBERS, 0, 0);
-						Slider_SetRange(handle, 0, (OptionsClass::MAX_DIFFICULTY_SETTING-1));
-						Slider_SetPos(handle, Options.Difficulty);
-					}
-				}
-				break;
-
-			case WM_COMMAND:
-				Game_Controls_Dialog_On_COMMAND(window, LOWORD(wparam), 0, HIWORD(wparam));
-				break;
-
-			case WM_HSCROLL:
-				if (LOWORD(wparam) == SB_THUMBTRACK) {
-					index = HIWORD(wparam);
-					int name;
-
-					handle = 0;
-					if ((HWND)lparam == GetDlgItem(window, IDC_GAME_SPEED_SLIDER)) {
-						name = GameSpeedNames[index];
-						handle = GetDlgItem(window, IDC_GAME_SPEED_LABEL);
-					} else if ((HWND)lparam == GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER)) {
-						name = GameScrollSpeedNames[index];
-						handle = GetDlgItem(window, IDC_SCROLL_SPEED_LABEL);
-					} else if ((HWND)lparam == GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER)) {
-						name = GameDetailLevelNames[index];
-						handle = GetDlgItem(window, IDC_DETAIL_LEVEL_LABEL);
-					} else if (GameActive == false && (HWND)lparam == GetDlgItem(window, IDC_DIFFICULTY_SLIDER)) {
-						name = GameDifficultyNames[index];
-						handle = GetDlgItem(window, IDC_DIFFICULTY_LABEL);
-					}
-					if (handle) {
-						SetWindowText(handle, Fetch_String(name));
-					}
-				}
-				break;
-		}
-		rc = 0;
+	if (rc != 0) { // RA2: Game_Controls_Dialog_Proc at 0x4CFC00 returns the ownerdraw answer at once
+		return(rc); // RA2: as above
 	}
-	return(rc);
+
+	switch (message) { // RA2: as above
+		case OD_SUBCLASSED: // RA2: the controls are primed once OwnerDraw has taken them over, not on WM_INITDIALOG
+			handle = GetDlgItem(window, IDC_GAME_SPEED_SLIDER); // RA2: as above
+			if (Session.Type == GAME_NORMAL && !GameControlsShown) { // RA2: the game speed slider stays hidden in single player unless -SPEEDCONTROL was given
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+				handle = GetDlgItem(window, 1812 /* RA2: the game speed caption, no name in language.h */); // RA2: as above
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+				handle = GetDlgItem(window, IDC_GAME_SPEED_LABEL); // RA2: as above
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+			} else if (handle) { // RA2: as above
+				SendMessage(handle, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				Slider_SetRange(handle, 0, (OptionsClass::MAX_SPEED_SETTING-1)); // RA2: as above
+				Slider_SetPos(handle, (OptionsClass::MAX_SPEED_SETTING-1) - Options.GameSpeed); // RA2: as above
+			}
+
+			if (MuteSWLaunches) { // RA2: muted launches hide the game speed slider as well
+				handle = GetDlgItem(window, IDC_GAME_SPEED_SLIDER); // RA2: as above
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+				handle = GetDlgItem(window, 1812 /* RA2: the game speed caption, no name in language.h */); // RA2: as above
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+				handle = GetDlgItem(window, IDC_GAME_SPEED_LABEL); // RA2: as above
+				ShowWindow(handle, SW_HIDE); // RA2: as above
+			}
+
+			handle = GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER); // RA2: as above
+			if (handle) { // RA2: as above
+				SendMessage(handle, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				Slider_SetRange(handle, 0, (OptionsClass::MAX_SCROLL_SETTING-1)); // RA2: as above
+				Slider_SetPos(handle, (OptionsClass::MAX_SCROLL_SETTING-1) - Options.ScrollRate); // RA2: as above
+			}
+
+			handle = GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER); // RA2: as above
+			if (handle) { // RA2: as above
+				SendMessage(handle, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+				Slider_SetRange(handle, 0, (OptionsClass::MAX_DETAIL_SETTING-1)); // RA2: as above
+				Slider_SetPos(handle, Options.DetailLevel); // RA2: as above
+			}
+
+			handle = GetDlgItem(window, IDC_TARGET_LINES); // RA2: no sidebar cameo text check box
+			if (handle) { // RA2: as above
+				Button_SetCheck(handle, Options.ActionLines != false); // RA2: as above
+			}
+
+			handle = GetDlgItem(window, 1540); // RA2: the show-hidden check box (as in Set)
+			if (handle) { // RA2: as above
+				Button_SetCheck(handle, Options.IsShowHidden != false); // RA2: as above
+			} // RA2: as above
+
+			handle = GetDlgItem(window, IDC_TOOLTIPS); // RA2: as above
+			if (handle) { // RA2: as above
+				Button_SetCheck(handle, Options.ToolTips != false); // RA2: as above
+			}
+
+			if (GameActive == true) { // RA2: no scroll coasting check box
+				handle = GetDlgItem(window, IDC_OPT_SOUND_BTN); // RA2: as above
+				if (handle) {
+					EnableWindow(handle, AudioDeviceAvailable()); // RA2: the audio library's own test, not Audio_Available
+					return(0); // RA2: the dialog proc answers 0 directly
+				}
+			} else {
+				handle = GetDlgItem(window, IDC_DIFFICULTY_SLIDER); // RA2: as above
+				if (handle) {
+					SendMessage(handle, OD_TRACKNUMBERS, 0, 0); // RA2: as above
+					Slider_SetRange(handle, 0, (OptionsClass::MAX_DIFFICULTY_SETTING-1)); // RA2: as above
+					Slider_SetPos(handle, Options.Difficulty); // RA2: as above
+					return(0); // RA2: as above
+				}
+			}
+			break; // RA2: as above
+
+		case WM_COMMAND: // RA2: the command handler is expanded here (and also kept out of line)
+			Game_Controls_Command(window, LOWORD(wparam), (HWND)lparam, HIWORD(wparam)); // RA2: as above
+			break; // RA2: as above
+
+		case WM_HSCROLL: // RA2: as above
+			if (LOWORD(wparam) == SB_THUMBTRACK) { // RA2: as above
+				index = HIWORD(wparam); // RA2: as above
+				char const * name; // RA2: the captions are string-table labels, not ids
+
+				if ((HWND)lparam == GetDlgItem(window, IDC_GAME_SPEED_SLIDER)) { // RA2: as above
+					name = Game_Speed_Labels[index]; // RA2: as above
+					handle = GetDlgItem(window, IDC_GAME_SPEED_LABEL); // RA2: as above
+				} else if ((HWND)lparam == GetDlgItem(window, IDC_SCROLL_SPEED_SLIDER)) { // RA2: as above
+					name = Game_Scroll_Labels[index]; // RA2: as above
+					handle = GetDlgItem(window, IDC_SCROLL_SPEED_LABEL); // RA2: as above
+				} else if ((HWND)lparam == GetDlgItem(window, IDC_DETAIL_LEVEL_SLIDER)) { // RA2: as above
+					name = Game_Detail_Labels[index]; // RA2: as above
+					handle = GetDlgItem(window, IDC_DETAIL_LEVEL_LABEL); // RA2: as above
+				} else {
+					if (GameActive != false) { // RA2: as above
+						return(0); // RA2: as above
+					}
+					if ((HWND)lparam != GetDlgItem(window, IDC_DIFFICULTY_SLIDER)) { // RA2: as above
+						return(0); // RA2: as above
+					}
+					name = Difficulty_Labels[index]; // RA2: as above
+					handle = GetDlgItem(window, IDC_DIFFICULTY_LABEL); // RA2: as above
+				}
+				if (handle) { // RA2: as above
+					SendMessage(handle, OD_SETTEXTW, 0, (LPARAM)StringTable::LoadString(name, NULL, "D:\\Ra2\\GameDlg.CPP", 420)); // RA2: the label's text, set as wide caption
+					return(0); // RA2: as above
+				}
+			}
+			break; // RA2: as above
+	}
+	return(0); // RA2: as above
 }
 
 
@@ -324,35 +341,29 @@ BOOL CALLBACK Game_Controls_Dialog_Proc(HWND window, UINT message, WPARAM wparam
 /// </summary>
 /// <param name="window">The game controls dialog window.</param>
 /// <param name="message">The identifier of the control that was activated.</param>
-/// <param name="lparam">The notification code the control sent.</param>
-void Game_Controls_Dialog_On_COMMAND(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+/// <param name="control">The window handle of the control.</param>
+/// <param name="code">The notification code the control sent.</param>
+void __fastcall Game_Controls_Command(HWND window, int message, HWND control, unsigned code) // RA2: Game_Controls_Command at 0x4CFFB0, __fastcall with the control handle unused
 {
 	int* retval = (int *)GetWindowLong(window, DWL_USER);
 
-	switch ((INT)message) {
+	switch (message) { // RA2: as above
 		case IDC_OPT_KEYBOARD_BTN:
-			if (lparam == 0 && GameActive == true) {
+			if (code == 0 && GameActive == true) { // RA2: as above
 				SpecialDialog = SDLG_KEYBOARD;
 				*retval = IDOK;
 			}
 			break;
 
 		case IDC_OPT_SOUND_BTN:
-			if (lparam == 0 && GameActive == true) {
+			if (code == 0 && GameActive == true) { // RA2: as above
 				SpecialDialog = SDLG_SOUND;
 				*retval = IDOK;
 			}
 			break;
 
-		case IDOK:
-			if (lparam == 0) {
-				*retval = IDOK;
-			}
-			break;
-
-		case IDCANCEL:
-			*retval = IDCANCEL;
+		case 1670: // RA2: 1670, the OK button, replaces IDOK/IDCANCEL; no cancel case
+			*retval = IDOK;
 			break;
 	}
 }
-
