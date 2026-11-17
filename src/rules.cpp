@@ -725,7 +725,6 @@ RulesClass::~RulesClass(void)
 /// pointer to one when this routine is called.</remarks>
 void RulesClass::Initialize(CCINIClass & ini) // RA2: a writable INI
 {
-	static char const * const RulesSection_Maximums = "Maximums"; // RA2: the executable's section name, a file-static pointer at 0x007A9060
 	while (ColorSchemes.Count()) delete ColorSchemes[0]; // RA2: as above
 	ColorSchemes.Clear(); // RA2: as above
 	SchemeLibrary_Free(); // RA2: as above
@@ -751,9 +750,7 @@ void RulesClass::Initialize(CCINIClass & ini) // RA2: a writable INI
 	while (::Houses.Count()) delete ::Houses[0]; // RA2: as above
 	while (HouseTypes.Count()) delete HouseTypes[0]; // RA2: as above
 
-	if (ini.Is_Present(RulesSection_Maximums)) { // RA2: the executable's Initialize (no Firestorm or art ini loading, scheme library and session ini)
-		MaxPlayers = ini.Get_Int(RulesSection_Maximums, "Players", MaxPlayers); // RA2: as above
-	}
+	Heap_Maximums(ini); // RA2: the executable reads the Maximums section here
 	Addition(ini);
 
 	CCFileClass file("LANGRULE.INI"); // RA2: the executable's Initialize (no Firestorm or art ini loading, scheme library and session ini)
