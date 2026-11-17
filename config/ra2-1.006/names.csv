@@ -4388,7 +4388,7 @@ address,symbol,evidence
 0x005A9E10,?XMP_Rabin_Miller_Test@@YI_NAAVStraw@@PBIHH@Z,"compiled from src/mpmath.cpp, matched"
 0x005AA130,?XMP_Randomize@@YIXPAIAAVStraw@@HH@Z,"compiled from src/mpmath.cpp, matched"
 0x005AA1A0,?XMP_Randomize@@YIXPAIAAVStraw@@PBI2H@Z,"compiled from src/mpmath.cpp, matched"
-0x005AA380,?XMP_Is_Prime@@YI_NPBIH@Z,"inferred: referenced by matched src/pk.cpp (4 references); across all matched code never at another address, and no other symbol here"
+0x005AA380,?XMP_Is_Prime@@YI_NPBIH@Z,"compiled from src/mpmath.cpp, matched"
 0x005AA7B0,??0MultiplayerObserverTeam@@QAE@XZ,"inferred: referenced by matched src/multiplayer.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x005AAA20,??0MPScoreScreen@@QAE@XZ,"compiled from src/mpscore.cpp, matched"
 0x005AAA40,?Presentation_005AAA40@MPScoreScreen@@QAEXXZ,"compiled from src/mpscore.cpp, matched"

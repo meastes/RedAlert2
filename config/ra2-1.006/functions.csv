@@ -4597,7 +4597,7 @@ address,size,evidence
 0x005A9E10,800,"function of the Tiberian Sun reconstruction, matched"
 0x005AA130,112,"function of the Tiberian Sun reconstruction, matched"
 0x005AA1A0,480,"function of the Tiberian Sun reconstruction, matched"
-0x005AA380,,"inferred: target of the call at 0x0060F1D9 in matched src/pk.cpp; size not known"
+0x005AA380,432,"code of src/mpmath.cpp, matched"
 0x005AA7B0,,"inferred: target of the call at 0x005B7733 in matched src/multiplayer.cpp; size not known"
 0x005AAA20,32,"code of src/mpscore.cpp, matched"
 0x005AAA40,160,"code of src/mpscore.cpp, matched"
