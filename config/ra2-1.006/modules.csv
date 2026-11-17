@@ -678,7 +678,7 @@ vqa,0x0071C590,0x0071D790,tibsun,"functions compiled from src/vqa.cpp, matched, 
 unk_0071D790,0x0071D790,0x0071DB20,unknown,code not assigned to a module
 vqoption,0x0071DB20,0x0071DC10,tibsun,"functions compiled from src/vqoption.cpp, matched, without gaps"
 unk_0071DC10,0x0071DC10,0x0071DE00,unknown,code not assigned to a module
-walk,0x0071DE00,0x0071FDE0,tibsun,"functions compiled from src/walk.cpp, without gaps; matched except ?Movement_AI@WalkLocomotionClass@@QAEX_N@Z and ?Mark_Head_To@WalkLocomotionClass@@QAE_NABVCoord@@@Z; seven placed by the gap"
+walk,0x0071DE00,0x0071FDE0,tibsun,"functions compiled from src/walk.cpp, without gaps; matched except ?Movement_AI@WalkLocomotionClass@@QAEX_N@Z; six placed by the gap"
 unk_0071FDE0,0x0071FDE0,0x007200C0,unknown,code not assigned to a module
 warhead,0x007200C0,0x00721090,tibsun,"functions compiled from src/warhead.cpp, matched, without gaps; two placed by the gap"
 unk_00721090,0x00721090,0x00721900,unknown,code not assigned to a module
