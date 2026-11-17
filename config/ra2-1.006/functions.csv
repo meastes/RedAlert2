@@ -8583,6 +8583,8 @@ address,size,evidence
 0x00721020,80,"code of src/warhead.cpp, matched: its code occurs at 2 addresses; placed by the gap the other functions of the file leave"
 0x00721070,16,"code of src/warhead.cpp, matched: too short for the match rule"
 0x00721080,16,"code of src/warhead.cpp, matched: too short for the match rule"
+0x007213A0,816,"code of src/wave.cpp, matched"
+0x007216D0,560,"code of src/wave.cpp, matched"
 0x00721900,192,"code of src/wave.cpp, matched"
 0x007219C0,320,"code of src/wave.cpp, matched"
 0x00721B00,240,"code of src/wave.cpp, matched"
