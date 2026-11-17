@@ -90,6 +90,7 @@
 #include "warhead.h"
 #include "weapon.h"
 #include "radsite.h" // RA2
+#include "trajhelp.h" // RA2: TrajectoryHelper::GetObstacle
 
 
 DynamicVectorClass<BulletClass *> ScalableBullets; // RA2: 0x008502F8 (YR name), the Scalable bullets in flight
@@ -196,70 +197,20 @@ BulletClass::~BulletClass(void)
 {
 	Detach_This_From_All(this, true);
 
+	if (SpawnNextAnim) { // RA2: a bullet with an anim was tracked in AnimPtrTracker (inlined Delete at 0x45F5C0)
+		AnimPtrTracker.Delete(this); // RA2: as above
+	}
+
 	if (GameActive) {
-#if NEVER
-		/*
-		**	SPECIAL CASE:
-		**	The dog is attached to the dog bullet in a limbo state. When the bullet is
-		**	destroyed, the dog must come back out of limbo at the closest location possible to
-		**	the bullet.
-		*/
-		if (Payback != NULL && Payback->What_Am_I() == RTTI_INFANTRY && ((InfantryClass *)Payback)->Class->IsDog) {
-
-			InfantryClass * dog = (InfantryClass *)Payback;
-			if (dog) {
-				bool unlimbo = false;
-				Dir256 dogface = dog->PrimaryFacing;
-				COORDINATE newcoord = Coord;
-
-				/*
-				**	Ensure that the coordinate, that the dog is to appear at, is legal. If not,
-				**	then find a nearby legal location.
-				*/
-				if (Can_Enter_Cell(newcoord) != MOVE_OK) {
-					newcoord = Map.Nearby_Location(newcoord.As_Cell(), dog->Class->Speed);
-				}
-
-				/*
-				**	Try to put the dog down where the target impacted.  If we can't
-				**	put it in that cell, then scan through the adjacent cells,
-				**	starting with our current heading, until we find a place where
-				**	we can put him down.  If all 8 adjacent cell checks fail, then
-				**	just delete the dog.
-				*/
-				for (int i = FACING_NONE; i < FACING_COUNT; i++) {
-					if (i != FACING_NONE) {
-						newcoord = Adjacent_Cell(Coord, FacingType(i));
-					}
-					ScenarioInit++;
-					if (dog->Unlimbo(newcoord, dog->PrimaryFacing)) {
-						dog->Mark(MARK_DOWN);
-						dog->Do_Action(DO_DOG_MAUL, true);
-						if (dog->WasSelected) {
-							dog->Select();
-						}
-						ScenarioInit--;
-						unlimbo = true;
-						break;
-					}
-					ScenarioInit--;
-				}
-
-				Payback = 0;
-
-				if (!unlimbo) {
-					delete dog;
-				}
-			}
-		}
-	#endif
 		BulletClass::Limbo();
 	}
 
 	Class=0;
 	Payback=0;
+	NextAnim = NULL; // RA2: also forgets the anim (+0x13C)
 	Bullets.Delete(this);
 }
+
 
 
 /***********************************************************************************************
@@ -984,13 +935,14 @@ void BulletClass::Draw_It(Point2D const & point, Rect const & cliprect) const
 /// </summary>
 void BulletClass::LoseTarget(void) // RA2: at 0x461470
 {
-	Cell cell = TarCom->Center_Coord().As_Cell();
+	Cell cell(TarCom->Center_Coord());
 	if (!ScenarioInit && !TarCom->In_Air() && cell != CELL_NONE) {
 		TarCom = &Map[cell];
 	} else {
 		TarCom = NULL;
 	}
 }
+
 
 
 
@@ -1019,34 +971,34 @@ void BulletClass::Detach(AbstractClass const * target, bool all)
 {
 	BASECLASS::Detach(target, all);
 
-#if 0
-	ObjectClass * obj = As_Object(target);
-	if (Payback != NULL && obj == Payback) {
-
-		/*
-		**	If we're being called as a result of the dog that fired us being put
-		**	in limbo, then don't detach.  If for any other reason, detach.
-		*/
-		if (Payback->What_Am_I() != RTTI_INFANTRY || !((InfantryClass *)Payback)->Class->IsDog) {
-			Payback = 0;
-		}
-	}
-
-	if (all && target == TarCom) {
-		TarCom = NULL;
-	}
-#endif
-
 	if (Payback == target) {
 		Payback = NULL;
 	}
 	if (TarCom == target) {
-		TarCom = NULL;
+		LoseTarget(); // RA2: retargets at the cell under the target instead of dropping the target (inlined LoseTarget, 0x461549)
 	}
 	if (Class == target) {
 		Class = NULL;
 	}
+	if (WeaponType == target) { // RA2: also the weapon type (+0x118)
+		WeaponType = NULL; // RA2: as above
+	}
+	if (NextAnim == target) { // RA2: also the anim (+0x13C)
+		NextAnim = NULL; // RA2: as above
+	}
+	if (all && target->Fetch_RTTI() == RTTI_BULLET) { // RA2: a Scalable bullet that goes leaves the list of those in flight
+		BulletClass * bullet = (BulletClass *)target; // RA2: as above
+		if (bullet->Class->Scalable) { // RA2: as above
+			for (int index = 0; index < ScalableBullets.Count(); index++) { // RA2: as above
+				if (bullet == ScalableBullets[index]) { // RA2: as above
+					ScalableBullets.Delete(bullet); // RA2: as above
+					return; // RA2: as above
+				}
+			}
+		}
+	}
 }
+
 
 
 /***********************************************************************************************
@@ -1076,38 +1028,30 @@ bool BulletClass::Unlimbo(Coord const & coord, TVelocity3D<double> const & veloc
 	*/
 	if (BASECLASS::Unlimbo(coord)) {
 		Velocity = velocity;
+		SourceCoords = coord; // RA2: remembers where the bullet started ...
+		LastMapCoords = SourceCoords.As_Cell(); // RA2: ... and its cell
 		Map.Remove(this);
 
 		Coord tcoord = TarCom->As_Coord();
+		TargetCoords = tcoord; // RA2: remembers where it is going
 
 		/*
-		**	Possibly adjust the target if this projectile is inaccurate. This occurs whenever
-		**	certain weapons are trained upon targets they were never designed to attack. Example: when
-		**	turrets or anti-tank missiles are fired at infantry. Indirect
-		**	fire is inherently inaccurate.
+		**	RA2: a flak bullet that is invisible is scattered around the target the farther it flies, up to
+		**	the ballistic scatter of the rules.
 		*/
-		if (IsInaccurate || Class->IsInaccurate ||
-			(dynamic_cast<CellClass *>(TarCom) != NULL || dynamic_cast<InfantryClass *>(TarCom) != NULL) /*&& (Warhead == WARHEAD_AP || Class->IsFueled))*/) {
-#if 0
-			/*
-			**	Inaccuracy for low velocity or homing projectiles manifests itself as a standard
-			**	Circular Error of Probability (CEP) algorithm. High speed projectiles usually
-			**	just overshoot the target by extending the straight line flight.
-			*/
-			if (/*Class->ROT != 0 ||*/ Class->IsArcing) {
-				int scatterdist = (::Distance(coord, tcoord)/16)-CELL_LEPTON / 4;
-				scatterdist = MIN(scatterdist, Rule->HomingScatter);
-				scatterdist = MAX(scatterdist, 0);
-
-				dir = (Dir256)((dir + (Random_Pick(0, 10)-5)) & DIR_MAX);
-				tcoord = Coord_Scatter(tcoord, Random_Pick(0, scatterdist));
-			} else {
-				int scatterdist = (::Distance(coord, tcoord)/16)-CELL_LEPTON / 4;
-				scatterdist = MIN(scatterdist, Rule->BallisticScatter);
-				scatterdist = MAX(scatterdist, 0);
-				tcoord = Move_Coord(tcoord, dir, Random_Pick(0, scatterdist));
-			}
-#endif
+		if (Class->FlakScatter && Class->IsInvisible) { // RA2: as above
+			float dx = (float)(coord.X - tcoord.X); // RA2: as above
+			float dy = (float)(coord.Y - tcoord.Y); // RA2: as above
+			double dz = (double)(coord.Z - tcoord.Z); // RA2: as above
+			float distance = (float)fastmath::sqrt(dx * dx + dy * dy + dz * dz); // RA2: the distance to fly
+			int scatter = Scen->RandomNumber(0, Rule->BallisticScatter * 2); // RA2: as above
+			int radius = (scatter * (int)distance) / WeaponType->Range; // RA2: as above
+			double angle = (short)((Scen->RandomNumber(0, 0x7FFFFFFE) * 4.656612877414201e-10 * 6.283185307179586 - 1.5707963267948966) * -10430.060040584269); // RA2: as above
+			angle = (angle - 0x3FFF) * -9.587672516830327e-05; // RA2: as above
+			int z = tcoord.Z; // RA2: as above
+			int y = (int)(tcoord.Y - fastmath::sin(angle) * radius); // RA2: as above
+			int x = (int)(fastmath::cos(angle) * radius + tcoord.X); // RA2: as above
+			tcoord = Coord(x, y, z); // RA2: as above
 		}
 
 		/*
@@ -1115,26 +1059,33 @@ bool BulletClass::Unlimbo(Coord const & coord, TVelocity3D<double> const & veloc
 		**	location and dispense with the actual flight.
 		*/
 		if (Class->IsInvisible) {
-			Coord firestorm_coord = Map.Firestorm_On_Path(coord, tcoord, Payback != NULL ? Payback->House : NULL);
-			if (firestorm_coord == COORD_NONE) {
-				PositionCoord = tcoord;
-				MaxSpeed = 0;
-				Velocity.Set_Speed(0);
-			} else {
+			HouseClass * house = Payback != NULL ? Payback->House : NULL; // RA2: as above
+			Coord firestorm_coord = Map.Firestorm_On_Path(coord, tcoord, house);
+			if (firestorm_coord != COORD_NONE) { // RA2: a firestorm on the way takes the bullet there
 				firestorm_coord.Z = Map.Get_Height_GL(firestorm_coord);
-				PositionCoord = firestorm_coord;
+				Set_Coord(firestorm_coord);
 				BuildingClass * bptr = Map[firestorm_coord].Cell_Building();
 				bptr->Crossing_Firestorm(this, false);
 				Delete_Me();
+			} else {
+				CellClass * blocking = TrajectoryHelper::FindFirstObstacle(coord, tcoord, Class, house); // RA2: a bullet that is stopped by an obstacle on the way lands there
+				if (blocking != NULL) { // RA2: as above
+					Set_Coord(blocking->Center_Coord()); // RA2: as above
+				} else {
+					Set_Coord(tcoord); // RA2: as above
+				}
+				Set_Coord(tcoord); // RA2: as above
+				MaxSpeed = 0;
+				Velocity.Set_Speed(0);
 			}
 		}
 
 		/*
 		**	Arm the fuse.
 		*/
-		Fuse.Arm_Fuse(PositionCoord, tcoord, dynamic_cast<AircraftClass *>(TarCom) != NULL ? 0 : Class->Arming);
+		Fuse.Arm_Fuse(PositionCoord, tcoord, (TarCom != NULL && TarCom->Fetch_RTTI() == RTTI_AIRCRAFT) ? 0 : Class->Arming); // RA2: as above
 
-		if (Is_Homing()) {
+		if (Class->ROT > 0) { // RA2: a homing bullet
 			Velocity.Set_Speed(1);
 		}
 
@@ -1145,6 +1096,7 @@ bool BulletClass::Unlimbo(Coord const & coord, TVelocity3D<double> const & veloc
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -1190,33 +1142,46 @@ LayerType BulletClass::In_Which_Layer(void) const
 bool BulletClass::Is_Forced_To_Explode(Coord & coord) const
 {
 	coord = PositionCoord;
-	CellClass const * cellptr = &Map[coord];
-	int height = HeightAGL;
+	CellClass * cellptr = &Map[coord];
 
 	/*
-	**	Check for impact on a wall or other high obstacle.
+	**	RA2: a bullet that cannot cross cliffs or walls explodes at the obstacle on its way from the
+	**	source to the target cell (TrajectoryHelper::GetObstacle at 0x4BBAF0).
 	*/
+	if (Class->SubjectToCliffs || Class->SubjectToWalls) { // RA2: as above
+		CellClass * source = &Map[SourceCoords]; // RA2: as above
+		CellClass * destination = &Map[TargetCoords]; // RA2: as above
+		CellClass * previous = &Map[LastMapCoords]; // RA2: as above
+		if (TrajectoryHelper::GetObstacle(source, destination, previous, coord, Class, Payback == NULL ? NULL : Payback->House)) { // RA2: as above
+			return(true); // RA2: as above
+		}
+	}
 
-	if (height < 0) { // RA2: no IsHigh (TibSun's use does not compile against RA2's declaration)
+	if (HeightAGL <= -LEVEL_LEPTON_H * 4) { // RA2: far below the ground
+		return(true);
+	}
+
+	if (TarCom != NULL && Class->FlakScatter) { // RA2: a flak bullet that is lower than its target explodes
+		Coord current = PositionCoord; // RA2: as above
+		if (current.Z < TarCom->As_Coord().Z && HeightAGL < 0) { // RA2: as above
+			return(true); // RA2: as above
+		}
+	}
+
+	if (Class->Level && cellptr->On_Ground()) { // RA2: a level bullet that reaches the ground
 		return(true);
 	}
 
 	/*
 	**	Bullets are generally more effective when they are fired at aircraft.
 	*/
-	if (Class->IsAntiAircraft && TarCom != NULL &&
-		(TarCom->RTTI == RTTI_AIRCRAFT || (TarCom->RTTI == RTTI_INFANTRY && ((InfantryClass *)TarCom)->Is_JumpJet()) && ((InfantryClass *)TarCom)->HeightAGL > 0) &&
-		Distance(TarCom) < CELL_LEPTON / 2) {
-
+	if (Class->IsAntiAircraft && TarCom != NULL && TarCom->In_Air() && Distance(TarCom) < CELL_LEPTON / 2) { // RA2: no jumpjet test
 		return(true);
 	}
 
-	/*
-	**	No reason for forced explosion was detected, so return 'false' to
-	**	indicate that no forced explosion is required.
-	*/
 	return(false);
 }
+
 
 
 /// <summary>
@@ -1409,14 +1374,15 @@ void BulletClass::Shrapnel(void) // RA2: at 0x462C50
 		if (Payback == NULL) {
 			count = 3;
 		} else {
-			count = -shrapnel - ::Distance(Payback->Center_Coord(), Position) / CELL_LEPTON_W;
+			Coord here = Position;
+			count = -shrapnel - ::Distance(Payback->Center_Coord(), here) / CELL_LEPTON_W;
 			if (count <= 0) return;
 		}
 	} else {
 		count = shrapnel;
 	}
-	if (Map[Get_Cell()].Cell_Occupier() == NULL) return;
-	if (Map[Get_Cell()].Cell_Occupier()->Fetch_RTTI() == RTTI_BUILDING) return;
+	if (Get_Cell_Ptr()->Cell_Occupier() == NULL) return;
+	if (Get_Cell_Ptr()->Cell_Occupier()->Fetch_RTTI() == RTTI_BUILDING) return;
 
 	WeaponTypeClass const * weapon = Class->ShrapnelWeapon;
 	BulletTypeClass const * projectile = weapon->Bullet;
@@ -1427,7 +1393,7 @@ void BulletClass::Shrapnel(void) // RA2: at 0x462C50
 	for (int radius = 1; radius <= range; radius++) {
 		int end = MapClass::RadiusCount[radius];
 		for (int index = MapClass::RadiusCount[radius - 1]; index < end; index++) {
-			CellClass * cellptr = &Map[MapClass::RadiusOffset[index] + origin];
+			CellClass * cellptr = &Map[origin + MapClass::RadiusOffset[index]];
 			ObjectClass * target = cellptr->Cell_Occupier();
 			if (target != NULL && target != Payback && Payback != NULL && !Payback->House->Is_Ally(target)) {
 				BulletClass * fragment = projectile->Create_Bullet(target, Payback, weapon->Attack, weapon->WarheadPtr, weapon->MaxSpeed, weapon->IsBright);
@@ -1467,6 +1433,7 @@ void BulletClass::Shrapnel(void) // RA2: at 0x462C50
 }
 
 
+
 /// <summary>
 /// RA2: leaves radiation in the cell: a new radiation site there, or more for the one it has.
 /// </summary>
@@ -1502,13 +1469,19 @@ HRESULT STDMETHODCALLTYPE BulletClass::Load(IStream * stream)
 	if (SUCCEEDED(result)) {
 		new (this) BulletClass(NoInitClass());
 
+		if (NextAnim) { // RA2: a bullet with an anim is tracked again in AnimPtrTracker (inlined Add at 0x463847)
+			AnimPtrTracker.Add(this); // RA2: as above
+		}
 		Swizzle_Pointer(&Class);
 		Swizzle_Pointer(&Payback);
 		Swizzle_Pointer(&Warhead);
 		Swizzle_Pointer(&TarCom);
+		Swizzle_Pointer(&WeaponType); // RA2: also the weapon type (+0x118) ...
+		Swizzle_Pointer(&NextAnim); // RA2: ... and the anim (+0x13C)
 	}
 	return(result);
 }
+
 
 
 /// <summary>
@@ -1617,9 +1590,16 @@ void BulletClass::Draw_Voxel(VoxelDataStruct const & voxeldata, Matrix3D const &
 	}
 
 	SurfaceRegion region = VoxelDrawSystem::Render();
-	flags = ShapeFlags_Type(flags & ~SHAPE_REMAP);
-	Blit_Block(*LogicalSurface, *ColorSchemes[Class->Color]->Converter, *VoxelDrawSystem::Get_Surface(), region.Bounds, region.Point + drawpoint, cliprect, NULL, ColorSchemes[Class->Color]->Converter->Blitter_From_Flags(ShapeFlags_Type(flags)), 0, ZGRAD_90DEG, brightness);
+	static int flat_height_offset = -65; // RA2: a Flat bullet is drawn at a fixed height offset, read from memory (0x7D11A4)
+	int height_offset = 0; // RA2: as above
+	ShapeFlags_Type draw_flags = ShapeFlags_Type(flags & ~SHAPE_REMAP); // RA2: a local for the flags
+	if (Class->Flat) { // RA2: as above
+		height_offset = flat_height_offset; // RA2: as above
+		draw_flags = ShapeFlags_Type(draw_flags | SHAPE_ZGRAD); // RA2: ... and with the z gradient
+	}
+	Blit_Block(*LogicalSurface, *ColorSchemes[Class->Color]->Converter, *VoxelDrawSystem::Get_Surface(), region.Bounds, region.Point + drawpoint, cliprect, NULL, ColorSchemes[Class->Color]->Converter->Blitter_From_Flags(draw_flags), height_offset, Class->Flat ? ZGRAD_GROUND : ZGRAD_90DEG, brightness, 0); // RA2: the full argument list
 }
+
 
 
 /// <summary>
