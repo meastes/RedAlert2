@@ -224,6 +224,9 @@ bool __fastcall Can_Force_Order(void); // RA2: 0x6F6670 (uicmnds.cpp), Player_As
 void __fastcall Planning_Cancel_Token(TechnoClass * techno); // RA2: 0x6155E0 (planmgr.cpp), Captured
 Rect * Drawing_GetTextDimensions(Rect * out, wchar_t const * text, Point2D loc, unsigned short flags, int marginX, int marginY); // RA2: 0x497360 (dialog.cpp), Draw_Text_Overlay
 static inline Rect Text_Rect(wchar_t const * text, Point2D loc, unsigned short flags, int marginx, int marginy) {Rect rect; return(*Drawing_GetTextDimensions(&rect, text, loc, flags, marginx, marginy));} // RA2: the box a text needs (Draw_Text_Overlay)
+static inline bool Mouse_Hover_Flag(TechnoClass const * techno) {return(techno->IsMouseHovering);} // RA2: read accessor of the tail test in Draw_Post_Render (its site decides the temporaries)
+static inline bool Techno_Is_Selected(TechnoClass const * techno) {return(techno->IsSelected);} // RA2: as above
+static inline float Vector_Length(Vector3 const & v) {double y = v.Y; double z = v.Z; double x = v.X; return((float)fastmath::sqrt(x * x + z * z + y * y));} // RA2: the length of a vector, summed in doubles, x, z, y (Railgun_Beam_Damage)
 
 namespace FileSystem { extern ConvertClass * PALETTE_PAL; }
 namespace Unsorted { extern bool ArmageddonMode; }
@@ -1336,59 +1339,95 @@ void TechnoClass::Per_Cell_Process(PCPType why)
 void TechnoClass::Draw_Post_Render(Point2D const & point, Rect const & cliprect) const
 {
 	bool sensed_underground = false;
-	if (!IsSelected) {
+	if (!IsSinking) { // RA2: a sinking object draws nothing here
 		CellClass * cell = Get_Cell_Ptr();
-		if (HeightAGL < -20 && cell->Is_Sensed(PlayerPtr->HeapID)) {
+		if (!IsSelected && HeightAGL < -20 && cell != NULL && cell->Is_Sensed(PlayerPtr->HeapID)) { // RA2: one condition, the cell is tested
 			sensed_underground = true;
 		}
-	}
 
-	if (IsSelected || sensed_underground) {
+		if (BombVisible && AttachedBomb != NULL && !Map[Get_Cell()].Is_Shrouded()) { // RA2: a visible bomb is drawn on the object
+			Point2D bomb_point; // RA2: as above
+			TacticalMap->Coord_To_Pixel(Render_Coord(), bomb_point); // RA2: as above
+			Draw_Shape(*LogicalSurface, *MouseDrawer, (ShapeSet const *)Rule->BOMBCURS_SHP, AttachedBomb->Get_Current_Flicker_Frame(), bomb_point, TacticalRect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+		}
 
-		UnitClass const * unit = (RTTI == RTTI_UNIT) ? dynamic_cast<UnitClass const *>(this) : NULL;
-		if (RTTI == RTTI_BUILDING) { // RA2: no core defenders
-
-			int color = WHITE;
-			if (HeightAGL < -4) { // RA2: no LimpetType (not in RA2's layout)
-				color = BLACK;
-			}
-
-			Coord dim = TClass->Lepton_Dimensions();
-			int x = dim.X / 2;
-			int y = dim.Y / 2;
-			color = NormalDrawer->Convert_Pixel(color);
-			Coord center = Center_Coord();
-
-			if (RTTI != RTTI_INFANTRY) {
-				Draw_Double_Selection_Bracket(center + Coord(x, y, 0), center + Coord(-x, y, 0), color);
-				Draw_Double_Selection_Bracket(center + Coord(x, y, 0), center + Coord(x, -y, 0), color);
-				Draw_Double_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(-x, y, dim.Z), color);
-				Draw_Double_Selection_Bracket(center + Coord(x, -y, 0), center + Coord(x, -y, dim.Z), color);
-			}
-
-			if (Strength > 0 && (House->Is_Ally(PlayerPtr) || Rule->IsHealthBar)) {
-				Draw_Health_Bar_Old(point, cliprect);
-			}
-
-			if (RTTI != RTTI_INFANTRY) {
-				Draw_Single_Selection_Bracket(center + Coord(x, y, 0), center + Coord(x, y, dim.Z), color);
-				Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(x, y, dim.Z), color);
-				Draw_Single_Selection_Bracket(center + Coord(-x, y, dim.Z), center + Coord(x, y, dim.Z), color);
-			} else {
-				Draw_Single_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(x, y, 0), color);
-				Draw_Single_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(-x, y, dim.Z), color);
-				Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(x, -y, 0), color);
-				Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(-x, -y, dim.Z), color);
+		if (this != NULL && Fetch_RTTI() == RTTI_BUILDING) { // RA2: a building being repaired shows the wrench
+			BuildingClass const * bldg = Fetch_RTTI() == RTTI_BUILDING ? (BuildingClass const *)this : NULL; // RA2: as above
+			if (bldg->IsRepairing && !Map[Get_Cell()].Is_Shrouded()) { // RA2: as above
+				Point2D repair_point; // RA2: as above
+				TacticalMap->Coord_To_Pixel(Render_Coord(), repair_point); // RA2: as above
+				int delay = Options.Normalize_Delay(14) / 4; // RA2: as above
+				if (delay < 2) { // RA2: as above
+					delay = 2; // RA2: as above
+				}
+				Draw_Shape(*LogicalSurface, *MouseDrawer, (ShapeSet const *)BuildingTypeClass::WrenchShapes, ((Frame % delay) * 6) / (delay - 1), repair_point, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL|SHAPE_ALPHA), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
 			}
 		}
 
-		Draw_Health_Bar(point, cliprect, sensed_underground);
-	}
+		if (!IsDisguisedAs(PlayerPtr) && Visual_Character(false, NULL) != VISUAL_HIDDEN) { // RA2: the rank pip is drawn for anything visible
+			DrawVeterancyPips(point, cliprect); // RA2: as above
+		}
 
-	if (TalkBubbleOwner == this && TalkBubbleType > 0 && (int)TalkBubbleTimer > 0) {
-		Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)ObjectTypeClass::TalkBubbleShapes, TalkBubbleType - 1, point, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
+		if (IsSelected || sensed_underground) { // RA2: as above
+
+			if (Fetch_RTTI() == RTTI_BUILDING) { // RA2: no core defenders, the virtual RTTI
+
+				int color = WHITE; // RA2: as above
+				if (HeightAGL < -4) { // RA2: no LimpetType (not in RA2's layout)
+					color = BLACK; // RA2: as above
+				}
+
+				Point3D const & lepton = Techno_Type_Class()->Lepton_Dimensions(); // RA2: the dimensions come by reference
+				Coord dim = lepton; // RA2: as above
+				int x = dim.X / 2; // RA2: as above
+				dim.Y /= 2; // RA2: the half is kept in the dimensions
+				int y = dim.Y; // RA2: as above
+				color = NormalDrawer->Convert_Pixel(color); // RA2: as above
+				Coord const & position = Center_Coord(); // RA2: as above
+				Coord center = position; // RA2: as above
+
+				if (Fetch_RTTI() != RTTI_INFANTRY) { // RA2: the virtual RTTI
+					Draw_Double_Selection_Bracket(center + Coord(x, y, 0), center + Coord(-x, y, 0), color); // RA2: as above
+					Draw_Double_Selection_Bracket(center + Coord(x, y, 0), center + Coord(x, -y, 0), color); // RA2: as above
+					Draw_Double_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(-x, y, dim.Z), color); // RA2: as above
+					Draw_Double_Selection_Bracket(center + Coord(x, -y, 0), center + Coord(x, -y, dim.Z), color); // RA2: as above
+				}
+
+				if (Strength > 0 && (House->Is_Ally(PlayerPtr) || Rule->IsHealthBar)) { // RA2: as above
+					((TechnoClass *)this)->Unknown_Virtual_3DC((unsigned)&point, (unsigned)&cliprect); // RA2: the old health bar is a virtual taking the argument addresses
+				}
+
+				if (Fetch_RTTI() != RTTI_INFANTRY) { // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(x, y, 0), center + Coord(x, y, dim.Z), color); // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(x, y, dim.Z), color); // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(-x, y, dim.Z), center + Coord(x, y, dim.Z), color); // RA2: as above
+				} else {
+					Draw_Single_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(x, y, 0), color); // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(-x, y, 0), center + Coord(-x, y, dim.Z), color); // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(x, -y, 0), color); // RA2: as above
+					Draw_Single_Selection_Bracket(center + Coord(x, -y, dim.Z), center + Coord(-x, -y, dim.Z), color); // RA2: as above
+				}
+			}
+
+			Draw_Health_Bar(point, cliprect, sensed_underground); // RA2: as above
+		}
+
+		if (Mouse_Hover_Flag(this) && !Techno_Is_Selected(this)) { // RA2: a hovered object shows its health bar too
+			if (IsDisguisedAs(PlayerPtr)) { // RA2: as above
+				if (GetDisguiseHouse(true) != NULL) { // RA2: as above
+					Draw_Health_Bar(point, cliprect, true); // RA2: as above
+				}
+			} else {
+				Draw_Health_Bar(point, cliprect, true); // RA2: as above
+			}
+		}
+
+		if (TalkBubbleOwner == this && TalkBubbleType > 0 && (int)TalkBubbleTimer > 0) { // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, (ShapeSet const *)ObjectTypeClass::TalkBubbleShapes, TalkBubbleType - 1, point, cliprect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: the last arguments are passed explicitly
+		}
 	}
 }
+
 
 
 /// <summary>
@@ -1864,7 +1903,7 @@ static inline int Sight_Bonus_For(Coord const & coord)
  *=============================================================================================*/
 bool TechnoClass::Unlimbo(Coord const & coord, Dir256 dir)
 {
-	IsLocked = Map.In_Local_Radar(coord.As_Cell());
+	IsLocked = Map.In_Local_Radar(coord.As_Cell(), true); // RA2: the cell overload with the height test spelled out
 
 	if (BASECLASS::Unlimbo(coord, dir)) {
 
@@ -1872,23 +1911,37 @@ bool TechnoClass::Unlimbo(Coord const & coord, Dir256 dir)
 			return(true);
 		}
 
+		UpdateSight(false, false, false, NULL); // RA2: the sight is revealed at once
+		Map.RevealArea3(PositionCoord, 0, LastSightRange + 3, 0); // RA2: as above, the surrounding area is uncovered
+		if (Techno_Type_Class()->BombSight != 0) { // RA2: a bomb detector joins the list
+			BombList.Add_Detector(this); // RA2: as above
+		}
 		House->Tracking_Active_Add(this, false);
 		PrimaryFacing.Set(dir);
 		BarrelPitch.Set(DIR_E << 8);
-		Enter_Idle_Mode(true);
+		BarrelPitch.Set_Desired(DirType(DIR_E) - DirType(Dir256(Techno_Type_Class()->FireAngle))); // RA2: the barrel aims at the type's fire angle
+		IsTurretRotateSoundPlaying = 1; // RA2: the turret sound is not playing
+		TurretIsRotating = 0; // RA2: as above
+		if (Fetch_RTTI() == RTTI_INFANTRY) { // RA2: infantry are marked while they enter idle mode
+			UnlimboingInfantry = true; // RA2: as above
+		}
+		Enter_Idle_Mode(true, true); // RA2: two arguments
+		UnlimboingInfantry = false; // RA2: as above
 		if (Ready_To_Commence()) {
 			Commence();
 		}
 
 		SightIncrease = Get_Sight_Bonus(coord);
 
-		if (!Map.In_Local_Radar(coord.As_Cell())) {
+		if (!Map.In_Local_Radar(coord.As_Cell(), true)) { // RA2: as above
 			IsDiscoveredByPlayer = false;
 		}
 
-		int risk = Risk();
-		HousesType owner = Owner();
-		Get_Cell_Ptr()->Adjust_Threat(owner, risk);
+		CellClass * here = Get_Cell_Ptr(); // RA2: the threat is only lent when there is a cell
+		if (here != NULL) { // RA2: as above
+			ThreatPosed = Risk(); // RA2: the risk is kept in ThreatPosed
+			here->Adjust_Threat(Owner(), ThreatPosed); // RA2: as above
+		}
 
 		RadarPos = Map.Coord_To_Radar_Pixel(PositionCoord, true);
 
@@ -1900,6 +1953,7 @@ bool TechnoClass::Unlimbo(Coord const & coord, Dir256 dir)
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -3014,313 +3068,240 @@ int TechnoClass::Evaluate_Just_Cell(Cell const & cell) const
  *=============================================================================================*/
 AbstractClass * TechnoClass::Greatest_Threat(ThreatType method, Coord const & coord, bool onlyenemy) const
 {
-	BStart(BENCH_GREATEST_THREAT);
-
 	ObjectClass const * bestobject = NULL;
 	int bestval = -1;
 	int zone = -1;
 
 	TargetScan++;
 
-	if (TClass->IsNoAutoFire && House->Is_Human_Player()) {
-		BEnd(BENCH_GREATEST_THREAT);
+	if (Techno_Type_Class()->IsNoAutoFire && House->Is_Human_Player()) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
 		return(NULL);
 	}
 
-	/*
-	**	Determine the zone that the target must be in. For aircraft and gunboats, they
-	**	ignore zones since they either can fly over any zone or are designed to fire into
-	**	other zones. If scanning for targets that are within range, then zone checking need
-	**	not be performed -- range checking is much more thorough and effective.
-	*/
-	if (!(method & THREAT_RANGE) &&
-		RTTI != RTTI_BUILDING &&
-		RTTI != RTTI_AIRCRAFT) {
-
-		zone = Map.Get_Cell_Zone(Center_Coord().As_Cell(), TClass->MZone, true);
+	if (!(method & THREAT_RANGE) && Fetch_RTTI() != RTTI_BUILDING && Fetch_RTTI() != RTTI_AIRCRAFT) { // RA2: the virtual RTTI
+		zone = Map.Get_Cell_Zone(Center_Coord().As_Cell(), Techno_Type_Class()->MZone, true); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
 	}
 
-	/*
-	**	Hack for dogs, 'cause they can only consider infantrymen to be a
-	**	threat.  Medics also.
-	*/
-	if (RTTI == RTTI_INFANTRY) {
-		if (Combat_Damage() < 0) {
-			method = ThreatType(THREAT_INFANTRY|THREAT_ALLIES|(method & (THREAT_RANGE|THREAT_AREA)));
+	if (Fetch_RTTI() == RTTI_INFANTRY) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+		if (Combat_Damage(-1) < 0) { // RA2: the weapon number is passed
+			method = ThreatType((method & (THREAT_RANGE|THREAT_AREA))|THREAT_ALLIES|THREAT_INFANTRY); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
 		} else if (((InfantryClass *)this)->Class->IsEngineer) {
 			method = ThreatType(method & ~(THREAT_INFANTRY|THREAT_VEHICLES));
 		}
-	} else if (RTTI == RTTI_UNIT) {
-		if (Combat_Damage() < 0) {
-			method = ThreatType(THREAT_VEHICLES|THREAT_ALLIES|(method & (THREAT_RANGE|THREAT_AREA)));
+	} else if (Fetch_RTTI() == RTTI_UNIT) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+		if (Combat_Damage(-1) < 0) { // RA2: as above
+			method = ThreatType((method & (THREAT_RANGE|THREAT_AREA))|THREAT_ALLIES|THREAT_VEHICLES); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
 		}
 	}
 
-	/*
-	**	Build a quick elimination mask. If the RTTI of the object doesn't
-	**	qualify with this mask, then we KNOW that it shouldn't be considered.
-	*/
 	int mask = 0;
-	if (method & THREAT_CIVILIANS) mask |= ((1 << RTTI_BUILDING)|(1 << RTTI_INFANTRY)|(1 << RTTI_UNIT));
+	if (method & THREAT_CIVILIANS) mask = ((1 << RTTI_BUILDING)|(1 << RTTI_INFANTRY)|(1 << RTTI_UNIT)); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
 	if (method & THREAT_AIR) mask |= (1 << RTTI_AIRCRAFT);
-	if (method & (THREAT_BUILDINGS|THREAT_FACTORIES|THREAT_POWER|THREAT_BASE_DEFENSE|THREAT_TIBERIUM|THREAT_CAPTURE)) mask |= (1 << RTTI_BUILDING);
+	if (method & (THREAT_BUILDINGS|THREAT_FACTORIES|THREAT_POWER|THREAT_BASE_DEFENSE|THREAT_TIBERIUM|THREAT_CAPTURE|THREAT_OCCUPIABLE|THREAT_TECH_BUILDINGS)) mask |= (1 << RTTI_BUILDING); // RA2: the tech building and occupiable bits count too
 	if (method & THREAT_INFANTRY) mask |= (1 << RTTI_INFANTRY);
-	if (method & (THREAT_VEHICLES|THREAT_TIBERIUM)) mask |= (1 << RTTI_UNIT);
+	if (method & (THREAT_VEHICLES|THREAT_TIBERIUM)) mask |= (1 << RTTI_UNIT); // RA2: the tiberium bit does not select vehicles in the mask test above, the exe tests 0x50
 
-	/*
-	**	Limit area target scans use a method where the actual map cells are
-	**	examined for occupants. The occupant is then examined in turn. The
-	**	best target within the area is returned as a target.
-	*/
+	if (Techno_Type_Class()->DistributedFire) { // RA2: distributed fire starts from empty lists
+		CurrentTargets.Clear(); // RA2: as above
+		CurrentTargetThreatValues.Clear(); // RA2: as above
+	}
+
 	if (method & (THREAT_AREA|THREAT_RANGE)) {
 		int range = 0;
 		if (method & THREAT_RANGE) {
 			range = Threat_Range(0);
-		} else {
-			if (method & THREAT_AREA) {
-				if (CurrentMission == MISSION_PATROL) {
-					range = Threat_Range(2);
-				} else {
-					range = Threat_Range(1);
-				}
+		} else if (method & THREAT_AREA) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+			if (CurrentMission == MISSION_PATROL) { // RA2: as above
+				range = Threat_Range(2); // RA2: as above
+			} else {
+				range = Threat_Range(1); // RA2: as above
 			}
 		}
 
-
-		/*
-		**	BG: Miserable hack to get the stupid doctor to actually do area
-		**	guarding.
-		*/
-		if (Combat_Damage() < 0 && CurrentMission == MISSION_GUARD) {
+		if (Combat_Damage(-1) < 0 && CurrentMission == MISSION_GUARD) { // RA2: as above
 			range = CELL_LEPTON * 2;
 		}
 
 		int crange = range / CELL_LEPTON;
 		if (range == 0) {
-			crange = MAX(Weapon_Range(0), Weapon_Range(1)) / CELL_LEPTON;
+			if (Techno_Type_Class()->Has_Turret_Weapons()) { // RA2: a turret weapon sets the range
+				crange = Weapon_Range(CurrentWeaponNumber) / CELL_LEPTON; // RA2: as above
+			} else if (Techno_Type_Class()->Underwater && Techno_Type_Class()->Organic && Techno_Type_Class()->IsSelfHealing) { // RA2: as above
+				crange = Techno_Type_Class()->ThreatRange / CELL_LEPTON; // RA2: as above
+			} else {
+				crange = ((Weapon_Range(0) > Weapon_Range(1)) ? Weapon_Range(0) : Weapon_Range(1)) / CELL_LEPTON; // RA2: as above
+			}
 			crange++;
+			crange += Techno_Type_Class()->AirRangeBonus / CELL_LEPTON; // RA2: as above
 		}
 		Cell cell = coord.As_Cell();
 
-		/*
-		**	If aircraft are a legal target, then scan through all of them at this time.
-		**	Scanning by cell is not possible for aircraft since they are not recorded
-		**	at the cell level.
-		*/
 		if (method & THREAT_AIR) {
-			int _mask = mask|(1 << RTTI_INFANTRY);
-			int value;
-			int index;
-			for (index = 0; index < Map.Layer[LAYER_TOP].Count(); index++) {
-				TechnoClass * object = (TechnoClass *)Map.Layer[LAYER_TOP][index];
-
-			} // RA2: no IsJumpJet (not in RA2's layout)
-
-			for (index = 0; index < Map.Layer[LAYER_AIR].Count(); index++) {
-				TechnoClass * object = (TechnoClass *)Map.Layer[LAYER_AIR][index];
-
-				if (object->RTTI == RTTI_INFANTRY) {
-					value = 0;
-					if ((!onlyenemy || object->House->HeapID == House->Enemy) &&
-						(!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) && object->IsDown &&
-						object->In_Which_Layer() != LAYER_GROUND &&
-						Evaluate_Object(method, _mask, range, object, value)) {
-
-						if (value > bestval) {
-							bestobject = object;
-							bestval = value;
-						}
+			int _mask = mask | (1 << RTTI_INFANTRY) | (1 << RTTI_UNIT); // RA2: the air scan also accepts infantry and units (0x8002)
+			AircraftTracker.Append_Radius_Bins(&Map[cell], crange); // RA2: the tracker replaces the layer scans
+			TechnoClass * object = AircraftTracker.Get(); // RA2: as above
+			while (object != NULL) { // RA2: as above
+				int value = 0; // RA2: as above
+				if (!House->Is_Ally(object) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) && object->IsDown && object->In_Which_Layer() != LAYER_GROUND && (!onlyenemy || object->House->HeapID == House->Enemy) && Evaluate_Object(method, _mask, range, object, value, -1, COORD_NONE)) { // RA2: as above
+					if (Techno_Type_Class()->DistributedFire) { // RA2: as above
+						CurrentTargets.Add((AbstractClass *)object); // RA2: as above
+						CurrentTargetThreatValues.Add(value); // RA2: as above
+					}
+					if (value > bestval) { // RA2: as above
+						bestobject = object; // RA2: as above
+						bestval = value; // RA2: as above
 					}
 				}
+				object = AircraftTracker.Get(); // RA2: as above
 			}
 		}
 
-		/*
-		**	When scanning the ground, always consider landed aircraft as a valid
-		**	potential target. This is only true if vehicles are considered a
-		**	valid target. A landed aircraft is considered a vehicle.
-		*/
 		if (method & THREAT_VEHICLES) {
 			mask |= (1 << RTTI_AIRCRAFT);
 		}
 
-		/*
-		**	Radiate outward from the object's location, looking for the best
-		**	target.
-		*/
-		Cell bestcell(0, 0);
-		int bestcellvalue = 0;
-		TechnoClass const * object;
-		int value;
-
-		for (int radius = 0; radius < crange; radius++) {
-
-			/*
-			**	Scan the top and bottom rows of the "box".
-			*/
-			for (int x = -radius; x <= radius; x++) {
-				Cell newcell = cell + Cell(x, -radius);
-				if (Map.In_Radar(newcell)) {
-					if (Evaluate_Cell(method, mask, newcell, range, &object, value, zone)) {
-						if (object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) &&
-						(!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) {
-							if (bestval < value) {
-								bestobject = object;
-							}
-						}
-					}
-					if (bestobject == NULL) {
-						value = Evaluate_Just_Cell(newcell);
-						if (bestcellvalue < value) {
-							bestcellvalue = value;
-							bestcell = newcell;
-						}
-					}
-				}
-
-				newcell = cell + Cell(x, radius);
-				if (Map.In_Radar(newcell)) {
-					if (Evaluate_Cell(method, mask, newcell, range, &object, value, zone)) {
-						if (object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) &&
-						(!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) {
-							if (bestval < value) {
-								bestobject = object;
-							}
-						}
-					}
-					if (bestobject == NULL) {
-						value = Evaluate_Just_Cell(newcell);
-						if (bestcellvalue < value) {
-							bestcellvalue = value;
-							bestcell = newcell;
-						}
-					}
-				}
-			}
-
-			/*
-			**	Scan the left and right columns of the "box".
-			*/
-			for (int y = -(radius-1); y < radius; y++) {
-				Cell newcell = cell + Cell(-radius, y);
-
-				if (Map.In_Radar(newcell)) {
-					if (Evaluate_Cell(method, mask, newcell, range, &object, value, zone)) {
-						if (object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) &&
-						(!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) {
-							if (bestval < value) {
-								bestobject = object;
-							}
-						}
-					}
-					if (bestobject == NULL) {
-						value = Evaluate_Just_Cell(newcell);
-						if (bestcellvalue < value) {
-							bestcellvalue = value;
-							bestcell = newcell;
-						}
-					}
-				}
-
-				newcell = cell + Cell(radius, y);
-				if (Map.In_Radar(newcell)) {
-					if (Evaluate_Cell(method, mask, newcell, range, &object, value, zone)) {
-						if (object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) &&
-						(!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) {
-							if (bestval < value) {
-								bestobject = object;
-							}
-						}
-					}
-					if (bestobject == NULL) {
-						value = Evaluate_Just_Cell(newcell);
-						if (bestcellvalue < value) {
-							bestcellvalue = value;
-							bestcell = newcell;
-						}
-					}
-				}
-			}
-
-			/*
-			**	Bail early if a target has already been found and the range is at
-			**	one of the breaking points (i.e., normal range or range * 2).
-			*/
-			if (bestobject != NULL) {
-				if (radius == crange/4) {
-					return((ObjectClass *)bestobject);
-				}
-				if (radius == crange/2) {
-					return((ObjectClass *)bestobject);
-				}
-			}
-			if (bestcell != CELL_NONE) {
-				return(&Map[bestcell]);
-			}
+		if (!(method ^ (THREAT_RANGE|THREAT_AIR))) { // RA2: a range scan for air units only ends here
+			return((ObjectClass *)bestobject); // RA2: as above
 		}
 
+		{ // RA2: the cell scan has its own block
+			Cell bestcell(0, 0); // RA2: as above
+			int bestcellvalue = 0; // RA2: as above
+			TechnoClass const * object; // RA2: as above
+			int value; // RA2: as above
+
+			for (int radius = 0; radius < crange; radius++) { // RA2: as above
+				for (int x = -radius; x <= radius; x++) { // RA2: as above
+					Cell scan = cell + Cell(x, -radius); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+					if (Map.In_Radar(scan)) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+						if (Evaluate_Cell(method, mask, scan, range, &object, value, zone) && object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) { // RA2: one condition
+							if (Techno_Type_Class()->DistributedFire) { // RA2: distributed fire keeps every candidate
+								CurrentTargets.Add((AbstractClass *)object); // RA2: as above
+								CurrentTargetThreatValues.Add(value); // RA2: as above
+							}
+							if (bestval < value) {
+								bestobject = object;
+								bestval = value; // RA2: the best value is kept too
+							}
+						}
+						if (bestobject == NULL) { // RA2: as above
+							value = Evaluate_Just_Cell(scan); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							if (bestcellvalue < value) { // RA2: as above
+								bestcellvalue = value; // RA2: as above
+								bestcell = scan; // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							}
+						}
+					}
+
+					scan = cell + Cell(x, radius); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+					if (Map.In_Radar(scan)) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+						if (Evaluate_Cell(method, mask, scan, range, &object, value, zone) && object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) { // RA2: one condition
+							if (Techno_Type_Class()->DistributedFire) { // RA2: distributed fire keeps every candidate
+								CurrentTargets.Add((AbstractClass *)object); // RA2: as above
+								CurrentTargetThreatValues.Add(value); // RA2: as above
+							}
+							if (bestval < value) {
+								bestobject = object;
+								bestval = value; // RA2: the best value is kept too
+							}
+						}
+						if (bestobject == NULL) { // RA2: as above
+							value = Evaluate_Just_Cell(scan); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							if (bestcellvalue < value) { // RA2: as above
+								bestcellvalue = value; // RA2: as above
+								bestcell = scan; // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							}
+						}
+					}
+				}
+
+				for (int y = 1 - radius; y < radius; y++) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+					Cell scan = cell + Cell(-radius, y); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+					if (Map.In_Radar(scan)) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+						if (Evaluate_Cell(method, mask, scan, range, &object, value, zone) && object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) { // RA2: one condition
+							if (Techno_Type_Class()->DistributedFire) { // RA2: distributed fire keeps every candidate
+								CurrentTargets.Add((AbstractClass *)object); // RA2: as above
+								CurrentTargetThreatValues.Add(value); // RA2: as above
+							}
+							if (bestval < value) {
+								bestobject = object;
+								bestval = value; // RA2: the best value is kept too
+							}
+						}
+						if (bestobject == NULL) { // RA2: as above
+							value = Evaluate_Just_Cell(scan); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							if (bestcellvalue < value) { // RA2: as above
+								bestcellvalue = value; // RA2: as above
+								bestcell = scan; // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							}
+						}
+					}
+
+					scan = cell + Cell(radius, y); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+					if (Map.In_Radar(scan)) { // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+						if (Evaluate_Cell(method, mask, scan, range, &object, value, zone) && object != NULL && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House))) { // RA2: one condition
+							if (Techno_Type_Class()->DistributedFire) { // RA2: distributed fire keeps every candidate
+								CurrentTargets.Add((AbstractClass *)object); // RA2: as above
+								CurrentTargetThreatValues.Add(value); // RA2: as above
+							}
+							if (bestval < value) {
+								bestobject = object;
+								bestval = value; // RA2: the best value is kept too
+							}
+						}
+						if (bestobject == NULL) { // RA2: as above
+							value = Evaluate_Just_Cell(scan); // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							if (bestcellvalue < value) { // RA2: as above
+								bestcellvalue = value; // RA2: as above
+								bestcell = scan; // RA2: the cell scan as the executable lays it out (distributed fire, mask bits)
+							}
+						}
+					}
+				}
+
+				if (bestobject != NULL) { // RA2: as above
+					if (radius == crange/4 || radius == crange/2) { // RA2: one condition
+						return((ObjectClass *)bestobject); // RA2: as above
+					}
+				}
+				if (bestcell != CELL_NONE) { // RA2: as above
+					return(&Map[bestcell]); // RA2: as above
+				}
+			}
+		}
 	} else {
-		/*
-		**	A full map scan was requested. First scan through aircraft. The top map layer
-		**	is NOT scanned since that layer will probably contain more bullets and animations
-		**	than aircraft.
-		*/
 		int index;
 		if (mask & (1L << RTTI_AIRCRAFT)) {
 			for (index = 0; index < Aircraft.Count(); index++) {
 				TechnoClass * object = Aircraft[index];
 
 				int value = 0;
-				if ((!onlyenemy || object->House->HeapID == House->Enemy) &&
-					(!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) &&
-					Evaluate_Object(method, mask, -1, object, value)) {
-
-					if (value > bestval) {
-						bestobject = object;
-						bestval = value;
-					}
+				if (!House->Is_Ally(object) && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) && Evaluate_Object(method, mask, -1, object, value, -1, COORD_NONE) && value > bestval) { // RA2: allies are skipped first
+					bestobject = object; // RA2: as above
+					bestval = value; // RA2: as above
 				}
 			}
 		}
 
-		/*
-		**	When scanning the ground, always consider landed aircraft as a valid
-		**	potential target. This is only true if vehicles are considered a
-		**	valid target. A landed aircraft is considered a vehicle.
-		*/
 		if (method & THREAT_VEHICLES) {
 			mask |= (1 << RTTI_AIRCRAFT);
 		}
 
-		/*
-		**	Now scan through the entire ground layer. This is painful, but what other
-		**	choice is there?
-		*/
-		for (index = 0; index < Technos.Count(); index++) {
-				TechnoClass * object = Technos[index];
+		for (index = 0; index < Technos.Count(); index++) { // RA2: the list of all technos
+			TechnoClass * object = Technos[index]; // RA2: as above
 
-				int value = 0;
-				if (object->Layer == LAYER_GROUND &&
-					(!onlyenemy || object->House->HeapID == House->Enemy) &&
-					(!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) &&
-					Evaluate_Object(method, mask, -1, object, value, zone, coord)) {
-
-					if (value > bestval) {
-						bestobject = object;
-						bestval = value;
-					}
-				}
+			int value = 0; // RA2: as above
+			if ((!House->Is_Ally(object) || Combat_Damage(-1) < 0 || (!House->Is_Human_Player() && this != NULL && Fetch_RTTI() == RTTI_INFANTRY && (this != NULL && Fetch_RTTI() == RTTI_INFANTRY ? (InfantryClass *)this : NULL)->Class->IsEngineer)) && object->Layer == LAYER_GROUND && (!onlyenemy || object->House->HeapID == House->Enemy) && (!(method & THREAT_ALLIES) || House->Is_Ally(object->House)) && Evaluate_Object(method, mask, -1, object, value, zone, coord) && value > bestval) { // RA2: allies are skipped unless it is a medic or an engineer
+				bestobject = object; // RA2: as above
+				bestval = value; // RA2: as above
 			}
+		}
 	}
 
-	BEnd(BENCH_GREATEST_THREAT);
-
-	/*
-	**	If a good target object was found, then return with the target value
-	**	of it.
-	*/
 	return((ObjectClass *)bestobject);
 }
+
+
 
 
 
@@ -4465,7 +4446,7 @@ int TechnoClass::Rearm_Delay(int which) const
 void TechnoClass::Laser_Zap(AbstractClass * target, int which, WeaponTypeClass const * weapon, Coord const & source_coord)
 {
 	RGBClass half; // RA2: the house colour halved, zeroed on entry
-	RGBClass const * outer; // RA2: as above
+	RGBClass const * outer; // RA2: the bolt colors are kept by pointer
 	RGBClass const * inner; // RA2: as above
 	int duration = weapon->LaserDuration; // RA2: as above
 	if (weapon->IsHouseColor) { // RA2: a house coloured laser: inner is the house's laser colour, outer half of it
@@ -4503,6 +4484,8 @@ void TechnoClass::Laser_Zap(AbstractClass * target, int which, WeaponTypeClass c
 		laser->IsHouseColor = true; // RA2: as above
 	}
 }
+
+
 
 
 
@@ -5223,98 +5206,119 @@ bool TechnoClass::ClickedEvent(int event) // RA2: not in TibSun, at 0x6CC510
  *=============================================================================================*/
 ActionType TechnoClass::What_Action(ObjectClass const * object, bool disallow_force) const
 {
-	if (object != NULL) {
+	if (object == NULL) { // RA2: nothing to act on
+		return(ACTION_NONE); // RA2: as above
+	}
 
-		/*
-		**	Return the ACTION_SELF flag if clicking on itself. However, if this
-		**	object cannot do anything special with itself, then just return with
-		**	the no action flag.
-		*/
-		if (object == this && CurrentObject.Count() == 1 && House->Is_Player_Control()) {
-			return(ACTION_SELF);
+	if (IsBeingWarpedOut()) { // RA2: a unit being warped out only selects
+		if (Is_Weapon_Equipped() && House->Is_Player_Control() && object->Owner() != Owner()) { // RA2: as above
+			return(ACTION_NONE); // RA2: as above
 		}
+		if (IsALoaner && IsOwnedByPlayer) { // RA2: as above
+			return(ACTION_NONE); // RA2: as above
+		}
+		if (!object->CanBeSelected() || object->IsSelected) { // RA2: as above
+			return(ACTION_NONE); // RA2: as above
+		}
+		return(ACTION_SELECT); // RA2: as above
+	}
 
-		if (object == this && CurrentObject.Count() == 1 && House->Is_Ally(PlayerPtr) && Session.Type == GAME_NORMAL) {
-			UnitClass const * unit = dynamic_cast<UnitClass const *>(this);
-			if (unit != NULL && unit->Class->Max_Passengers() > 0 && unit->Cargo.How_Many() > 0) {
-				return(ACTION_SELF);
+	if (object == this && CurrentObject.Count() == 1 && object->AttachedBomb != NULL && object->AttachedBomb->OwnerHouse->Is_Player_Control()) { // RA2: a bomb attached to this object can be detonated by its owner
+		if (object->AttachedBomb->Is_Death_Bomb() == 1 && Rule->CanDetonateDeathBomb) { // RA2: as above
+			return(ACTION_DETONATE); // RA2: the order of the tests follows the executable
+		}
+		if (object->AttachedBomb->Is_Death_Bomb() == 0 && Rule->CanDetonateTimeBomb) { // RA2: as above
+			return(ACTION_DETONATE); // RA2: the order of the tests follows the executable
+		}
+	}
+
+	bool altdown = !disallow_force && (Keyboard->Down(Options.KeyForceMove1) || Keyboard->Down(Options.KeyForceMove2)); // RA2: the move keys are read first (opcheck: Options+140, +144)
+	bool force_fire = !disallow_force && (Keyboard->Down(Options.KeyForceAttack1) || Keyboard->Down(Options.KeyForceAttack2)); // RA2: as above
+	if (!disallow_force && (Keyboard->Down(Options.KeySelect1) || Keyboard->Down(Options.KeySelect2))) { // RA2: the select (shift) keys toggle selection and cancel a force-fire
+		if (force_fire) { // RA2: as above
+			force_fire = false; // RA2: as above
+		} else if (House->Is_Player_Control() && !IsALoaner) { // RA2: as above
+			return(ACTION_TOGGLE_SELECT); // RA2: as above
+		}
+	}
+
+	if (object == this && CurrentObject.Count() == 1 && House->Is_Player_Control()) { // RA2: as above
+		return(ACTION_SELF); // RA2: as above
+	}
+
+	if (object == this && CurrentObject.Count() == 1 && House->Is_Ally(PlayerPtr) && Session.Type == GAME_NORMAL) { // RA2: as above
+		if (this != NULL) { // RA2: the casts are tested against the pointer
+			if (Fetch_RTTI() == RTTI_UNIT && ((UnitClass const *)this)->Class->Max_Passengers() > 0 && ((UnitClass const *)this)->Cargo.How_Many() > 0) { // RA2: as above
+				return(ACTION_SELF); // RA2: as above
 			}
-			AircraftClass const * airc = dynamic_cast<AircraftClass const *>(this);
-			if (airc != NULL && airc->Passenger) {
-				return(ACTION_SELF);
-			}
-		}
-
-		bool altdown = !disallow_force && (Keyboard->Down(Options.KeyForceMove1) || Keyboard->Down(Options.KeyForceMove2));
-		bool ctrldown = !disallow_force && (Keyboard->Down(Options.KeyForceAttack1) || Keyboard->Down(Options.KeyForceAttack2));
-		bool shiftdown = !disallow_force && (Keyboard->Down(Options.KeySelect1) || Keyboard->Down(Options.KeySelect2));
-
-		/*
-		**	Special guard area mission is possible if both the control and the
-		**	alt keys are held down.
-		*/
-		if (House->Is_Player_Control() && ctrldown && altdown && Can_Player_Move()) {
-			return(ACTION_GUARD_AREA);
-		}
-
-		/*
-		**	Special override to force a move regardless of what is occupying the location.
-		*/
-		if (altdown) {
-			if (House->Is_Player_Control() && Can_Player_Move()) {
-				return(ACTION_MOVE);
-			}
-		}
-
-		/*
-		**	Override so that toggled select state can be performed while the <SHIFT> key
-		**	is held down.
-		*/
-		if (shiftdown) {
-			if (House->Is_Player_Control() && !IsALoaner) {
-				return(ACTION_TOGGLE_SELECT);
+			if (Fetch_RTTI() == RTTI_AIRCRAFT && ((AircraftClass const *)this)->Passenger) { // RA2: as above
+				return(ACTION_SELF); // RA2: as above
 			}
 		}
+	}
 
-		/*
-		**	If firing is possible and legal, then return this action potential.
-		*/
-		TechnoTypeClass const * ttype = TClass;
-		if (object->Not_Underground() && House->Is_Player_Control() && (ctrldown || !House->Is_Ally(object)) && (ctrldown || object->Class_Of()->IsLegalTarget || (Rule->IsTreeTarget && object->RTTI == RTTI_TERRAIN))) {
+	if (House->Is_Player_Control() && House->Is_Ally((TechnoClass *)object) && Fetch_RTTI() != RTTI_AIRCRAFT && force_fire) { // RA2: a force-fire on an ally with the move keys down is a guard-area
+		if (altdown) { // RA2: as above
+			if (Can_Player_Move()) { // RA2: as above
+				return(ACTION_GUARD_AREA); // RA2: as above
+			}
+		}
+	}
+	if (altdown && House->Is_Player_Control() && Can_Player_Move()) { // RA2: a forced move
+		return(ACTION_MOVE); // RA2: as above
+	}
 
-			if (Is_Weapon_Equipped() ||
-					(RTTI == RTTI_INFANTRY &&
-					(/// ((InfantryTypeClass const *)ttype)->IsBomber ||
-					((InfantryTypeClass const *)ttype)->IsCapture)
-					)) {
-
-				int primary = What_Weapon_Should_I_Use((ObjectClass *)object);
-				if (Can_Player_Move() || In_Range((ObjectClass *)object, primary)) {
-					if (In_Range((ObjectClass *)object, primary) || (RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->IsCapture && object->RTTI == RTTI_BUILDING && ((BuildingClass *)object)->Class->IsCaptureable)) {
-						return(ACTION_ATTACK);
-					} else {
-						if (!Can_Player_Move()) {
-							return(ACTION_NONE);
-						} else {
-							return(ACTION_ATTACK);
+	TechnoTypeClass const * ttype = Techno_Type_Class(); // RA2: the order of the tests follows the executable
+	int primary = What_Weapon_Should_I_Use((ObjectClass *)object); // RA2: the weapon is chosen before the target is tested
+	if (object->Not_Underground()) { // RA2: the order of the tests follows the executable
+		WeaponTypeClass * weapon_type = Get_Class_Weapon_Data(primary)->Weapon; // RA2: as above
+		bool disguised = Rule->AttackCursorOnDisguise || ((object->AbstractFlags & 1) && (object->Techno_Type_Class()->PermaDisguise || ((object->AbstractFlags & 1) && ((TechnoClass *)object)->DisguiseBlinkTimer.Value() != 0))); // RA2: as above
+		bool owned = object->IsDisguisedAs(House) && !disguised; // RA2: as above
+		bool capture = owned && object->GetDisguiseHouse(true) == NULL; // RA2: as above
+		bool can_disguise = CanDisguiseAs((AbstractClass *)object); // RA2: as above
+		bool usable = !owned || (capture && can_disguise); // RA2: as above
+		bool ivan = weapon_type != NULL && weapon_type->WarheadPtr->IvanBomb && object->Techno_Type_Class() != NULL && object->Techno_Type_Class()->MaxPassengers > 0; // RA2: as above
+		bool foot = false; // RA2: as above
+		if (weapon_type != NULL && weapon_type->WarheadPtr->Sonic) { // RA2: as above
+			foot = (object->AbstractFlags & 4); // RA2: as above
+		}
+		bool sonic = foot && ((FootClass *)object)->ParasiteEatingMe != NULL; // RA2: as above
+		bool friendly = Techno_Type_Class()->AttackFriendlies || (Techno_Type_Class()->AttackCursorOnFriendlies && !ivan) || sonic; // RA2: as above
+		bool enemy = !House->Is_Ally((TechnoClass *)object) || friendly; // RA2: as above
+		bool owned_friendly = owned && friendly; // RA2: as above
+		if (House->Is_Player_Control()) { // RA2: as above
+			if (force_fire || (enemy && (usable || owned_friendly) && (object->Class_Of()->IsLegalTarget || can_disguise))) { // RA2: as above
+				bool infiltrate = Fetch_RTTI() == RTTI_INFANTRY && ((InfantryTypeClass const *)ttype)->IsCapture; // RA2: as above
+				if ((Is_Weapon_Equipped() || infiltrate) && (Can_Player_Move() || In_Range((ObjectClass *)object, primary))) { // RA2: as above
+					bool special = false; // RA2: as above
+					if (infiltrate) { // RA2: as above
+						if ((!((InfantryClass const *)this)->Class->IsAgent && object->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)object)->Class->IsCaptureable) // RA2: as above
+							|| (((InfantryClass const *)this)->Class->IsAgent && object->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)object)->Class->Spyable) // RA2: as above
+							|| (((InfantryClass const *)this)->Class->IsBomber && object->Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass const *)object)->Class->CanC4)) { // RA2: as above
+							special = true; // RA2: as above
 						}
+					}
+					if (Can_Fire((AbstractClass *)object, primary, true) != FIRE_ILLEGAL || special || force_fire) { // RA2: as above
+						return(ACTION_ATTACK); // RA2: as above
 					}
 				}
 			}
 		}
-
-		/*
-		**	Possibly try to select the specified object, if that is warranted.
-		*/
-		if (!Is_Weapon_Equipped() || !House->Is_Player_Control() || object->Owner() == Owner()) {
-			if ((!IsALoaner || !IsOwnedByPlayer) && object->Class_Of()->IsSelectable && !object->IsSelected) {
-				return(ACTION_SELECT);
-			}
-			return(ACTION_NONE);
-		}
 	}
-	return(ACTION_NONE);
+
+	if (Is_Weapon_Equipped() && House->Is_Player_Control() && object->Owner() != Owner()) { // RA2: selection of an own object
+		return(ACTION_NONE); // RA2: as above
+	}
+	if (IsALoaner && IsOwnedByPlayer) { // RA2: as above
+		return(ACTION_NONE); // RA2: as above
+	}
+	if (!object->CanBeSelected() || object->IsSelected || object->IsBeingWarpedOut()) { // RA2: as above
+		return(ACTION_NONE); // RA2: as above
+	}
+	return(ACTION_SELECT); // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -5340,18 +5344,19 @@ ActionType TechnoClass::What_Action(Cell const & cell, bool check_fog, bool disa
 	CellClass const * cellptr = &Map[cell];
 	OverlayTypeClass const * optr = NULL;
 
-	bool ctrldown = !disallow_force && (Keyboard->Down(Options.KeyForceAttack1) || Keyboard->Down(Options.KeyForceAttack2));
-	bool shiftdown = !disallow_force && (Keyboard->Down(Options.KeySelect1) || Keyboard->Down(Options.KeySelect2));
-	bool altdown = !disallow_force && (Keyboard->Down(Options.KeyForceMove1) || Keyboard->Down(Options.KeyForceMove2));
+	bool ctrldown = !disallow_force && (Keyboard->Down(Options.KeyForceAttack1) || Keyboard->Down(Options.KeyForceAttack2)); // RA2: the force-attack keys are read first, then the select keys, then the move keys
+	bool shiftdown = !disallow_force && (Keyboard->Down(Options.KeySelect1) || Keyboard->Down(Options.KeySelect2)); // RA2: as above
+	bool altdown = !disallow_force && (Keyboard->Down(Options.KeyForceMove1) || Keyboard->Down(Options.KeyForceMove2)); // RA2: as above
+	if (shiftdown && ctrldown) { // RA2: both together cancel each other
+		shiftdown = false; // RA2: as above
+		ctrldown = false; // RA2: as above
+	}
 
-	/*
-	 * When fog of war is enabled and the fogged imagery is being examined, then
-	 * scan the cell's list of fogged objects for an overlay or a targetable
-	 * enemy building. This lets the player target what they can still see under
-	 * the fog rather than what is actually present.
-	 */
 	OverlayType overlay = OVERLAY_NONE;
 	bool legal = false;
+	if (IsBeingWarpedOut() || IsWarpingIn()) { // RA2: nothing to do for a unit being warped
+		return(ACTION_NONE); // RA2: as above
+	}
 	if (Scen->Special.IsFogOfWar && check_fog) {
 		if (cellptr->FoggedObjects != NULL) {
 			for (int index = 0; index < cellptr->FoggedObjects->Count(); index++) {
@@ -5364,92 +5369,66 @@ ActionType TechnoClass::What_Action(Cell const & cell, bool check_fog, bool disa
 					}
 				}
 			}
-
-			if (overlay != OVERLAY_NONE) {
-				optr = OverlayTypes[overlay];
-			}
 		}
 	}
 
-	if (optr == NULL && cellptr->Overlay != OVERLAY_NONE) {
-		optr = OverlayTypes[cellptr->Overlay];
+	if (overlay != OVERLAY_NONE) { // RA2: the fogged overlay wins, else the cell's own
+		optr = OverlayTypes[overlay]; // RA2: as above
+	} else if (cellptr->Overlay != OVERLAY_NONE) { // RA2: as above
+		optr = OverlayTypes[cellptr->Overlay]; // RA2: as above
 	}
 
-	/*
-	 * Special guard area or waypoint patrol mission is possible if both the
-	 * control and the alt keys are held down, or if this object is already on a
-	 * waypoint patrol.
-	 */
 	bool renovator = Is_Renovator();
 	if (House->Is_Player_Control() && ((ctrldown && altdown) || IsOnWaypointPatrol) && Can_Player_Move() && (Can_Player_Fire() || renovator)) {
-		if (PlayerPtr->Waypoint_At(cell) != NULL || IsOnWaypointPatrol) {
-			return(ACTION_PATROL_WAYPOINT);
+		if (PlayerPtr->Waypoint_At(cell) == NULL && !IsOnWaypointPatrol) { // RA2: the test is inverted
+			return(ACTION_GUARD_AREA); // RA2: as above
 		}
-		return(ACTION_GUARD_AREA);
+		return(ACTION_PATROL_WAYPOINT); // RA2: as above
 	}
 
-	/*
-	**	If firing is possible and legal, then return this action potential.
-	*/
-	if (House->Is_Player_Control() && Get_Class_Weapon_Data(0)->Weapon != NULL) {
-
+	WeaponDataStruct const * wdata; // RA2: the order of the tests follows the executable
+	if (House->Is_Player_Control() && (wdata = GetTurretWeapon()) != NULL && wdata->Weapon != NULL) { // RA2: the turret weapon, not the primary
+		int primary = What_Weapon_Should_I_Use((AbstractClass *)&Map[cell]); // RA2: chosen first
 		bool destroyable = Map[cell].Is_Tile_Destroyable_Cliff();
 		if (destroyable) {
-			if (Get_Class_Weapon_Data(0)->Weapon->WarheadPtr->IsFire) {
+			WeaponTypeClass * wtype = GetTurretWeapon()->Weapon; // RA2: as above
+			if (wtype->WarheadPtr->IsFire) { // RA2: the order of the tests follows the executable
 				destroyable = false;
 			}
 		}
 
 		if (ctrldown || (optr != NULL && optr->IsLegalTarget) || destroyable || legal) {
-			WarheadTypeClass const * warhead = Get_Class_Weapon_Data(0)->Weapon->WarheadPtr;
-			bool isally = (cellptr->Owner != HOUSE_NONE) && !Houses[cellptr->Owner]->Is_Ally(House);
+			WarheadTypeClass const * warhead = GetTurretWeapon()->Weapon->WarheadPtr; // RA2: as above
+			bool isally = (cellptr->Owner != HOUSE_NONE) ? !Houses[cellptr->Owner]->Is_Ally(House) : false; // RA2: as above
 
 			VeinholeMonsterClass * monster = VeinholeMonsterClass::Get_Monster_At(cell);
 			bool isvein = (monster != NULL && !monster->IsDead && monster->Strength > 0);
 
 			if (ctrldown || optr == NULL || isvein || (isally && optr->IsWall && (warhead->IsWallDestroyer || (warhead->IsWoodDestroyer && optr->Armor == ARMOR_WOOD)))) {
-				int primary = What_Weapon_Should_I_Use(&Map[cell]);
-				if (Can_Player_Move()) {
-					return(ACTION_ATTACK);
-				}
-				if (In_Range(Coord(cell, 0), primary)) {
+				if (Can_Player_Move() || In_Range(Coord(cell.X * 256 + 128, cell.Y * 256 + 128, 0), primary)) { // RA2: as above
 					return(ACTION_ATTACK);
 				}
 			}
+		}
+		if (CanDisguiseAs((AbstractClass *)cellptr) && (Can_Player_Move() || In_Range(Coord(cell.X * 256 + 128, cell.Y * 256 + 128, 0), primary))) { // RA2: a disguised unit can attack a cell too
+			return(ACTION_ATTACK); // RA2: as above
 		}
 	}
 
-	/*
-	**	If the object can enter the cell specified, then allow
-	**	movement to it.
-	*/
 	if (House->Is_Player_Control() && (Can_Player_Move() || Is_Move_Override())) {
 
-		if (!Map.In_Local_Radar(cell, true)) {
-			return(ACTION_NOMOVE);
-		}
-
-		if (shiftdown) {
-			return(ACTION_MOVE);
-		}
-
-		if (Is_Move_Override()) {
-			if (altdown) {
-			} // RA2: no ACTION_RALLY_TO_POINT (not in RA2's layout)
-			if (!Can_Player_Move()) {
-				return(ACTION_NONE);
-			}
-		}
-
-		if (Can_Player_Move()) {
-			if (Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, true) <= MOVE_CLOAK) {
+		if (Map.In_Local_Radar(cell, true)) { // RA2: outside the radar, only NOMOVE
+			if (shiftdown) { // RA2: as above
 				return(ACTION_MOVE);
 			}
-			if (check_fog) {
-				return(ACTION_MOVE);
+			if (Is_Move_Override() && altdown) { // RA2: as above
+				return(ACTION_MOVE); // RA2: as above
 			}
-			if (Techno_Type_Class()->IsSubterranean) {
-				if (Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, false) <= MOVE_CLOAK) {
+			if (Can_Player_Move()) { // RA2: as above
+				if (Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, true) <= MOVE_CLOAK || check_fog) { // RA2: as above
+					return(ACTION_MOVE); // RA2: as above
+				}
+				if (Techno_Type_Class()->IsSubterranean && Can_Enter_Cell(&Map[cell], FACING_NONE, -1, 0, false) <= MOVE_CLOAK) { // RA2: as above
 					return(ACTION_MOVE);
 				}
 			}
@@ -5459,6 +5438,8 @@ ActionType TechnoClass::What_Action(Cell const & cell, bool check_fog, bool disa
 
 	return(ACTION_NONE);
 }
+
+
 
 
 
@@ -5935,249 +5916,199 @@ void TechnoClass::Set_Owner(HouseClass * newowner)
  *=============================================================================================*/
 ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass const * warhead, TechnoClass * source, bool forced, bool no_crew)
 {
-	bool negative = damage < 0;
+	bool negative = damage < 0; // RA2: healing is the negative case
 
-	/*
-	 * If not a forced damage condition, adjust damage according to the house and
-	 * object armor bias, veterancy armor bonus, and type-immunity.
-	 */
-	if (!forced && damage > 0) {
-		damage = (int)(1.0 / (House->ArmorBias * ArmorBias) * (double)damage);
+	if (!forced && !negative) { // RA2: also skipped for healing
+		double incoming = damage; // RA2: the armor factor comes from the house type and is divided out
+		damage = (int)(incoming / (House->Armor_Multiplier(Techno_Type_Class()) * ArmorBias)); // RA2: as above
 
 		if (Has_Ability(ABILITY_STRONGER)) {
-			damage = (int)(1.0 / (Rule->VeteranArmor + 1.0) * (double)damage);
+			damage = (int)(damage / Rule->VeteranArmor); // RA2: as above
 		}
 
 		if (damage < 1) {
 			damage = 1;
 		}
 
-		/*
-		 * Type-immune objects take no damage from another object of the same type
-		 * owned by the same house.
-		 */
-		if (source != NULL) {
-			if (TClass->IsTypeImmune) {
-				if (TClass == source->TClass && House == source->House) {
-					return(RESULT_NONE);
-				}
+		if (source != NULL && Techno_Type_Class()->IsTypeImmune) { // RA2: one condition
+			TechnoTypeClass const * source_type = source->Techno_Type_Class(); // RA2: as above
+			if (Techno_Type_Class() == source_type && House == source->House) { // RA2: as above
+				return(RESULT_NONE); // RA2: as above
 			}
 		}
 	}
 
-	/*
-	 * Negative damage (healing) resets the limpet drain effect and restores the
-	 * normal rate of turn for the turret and body.
-	 */
-	if (negative == true) {
-		PrimaryFacing.Set_ROT(TClass->ROT); // RA2: no LimpetSpeedFactor, LimpetType (not in RA2's layout)
-		SecondaryFacing.Set_ROT(TClass->ROT);
+	if (Unknown_Virtual_32C() && !forced && !negative) { // RA2: an invulnerable object only flashes
+		Combat_Lighting(Position, damage * 2, warhead, 1, 1); // RA2: as above
+		damage = 0; // RA2: as above
+		return(RESULT_NONE); // RA2: as above
+	}
+
+	if (IsBeingWarpedOut()) { // RA2: a unit being warped out takes no damage
+		damage = 0; // RA2: as above
+		return(RESULT_NONE); // RA2: as above
+	}
+
+	if (Techno_Type_Class()->DamageReducesReadiness) { // RA2: damage costs ammunition
+		double fraction = (double)damage / Techno_Type_Class()->MaxStrength; // RA2: as above
+		double reduction = Techno_Type_Class()->ReadinessReductionMultiplier * fraction; // RA2: as above
+		double readiness = Ammo; // RA2: as above
+		Ammo = (int)(readiness - Techno_Type_Class()->MaxAmmo * reduction); // RA2: as above
+		if (Ammo < 0) { // RA2: as above
+			Ammo = 0; // RA2: as above
+		}
+		Start_Reload_Timer(); // RA2: as above
+	}
+
+	if (warhead != NULL) { // RA2: immunity to radiation and psionics
+		if (warhead->Radiation && Techno_Type_Class()->ImmuneToRadiation) { // RA2: as above
+			damage = 0; // RA2: as above
+			return(RESULT_NONE); // RA2: as above
+		}
+		if (warhead->PsychicDamage && Techno_Type_Class()->ImmuneToPsionics) { // RA2: as above
+			damage = 0; // RA2: as above
+			return(RESULT_NONE); // RA2: as above
+		}
 	}
 
 	ResultType result = (ResultType)ObjectClass::Take_Damage(damage, distance, warhead, source, forced, no_crew);
 
-	/*
-	 * Inform the owning house of the anger level this damage produced.
-	 */
 	if (source != NULL) {
-		House->Add_Anger((int)((double)TClass->Raw_Cost() * ((double)damage / (double)(int)TClass->MaxStrength)), source->House);
+		TechnoTypeClass const * type = Techno_Type_Class(); // RA2: as above
+		double incoming = damage; // RA2: as above
+		House->Add_Anger((int)(type->Raw_Cost() * (incoming / Techno_Type_Class()->MaxStrength)), source->House); // RA2: as above
+	}
+
+	if (result == RESULT_DESTROYED) { // RA2: a delayed kill keeps a destroyed building alive for a while
+		if (Fetch_RTTI() == RTTI_BUILDING && warhead != NULL && warhead->CausesDelayKill) { // RA2: as above
+			BuildingClass * bldg = (BuildingClass *)this; // RA2: as above
+			if (bldg->Class->EligibleForDelayKill) { // RA2: as above
+				int delay = warhead->DelayKillFrames; // RA2: as above
+				int frames = (int)((double)delay + ((warhead->DelayKillAtMax * (double)delay - delay) / (double)((int)warhead->SpreadFactor * 256)) * distance); // RA2: as above
+				if (!bldg->IsGoingToBlow || frames < bldg->CountDown.Value()) { // RA2: as above
+					bldg->IsGoingToBlow = true; // RA2: as above
+					bldg->CountDown = CDTimerClass<FrameTimerClass>(frames); // RA2: as above
+				}
+				IsActive = true; // RA2: as above
+				Strength = 1; // RA2: as above
+				result = RESULT_ALREADY_DESTROYED; // RA2: as above
+			}
+		}
 	}
 
 	if (result == RESULT_ALREADY_DESTROYED) {
 		return(RESULT_ALREADY_DESTROYED);
 	}
 
-	/*
-	 * Any damage that was actually registered flashes this object on the radar.
-	 */
 	if (result != RESULT_NONE) {
-		RadarFlashTimer = Rule->RadarCombatFlashTime;
+		RadarFlashTimer = CDTimerClass<FrameTimerClass>(Rule->RadarCombatFlashTime); // RA2: the timer is constructed from the value
 	}
 
-	/*
-	 * If the object's strength has reached zero it is destroyed regardless of the
-	 * result reported by the base class.
-	 */
+	if (result != RESULT_NONE && result != RESULT_DESTROYED && Techno_Type_Class()->CanDisguise && !Techno_Type_Class()->PermaDisguise) { // RA2: damage breaks a disguise
+		if (IsDisguised()) { // RA2: as above
+			ClearDisguise(); // RA2: as above
+		}
+		InfantryBlinkTimer = CDTimerClass<FrameTimerClass>(damage * 2); // RA2: as above
+	}
+
 	if (Strength == 0) {
 		result = RESULT_DESTROYED;
 	}
 
 	switch (result) {
 		case RESULT_DESTROYED:
-
-			/*
-			 * Play the death voice response.
-			 */
-			if (TClass->VoiceDie.Count() > 0) {
-				VocType voc = (VocType)TClass->VoiceDie.Pick(NonCriticalRandomNumber());
-				Sound_Effect(voc, Get_Coord());
-			}
-
-			Transmit_Message(RADIO_OVER_OUT);
-			Stun();
-
-			/*
-			 * Tiberium-healing objects spew tiberium into the adjacent cells when destroyed.
-			 */
-			if (TClass->IsTiberiumHeal) {
-				static FacingType _heal_facing[] = {FACING_NONE, FACING_N, FACING_E, FACING_S, FACING_W};
-
-				Cell center = Center_Coord().As_Cell();
-				for (int index = 0; index < ARRAY_SIZE(_heal_facing); index++) {
-					Cell cell = Adjacent_Cell(center, _heal_facing[index]);
-					CellClass * cellptr = &Map[cell];
-					cellptr->Place_Tiberium(TIBERIUM_RIPARIUS, Scen->RandomNumber(0, 2));
-				}
-			}
-
-			/*
-			 * Clean up the primary attached particle system.
-			 */
-			if (ParticleSystems[0] != NULL) {
-				ParticleSystems[0]->Delete_Me();
-				ParticleSystems[0] = NULL;
-			}
-
-			/*
-			 * If destroyed while in/near the water and flagged to explode, bail out so the
-			 * splash logic (handled elsewhere) is not stomped by debris.
-			 */
-			if (HeightAGL <= 10) {
-				if (IsToExplode) {
-					if (Map[Get_Coord()].Land_Type() == LAND_WATER) {
-						break;
-					}
-				}
-			}
-
-			/*
-			 * Spawn destruction debris -- either the explicit voxel debris list (with
-			 * per-type maximums) or generic metallic debris animations.
-			 */
-			if (TClass->MaxDebris > 0) {
-				if (TClass->DebrisTypes.Count() > 0) {
-					int remaining = TClass->MaxDebris;
-					for (int index = 0; remaining > 0; index++) {
-						if (index >= TClass->DebrisTypes.Count()) {
-							break;
-						}
-
-						int count = abs(Scen->RandomNumber) % (TClass->DebrisMaximums[index] + 1);
-						if (count >= remaining) {
-							count = remaining;
-						}
-						for (int j = 0; j < count; j++) {
-							new VoxelAnimClass(TClass->DebrisTypes[index], Center_Coord(), House);
-						}
-						remaining -= count;
-					}
-				} else {
-					int count = Scen->RandomNumber(0, TClass->MaxDebris);
-					for (int index = 0; index < count; index++) {
-						new AnimClass(Rule->MetallicDebris[Scen->RandomNumber(0, Rule->MetallicDebris.Count() - 1)], Center_Coord() + Coord(0, 0, 20), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), 0);
-					}
-				}
-			}
-
-			/*
-			 * Determine whether this object performs a violent collateral explosion on death.
-			 * Either the type is flagged exploding, or a veteran/elite has the explodes ability.
-			 */
-			if (!TClass->IsExploding && !Has_Ability(ABILITY_EXPLODES)) {
-				break;
-			}
-
 			{
-				/*
-				**	The warhead to use is based on the weapon this object is equipped with.
-				*/
-				WarheadTypeClass const * wh = NULL;
-				if (Get_Class_Weapon_Data(0)->Weapon != NULL) {
-					wh = Get_Class_Weapon_Data(0)->Weapon->WarheadPtr;
+				if (Techno_Type_Class()->VoiceDie.Count() > 0 && House->Is_Player_Control()) { // RA2: only for the player's side
+					VocClass::PlayAt(Techno_Type_Class()->VoiceDie.Pick(NonCriticalRandomNumber()), Get_Coord(), NULL); // RA2: as above
+				}
+				if (Techno_Type_Class()->DieSound.Count() > 0) { // RA2: a type's own death sound
+					VocClass::PlayAt(Techno_Type_Class()->DieSound.Pick(NonCriticalRandomNumber()), Get_Coord(), NULL); // RA2: as above
 				}
 
-				int colat_damage = Get_Collateral_Damage();
-				AnimTypeClass const * anim = Combat_Anim(colat_damage, wh, Map[Center_Coord()].Land_Type(), Get_Coord());
-				Combat_Lighting(Center_Coord(), colat_damage, wh, false);
-				if (anim != NULL) {
-					new AnimClass(anim, Center_Coord(), 0, 1, ShapeFlags_Type(SHAPE_ZGRAD|SHAPE_WIN_REL|SHAPE_CENTER), Get_Explosion_Z(Center_Coord()));
+				Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+				Stun(); // RA2: as above
+
+				if (ParticleSystems[0] != NULL) { // RA2: as above
+					ParticleSystems[0]->Delete_Me(); // RA2: as above
+					ParticleSystems[0] = NULL; // RA2: as above
 				}
 
-				int radius = (int)((double)(colat_damage / 100) / Rule->ExplosionSpread * CELL_LEPTON);
-				if (radius >= 3 * CELL_LEPTON) {
-					radius = 3 * CELL_LEPTON;
-				} else if (radius <= 1) {
-					radius = 1;
-				}
+				if (!(HeightAGL <= 10 && IsToExplode && Map[Get_Coord()].Land_Type() == LAND_WATER)) { // RA2: one condition, no tiberium healing spill
+					if (Techno_Type_Class()->MaxDebris > 0) { // RA2: the death and smoke handling as the executable lays it out
+						int maximum = Techno_Type_Class()->MaxDebris - 1; // RA2: the debris count is drawn from the type's range
+						int debris = Random_Pick(Techno_Type_Class()->MinDebris, maximum); // RA2: as above
+						if (Techno_Type_Class()->DebrisTypes.Count() > 0) { // RA2: the death and smoke handling as the executable lays it out
+							int index = 0; // RA2: the death and smoke handling as the executable lays it out
+							while (debris > 0) { // RA2: the death and smoke handling as the executable lays it out
+								int pieces = abs(Scen->RandomNumber) % (Techno_Type_Class()->DebrisMaximums[index] + 1); // RA2: the death and smoke handling as the executable lays it out
+								if (pieces >= debris) { // RA2: the death and smoke handling as the executable lays it out
+									pieces = debris; // RA2: the death and smoke handling as the executable lays it out
+								}
+								for (int n = pieces; n > 0; n--) { // RA2: the death and smoke handling as the executable lays it out
+									new VoxelAnimClass(Techno_Type_Class()->DebrisTypes[index], Center_Coord(), House); // RA2: the death and smoke handling as the executable lays it out
+								}
+								debris -= pieces; // RA2: the death and smoke handling as the executable lays it out
+								if (++index >= Techno_Type_Class()->DebrisTypes.Count()) { // RA2: the death and smoke handling as the executable lays it out
+									index = 0; // RA2: as above
+								}
+							}
+						}
+						if (Techno_Type_Class()->DebrisAnims.Count() > 0) { // RA2: the type's own debris animations
+							for (int n = debris; n > 0; n--) { // RA2: as above
+								new AnimClass(Techno_Type_Class()->DebrisAnims[Random_Pick(0, Techno_Type_Class()->DebrisAnims.Count() - 1)], Center_Coord() + Coord(0, 0, 20), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: as above
+							}
+						} else if (Techno_Type_Class()->DebrisTypes.Count() == 0) { // RA2: as above
+							for (; debris > 0; debris--) { // RA2: as above
+								new AnimClass(Rule->MetallicDebris[Random_Pick(0, Rule->MetallicDebris.Count() - 1)], Center_Coord() + Coord(0, 0, 20), 0, 1, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), 0); // RA2: as above
+							}
+						}
+					}
 
-				int cells = radius / CELL_LEPTON;
-				if (cells < 1) {
-					cells = 1;
-				}
-				Wide_Area_Damage(Center_Coord(), radius, colat_damage * cells, source, wh);
-
-				/*
-				 * A destroyed harvester scatters its tiberium cargo into the surrounding cells.
-				 */
-				if (Storage.Get_Total_Amount() <= 0 || Fetch_RTTI() == RTTI_BUILDING || Scen->Special.IsHarvesterImmune) {
-					break;
-				}
-
-				static FacingType _scatter_facing[] = {FACING_NONE, FACING_E, FACING_NW, FACING_NE, FACING_S, FACING_SE, FACING_N, FACING_SW, FACING_W};
-
-				int amount = (int)((double)Storage.Get_Total_Amount() / (double)TClass->Capacity * 9.0);
-				Cell center = Center_Coord().As_Cell();
-				for (int index = 0; index < ARRAY_SIZE(_scatter_facing); index++) {
-					Cell cell = Adjacent_Cell(center, _scatter_facing[index]);
-					CellClass * cellptr = &Map[cell];
-					cellptr->Place_Tiberium(TIBERIUM_RIPARIUS, Scen->RandomNumber(0, 2));
-					amount--;
-					if (amount <= 0) {
-						break;
+					WeaponTypeClass const * weapon = Get_Class_Weapon_Data(CurrentWeaponNumber)->Weapon; // RA2: the current weapon decides the death weapon
+					if (Techno_Type_Class()->IsExploding || Has_Ability(ABILITY_EXPLODES) || (weapon != NULL && weapon->Suicide)) { // RA2: as above
+						Kill_Cargo(source); // RA2: as above
+						FireDeathWeapon(0); // RA2: as above
 					}
 				}
-				break;
 			}
+			if (AttachedBomb != NULL) { // RA2: an attached bomb goes off
+				AttachedBomb->Detonate(); // RA2: as above
+			}
+			break; // RA2: as above
 
-		case RESULT_HALF: {
-
-			/*
-			 * Half-strength transition may trigger a feedback voice response.
-			 */
-			TechnoTypeClass const * ttype = TClass;
-			if (ttype->VoiceFeedback.Count() > 0 && Scen->RandomNumber(0, 99) < 30) {
-				VocType voc = (VocType)ttype->VoiceFeedback.Pick(Scen->RandomNumber());
-				Sound_Effect(voc, Center_Coord());
+		case RESULT_HALF: // RA2: the death and smoke handling as the executable lays it out
+			{
+				TechnoTypeClass const * ttype = Techno_Type_Class(); // RA2: as above
+				if (ttype->VoiceFeedback.Count() > 0 && NonCriticalRandomNumber(0, 99) < 30 && House->Is_Player_Control()) { // RA2: only for the player's side
+					int selection = NonCriticalRandomNumber(); // RA2: as above
+					int voice = ttype->VoiceFeedback.Pick(selection); // RA2: as above
+					VocClass::PlayAt(voice, Center_Coord(), NULL); // RA2: as above
+				}
 			}
 			break;
-		}
 
 		case RESULT_NONE:
+			break; // RA2: as above
+
 		case RESULT_MAJOR:
 			break;
 
 		default:
-
-			/*
-			 * Protected or rescue-needing AI objects notify their base when attacked.
-			 */
-			if ((TClass->IsToProtect || IsNeedingRescue) && !House->Is_Human_Player()) {
-				if (source != NULL) {
-					Base_Is_Attacked(source);
-				}
+			if (Techno_Type_Class()->DamageSound != -1) { // RA2: the damage sound is played at the object
+				VocClass::PlayIndexAtPos(Techno_Type_Class()->DamageSound, Get_Coord(), 0); // RA2: as above
+			}
+			if (Techno_Type_Class()->DamageSound != -1) { // RA2: as above, the test is repeated
+				VocClass::PlayIndexAtPos(Techno_Type_Class()->DamageSound, Get_Coord(), 0); // RA2: as above
+			}
+			if ((Techno_Type_Class()->IsToProtect || IsNeedingRescue) && !House->Is_Human_Player() && source != NULL) { // RA2: one condition
+				Base_Is_Attacked(source); // RA2: as above
 			}
 			break;
 	}
 
 	if (result != RESULT_DESTROYED) {
-		/*
-		**	If some damage was received and this object is cloaked, shimmer
-		**	the cloak a bit.
-		*/
-		if (source != NULL) {
-			if (!House->Is_Ally(source)) {
-				IsTickedOff = true;
-			}
+		if (source != NULL && !House->Is_Ally(source)) { // RA2: one condition
+			IsTickedOff = true; // RA2: as above
 		}
 		Do_Shimmer();
 
@@ -6185,43 +6116,33 @@ ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 			if (ParticleSystems[3] != NULL) {
 				ParticleSystems[3]->Delete_Me();
 			}
-		} else {
-			if (result == RESULT_HALF || result == RESULT_MAJOR) {
-				DynamicVectorClass<ParticleSystemTypeClass const *> systems;
-				systems.Set_Growth_Step(10);
-
-				for (int index = TClass->DamageParticleSystems.Count() - 1; index >= 0; index--) {
-					if (TClass->DamageParticleSystems[index]->Behaves_Like() == PSYS_BEHAVIOR_SMOKE) {
-						systems.Add(TClass->DamageParticleSystems[index]);
-					}
+		} else if (result == RESULT_HALF || result == RESULT_MAJOR) { // RA2: the death and smoke handling as the executable lays it out
+			DynamicVectorClass<ParticleSystemTypeClass const *> smoke_types; // RA2: no growth step
+			for (int index = Techno_Type_Class()->DamageParticleSystems.Count() - 1; index >= 0; index--) { // RA2: the death and smoke handling as the executable lays it out
+				if (Techno_Type_Class()->DamageParticleSystems[index]->BehavesLike == PSYS_BEHAVIOR_SMOKE) { // RA2: the death and smoke handling as the executable lays it out
+					smoke_types.Add(Techno_Type_Class()->DamageParticleSystems[index]); // RA2: the death and smoke handling as the executable lays it out
 				}
-
-				if (ParticleSystems[3] == NULL && systems.Count() > 0 && HeightAGL > -10) {
-					Coord spawn = TClass->DamageSmokeOffset;
-					ParticleSystems[3] = new ParticleSystemClass(systems[Scen->RandomNumber(0, systems.Count() - 1)], Get_Coord() + spawn, NULL, this, COORD_NONE);
-				}
+			}
+			if (ParticleSystems[3] == NULL && smoke_types.Count() > 0 && HeightAGL > -10) { // RA2: the death and smoke handling as the executable lays it out
+				Coord offset = Techno_Type_Class()->DamageSmokeOffset; // RA2: the smoke offset of the type
+				ParticleSystems[3] = new ParticleSystemClass(smoke_types[Scen->RandomNumber(0, smoke_types.Count() - 1)], Get_Coord() + offset, NULL, this, COORD_NONE); // RA2: the death and smoke handling as the executable lays it out
 			}
 		}
 
 		if (!negative) {
 			AbstractClass * target = source;
-
 			if (Is_Allowed_To_Retaliate(source, warhead)) {
-
-				if (source == NULL) {
-					if (warhead->IsVeinhole) {
-						target = VeinholeMonsterClass::Get_Vein_Owner_At(Destination_Coord().As_Cell());
-					} else {
-						target = NULL;
-					}
+				if (source == NULL && Rule->IsScatter) { // RA2: no veinhole owner
+					target = NULL; // RA2: as above
 				}
-
 				if (target != NULL) {
 					int which = What_Weapon_Should_I_Use(target);
 					bool retaliate = In_Range(target, which);
 					if (!retaliate) {
 						if (House->Is_Human_Player()) {
-							retaliate = ((double)(int)Distance(target->Center_Coord()) <= ((double)TClass->SightRange + 0.5) * CELL_LEPTON);
+							Point3D difference = Center_Coord() - target->Center_Coord(); // RA2: the distance is computed from the difference
+							double range = (int)sqrt((double)difference.X * (double)difference.X + (double)difference.Z * (double)difference.Z + (double)difference.Y * (double)difference.Y); // RA2: as above
+							retaliate = range <= (Techno_Type_Class()->SightRange + 0.5) * 256.0; // RA2: as above
 						} else {
 							retaliate = true;
 						}
@@ -6231,7 +6152,7 @@ ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 					}
 				}
 
-				FootClass * foot = dynamic_cast<FootClass *>(this);
+				FootClass * foot = Is_Foot() ? (FootClass *)this : NULL; // RA2: a foot by its flag
 				if (foot != NULL) {
 					if (TarCom == NULL && foot->NavCom == NULL) {
 						if (Rule->IsScatter || Has_Ability(ABILITY_SCATTER)) {
@@ -6239,10 +6160,8 @@ ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 						}
 					}
 				}
-
 			} else {
-
-				FootClass * foot = dynamic_cast<FootClass *>(this);
+				FootClass * foot = Is_Foot() ? (FootClass *)this : NULL; // RA2: as above
 				if (foot != NULL) {
 					if (Current_Mission_Control().IsScatter) {
 						if (!IsTethered) {
@@ -6259,6 +6178,8 @@ ResultType TechnoClass::Take_Damage(int & damage, int distance, WarheadTypeClass
 	}
 	return(result);
 }
+
+
 
 
 /***********************************************************************************************
@@ -7022,7 +6943,7 @@ void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool 
 		start_point.Y += TacticalRect.Y;
 		end_point.Y += TacticalRect.Y;
 		if (Clip_Line_To_Rect(start_point, end_point, clip)) {
-			shade = color; // RA2: as above
+			shade = color; // RA2: the shade starts from the line color
 			int ratio = j * 4;
 			shade.Adjust(ratio < 0xFE ? ratio : 0xFE, BlackColor);
 			CompositeSurface->Draw_Line(start_point, end_point, DSurface::Build_Hicolor_Pixel(shade));
@@ -7030,6 +6951,8 @@ void TechnoClass::Draw_Shaded_Line(Coord start, Coord end, RGBClass color, bool 
 		last = next;
 	}
 }
+
+
 
 
 
@@ -7143,111 +7066,108 @@ void TechnoClass::Techno_Draw_Object(ShapeSet const * shapefile, int shapenum, P
 {
 	if (shapefile != NULL) {
 		bool shadow = DrawShapeShadows;
-		VisualType visual = Visual_Character();
+		VisualType visual = Visual_Character(false, NULL); // RA2: both arguments passed
 
-		ShapeFlags_Type flags = SHAPE_NORMAL;
+		unsigned flags = SHAPE_NORMAL; // RA2: the flags are kept as a plain number
 		if (negflags == SHAPE_NORMAL) {
-			bool visible = false;
-			bool shadowy = true;
-			switch (visual) {
+			switch (visual) { // RA2: the visual character picks the translucency directly
+				case VISUAL_RIPPLE: // RA2: as above
+					if (CloakingDevice.Fetch_Stage()) { // RA2: as above
+						flags = SHAPE_TRANSLUCENT50; // RA2: as above
+						break; // RA2: as above
+					}
+				case VISUAL_INDISTINCT: // RA2: as above
+					flags = SHAPE_TRANSLUCENT25; // RA2: as above
+					break; // RA2: as above
+
 				case VISUAL_DARKEN:
 				case VISUAL_SHADOWY:
-					visible = true;
-					shadowy = false;
+					flags = SHAPE_TRANSLUCENT50; // RA2: as above
 					break;
 
 				case VISUAL_HIDDEN:
 					return;
-
-				case VISUAL_RIPPLE:
-					visible = true;
-					if (CloakingDevice.Fetch_Stage()) {
-						shadowy = false;
-					}
-					break;
-
-				case VISUAL_INDISTINCT:
-					visible = true;
-					break;
-			}
-			if (visible) {
-				if (shadowy) {
-					flags = ShapeFlags_Type(flags|SHAPE_TRANSLUCENT25);
-				} else {
-					flags = ShapeFlags_Type(flags|SHAPE_TRANSLUCENT50);
-				}
 			}
 		}
 
+		if (IsBeingWarpedOut() || IsWarpingIn()) { // RA2: a unit being warped is translucent
+			flags |= SHAPE_TRANSLUCENT50; // RA2: as above
+		}
+
 		ConvertClass * converter;
-		if (RTTI == RTTI_BUILDING && ((BuildingClass *)this)->Class->IsTerrainPalette) {
+		if (Fetch_RTTI() == RTTI_BUILDING && ((BuildingClass *)this)->Class->IsTerrainPalette) { // RA2: the virtual RTTI
 			CellClass * cptr = &Map[Center_Coord().As_Cell()];
 			converter = cptr->Drawer;
 			if (converter == NULL) {
-				cptr->Init_Drawer();
+				cptr->Init_Drawer(NULL, 0x10000, 0, 1000, 1000, 1000); // RA2: all six arguments
 				converter = cptr->Drawer;
 				if (converter == NULL) return;
 			}
 			brightness = cptr->TileBrightness;
 		} else {
-			if (RTTI == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) {
+			if (Fetch_RTTI() == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) { // RA2: as above
 				converter = EightBitDrawer;
 			} else {
-				converter = ColorSchemes[House->Scheme]->Converter;
+				converter = (ConvertClass *)GetRemapColour(); // RA2: the remap virtual replaces the house scheme lookup
 			}
 		}
 
 		Point2D drawpoint = xdrawpoint;
 		int zadjust = xzadjust;
 
-		switch ((RTTIType)RTTI) {
+		switch (Fetch_RTTI()) { // RA2: the virtual RTTI
 			case RTTI_UNIT:
 				if (((UnitClass *)this)->Class->IsSmallVisceroid || ((UnitClass *)this)->Class->IsLargeVisceroid) {
 					shadow = false;
 				}
+			case RTTI_INFANTRY: // RA2: units fall into the infantry case
 				if (HeightAGL == 0) {
 					zadjust += Get_Z_Adjust();
 				} else {
-					zadjust -= TacticalMap->Z_Lepton_To_Pixel(Height);
+					zadjust -= TacticalMap->Z_Lepton_To_Pixel(Get_Height()); // RA2: as above
+					shadow = false; // RA2: as above
 				}
 				break;
 
 			case RTTI_AIRCRAFT:
-				drawpoint.Y -= TacticalMap->Z_Lepton_To_Pixel(Height);
-				zadjust -= TacticalMap->Z_Lepton_To_Pixel(Height);
+				drawpoint.Y -= TacticalMap->Z_Lepton_To_Pixel(Get_Height()); // RA2: as above
+				zadjust -= TacticalMap->Z_Lepton_To_Pixel(Get_Height()); // RA2: as above
 				break;
+		}
 
-			case RTTI_INFANTRY:
-				if (HeightAGL == 0) {
-					zadjust += Get_Z_Adjust();
-				} else {
-					zadjust -= TacticalMap->Z_Lepton_To_Pixel(Height);
-					shadow = false;
+		if (Techno_Type_Class()->NoShadow) { // RA2: a type without shadow
+			shadow = false; // RA2: as above
+		}
+
+		if (!IsClearlyVisibleTo(PlayerPtr)) { // RA2: a disguised object looks like what it imitates
+			if (GetDisguise(true)->Fetch_RTTI() != RTTI_OVERLAYTYPE && GetDisguise(true)->Fetch_RTTI() != RTTI_TERRAINTYPE) { // RA2: as above
+				converter = ColorSchemes[GetDisguiseHouse(true)->Scheme]->Converter; // RA2: as above
+			} else {
+				CellClass * cptr = (CellClass *)Get_Cell_Ptr(); // RA2: as above
+				converter = cptr->Drawer; // RA2: as above
+				if (converter == NULL) { // RA2: as above
+					cptr->Init_Drawer(NULL, 0x10000, 0, 1000, 1000, 1000); // RA2: as above
+					converter = cptr->Drawer; // RA2: as above
 				}
-				break;
+				brightness = cptr->TileBrightness; // RA2: as above
+			}
+			if (converter == NULL) { // RA2: as above
+				converter = ColorSchemes[PlayerPtr->Scheme]->Converter; // RA2: as above
+			}
 		}
 
-		/*
-		**	If they're viewing a spy, and the spy belongs to some other house,
-		**	make it look like an infantryman from our house
-		*/
-		if (RTTI == RTTI_INFANTRY) {
-			if (!IsOwnedByPlayer) {
-			} // RA2: no IsDisguised (not in RA2's layout)
-		}
+		if (zgrad != ZGRAD_NONE) flags |= SHAPE_ZGRAD; // RA2: the flags are a plain number
+		if (zwrite) flags |= SHAPE_ZWRITE; // RA2: the flags are a plain number
+		flags |= SHAPE_ALPHA; // RA2: the flags are a plain number
 
-		if (zgrad != ZGRAD_NONE) flags = ShapeFlags_Type(flags|SHAPE_ZGRAD);
-		if (zwrite) flags = ShapeFlags_Type(flags|SHAPE_ZWRITE);
-		flags = ShapeFlags_Type(flags|SHAPE_ALPHA);
-
-		if (RTTI == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) {
-			flags = ShapeFlags_Type(flags|SHAPE_NOTRANS);
+		if (Fetch_RTTI() == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) { // RA2: as above
+			flags |= SHAPE_NOTRANS; // RA2: the flags are a plain number
 			shadow = false;
 		}
 
-		flags = ShapeFlags_Type(flags & ~negflags);
+		flags &= ~negflags; // RA2: the flags are a plain number
 
-		if (RTTI == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) {
+		if (Fetch_RTTI() == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) { // RA2: as above
 			Rect shaperect = shapefile->Get_Rect(shapenum);
 			Rect drawrect;
 			drawrect.X = shaperect.X + drawpoint.X - shapefile->Get_Width() / 2;
@@ -7257,29 +7177,37 @@ void TechnoClass::Techno_Draw_Object(ShapeSet const * shapefile, int shapenum, P
 			UnitCompositeDirtyRect = Union(UnitCompositeDirtyRect, drawrect);
 		}
 
+		if (House->Is_Player_Control() && IsDisguised()) { // RA2: the player's own disguised unit gets the disguise flags
+			flags = GetDisguiseFlags(flags); // RA2: as above
+		}
+
 		brightness = Apparent_Brightness(brightness);
+		if (Unknown_Virtual_32C()) { // RA2: an invulnerable object is tinted
+			brightness = GetEffectTintIntensity(brightness); // RA2: as above
+		}
 
 		switch (visual) {
 			case VISUAL_NORMAL:
 				Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2, zgrad, brightness, zshapefile, zshapenum, zoff);
 				if (shadow) {
-					zadjust = -2 - TacticalMap->Z_Lepton_To_Pixel(Height);
+					zadjust = -2 - TacticalMap->Z_Lepton_To_Pixel(Get_Height()); // RA2: as above
 					if (IsInTransport) {
 						drawpoint.Y -= 14;
 					}
-					Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum + shapefile->Get_Count() / 2, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2);
+					flags &= ~(SHAPE_TRANSLUCENT75); // RA2: the translucency is dropped for the shadow
+					Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum + shapefile->Get_Count() / 2, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: the last arguments are passed explicitly
 				}
 				break;
 
 			case VISUAL_INDISTINCT:
 				Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2, zgrad, brightness, zshapefile, zshapenum, zoff);
-				if (DrawShapeShadows) {
-					zadjust = -2 - TacticalMap->Z_Lepton_To_Pixel(Height);
-					flags = ShapeFlags_Type(flags & ~SHAPE_TRANSLUCENT75);
+				if (shadow) { // RA2: the local flag, not the global
+					zadjust = -2 - TacticalMap->Z_Lepton_To_Pixel(Get_Height()); // RA2: as above
+					flags &= ~(SHAPE_TRANSLUCENT75); // RA2: as above
 					if (IsInTransport) {
 						drawpoint.Y -= 14;
 					}
-					Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum + shapefile->Get_Count() / 2, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2);
+					Draw_Shape(*LogicalSurface, *converter, shapefile, shapenum + shapefile->Get_Count() / 2, drawpoint, rect, ShapeFlags_Type(flags|SHAPE_DARKEN|SHAPE_CENTER|SHAPE_WIN_REL), NULL, zadjust - 2, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
 				}
 				break;
 
@@ -7294,6 +7222,8 @@ void TechnoClass::Techno_Draw_Object(ShapeSet const * shapefile, int shapenum, P
 		}
 	}
 }
+
+
 
 
 
@@ -7424,40 +7354,46 @@ void TechnoClass::Draw_Voxel(VoxelDataStruct const & voxeldata, int frame, int k
 /// <param name="point">Screen position to draw the shadow at.</param>
 /// <param name="matrix">Transform matrix for the shadow.</param>
 /// <param name="force_cache">Force rendering even when a cache key is supplied.</param>
-void TechnoClass::Techno_Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache) const
+void TechnoClass::Techno_Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache, Surface * surface, unsigned shadow_x, unsigned shadow_y) const // RA2: 0x6D21E0 takes the shadow surface and the two shadow offsets
 {
-	if (Cloak != UNCLOAKED || ((FlashCount / 2) % 2 == 1) || voxeldata.VoxLib->Load_Failed()) {
+	if (Cloak != UNCLOAKED || Techno_Type_Class()->NoShadow || voxeldata.VoxLib->Load_Failed()) { // RA2: a type without shadow draws none; no flash test
 		return;
 	}
 
 	if (key != -1) {
-		StaticBufferClass::Entry * entry = (*cache)[key];
-		if (entry != NULL) {
-			Techno_Blit_Voxel(*entry, point, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD), NORMAL_LIGHT);
-			return;
+		if (cache == NULL || Techno_Type_Class()->DisableShadowCache) { // RA2: a type that does not cache its shadow renders it every time
+			key = -1; // RA2: as above
+		} else {
+			StaticBufferClass::Entry * entry = (*cache)[key]; // RA2: as above
+			if (entry != NULL) { // RA2: as above
+				Techno_Blit_Voxel(*entry, point, cliprect, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD), NORMAL_LIGHT); // RA2: as above
+				return; // RA2: as above
+			}
+			if (!force_cache) { // RA2: a missing entry is only rendered when asked to
+				return; // RA2: as above
+			}
 		}
 	}
 
-	if (key == -1 || force_cache) {
-		SurfaceRegion region = Techno_Render_Voxel_Shadow(voxeldata, matrix, point, cliprect, layer_index, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD), key != -1);
-		if (key != -1) {
-			bool added = true;
-			StaticBufferClass::Entry * data = VoxelStaticBuffer.Add(*VoxelDrawSystem::Get_Surface(), region);
-			if (data == NULL || !cache->Add_Index(key, data)) {
-				added = false;
-				Class_Of()->Clear_Voxel_Indexes();
-				if (data == NULL) {
-					data = VoxelStaticBuffer.Add(*VoxelDrawSystem::Get_Surface(), region);
-				}
+	SurfaceRegion region = Techno_Render_Voxel_Shadow(voxeldata, matrix, point, cliprect, layer_index, ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD), key != -1, surface, shadow_x, shadow_y); // RA2: the surface and offsets are passed on
+	if (key != -1) { // RA2: as above
+		bool added = true; // RA2: as above
+		StaticBufferClass::Entry * data = VoxelStaticBuffer.Add(*VoxelDrawSystem::Get_Surface(), region); // RA2: as above
+		if (data == NULL || !cache->Add_Index(key, data)) { // RA2: as above
+			added = false; // RA2: as above
+			Class_Of()->Clear_Voxel_Indexes(); // RA2: as above
+			if (data == NULL) { // RA2: as above
+				data = VoxelStaticBuffer.Add(*VoxelDrawSystem::Get_Surface(), region); // RA2: as above
 			}
-			if (!added) {
-				cache->Add_Index(key, data);
-			}
-
-			Techno_Draw_Voxel_Shadow(voxeldata, layer_index, key, cache, cliprect, point, matrix, false);
 		}
+		if (!added) { // RA2: as above
+			cache->Add_Index(key, data); // RA2: as above
+		}
+
+		Techno_Draw_Voxel_Shadow(voxeldata, layer_index, key, cache, cliprect, point, matrix, false, NULL, 0, 0); // RA2: the recursion passes no surface and no offsets
 	}
 }
+
 
 
 /// <summary>
@@ -7529,24 +7465,35 @@ SurfaceRegion TechnoClass::Techno_Render_Voxel_Object(VoxelDataStruct const & vo
 /// <param name="layer_index">Which of the object's layers to cast the shadow for.</param>
 /// <param name="cached">Is the caller keeping the shadow rather than drawing it now?</param>
 /// <returns>Returns with the surface region the shadow was rendered into.</returns>
-SurfaceRegion TechnoClass::Techno_Render_Voxel_Shadow(VoxelDataStruct const & voxeldata, Matrix3D const & matrix, Point2D const & point, Rect const & cliprect, int layer_index, ShapeFlags_Type flags, bool cached) const
+SurfaceRegion TechnoClass::Techno_Render_Voxel_Shadow(VoxelDataStruct const & voxeldata, Matrix3D const & matrix, Point2D const & point, Rect const & cliprect, int layer_index, ShapeFlags_Type flags, bool cached, Surface * surface, unsigned shadow_x, unsigned shadow_y) const // RA2: 0x6D2810 also takes the shadow surface and the two offsets and passes them on
 {
-	Matrix3D mtx = voxeldata.MotLib->Get_Layer_Matrix(layer_index, 0);
-	Matrix3D mtx2 = matrix * mtx;
-	Matrix3D mtx3;
-	mtx3.Make_Identity();
+	MotionLibrary * motlib = voxeldata.MotLib; // RA2: the motion library is kept
+	Matrix3D combined; // RA2: the layer matrix is applied in its own block
+	{
+		Matrix3D section_matrix; // RA2: as above
+		section_matrix = motlib->Get_Layer_Matrix(layer_index, 0); // RA2: as above
+		combined = matrix * section_matrix; // RA2: as above
+	}
+	Matrix3D basis; // RA2: an aircraft's shadow is half size
+	basis.Make_Identity(); // RA2: the basis matrix is set up first
+	if (Techno_Type_Class()->ConsideredAircraft) { // RA2: as above
+		basis.Scale(0.5f); // RA2: as above
+	}
 
 	VoxelDrawSystem::Reset();
-	VoxelDrawSystem::Prep_For_Shadow(voxeldata.VoxLib, layer_index, 0, VoxelCameraMatrix * mtx3, mtx2, VoxelShadowLightVector, NULL, 0, 0); // RA2: also a shadow surface and position, which RA2's 0x6D2810 passes on from its own arguments; this signature has none
+	VoxelDrawSystem::Prep_For_Shadow(voxeldata.VoxLib, layer_index, 0, VoxelCameraMatrix * basis, combined, VoxelShadowLightVector, surface, shadow_x, shadow_y); // RA2: the surface and offsets of the caller
 	SurfaceRegion region = VoxelDrawSystem::Render();
 
 	if (!cached) {
 		Rect r = VoxelDrawSystem::Get_Surface()->Get_Rect(); /// The result is unused.
-		Blit_Block(*LogicalSurface, *NormalDrawer, *VoxelDrawSystem::Get_Surface(), region.Bounds, region.Point + point, cliprect, NULL, NormalDrawer->Blitter_From_Flags(flags), Get_Z_Adjust());
+		Point2D destination = region.Point + point; // RA2: the destination is a local
+		Blit_Block(*LogicalSurface, *NormalDrawer, *VoxelDrawSystem::Get_Surface(), region.Bounds, Point2D(destination.X, destination.Y), cliprect, NULL, NormalDrawer->Blitter_From_Flags(flags), Get_Z_Adjust(), Get_Z_Gradient(), 1000, 0); // RA2: the depth gradient and the last arguments are passed explicitly
 	}
 
 	return(region);
 }
+
+
 
 
 /// <summary>
@@ -7969,9 +7916,8 @@ static inline bool Is_Object(AbstractClass const * a)
 void TechnoClass::Base_Is_Attacked(TechnoClass const * enemy)
 {
 	FootClass * defender[6];
-	memset(defender, '\0', sizeof(defender));
-
 	int value[ARRAY_SIZE(defender)];
+	memset(defender, '\0', sizeof(defender)); // RA2: as above
 	memset(value, '\0', sizeof(value));
 
 	int count = 0;
@@ -7979,271 +7925,164 @@ void TechnoClass::Base_Is_Attacked(TechnoClass const * enemy)
 	int desired = enemy->Risk() * Rule->ComputerBaseDefenseResponse;
 	int risktotal = 0;
 
-	/*
-	**	Humans have to deal with their own base is attacked problems.
-	*/
-	if (enemy == NULL || House->Is_Ally(enemy) || House->Is_Human_Player()) {
+	if (enemy == NULL || House->Is_Ally(enemy) || House->Is_Human_Player() || enemy->IsInLimbo) { // RA2: an enemy in limbo is ignored too
 		return;
 	}
 
-	/*
-	**	Don't overreact if this building can defend itself.
-	*/
 	if (Session.Type == GAME_NORMAL && Is_Weapon_Equipped()) return;
 
-	/*
-	**	If the enemy is not an infantry or a unit there is not much we can
-	**	do about it.
-	*/
-	if (enemy->RTTI != RTTI_INFANTRY && enemy->RTTI != RTTI_UNIT) {
+	if (enemy->Fetch_RTTI() != RTTI_INFANTRY && enemy->Fetch_RTTI() != RTTI_UNIT) { // RA2: the virtual RTTI
 		return;
 	}
 
-	/*
-	**	If we are a certain type of building, such as a barrel or land mine,
-	**	ignore the attack.
-	*/
-	if (TClass->IsInsignificant) {
+	if (Techno_Type_Class()->IsInsignificant) { // RA2: the virtual type
 		return;
 	}
 
-	/*
-	**	If the threat has already been dealt with then we don't need to do
-	**	any work. Check for that here.
-	*/
-	if (enemy->Is_Foot() && ((FootClass *)enemy)->BaseAttackTimer != 0) {
+	bool is_foot; // RA2: the foot test is kept in a local, left unset for a null enemy
+	if (enemy != NULL) { // RA2: as above
+		is_foot = (enemy->AbstractFlags & 4); // RA2: as above
+	}
+	if (enemy != NULL && is_foot && ((FootClass *)enemy)->BaseAttackTimer != 0) { // RA2: as above
 		return;
 	}
 
-	/*
-	**	We will need units to defend our base.  We need to suspend teams until
-	**	the situation has been dealt with.
-	*/
 	TeamClass::Suspend_Teams(Rule->SuspendPriority, House);
 
-	/*
-	**	Loop through the infantry looking for those who are capable of going
-	**	on a rescue mission.
-	*/
-	int index;
-	for (index = 0; index < Infantry.Count() && desired > 0; index++) {
-	 	InfantryClass * infantry = Infantry[index];
+	for (int index = 0; index < Infantry.Count(); index++) { // RA2: the limit is tested inside the loop
+		if (desired <= 0) { // RA2: as above
+			break; // RA2: as above
+		}
+		InfantryClass * infantry = Infantry[index]; // RA2: as above
 		if (infantry != NULL && infantry->IsActive && infantry->Owner() == Owner()) {
-
-			/*
-			**	Never recruit sticky guard units to defend a base.
-			*/
 			bool basedefense = infantry->Team != NULL && infantry->Team->Class->IsBaseDefense;
-			if (infantry->Team != NULL && !basedefense) {
-				continue;
-			}
-
-			if (!infantry->IsTeamRecruitable || !infantry->Is_Weapon_Equipped() || !infantry->IsAutocreateRecruitable ||
-					(!infantry->Current_Mission_Control().IsRecruitable && Session.Type == GAME_NORMAL)) continue;
-
-			/*
-			**	Don't allow a response if it doesn't have a weapon that will affect the
-			**	enemy object.
-			*/
-			if (infantry->Get_Class_Weapon_Data(0)->Weapon->WarheadPtr->Modifier[enemy->TClass->Armor] == 0) {
-				continue;
-			}
-
-			/*
-			**	Don't try to help if the building is on another planet.
-			*/
-			if (!Map.Is_Same_Cell_Zone(infantry->Destination_Coord().As_Cell(), Destination_Coord().As_Cell(), infantry->Class->MZone, infantry->Is_Moving_Onto_Bridge(), false, false)) continue;
-
-			/*
-			**	Find the amount of threat that this unit can apply to the
-			**	enemy.
-			*/
-			int threat = infantry->Rescue_Mission((AbstractClass *)enemy);
-
-			/*
-			**	If it can't apply any threat then do just skip it and do not
-			**	add it to the list.
-			*/
-			if (!threat) {
-				continue;
-			}
-
-			/*
-			**	Greatly increase the threat value if this unit is already assigned to protect
-			**	the target.
-			*/
-			if (ArchiveTarget == this) {
-				threat *= 100;
-			}
-
-			/*
-			**	If the value returned is negative then this unit is already
-			**	assigned to fighting the enemy, so subtract its value from
-			**	the enemy's desired value.
-			*/
-			if (threat < 0) {
-				desired += threat;
-				continue;
-			}
-
-			if (count < ARRAY_SIZE(defender)) {
-				defender[count] = infantry;
-				value[count] = threat;
-				count++;
-				continue;
-			}
-
-			if (threat > weakest) {
-				int newweakest = threat;
-
-				for (int lp = 0; lp < count; lp++) {
-					if (value[lp] == weakest) {
-						value[lp] = threat;
-						defender[lp] = (FootClass *) infantry;
-						continue;
-					}
-					if (value[lp] < newweakest) {
-						newweakest = value[lp];
+			if ((infantry->Team == NULL || basedefense) && infantry->IsTeamRecruitable && infantry->Is_Weapon_Equipped() && infantry->IsAutocreateRecruitable && (infantry->Current_Mission_Control().IsRecruitable || Session.Type != GAME_NORMAL)) { // RA2: one condition instead of continues
+				int armor = enemy->Techno_Type_Class()->Armor; // RA2: as above
+				if (infantry->GetTurretWeapon()->Weapon->WarheadPtr->Modifier[armor] != 0.0) { // RA2: the turret weapon
+					Cell from = Destination_Coord().As_Cell(); // RA2: as above
+					Cell to = infantry->Destination_Coord().As_Cell(); // RA2: as above
+					if (Map.Is_Same_Cell_Zone(to, from, infantry->Class->MZone, infantry->Is_Moving_Onto_Bridge(), false, false)) { // RA2: as above
+						int threat = infantry->Rescue_Mission((AbstractClass *)enemy); // RA2: as above
+						if (threat) { // RA2: as above
+							if (ArchiveTarget == this) { // RA2: as above
+								threat *= 100; // RA2: as above
+							}
+							if (threat < 0) { // RA2: as above
+								desired += threat; // RA2: as above
+							} else if (count < ARRAY_SIZE(defender)) { // RA2: else-if chains and own counters as the executable lays them out
+								defender[count] = infantry; // RA2: as above
+								value[count] = threat; // RA2: as above
+								count++; // RA2: as above
+							} else if (threat > weakest) { // RA2: else-if chains and own counters as the executable lays them out
+								int newweakest = threat; // RA2: as above
+								for (int lp = 0; lp < count; lp++) { // RA2: as above
+									if (value[lp] == weakest) { // RA2: as above
+										value[lp] = threat; // RA2: as above
+										defender[lp] = infantry; // RA2: else-if chains and own counters as the executable lays them out
+									} else if (value[lp] < newweakest) { // RA2: else-if chains and own counters as the executable lays them out
+										newweakest = value[lp]; // RA2: as above
+									}
+								}
+								weakest = newweakest; // RA2: as above
+							}
+						}
 					}
 				}
-				weakest = newweakest;
 			}
 		}
 	}
 
-	/*
-	**	Loop through the units looking for those who are capable of going
-	**	on a rescue mission.
-	*/
-	for (index = 0; index < Units.Count() && desired > 0; index++) {
-	 	UnitClass * unit = Units[index];
-		if (unit != NULL && unit->IsActive && unit->Owner() == Owner()) {
-
-			/*
-			**	Never recruit sticky guard units to defend a base.
-			*/
-			bool basedefense = unit->Team != NULL && unit->Team->Class->IsBaseDefense;
-			if (unit->Team != NULL && !basedefense) {
+	for (int unit_index = 0; unit_index < Units.Count(); unit_index++) { // RA2: a second counter
+		if (desired <= 0) { // RA2: as above
+			break; // RA2: as above
+		}
+		UnitClass * unit = Units[unit_index]; // RA2: else-if chains and own counters as the executable lays them out
+		if (unit != NULL && unit->IsActive) { // RA2: the owner is tested next
+			int unit_owner = unit->Owner(); // RA2: as above
+			if (unit_owner != Owner()) { // RA2: as above
 				continue;
 			}
-
-			if (!unit->IsTeamRecruitable || !unit->Is_Weapon_Equipped() || !unit->IsAutocreateRecruitable ||
-					(!unit->Current_Mission_Control().IsRecruitable && Session.Type == GAME_NORMAL)) continue;
-
-			/*
-			**	Don't allow a response if it doesn't have a weapon that will affect the
-			**	enemy object.
-			*/
-			if (unit->Get_Class_Weapon_Data(0)->Weapon->WarheadPtr->Modifier[enemy->TClass->Armor] == 0) {
-				continue;
-			}
-
-			/*
-			**	Don't try to help if the building is on another planet.
-			*/
-			if (!Map.Is_Same_Cell_Zone(unit->Destination_Coord().As_Cell(), Destination_Coord().As_Cell(), unit->Class->MZone, unit->Is_Moving_Onto_Bridge(), false, false)) continue;
-
-			/*
-			**	Find the amount of threat that this unit can apply to the
-			**	enemy.
-			*/
-			int threat = unit->Rescue_Mission((AbstractClass *)enemy);
-
-			/*
-			**	If it can't apply any threat then do just skip it and do not
-			**	add it to the list.
-			*/
-			if (!threat) {
-				continue;
-			}
-
-			/*
-			**	Greatly increase the threat value if this unit is already assigned to protect
-			**	the target.
-			*/
-			if (threat > 0 && ArchiveTarget == this) {
-				threat *= 10;
-			}
-
-			/*
-			**	If the value returned is negative then this unit is already
-			**	assigned to fighting the enemy, so subtract its value from
-			**	the enemy's desired value.
-			*/
-			if (threat < 0) {
-				desired += threat;
-				continue;
-			}
-
-			if (count < ARRAY_SIZE(defender)) {
-				defender[count] = unit;
-				value[count] = threat;
-				count++;
-				continue;
-			}
-			if (threat > weakest) {
-				int newweakest = threat;
-
-				for (int lp = 0; lp < count; lp ++) {
-					if (value[lp] == weakest) {
-						value[lp] = threat;
-						defender[lp] = (FootClass *) unit;
-						continue;
-					}
-					if (value[lp] < newweakest) {
-//					if (value[count] < newweakest) {
-						newweakest = value[lp];
+			bool basedefense = unit->Team != NULL && unit->Team->Class->IsBaseDefense; // RA2: as above
+			if ((unit->Team == NULL || basedefense) && unit->IsTeamRecruitable && unit->Is_Weapon_Equipped() && unit->IsAutocreateRecruitable && (unit->Current_Mission_Control().IsRecruitable || Session.Type != GAME_NORMAL)) { // RA2: as above
+				int armor = enemy->Techno_Type_Class()->Armor; // RA2: as above
+				if (unit->GetTurretWeapon()->Weapon->WarheadPtr->Modifier[armor] != 0.0) { // RA2: as above
+					Cell from = Destination_Coord().As_Cell(); // RA2: as above
+					Cell to = unit->Destination_Coord().As_Cell(); // RA2: as above
+					if (Map.Is_Same_Cell_Zone(to, from, unit->Class->MZone, unit->Is_Moving_Onto_Bridge(), false, false)) { // RA2: as above
+						int threat = unit->Rescue_Mission((AbstractClass *)enemy); // RA2: as above
+						if (threat) { // RA2: as above
+							if (threat > 0 && ArchiveTarget == this) { // RA2: as above
+								threat *= 10; // RA2: as above
+							}
+							if (threat < 0) { // RA2: as above
+								desired += threat; // RA2: as above
+							} else if (count < ARRAY_SIZE(defender)) { // RA2: else-if chains and own counters as the executable lays them out
+								defender[count] = unit; // RA2: as above
+								value[count] = threat; // RA2: as above
+								count++; // RA2: as above
+							} else if (threat > weakest) { // RA2: else-if chains and own counters as the executable lays them out
+								int newweakest = threat; // RA2: as above
+								for (int lp = 0; lp < count; lp++) { // RA2: as above
+									if (value[lp] == weakest) { // RA2: as above
+										value[lp] = threat; // RA2: as above
+										defender[lp] = unit; // RA2: else-if chains and own counters as the executable lays them out
+									} else if (value[lp] < newweakest) { // RA2: else-if chains and own counters as the executable lays them out
+										newweakest = value[lp]; // RA2: as above
+									}
+								}
+								weakest = newweakest; // RA2: as above
+							}
+						}
 					}
 				}
-				weakest = newweakest;
 			}
 		}
 	}
 
 	if (desired > 0) {
+		for (int first = 0; first < count - 1; first++) { // RA2: own counters
+			for (int second = first + 1; second < count; second++) { // RA2: as above
+				if (value[first] < value[second]) { // RA2: else-if chains and own counters as the executable lays them out
+					value[first] ^= value[second]; // RA2: else-if chains and own counters as the executable lays them out
+					value[second] ^= value[first]; // RA2: else-if chains and own counters as the executable lays them out
+					value[first] ^= value[second]; // RA2: else-if chains and own counters as the executable lays them out
 
-		/*
-		**	Sort the defenders by value, this doesn't take very long and will
-		**	help the closest defenders to respond.
-		*/
-		int lp;
-		for (lp = 0; lp < count - 1; lp ++) {
-			for (int lp2 = lp + 1; lp2 < count; lp2++) {
-				if (value[lp] < value[lp2]) {
-
-					value[lp] 	^= value[lp2];
-					value[lp2]	^= value[lp];
-					value[lp]	^= value[lp2];
-
-					FootClass *temp;
-					temp				= defender[lp];
-					defender[lp]	= defender[lp2];
-					defender[lp2]  = temp;
+					FootClass * temp = defender[first]; // RA2: else-if chains and own counters as the executable lays them out
+					defender[first] = defender[second]; // RA2: else-if chains and own counters as the executable lays them out
+					defender[second] = temp; // RA2: else-if chains and own counters as the executable lays them out
 				}
 			}
 		}
 
-		for (lp = 0; lp < count; lp ++) {
-			bool basedefense = defender[lp]->Team != NULL && defender[lp]->Team->Class->IsBaseDefense;
-			if (Percent_Chance(66) && !basedefense) {
-				defender[lp]->Assign_Mission(MISSION_RESCUE);
-				defender[lp]->ArchiveTarget = this;
+		for (int chosen = 0; chosen < count; chosen++) { // RA2: as above
+			FootClass * member = defender[chosen]; // RA2: the responder is kept in a local
+			bool basedefense = member->Team != NULL && member->Team->Class->IsBaseDefense; // RA2: else-if chains and own counters as the executable lays them out
+			if (Scen->RandomNumber(0, 99) >= 66 || basedefense) { // RA2: a plain random draw, the base defense test is an alternative
+				member->QueueMission(MISSION_GUARD_AREA, false); // RA2: queued, not assigned
+				member->ArchiveTarget = this; // RA2: else-if chains and own counters as the executable lays them out
 			} else {
-				defender[lp]->Assign_Mission(MISSION_GUARD_AREA);
-				defender[lp]->ArchiveTarget = this;
+				member->QueueMission(MISSION_RESCUE, false); // RA2: as above
+				member->ArchiveTarget = this; // RA2: else-if chains and own counters as the executable lays them out
 			}
-			defender[lp]->Assign_Target((AbstractClass *)enemy);
-			risktotal += defender[lp]->Risk();
+			member->Assign_Target((AbstractClass *)enemy); // RA2: else-if chains and own counters as the executable lays them out
+			risktotal += member->Risk(); // RA2: else-if chains and own counters as the executable lays them out
 			if (risktotal > desired) {
 				break;
 			}
 		}
 	}
 
-	if (risktotal > desired && enemy->Is_Foot()) {
-		((FootClass *)enemy)->BaseAttackTimer = TICKS_PER_MINUTE * Rule->BaseDefenseDelay;
+	if (risktotal > desired) { // RA2: as above
+		if (enemy != NULL) { // RA2: the foot test is repeated
+			is_foot = (enemy->AbstractFlags & 4); // RA2: as above
+		}
+		if (enemy != NULL && is_foot) { // RA2: as above
+			((FootClass *)enemy)->BaseAttackTimer = (int)(Rule->BaseDefenseDelay * 900.0); // RA2: minutes of 900 ticks
+		}
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -9101,35 +8940,88 @@ void TechnoClass::Draw_Pips(Point2D const & bottomleft, Point2D const & center, 
 	Point2D offset(4, 2);
 	Point2D xy = bottomleft + Point2D(6, -1);
 
-	ShapeSet const * pip_shapes = (ShapeSet const *)Class_Of()->PipShapes;
-	ShapeSet const * pips1 = (ShapeSet const *)Class_Of()->PipShapes;
-	ShapeSet const * pips2 = (ShapeSet const *)Class_Of()->Pip2Shapes;
+	Class_Of(); // RA2: the type is fetched for each table
+	ShapeSet const * pip_shapes = (ShapeSet const *)ObjectTypeClass::PipShapes; // RA2: a static table, the type call stays
+	Class_Of(); // RA2: as above
+	ShapeSet const * pips2 = (ShapeSet const *)ObjectTypeClass::Pip2Shapes; // RA2: as above
 
-	if (RTTI != RTTI_BUILDING) {
+	bool building = Fetch_RTTI() == RTTI_BUILDING; // RA2: the virtual RTTI, kept in a local
+	if (!building) { // RA2: the pip tables and tests as the executable reads them
 		xy = bottomleft + Point2D(-5, 0);
 		offset = Point2D(4, 0);
 		pip_shapes = pips2;
+	}
+
+	if (Fetch_RTTI() == RTTI_BUILDING && Techno_Type_Class()->PipScale == 2) { // RA2: a building with this scale draws no pips here
+		return; // RA2: as above
+	}
+
+	int spawns = Techno_Type_Class()->SpawnsNumber; // RA2: carrier spawns show docked or away
+	if (spawns > 0) { // RA2: as above
+		int docked = SpawnManager->CountDockedSpawns(); // RA2: as above
+		for (int index = 0; index < spawns; index++) { // RA2: as above
+			int full = 1; // RA2: as above
+			int empty = 0; // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, index < docked ? full : empty, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: the last arguments are passed explicitly
+		}
+	}
+
+	if (building) { // RA2: a garrisoned building shows its occupants
+		BuildingClass const * bldg = (BuildingClass const *)this; // RA2: as above
+		int occupants = bldg->Class->MaxNumberOccupants; // RA2: as above
+		int count = bldg->GetOccupantCount(); // RA2: as above
+		if (bldg->Class->ShowOccupantPips && occupants > 0 && count > 0) { // RA2: as above
+			for (int index = 0; index < occupants; index++) { // RA2: as above
+				int full = 7; // RA2: as above
+				int empty = 6; // RA2: as above
+				Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, index < count ? full : empty, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+			}
+		}
 	}
 
 	/*
 	**	Transporter type objects have a different graphic representation for the pips. The
 	**	pip color represents the type of occupant.
 	*/
-	if (TClass->Max_Passengers() > 0) {
-		ObjectClass const * object = Cargo.Attached_Object();
-		for (int index = 0; index < Class_Of()->Max_Pips(); index++) {
-			PipEnum pip = PIP_EMPTY;
-
-			if (object != NULL) {
-				pip = PIP_GREEN;
-				if (object->RTTI == RTTI_INFANTRY) {
-					pip = ((InfantryClass *)object)->Class->Pip;
-				}
-				object = object->Next;
-			}
-			Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, pip, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
+	if (Techno_Type_Class()->MaxPassengers > 0) { // RA2: the pip tables and tests as the executable reads them
+		Point2D shift(0, 0); // RA2: a gunner shifts the other pips
+		int pips = Class_Of()->Max_Pips(); // RA2: the pips are colored by an array of occupant sizes
+		Techno_Type_Class(); // RA2: as above
+		int * colors = new int[pips]; // RA2: as above
+		for (int c = 0; c < pips; c++) { // RA2: as above
+			colors[c] = 0; // RA2: as above
 		}
-
+		int passengers = Cargo.How_Many(); // RA2: as above
+		int slot = Cargo.GetTotalSize() - 1; // RA2: as above
+		if (slot > pips) { // RA2: as above
+			slot = pips; // RA2: as above
+		}
+		ObjectClass * object = Cargo.Attached_Object(); // RA2: as above
+		for (int i = 0; i < passengers && object != NULL; i++) { // RA2: as above
+			if (object->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: as above
+				colors[slot] = ((InfantryClass *)object)->Class->Pip; // RA2: as above
+			} else if (object->Fetch_RTTI() == RTTI_UNIT) { // RA2: as above
+				int size = (int)(((TechnoClass *)object)->Techno_Type_Class()->Size - 1.0); // RA2: as above
+				for (int extra = size; extra > 0; extra--) { // RA2: as above
+					colors[slot--] = 4; // RA2: as above
+				}
+				colors[slot] = 5; // RA2: as above
+			} else {
+				colors[slot] = 1; // RA2: as above
+			}
+			object = object->Next; // RA2: as above
+			slot--; // RA2: as above
+		}
+		int start = 0; // RA2: as above
+		if (Techno_Type_Class()->Gunner) { // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, colors[0], xy, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+			start = 1; // RA2: as above
+			shift = offset * 2; // RA2: as above
+		}
+		for (int j = start; j < pips; j++) { // RA2: as above
+			Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, colors[j], xy + shift + offset * j, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+		}
+		delete colors; // RA2: as above
 	} else {
 
 		/*
@@ -9142,94 +9034,56 @@ void TechnoClass::Draw_Pips(Point2D const & bottomleft, Point2D const & center, 
 		**	Check if it's a harvester, to show the right type of pips for the
 		**	various minerals it could have harvested.
 		*/
-		if (RTTI == RTTI_UNIT && TClass->PipScale == PIPSCALE_TIBERIUM) {
-
-			int iron = Storage.Get_Amount(0);
-			int nickel = Storage.Get_Total_Amount() - iron;
-			int greenpips   = TClass->Max_Pips() * (double(iron) / TClass->Capacity) + 0.5;
-			int bluepips  = TClass->Max_Pips() * (double(nickel) / TClass->Capacity) + 0.5;
+		if (Fetch_RTTI() == RTTI_UNIT && Techno_Type_Class()->PipScale == 2) { // RA2: the harvester scale
+			float gold = Storage.Get_Amount(0); // RA2: the four tiberium slots are read separately
+			float gems = Storage.Get_Amount(2); // RA2: as above
+			float ore = Storage.Get_Amount(3); // RA2: as above
+			float other = Storage.Get_Amount(1); // RA2: as above
+			int greenpips = (int)(Techno_Type_Class()->Max_Pips() * ((double)(ore + gems + gold) / Techno_Type_Class()->Capacity) + 0.5); // RA2: as above
+			int bluepips = (int)(Techno_Type_Class()->Max_Pips() * ((double)other / Techno_Type_Class()->Capacity) + 0.5); // RA2: as above
 
 			for (int index = 0; index < Class_Of()->Max_Pips(); index++) {
-				int shape = PIP_EMPTY;
+				int shape = 0; // RA2: the pip tables and tests as the executable reads them
 				if (bluepips > 0) {
-					shape = PIP_BLUE;
+					shape = 5; // RA2: the pip tables and tests as the executable reads them
 					bluepips--;
 				} else if (greenpips > 0) {
-					shape = PIP_GREEN;
+					shape = 1; // RA2: the pip tables and tests as the executable reads them
 					greenpips--;
 				}
-				Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, shape, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
+				Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, shape, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
 			}
-		}
-
-		/*
-		**
-		*/
-		else if (TClass->PipScale == PIPSCALE_AMMO) {
-			int _pips = pips;
-			for (int index = 0; index < Class_Of()->Max_Pips(); index++) {
-				if (_pips > 0) {
-					_pips--;
-					Draw_Shape(*LogicalSurface, *NormalDrawer, pips2, 6, xy + offset * index - Point2D(0, 3), rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
+		} else if (Techno_Type_Class()->PipScale == 1) { // RA2: the ammo scale, with optional wrapping rows
+			int wrap = Techno_Type_Class()->PipWrap; // RA2: as above
+			if (wrap == 0) { // RA2: as above
+				int left = pips; // RA2: as above
+				for (int index = 0; index < Class_Of()->Max_Pips(); index++) { // RA2: as above
+					if (left > 0) { // RA2: as above
+						left--; // RA2: as above
+						Draw_Shape(*LogicalSurface, *NormalDrawer, pips2, 12, xy + offset * index - Point2D(0, 3), rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
+					}
+				}
+			} else {
+				int rows = Class_Of()->Max_Pips() / wrap; // RA2: as above
+				for (int index = 0; index < wrap; index++) { // RA2: as above
+					int frame = 13; // RA2: as above
+					for (int row = rows - 1; row >= 0; row--) { // RA2: as above
+						if (index + row * wrap < Ammo) { // RA2: as above
+							frame = row + 14; // RA2: as above
+							break; // RA2: as above
+						}
+					}
+					Draw_Shape(*LogicalSurface, *NormalDrawer, pips2, frame, xy + offset * index - Point2D(0, 3), rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL), NULL, 0, ZGRAD_GROUND, 1000, NULL, 0, Point2D(0, 0)); // RA2: as above
 				}
 			}
-
 		}
-		/*
-		**
-		*/
-		else if (RTTI == RTTI_BUILDING && TClass->PipScale == PIPSCALE_TIBERIUM) {
-			int _pips = pips;
-			for (int index = 0; index < Class_Of()->Max_Pips(); index++) {
-				int shape = PIP_EMPTY;
-				if (_pips > 0) {
-					shape = PIP_GREEN;
-					_pips--;
-				}
-				Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, shape, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
-			}
-		}
-
-		/*
-		**
-		*/
-		else if (TClass->PipScale == PIPSCALE_CHARGE) {
-			for (int index = 0; index < Class_Of()->Max_Pips(); index++) {
-				Draw_Shape(*LogicalSurface, *NormalDrawer, pip_shapes, index < pips ? 1 : 0, xy + offset * index, rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
-			}
-		}
-	}
-
-	/*
-	**	Special hack to display a red pip on the medic.
-	*/
-	if (RTTI == RTTI_INFANTRY && Combat_Damage() < 0) {
-		Draw_Shape(*LogicalSurface, *NormalDrawer, pips1, PIP_MEDIC, xy+Point2D(0,-8), rect, ShapeFlags_Type(SHAPE_CENTER|SHAPE_WIN_REL));
 	}
 
 	/*
 	**	Display whether this unit is a leader unit or not.
 	*/
-	if (RTTI != RTTI_BUILDING) {
+	if (Fetch_RTTI() != RTTI_BUILDING) { // RA2: the pip tables and tests as the executable reads them
 		Draw_Text_Overlay(bottomleft + Point2D(-10, 10), bottomleft, rect);
-	}
-
-	PipEnum veterancy_shape = PIP_NONE;
-	if (Veterancy.Is_Veteran()) {
-		veterancy_shape = PIP_VETERAN;
-	}
-	if (Veterancy.Is_Elite()) {
-		veterancy_shape = PIP_ELITE;
-	}
-	if (Veterancy.Is_Dumbass()) {
-		veterancy_shape = PIP_COUNT;
-	}
-	if (veterancy_shape != PIP_NONE) {
-		Point2D drawpoint = center + Point2D(5, 2);
-		if (RTTI != RTTI_INFANTRY) {
-			drawpoint += Point2D(5, 4);
-		}
-		Draw_Shape(*LogicalSurface, *NormalDrawer, pips1, veterancy_shape, drawpoint, rect, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER));
 	}
 
 	/*
@@ -9237,18 +9091,25 @@ void TechnoClass::Draw_Pips(Point2D const & bottomleft, Point2D const & center, 
 	**	number assigned with the <CTRL> key.
 	*/
 	if (Group >= 0 && Group < 10) {
-		int yval = -1;
-		int group = Group+1;
-
-		if (Class_Of()->Max_Pips()) yval -= 4;
+		int group = Group + 1; // RA2: the pip tables and tests as the executable reads them
 		if (group == 10) group = 0;
-
-		char group_text[12];
-		sprintf(group_text, "%d", group < 10 ? group : 0);
-
-		Plain_Text_Print(group_text, *LogicalSurface, rect, bottomleft + Point2D(-4, yval-3), WHITE, TBLACK, TextPrintType(TPF_FULLSHADOW|TPF_EFNT), 0, 1);
+		int yval = Fetch_RTTI() == RTTI_INFANTRY ? -36 : -33; // RA2: a fixed offset by type
+		wchar_t text[10]; // RA2: the group number is wide text in a box
+		swprintf(text, L"%d", group < 10 ? group : 0); // RA2: as above
+		Point2D where = bottomleft + Point2D(-4, yval - 3); // RA2: as above
+		Rect box = Text_Rect(text, where, 73, 2, -2); // RA2: as above
+		box = Intersect(box, rect); // RA2: as above
+		box.X--; // RA2: as above
+		box.Width++; // RA2: as above
+		RGBClass color = House->RemapColorRGB; // RA2: as above
+		int pixel = DSurface::Build_Hicolor_Pixel(color.Get_Red(), color.Get_Green(), color.Get_Blue()); // RA2: as above
+		LogicalSurface->Fill_Rect(box, 0); // RA2: as above
+		LogicalSurface->Draw_Rect(box, pixel); // RA2: as above
+		Plain_Text_Print(text, LogicalSurface, (Rect const *)&rect, &where, pixel, 0, TextPrintType(73), -1, 1); // RA2: as above
 	}
 }
+
+
 
 /// <summary>
 /// Draws the veteran, elite or dumbass pip at the object's corner.
@@ -10101,14 +9962,23 @@ Coord TechnoClass::Railgun_Beam_Damage(Coord & coord, AbstractClass *abstract, W
 			final_cell = final_impact.As_Cell();
 			CellClass *cptr = &Map[final_cell];
 
-			TechnoClass *optr = (TechnoClass *)cptr->Cell_Occupier(cptr->IsUnderBridge && final_impact.Z >= LEVEL_LEPTON_H * (cptr->Height + BRIDGE_CELL_HEIGHT));
+			ObjectClass * optr; // RA2: declared first, the occupier list is picked by an if/else
+			if (cptr->IsUnderBridge && final_impact.Z >= LEVEL_LEPTON_H * (cptr->Height + BRIDGE_CELL_HEIGHT)) { // RA2: as above
+				optr = cptr->Cell_Bridge_Occupier(); // RA2: as above
+			} else {
+				optr = cptr->Cell_Occupier(); // RA2: as above
+			}
 
 			while (optr != NULL) {
 				if (optr != this) {
 					if (optr == abstract) {
 						target_found = true;
 					}
-					if (optr->Is_Techno()) {
+					bool techno; // RA2: the flag test is kept in a local, left unset for a null object
+					if (optr != NULL) { // RA2: as above
+						techno = (optr->AbstractFlags & 1); // RA2: as above
+					}
+					if (optr != NULL && techno) { // RA2: as above
 						float distance = 0.0f;
 						if (optr->RTTI != RTTI_BUILDING) {
 							/*
@@ -10123,8 +9993,7 @@ Coord TechnoClass::Railgun_Beam_Damage(Coord & coord, AbstractClass *abstract, W
 							Vector3 off = obj - start;
 							Vector3 cross = Vector3::Cross_Product(off, delta);
 							Vector3 perp = Vector3::Cross_Product(cross, delta);
-							float dot = perp * off;
-							distance = fabs(dot / perp.Length());
+							distance = (float)fabs((perp * off) / Vector_Length(perp)); // RA2: the length comes from a helper summing in doubles
 						}
 
 						if (distance < Rule->RailgunDamageRadius || optr == abstract) {
@@ -10134,7 +10003,7 @@ Coord TechnoClass::Railgun_Beam_Damage(Coord & coord, AbstractClass *abstract, W
 						}
 					}
 				}
-				optr = (TechnoClass *)optr->Next;
+				optr = optr->Next; // RA2: the list is walked through the object pointer
 			}
 
 			/// We hit a cell higher than the impact point, halt gathering targets.
@@ -10152,23 +10021,21 @@ Coord TechnoClass::Railgun_Beam_Damage(Coord & coord, AbstractClass *abstract, W
 
 	CellClass *cptr = (CellClass *)abstract;
 
-	if (!target_found) {
-		ObjectClass *obj = dynamic_cast<ObjectClass *>(abstract);
+	if (!target_found && abstract != NULL && (abstract->AbstractFlags & 2)) { // RA2: as above
+		ObjectClass * obj = (ObjectClass *)abstract; // RA2: the abstract flag test replaces the dynamic cast
 
-		if (obj != NULL) {
-			if (targets.Count() == 0 || targets.ID(obj) == -1) {
-				targets.Add(obj);
-			}
+		if (targets.Count() == 0 || targets.ID(obj) == -1) { // RA2: as above
+			targets.Add(obj); // RA2: as above
 		}
 	}
 
 	for (int j = 0; j < targets.Count(); j++) {
 		int damage = weapon->AmbientDamage;
-		targets[j]->Take_Damage(damage, 0, weapon->WarheadPtr, this);
+		targets[j]->Take_Damage(damage, 0, weapon->WarheadPtr, this, false, false); // RA2: all six arguments
 	}
 
 	/// If the impact was a cell and contains a collapseable cliff, try to collapse it.
-	if (cptr->RTTI == RTTI_CELL && cptr->Is_Tile_Destroyable_Cliff()) {
+	if (abstract->Fetch_RTTI() == RTTI_CELL && cptr->Is_Tile_Destroyable_Cliff()) { // RA2: the virtual RTTI
 		if (Percent_Chance(Rule->CollapseChance)) {
 			Map.Collapse_Cliff(cptr);
 		}
@@ -10176,6 +10043,8 @@ Coord TechnoClass::Railgun_Beam_Damage(Coord & coord, AbstractClass *abstract, W
 
 	return(center);
 }
+
+
 
 
 /// <summary>
