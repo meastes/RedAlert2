@@ -532,7 +532,9 @@ unk_00668300,0x00668300,0x00668730,unknown,code not assigned to a module
 script,0x00668730,0x006691A0,tibsun,"functions compiled from src/script.cpp, matched, without gaps; ten placed by the gap"
 unk_006691A0,0x006691A0,0x006695E0,unknown,code not assigned to a module
 scroll,0x006695E0,0x0066AC60,tibsun,"functions compiled from src/scroll.cpp, matched, without gaps"
-unk_0066AC60,0x0066AC60,0x0066CA70,unknown,code not assigned to a module
+unk_0066AC60,0x0066AC60,0x0066AEA0,unknown,code not assigned to a module
+sendfile,0x0066AEA0,0x0066C880,tibsun,"functions compiled from src/sendfile.cpp, matched, without gaps"
+unk_0066C880,0x0066C880,0x0066CA70,unknown,code not assigned to a module
 serialed,0x0066CA70,0x0066E0A0,tibsun,"functions compiled from src/serialed.cpp, matched, without gaps"
 unk_0066E0A0,0x0066E0A0,0x0066E290,unknown,code not assigned to a module
 session,0x0066E290,0x006737D0,tibsun,"functions compiled from src/session.cpp, without gaps; matched except ??0MultiMission@@QAE@PBDPBG0_N0HH@Z; two placed by the gap"
