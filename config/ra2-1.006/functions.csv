@@ -6914,7 +6914,7 @@ address,size,evidence
 0x0065C7D0,1536,"code of src/scenario.cpp, matched"
 0x0065CDD0,1264,"code of src/scenario.cpp, matched"
 0x0065D2C0,176,"code of src/scenario.cpp, matched: too few unmasked bytes for the match rule"
-0x0065D370,,"inferred: target of the call at 0x0065EB6E in matched src/scenario.cpp; size not known"
+0x0065D370,1152,"code of src/scenario.cpp, matched: too few unmasked bytes for the match rule"
 0x0065D7F0,,"inferred: target of the call at 0x0053F9BA in matched src/mainloop.cpp; size not known"
 0x0065DEC0,1408,"code of src/scenario.cpp, matched"
 0x0065E440,336,"code of src/scenario.cpp, matched"
