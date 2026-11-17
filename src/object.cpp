@@ -118,6 +118,7 @@
 #include "infantry.h"
 #include "infatype.h"
 #include "inline.h"
+#include "linetrail.h" // RA2: the line trail Unlimbo makes
 #include "logic.h"
 #include "map.h"
 #include "mono.h"
@@ -136,16 +137,6 @@ namespace Unsorted { extern bool ArmageddonMode; }
 
 void Set_Type_Select_Mode(unsigned mode); // RA2: 0x006F6780 (uicmnds.cpp, not in main yet), the select-by-type mode; 0 leaves it
 
-class LineTrail { // RA2: a line trail object (link2.cpp in YR); only what object.cpp uses is declared
-public: // RA2: as above
-	LineTrail(void); // RA2: 0x005393E0, called by Unlimbo (meastes' name; the object is 528 bytes)
-	void Release_Owner(void); // RA2: 0x005394F0, called by Detach_All; YR's name Release_Owner (meastes: Clear_Owner)
-	void Set_Decrement(int value); // RA2: 0x00539510, called by Unlimbo; YR's name
-
-	RGBClass Color; // RA2: +0x00, set by Unlimbo
-	ObjectClass * Owner; // RA2: +0x04, the object that draws the trail
-	char Rest[520]; // RA2: the other members (not used here); fills the 528 bytes that Unlimbo allocates
-}; // RA2: as above
 
 
 
