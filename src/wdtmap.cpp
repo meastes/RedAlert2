@@ -467,6 +467,15 @@ static inline Point2D To_Point(Point2D point) // RA2: the point as the INI class
 
 
 /// <summary>
+/// RA2: the territory a click map color stands for: colors 0 to 29, and 255 (no territory) for any other.
+/// </summary>
+unsigned __fastcall Territory_Of_Color(unsigned color) // RA2: 0x0072A870, the executable also has this out of line, though no function calls it; WDT_Write_Map_Ini tests the color with the same two comparisons
+{
+	return color > 29 ? 255 : color; // RA2: as above
+}
+
+
+/// <summary>
 /// RA2: a development tool that no code calls. It scans a click map, finds each territory's bounding rectangle and
 /// center point (colors 0 to 29), and writes the center points to WDTMap.ini, next to the game and as ..\code\wdtmap.ini,
 /// as the Target_(width) entries of the sections (prefix)(NN).
@@ -475,6 +484,7 @@ static inline Point2D To_Point(Point2D point) // RA2: the point as the INI class
 /// <param name="filename">The PCX file of the click map.</param>
 void __fastcall WDT_Write_Map_Ini(Wstring const & prefix, Wstring const & filename) // RA2: a development tool that no code calls. It scans a click map, finds each territory's bounding rectangle and
 {
+	Wstring __fastcall operator+(Wstring const & left, Wstring const & right); // RA2: 0x0076F7D0, the free join of two strings (wstring.h has only the member), declared here because file scope makes the other joins in this file ambiguous
 	CDFileClass file; // RA2: as above
 	file.Open("WDTMap.ini", FileClass::READ); // RA2: as above
 	INIClass ini; // RA2: as above
@@ -528,9 +538,9 @@ void __fastcall WDT_Write_Map_Ini(Wstring const & prefix, Wstring const & filena
 	}
 	int i = 0; // RA2: as above
 	while (cursor) { // RA2: as above
-		Wstring section = prefix + Wstring_FromInt(i, 2); // RA2: as above
+		Wstring section = operator+(prefix, Wstring_FromInt(i, 2)); // RA2: the free join, prefix in edx
 		Wstring number = Wstring_FromInt(VideoModeWidth); // RA2: as above
-		ini.Put_Point(section, Wstring("Target_") + number, To_Point(centroids[i].Center_Point())); // RA2: as above
+		ini.Put_Point(section, Wstring("Target_").operator+(number), To_Point(centroids[i].Center_Point())); // RA2: as above
 		++cursor; // RA2: as above
 		i++; // RA2: as above
 	}

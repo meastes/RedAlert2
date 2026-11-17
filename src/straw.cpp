@@ -38,6 +38,9 @@
 
 #include <cstddef>
 #include <cstring>
+#include <wchar.h> // RA2: wcslen, wcscpy for SubTitle
+#include "rect.h" // RA2: the unused rectangle after SubTitle
+#include "subtitle.h" // RA2: SubTitle
 
 
 /***********************************************************************************************
@@ -133,3 +136,56 @@ int Straw::Get(void * source, int slen)
 	}
 	return(0);
 }
+
+/// <summary>
+/// RA2: a subtitle that shows at once, for 20 seconds, in white, on line 15, centered, without text.
+/// </summary>
+SubTitle::SubTitle(void) // RA2: 0x0069B0C0
+	: TimeStamp(0), // RA2: as above
+	Duration(20 * 60), // RA2: as above
+	RGBColor(0x00FFFFFF), // RA2: as above
+	LinePosition(15), // RA2: as above
+	Align(Center), // RA2: as above
+	Caption(NULL) // RA2: as above
+{
+}
+
+/// <summary>
+/// RA2: frees the caption.
+/// </summary>
+SubTitle::~SubTitle(void) // RA2: 0x0069B0F0
+{
+	if (Caption != NULL) { // RA2: as above
+		delete [] Caption; // RA2: as above
+	}
+}
+
+/// <summary>
+/// RA2: sets the colour of the text as 0x00RRGGBB.
+/// </summary>
+void SubTitle::Set_RGB_Color(unsigned char red, unsigned char green, unsigned char blue) // RA2: 0x0069B100
+{
+	RGBColor = (((unsigned long)red << 16) | ((unsigned long)green << 8) | (unsigned long)blue); // RA2: as above
+}
+
+/// <summary>
+/// RA2: replaces the caption with a copy of the text.
+/// </summary>
+void SubTitle::Set_Caption(wchar_t * string) // RA2: 0x0069B120
+{
+	if (Caption != NULL) { // RA2: as above
+		delete [] Caption; // RA2: as above
+		Caption = NULL; // RA2: as above
+	}
+
+	if (string != NULL) { // RA2: as above
+		unsigned int length = wcslen(string); // RA2: as above
+		Caption = new wchar_t[length + 1]; // RA2: as above
+
+		if (Caption != NULL) { // RA2: as above
+			wcscpy(Caption, string); // RA2: as above
+		}
+	}
+}
+
+Rect SubtitleUnusedRect(0, 0, 0, 0); // RA2: 0x00ABD740; a rectangle nothing reads (its initializer is the one at 0x0069B170)

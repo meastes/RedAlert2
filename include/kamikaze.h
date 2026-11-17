@@ -5,7 +5,11 @@
 
 #pragma once
 
+#include "ftimer.h" // RA2: the tracker holds a frame timer
+#include "timer.h" // RA2: as above
+
 class AbstractClass;
+class AircraftClass;
 
 /*
 **	RA2 tracks the aircraft that fly into their target.
@@ -13,6 +17,9 @@ class AbstractClass;
 class KamikazeClass
 {
 	public:
+		CDTimerClass<FrameTimerClass> Timer; // RA2: +0x00; the tracker's update timer (set to 2 when a missile is handed over)
+
+		void Add(AircraftClass * missile, AbstractClass * target); // RA2: 0x005316A0, tracks a missile flying at the target
 		void Remove(AbstractClass * target);
 		HRESULT Save(IStream * stream); // RA2: 0x00531A40, Put_All saves the tracked kamikazes
 		HRESULT Load(IStream * stream); // RA2: 0x00531AA0, Get_All loads the tracked kamikazes

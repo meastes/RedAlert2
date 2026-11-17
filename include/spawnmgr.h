@@ -11,6 +11,8 @@ class AircraftClass;
 class AircraftTypeClass;
 class TechnoClass;
 
+EXTERN_C const CLSID CLSID_SpawnManagerClass; // RA2: 0x007A1DD0, the class identifier GetClassID returns
+
 enum SpawnNodeStatus {
 	SPAWN_IDLE = 0,
 	SPAWN_TAKEOFF = 1,
