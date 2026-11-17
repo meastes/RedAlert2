@@ -159,6 +159,7 @@ inline int Max_Visible_Rows(void) // RA2: the rows that fit, inline in Draw_It (
 }
 PaletteClass * Get_Game_Palette(void); // RA2: 0x6F45E0, the pointer at 0xAC11A0 (the sidebar layout's module)
 extern int SidebarWidth; // RA2: 0x7ADD80
+void Set_Tab_Building(BuildingClass * building); // RA2: 0x6F8A00; the structure or defense tab (by the building type's build category) shows this building
 namespace Unsorted { extern bool ArmageddonMode; } // RA2: as above
 namespace Game { extern bool IsActive; extern HWND hWnd; } // RA2: as above
 namespace Unsorted { extern bool ScenarioStarted; } // RA2: as above
@@ -838,6 +839,8 @@ void SidebarClass::Update_Build_Buttons() // RA2: as above
 }
 
 
+
+
 void SidebarClass::Enable_Column_Button(int index) // RA2: as above
 {
 	if (First_Used_Column() == -1 && SidebarShapes[SBSHAPE_SHUTTER_BACK]) { // RA2: as above
@@ -1142,6 +1145,9 @@ void SidebarClass::Start_Tab_Flash(int index) // RA2: as above
 }
 
 
+
+
+
 bool SidebarClass::Stop_Tab_Flash(int index) // RA2: as above
 {
 	return TabButton[index].Stop_Flashing(); // RA2: as above
@@ -1223,6 +1229,8 @@ void SidebarClass::AI(KeyNumType & input, Point2D const & xy)
 	}
 	PowerClass::AI(input, xy); // RA2: as above
 }
+
+
 
 
 /***********************************************************************************************
@@ -1319,7 +1327,7 @@ bool SidebarClass::Activate(int control)
 			Add_A_Button(Upgrade);
 			for (int tab = 0; tab < STRIPS; tab++) { // RA2: as above
 				TabButton[tab].Zap(); // RA2: as above
-				TabButton[tab].IsOn = false; // RA2: as above
+				TabButton[tab].IsPressed = false; // RA2: the exe clears the byte at +0x2C of the button (IsPressed), not IsOn at +0x2D
 				Add_A_Button(TabButton[tab]); // RA2: as above
 			}
 			ScrollDownButton.Zap(); // RA2: as above
@@ -1822,46 +1830,17 @@ void SidebarClass::StripClass::Flag_To_Redraw(void)
  *   12/31/1994 JLB : Created.                                                                 *
  *   12/31/1994 JLB : Uses mouse coordinate parameters.                                        *
  *=============================================================================================*/
-bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
+bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy) // RA2: 0x67F050; the scroll buttons are handled in SidebarClass::AI
 {
-	KeyNumType key = KeyNumType(input & ~KN_UNK);
-	bool redraw = false;
-
-	/*
-	**	If this is scroll button for this side strip, then scroll the strip as
-	**	indicated.
-	*/
-	if (key == KeyNumType(ScrollUpButton.ID|KN_BUTTON)) { // RA2: as above
-		ScrollUpButton.IsPressed = false; // RA2: as above
-		if ((input & KN_UNK) != 0) {
-			if (!Page(true)) {
-				Sound_Effect(Rule->ScoldSound);
-			}
-		} else {
-			if (!Scroll(true)) {
-				Sound_Effect(Rule->ScoldSound);
-			}
-		}
-	}
-	else if (key == KeyNumType(ScrollDownButton.ID|KN_BUTTON)) { // RA2: as above
-		ScrollDownButton.IsPressed = false; // RA2: as above
-		if ((input & KN_UNK) != 0) {
-			if (!Page(false)) {
-				Sound_Effect(Rule->ScoldSound);
-			}
-		} else {
-			if (!Scroll(false)) {
-				Sound_Effect(Rule->ScoldSound);
-			}
-		}
-	}
+	bool redraw = false; // RA2: as above
 
 	/*
 	**	Reflect the scroll desired direction/value into the scroll
 	**	logic handler. This might result in up or down scrolling.
 	*/
-	if (!IsScrolling && Scroller) {
-		if (BuildableCount <= Map.Get_Row_Count()) { // RA2: as above
+	if (!IsScrolling && Scroller) { // RA2: as above
+		int rows = Map.Get_Row_Count(); // RA2: the rows are computed once and used twice
+		if (BuildableCount <= rows * 2) { // RA2: two cameos to a row
 			Scroller = 0;
 		} else {
 
@@ -1882,11 +1861,11 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 				}
 
 			} else {
-				if (TopIndex+Map.Get_Row_Count() >= BuildableCount) { // RA2: as above
+				if ((TopIndex + rows) * 2 >= BuildableCount) { // RA2: two cameos to a row
 					Scroller = 0;
 				} else {
 					Scroller--;
-					Slid = OBJECT_HEIGHT;
+					Slid = SidebarClass::CameoHeight; // RA2: the step from one row of cameos to the next
 					IsScrollingDown = true;
 					IsScrolling = true;
 				}
@@ -1899,15 +1878,15 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 	*/
 	if (IsScrolling) {
 		if (IsScrollingDown) {
-			Slid -= SCROLL_RATE;
+			Slid -= SidebarClass::SidebarEdgeStep; // RA2: 0xABCD80
 			if (Slid <= 0) {
 				IsScrolling = false;
 				Slid = 0;
 				TopIndex++;
 			}
 		} else {
-			Slid += SCROLL_RATE;
-			if (Slid >= OBJECT_HEIGHT) {
+			Slid += SidebarClass::SidebarEdgeStep; // RA2: as above
+			if (Slid >= SidebarClass::CameoHeight) { // RA2: as above
 				IsScrolling = false;
 				Slid = 0;
 			}
@@ -1930,6 +1909,44 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 		}
 	}
 
+	if (Map.RedrawUntilFrame > Frame) { // RA2: the sidebar was asked to redraw for a few more frames
+		redraw = true; // RA2: as above
+	}
+
+	/*
+	**	The tab flashes while something on its strip can be placed.
+	*/
+	if (ID == 0 || ID == 1) { // RA2: the structure and defense tabs
+		bool ready = false; // RA2: as above
+		for (int index = 0; index < BuildableCount; index++) { // RA2: as above
+			if (Buildables[index].BuildableType == RTTI_SPECIAL) { // RA2: as above
+				SuperClass * super = PlayerPtr->SuperWeapon[Buildables[index].BuildableID]; // RA2: as above
+				if (super != NULL && super->Can_Place()) { // RA2: as above
+					ready = true; // RA2: as above
+					break; // RA2: as above
+				}
+			} else {
+				FactoryClass * factory = Buildables[index].Factory; // RA2: as above
+				if (factory != NULL && factory->Has_Completed()) { // RA2: as above
+					TechnoClass * done = factory->Get_Object(); // RA2: as above
+					if (done != NULL && done->Fetch_RTTI() == RTTI_BUILDING) { // RA2: as above
+						ready = true; // RA2: as above
+						break; // RA2: as above
+					}
+				}
+			}
+		}
+		if (ready) { // RA2: as above
+			int frame = Frame; // RA2: the frame is read once; the exe adds the delay to it as (delay + frame), unlike the out-of-line Start_Tab_Flash 0x67DC00
+			int delay = 10 - frame % 10; // RA2: the tab flashes in step with the next multiple of ten frames, as Start_Tab_Flash does
+			Map.TabButton[ID].Start_Flashing(10, delay, (delay + frame) / 10 % 2 == 0); // RA2: as above
+			Map.IsForceCompleteRedraw = true; // RA2: as above
+			Map.Flag_To_Redraw(); // RA2: as above
+		} else {
+			Map.Stop_Tab_Flash(ID); // RA2: as above
+		}
+	}
+
 	/*
 	**	Handle any building clock animation logic.
 	*/
@@ -1949,23 +1966,42 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 					*/
 					TechnoClass * pending = factory->Get_Object();
 					if (pending != NULL) {
-						switch ((RTTIType)pending->RTTI) {
-							case RTTI_UNIT:
-							case RTTI_AIRCRAFT:
-								OutList.Add(EventClass(pending->Owner(), EventClass::PLACE, pending->RTTI, CELL_NONE));
-								Speak(VOX_UNIT_READY);
+						switch (pending->Fetch_RTTI()) { // RA2: as above
+							case RTTI_BUILDING: { // RA2: as above
+								Queue_Speech("EVA_ConstructionComplete", -1, -1); // RA2: RA2's EVA speaks through Queue_Speech
+								BuildingClass * building = (pending->Fetch_RTTI() == RTTI_BUILDING) ? (BuildingClass *)pending : NULL; // RA2: the cast the exe makes before the call
+								Set_Tab_Building(building); // RA2: 0x6F8A00 makes the building the one the structure or defense tab shows
 								break;
+							}
 
-							case RTTI_BUILDING:
-								Speak(VOX_CONSTRUCTION);
-								break;
-
-							case RTTI_INFANTRY:
-								OutList.Add(EventClass(pending->Owner(), EventClass::PLACE, pending->RTTI, CELL_NONE));
-								Speak(VOX_UNIT_READY);
+							case RTTI_UNIT: // RA2: the jump table of the exe sends these three kinds to one body
+							case RTTI_AIRCRAFT: // RA2: as above
+							case RTTI_INFANTRY: // RA2: as above
+								OutList.Add(EventClass(pending->Owner(), EventClass::PLACE, pending->Fetch_RTTI(), -1, pending->Techno_Type_Class()->Naval, CELL_NONE)); // RA2: the event carries the naval flag of the type
+								Buildables[index].Unknown_10 = 0; // RA2: the entry is cleared once the placement event is queued (or dropped)
 								break;
 						}
 					}
+				}
+			}
+		}
+	}
+
+	/*
+	**	The cameo clocks of the entries that are not producing are reset, and all of them are
+	**	advanced here.
+	*/
+	for (int index = 0; index < BuildableCount; index++) { // RA2: as above
+		if (Buildables[index].Unknown_10 == 1) { // RA2: as above
+			FactoryClass * factory = Buildables[index].Factory; // RA2: as above
+			if (factory != NULL && (!factory->Is_Building() || factory->Is_On_Hold())) { // RA2: as above
+				Buildables[index].Progress.Set_Rate(0); // RA2: as above
+				Buildables[index].Progress.Set_Stage(0); // RA2: as above
+			}
+			if (Buildables[index].Progress.Graphic_Logic()) { // RA2: as above
+				redraw = true; // RA2: as above
+				if (Buildables[index].Progress.Fetch_Stage() >= 53) { // RA2: the clock has 54 frames; at the last one it stops and keeps the stage
+					Buildables[index].Progress.Set_Rate(0); // RA2: as above
 				}
 			}
 		}
@@ -1976,12 +2012,28 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy)
 	**	set the redraw flag for this side strip.
 	*/
 	if (redraw) {
+		Map.Flag_Tab_To_Redraw(Map.ActiveTabIndex); // RA2: as above
 		Flag_To_Redraw();
-		IsToBlitSidebar = true;
+		SidebarClass::IsSidebarRedrawPending = true; // RA2: as above
+		SidebarClass::IsToBlitSidebar = true; // RA2: as above
 	}
 
 	return(redraw);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /// <summary>
@@ -2751,6 +2803,19 @@ bool SidebarClass::StripClass::Has_Buildables(void) const // RA2: as above
 {
 	return BuildableCount > 0; // RA2: as above
 }
+/// <summary>
+/// Abandons the production of an object kind in the strip it is built from.
+/// </summary>
+/// <param name="type">The object type's RTTI.</param>
+/// <param name="id">The object type's index; with the kind it gives the strip.</param>
+/// <param name="factory">The factory that was producing.</param>
+/// <returns>Was the factory abandoned?</returns>
+bool SidebarClass::Abandon_Production(RTTIType type, int id, FactoryClass * factory) // RA2: 0x681740 takes the object id too; the strip comes from Which_Tab, whose body is expanded here
+{
+	return(Column[Which_Tab(type, id, false)].Abandon_Production(factory)); // RA2: as above
+}
+
+
 
 
 /***********************************************************************************************
@@ -2865,6 +2930,28 @@ void SidebarClass::Zoom_Mode_Control(void)
 		Radar_Activate(2, true); // RA2: as above
 	}
 }
+
+/// <summary>
+/// Determines which sidebar tab an object type is built from, when the build category is known already.
+/// </summary>
+/// <param name="type">The object type's RTTI (only the type classes are tabbed this way).</param>
+/// <param name="category">The build category of the object (5 for the defense buildings).</param>
+/// <param name="naval">Unused.</param>
+/// <returns>The tab (0 to 3), or -1 if the kind is not built from the sidebar.</returns>
+int Sidebar_Which_Tab_By_Category(RTTIType type, int category, bool naval) // RA2: 0x681940 (YR: SidebarClass::GetObjectTabIdxByCat)
+{
+	if (type == RTTI_INFANTRYTYPE) { // RA2: as above
+		return 2; // RA2: as above
+	}
+	if (type == RTTI_UNITTYPE || type == RTTI_AIRCRAFTTYPE) { // RA2: as above
+		return 3; // RA2: as above
+	}
+	if (type == RTTI_BUILDINGTYPE) { // RA2: as above
+		return category == 5; // RA2: as above
+	}
+	return -1; // RA2: as above
+}
+
 
 
 /// <summary>

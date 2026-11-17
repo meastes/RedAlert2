@@ -159,7 +159,7 @@ class SidebarClass : public PowerClass
 		void Flag_Tab_To_Redraw(int tab); // RA2: 0x67C2D0
 		void Select_Tab(int tab); // RA2: 0x67D990
 		void Flash_Cameo(TechnoTypeClass const * type, int frames); // RA2: 0x6822B0
-		bool Sidebar_Click(KeyNumType & input, int x, int y);
+		bool Abandon_Production(RTTIType type, int id, FactoryClass * factory); // RA2: 0x681740 takes the object id too (HouseClass::Abandon_Production passes it); replaces TibSun's Sidebar_Click declaration, which nothing defines or calls
 		void Recalc(void);
 		bool Factory_Link(FactoryClass * factory, RTTIType type, int id);
 
