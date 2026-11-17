@@ -56,10 +56,22 @@ bool ObjectTypeClass::TalkBubbleShapesAllocated = false; // RA2: as above
 DynamicVectorClass<ObjectTypeClass *> ObjectTypeClass::ObjectTypes;
 
 
-/// <summary>
-/// RA2
-/// </summary>
-static inline bool _Add_Type(DynamicVectorClass<ObjectTypeClass *> & v, ObjectTypeClass * p) { return v.Add(p); }
+template<> inline bool DynamicVectorClass<ObjectTypeClass *>::Add(ObjectTypeClass * const & object) // RA2: this unit's Add holds the new length in a variable before the Resize call (the sum is formed in the register that held Length), as in link2.cpp
+{
+	if (ActiveCount >= Length()) { // RA2: as above
+		if ((IsAllocated || !VectorMax) && GrowthStep > 0) { // RA2: as above
+			int new_length = Length(); // RA2: as above
+			new_length += GrowthStep; // RA2: as above
+			if (!Resize(new_length)) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		} else {
+			return(false); // RA2: as above
+		}
+	}
+	(*this)[ActiveCount++] = object; // RA2: as above
+	return(true); // RA2: as above
+}
 
 
 /***********************************************************************************************
@@ -82,10 +94,14 @@ ObjectTypeClass::ObjectTypeClass(char const * ininame) :
 	BASECLASS(ininame),
 	MaxSize(0),
 	CrushSound(VOC_NONE),
+	AmbientSound(-1), // RA2: 0x1C4 starts at -1, like CrushSound
 	GraphicName(),
+	AlternateArcticArt(false), // RA2: 0x1E1 starts clear
+	ArcticArtInUse(false), // RA2: 0x1E2 starts clear
 	AlphaGraphicName(),
 	IsTheater(false),
 	IsCrushable(false),
+	IsBombable(true), // RA2: 0x1FE starts set
 	IsStealthy(false),
 	IsSelectable(true),
 	IsLegalTarget(true),
@@ -97,15 +113,20 @@ ObjectTypeClass::ObjectTypeClass(char const * ininame) :
 	IsNewTheater(false),
 	IsHasRadialIndicator(false),
 	IsIgnoresFirestorm(false),
+	UseLineTrail(false), // RA2: 0x20A starts clear
+	LineTrailColor(128, 128, 128), // RA2: 0x20B..0x20D are stored as 0x80
+	LineTrailColorDecrement(16), // RA2: 0x210 is stored as 0x10
 	RadialColor(0,0,0),
 	Armor(ARMOR_NONE),
 	MaxStrength(0),
 	ImageData(0),
-	AlphaImageData(0)
+	ImageAllocated(false), // RA2: 0xA8 starts clear
+	AlphaImageData(0), // RA2: as above
+	NoSpawnAlt(false) // RA2: 0x1B8 starts clear
 {
 	GraphicName = IniName;
 
-	AlphaGraphicName = "";
+	AlphaGraphicName = ""; // RA2: copied from the string at 0x83C55C
 
 	ObjectTypes.Add(this);
 }
