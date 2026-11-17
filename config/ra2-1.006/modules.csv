@@ -425,7 +425,7 @@ nullmgr,0x005CFFC0,0x005D1F20,tibsun,"functions compiled from src/nullmgr.cpp, m
 unk_005D1F20,0x005D1F20,0x005D2730,unknown,code not assigned to a module
 object,0x005D2730,0x005D54F0,tibsun,"functions compiled from src/object.cpp, matched, without gaps; 25 placed by the gap; ??0ObjectClass@@QAE@XZ not placed; ??0ObjectClass@@QAE@ABVNoInitClass@@@Z not placed; ??1ObjectClass@@UAE@XZ not placed"
 unk_005D54F0,0x005D54F0,0x005D5A80,unknown,code not assigned to a module
-objtype,0x005D5A80,0x005D7FF0,tibsun,"functions compiled from src/objtype.cpp, without gaps; matched except ??1ObjectTypeClass@@UAE@XZ and ?Fetch_Normal_Image@ObjectTypeClass@@QAEXXZ and ?Load@ObjectTypeClass@@UAGJPAUIStream@@@Z; two placed by the gap; ??0ObjectTypeClass@@QAE@PBD@Z not placed; ?Theater_Naming_Convention@ObjectTypeClass@@QBEXPADW4TheaterType@@@Z not placed"
+objtype,0x005D5A80,0x005D7FF0,tibsun,"functions compiled from src/objtype.cpp, matched, without gaps; two placed by the gap; ??0ObjectTypeClass@@QAE@PBD@Z not placed; ?Theater_Naming_Convention@ObjectTypeClass@@QBEXPADW4TheaterType@@@Z not placed"
 unk_005D7FF0,0x005D7FF0,0x005D8390,unknown,code not assigned to a module
 obscure,0x005D8390,0x005D85E0,tibsun,"functions compiled from src/obscure.cpp, matched, without gaps"
 unk_005D85E0,0x005D85E0,0x005D87D0,unknown,code not assigned to a module
