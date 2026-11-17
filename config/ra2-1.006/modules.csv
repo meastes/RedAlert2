@@ -279,7 +279,7 @@ ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, matched, 
 unk_005109B0,0x005109B0,0x00513080,unknown,code not assigned to a module
 unk_00513080,0x00513080,0x00513260,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00513260,0x00513260,0x00513290,unknown,code not assigned to a module
-init,0x00513290,0x0051AD10,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; one placed by the gap; inline ?DebugString@@YAXPBDZZ at 0x005173B0"
+init,0x00513290,0x0051AD10,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; one placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; ?Init_Campaigns@@YIXXZ not placed; ?Init_Rules@@YI_NXZ not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0"
 unk_0051AD10,0x0051AD10,0x0051E820,unknown,code not assigned to a module
 interpal,0x0051E820,0x0051ECF0,tibsun,"functions compiled from src/interpal.cpp, matched, without gaps"
 unk_0051ECF0,0x0051ECF0,0x0051EEE0,unknown,code not assigned to a module
