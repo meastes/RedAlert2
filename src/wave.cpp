@@ -58,6 +58,9 @@ bool _tables_calculated = false;
 
 const float WaveStep = 0.05f;
 
+// RA2: the executable expands the table building into both constructors and also keeps WaveClass::Init_Statics (0x721BF0) as a function of its own; one inline helper does both
+static inline void Build_Shared_Tables(void); // RA2: as above
+
 
 /// <summary>
 /// Creates a wave between the firing object and its target.
@@ -72,6 +75,7 @@ WaveClass::WaveClass(Coord const & source_coord, Coord const & target_coord, Tec
 	Target(target),
 	Type(type),
 	IsWaveActive(true),
+	IsWaveFading(false), // RA2: the constructor clears the byte at +0x119
 	WaveEC(100),
 	WaveProgress(0),
 	FadeProgress(0),
@@ -79,11 +83,16 @@ WaveClass::WaveClass(Coord const & source_coord, Coord const & target_coord, Tec
 	Source(source),
 	AffectedCells(5)
 {
+	if (source_coord == target_coord) { // RA2: a wave with equal endpoints deletes itself and returns before anything else
+		Delete_Me(); // RA2: as above
+		return; // RA2: as above
+	}
+
 	Create_ID();
 	Waves.Add(this);
 
 	if (!_tables_calculated) {
-		Init_Statics();
+		Build_Shared_Tables(); // RA2: table building expanded in place
 	}
 
 	Build_Wave_Shape(source_coord, target_coord);
@@ -118,6 +127,7 @@ WaveClass::WaveClass(void) :
 	BASECLASS(),
 	Target(NULL),
 	IsWaveActive(true),
+	IsWaveFading(false), // RA2: the constructor clears the byte at +0x119
 	WaveEC(100),
 	WaveProgress(0),
 	FadeProgress(0),
@@ -128,7 +138,7 @@ WaveClass::WaveClass(void) :
 	Waves.Add(this);
 
 	if (!_tables_calculated) {
-		Init_Statics();
+		Build_Shared_Tables(); // RA2: table building expanded in place
 	}
 }
 
@@ -192,12 +202,7 @@ void WaveClass::Set_Laser_Pixel(unsigned short * buffer, int mult) const
 }
 
 
-/// <summary>
-/// Builds the lookup tables that every sonic wave shares.
-/// The radius, sine and intensity tables are the same for all waves, so the first wave to
-/// come along builds them and every wave after that makes free with them.
-/// </summary>
-void WaveClass::Init_Statics(void)
+static inline void Build_Shared_Tables(void) // RA2: as above
 {
 	const double _sine_duration = 0.125;
 	const double _sine_amplitude = 12;
@@ -219,6 +224,17 @@ void WaveClass::Init_Statics(void)
 	for (i = 0; i < _INTENSITY_TABLE_SIZE; i++) {
 		IntensityTable[i] = _INTENSITY_TABLE_OFFSET + (i * 8);
 	}
+}
+
+
+/// <summary>
+/// Builds the lookup tables that every sonic wave shares.
+/// The radius, sine and intensity tables are the same for all waves, so the first wave to
+/// come along builds them and every wave after that makes free with them.
+/// </summary>
+void WaveClass::Init_Statics(void) // RA2: as above
+{
+	Build_Shared_Tables(); // RA2: the table building moved into the helper above
 }
 
 

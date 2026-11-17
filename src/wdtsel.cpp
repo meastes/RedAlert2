@@ -62,6 +62,7 @@ Selection::Selection(rc_ptr<Campaign> const & campaign, int faction) : // RA2: c
 	LastHoverZone(-1), // RA2: as above
 	WorldMap(Map::Create(campaign->Properties->Get_Map_ID(), faction, campaign->Get_Player_Faction())), // RA2: as above
 	HoveredTerritoryID(-1), // RA2: as above
+	MousedTerritory(), // RA2: the empty counted pointer is made by its constructor between the territory id and the target drawer
 	TargetDrawer(NULL), // RA2: as above
 	ZoomingTarget(NULL), // RA2: as above
 	ThrobbingTarget(NULL), // RA2: as above
@@ -528,7 +529,7 @@ void Selection::Remove_Target_Anims(void)
 /// </summary>
 void Selection::Remove_Target_Anims2(void)
 {
-	for (TERRITORY_ITER it(WorldMap->Territories, 0); it; ++it) { // RA2: the map keeps its territories as counted pointers
+	for (TERRITORY_ITER it(WorldMap.Get()->Territories, 0); it; ++it) { // RA2: the map is reached through the plain getter here: its operator-> expanded inline in the destructor only so (the executable has all of the destructor's calls expanded)
 		MSAnim * anim = (*it)->Remove_Target_Anim(); // RA2: as above
 		if (anim != NULL) {
 			Remove_Anim(anim);

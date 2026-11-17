@@ -185,11 +185,6 @@ void LightConvertClass::Apply_Tint(int red_tint, int green_tint, int blue_tint, 
 
 		if (level_count >= 0) {
 
-			int intensity_accum = 0;
-			int blue_accum = 0;
-			int green_accum = 0;
-			int red_accum = 0;
-
 			for (; level <= IntensityLevels - 1; level++) {
 
 				int interp_intensity;
@@ -198,13 +193,13 @@ void LightConvertClass::Apply_Tint(int red_tint, int green_tint, int blue_tint, 
 				int interp_blue;
 
 				if (IntensityLevels > 1) {
-					interp_red = red_accum / level_count;
-					interp_green = green_accum / level_count;
-					interp_blue = blue_accum / level_count;
+					interp_red = red_step * 2 * level / level_count; // RA2: the tint scales with the level; the compiler turns the product into a running sum
+					interp_green = green_step * 2 * level / level_count; // RA2: as above
+					interp_blue = blue_step * 2 * level / level_count; // RA2: as above
 					if (level > max_level) {
 						interp_intensity = 0x10000;
 					} else {
-						interp_intensity = intensity_accum / max_level;
+						interp_intensity = level * 0x10000 / max_level; // RA2: the intensity is computed from the level in place, no separate running sums
 					}
 				} else {
 					interp_red = red_step;
@@ -255,10 +250,6 @@ void LightConvertClass::Apply_Tint(int red_tint, int green_tint, int blue_tint, 
 						}
 						break;
 				}
-				red_accum += 2 * red_step;
-				green_accum += 2 * green_step;
-				blue_accum += 2 * blue_step;
-				intensity_accum += 0x10000;
 			}
 		}
 	}
