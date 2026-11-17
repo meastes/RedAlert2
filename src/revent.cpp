@@ -83,7 +83,20 @@ const char * RadarEventNames[RADAREVENT_COUNT] = {
 /// <param name="event">The kind of event to raise.</param>
 /// <param name="cell">The cell that the event should draw attention to.</param>
 /// <returns>bool; Was an event actually created?</returns>
-
+bool Submit_Radar_Event(RadarEventType event, Cell cell) // RA2: at 0x0063B5B0
+{
+	if (Can_Suppress_Radar_Event(event)) {
+		for (int index = 0; index < RadarEventClass::RadarEvents.Count(); index++) {
+			if (RadarEventClass::RadarEvents[index]->Type == event) {
+				if (cell.Distance_To(RadarEventClass::RadarEvents[index]->Location) < RadarEventClass::RadarEvents[index]->Get_Suppression_Distance()) {
+					return(false);
+				}
+			}
+		}
+	}
+	new RadarEventClass(event, cell);
+	return(true);
+}
 
 
 /// <summary>
@@ -107,31 +120,6 @@ void Plot_Radar_Event_Point(Point2D const & point)
 bool Can_Suppress_Radar_Event(RadarEventType event)
 {
 	return(RadarEventTypes[event].CanSuppress); // RA2: reads the table's flag instead of testing kinds
-}
-
-
-/// <summary>
-/// Raises a radar event at the specified cell.
-/// This is the routine the game logic calls to draw the player's eye to something
-/// worth looking at. An event of a suppressible kind is quietly dropped when one of
-/// the same kind is already showing nearby.
-/// </summary>
-/// <param name="event">The kind of event to raise.</param>
-/// <param name="cell">The cell that the event should draw attention to.</param>
-/// <returns>bool; Was an event actually created?</returns>
-bool Submit_Radar_Event(RadarEventType event, Cell cell) // RA2: at 0x0063B5B0
-{
-	if (Can_Suppress_Radar_Event(event)) {
-		for (int index = 0; index < RadarEventClass::RadarEvents.Count(); index++) {
-			if (RadarEventClass::RadarEvents[index]->Type == event) {
-				if (cell.Distance_To(RadarEventClass::RadarEvents[index]->Location) < RadarEventClass::RadarEvents[index]->Get_Suppression_Distance()) {
-					return(false);
-				}
-			}
-		}
-	}
-	new RadarEventClass(event, cell);
-	return(true);
 }
 
 
@@ -170,6 +158,19 @@ RadarEventClass::RadarEventClass(RadarEventType type, Cell cell):
 RadarEventClass::~RadarEventClass(void)
 {
 	RadarEvents.Delete(this);
+}
+
+
+/// <summary>
+/// Removes every radar event currently in play.
+/// This routine is used when the radar events must be discarded wholesale, such as
+/// when a scenario is torn down or a saved game is about to be read in.
+/// </summary>
+void RadarEventClass::Clear(void)
+{
+	for (int i = RadarEvents.Count() - 1; i >= 0; i--) {
+		delete RadarEvents[i];
+	}
 }
 
 
@@ -570,19 +571,6 @@ int RadarEventClass::Get_Duration(void)
 int RadarEventClass::Get_Suppression_Distance(void)
 {
 	return(RadarEventTypes[Type].SuppressionDistance); // RA2: from the static table
-}
-
-
-/// <summary>
-/// Removes every radar event currently in play.
-/// This routine is used when the radar events must be discarded wholesale, such as
-/// when a scenario is torn down or a saved game is about to be read in.
-/// </summary>
-void RadarEventClass::Clear(void)
-{
-	for (int i = RadarEvents.Count() - 1; i >= 0; i--) {
-		delete RadarEvents[i];
-	}
 }
 
 
