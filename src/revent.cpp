@@ -25,6 +25,45 @@ DynamicVectorClass<RadarEventClass *> RadarEventClass::RadarEvents;
 
 Cell LastRadarEventCell(0,0);
 
+/*
+**	RA2: the cells of the last eight radar events form a ring (0x00AB6788), with the index of the
+**	newest cell (0x00AB67C8) and the cell the "previous event" hotkey is on (0x00AB6818).
+*/
+Cell RecentRadarEventCells[8]; // RA2: at 0x00AB6788
+int RecentRadarEventNewest; // RA2: at 0x00AB67C8
+int RecentRadarEventCurrent; // RA2: at 0x00AB6818
+
+void Record_Event_Cell(Cell const & cell); // RA2: defined at the end of the file (0x0063C6C0), still expanded into the constructor
+
+/*
+**	RA2: the radar event kinds' parameters are a static table in the executable at 0x007A8D58
+**	(16 bytes per kind, 15 kinds), not rules.ini lists as in Tiberian Sun.
+*/
+struct RadarEventTypeStruct { // RA2: one row of the table at 0x007A8D58
+	int SuppressionDistance; // RA2: +0, read by the function at 0x0063C630
+	int VisibilityDuration; // RA2: +4, read by the function at 0x0063C610
+	int Duration; // RA2: +8, read by the function at 0x0063C620
+	bool CanSuppress; // RA2: +12, read inline by the suppression test
+};
+
+RadarEventTypeStruct RadarEventTypes[15] = { // RA2: initial values as stored in the executable
+	{8, 200, 400, true}, // RA2: as above
+	{8, 200, 400, false}, // RA2: as above
+	{8, 200, 400, false}, // RA2: as above
+	{8, 200, 600, true}, // RA2: as above
+	{8, 200, 400, true}, // RA2: as above
+	{6, 200, 400, true}, // RA2: as above
+	{2, 0, 200, true}, // RA2: as above
+	{8, 0, 200, true}, // RA2: as above
+	{2, 0, 400, true}, // RA2: as above
+	{5, 0, 400, false}, // RA2: as above
+	{8, 0, 100, false}, // RA2: as above
+	{8, 200, 200, true}, // RA2: as above
+	{8, 200, 400, false}, // RA2: as above
+	{8, 0, 5, false}, // RA2: as above
+	{8, 0, 200, true} // RA2: as above
+};
+
 const char * RadarEventNames[RADAREVENT_COUNT] = {
 	"Combat Event",
 	"Noncombat Event",
@@ -67,13 +106,7 @@ void Plot_Radar_Event_Point(Point2D const & point)
 /// <returns>bool; May a nearby event of this kind be discarded?</returns>
 bool Can_Suppress_Radar_Event(RadarEventType event)
 {
-	switch (event) {
-		case RADAREVENT_COMBAT:
-		case RADAREVENT_HARVESTER_ATTACKED:
-		case RADAREVENT_ENEMY_SENSED:
-			return(true);
-	}
-	return(false);
+	return(RadarEventTypes[event].CanSuppress); // RA2: reads the table's flag instead of testing kinds
 }
 
 
@@ -124,7 +157,7 @@ RadarEventClass::RadarEventClass(RadarEventType type, Cell cell):
 {
 	Offset = Map.Cell_To_Radar_Pixel(cell).TopLeft - Map.RadarRect.TopLeft;
 	Radius = MAX(Offset.X, MAX(Offset.Y, MAX(Map.RadarRect.Width - Offset.X, Map.RadarRect.Height - Offset.Y)));
-	LastRadarEventCell = cell;
+	Record_Event_Cell(cell); // RA2: records the cell in the ring instead of LastRadarEventCell
 	RadarEvents.Add(this);
 }
 
@@ -512,7 +545,7 @@ RGBClass RadarEventClass::Get_Min_Color(void) const
 /// <returns>Returns with the number of game frames the settled event remains drawn.</returns>
 int RadarEventClass::Get_Visibility_Duration(void)
 {
-	return(Rule->RadarEventVisibilityDurations[Type]);
+	return(RadarEventTypes[Type].VisibilityDuration); // RA2: from the static table
 }
 
 
@@ -524,7 +557,7 @@ int RadarEventClass::Get_Visibility_Duration(void)
 /// <returns>Returns with the number of game frames this event should survive.</returns>
 int RadarEventClass::Get_Duration(void)
 {
-	return(Rule->RadarEventDurations[Type]);
+	return(RadarEventTypes[Type].Duration); // RA2: from the static table
 }
 
 
@@ -536,7 +569,7 @@ int RadarEventClass::Get_Duration(void)
 /// <returns>Returns with the suppression distance, in cells.</returns>
 int RadarEventClass::Get_Suppression_Distance(void)
 {
-	return(Rule->RadarEventSuppressionDistances[Type]);
+	return(RadarEventTypes[Type].SuppressionDistance); // RA2: from the static table
 }
 
 
@@ -563,3 +596,13 @@ void Clear_Radar_Events(void) // RA2: not in TibSun, at 0x0063C640
 	}
 }
 
+
+/// <summary>
+/// Remembers the cell of a radar event in the ring of recent event cells.
+/// </summary>
+void Record_Event_Cell(Cell const & cell) // RA2: not in TibSun, at 0x0063C6C0
+{
+	RecentRadarEventNewest = (RecentRadarEventNewest + 1) % 8; // RA2: as above
+	RecentRadarEventCells[RecentRadarEventNewest] = cell; // RA2: as above
+	RecentRadarEventCurrent = RecentRadarEventNewest; // RA2: as above
+}

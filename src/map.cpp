@@ -12372,7 +12372,6 @@ int MapClass::Region_Threat(HouseClass * house, int level, int from_subzone, int
 				facing = FACING_N;
 			}
 
-			Cell fb(from_block_x, from_block_y); // RA2: as above
 			int from_threat1 = house->Regions[Cell_Region(RegionQuadrantOffsets[FromRegionQuadrants[facing][0]] + Cell(from_block_x, from_block_y))].Threat_Value();
 			int from_threat2 = house->Regions[Cell_Region(RegionQuadrantOffsets[FromRegionQuadrants[facing][1]] + Cell(from_block_x, from_block_y))].Threat_Value();
 			int from_threat = from_threat1;
@@ -12391,6 +12390,7 @@ int MapClass::Region_Threat(HouseClass * house, int level, int from_subzone, int
 	}
 	return(0);
 }
+
 
 
 /// <summary>

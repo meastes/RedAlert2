@@ -53,7 +53,7 @@ class BaseNodeClass
 {
 	public:
 		BaseNodeClass(void) {};
-		BaseNodeClass(StructType building, Cell cell) : Type(building), CellID(cell) {};
+		BaseNodeClass(StructType building, Cell cell) : Type(building), CellID(cell), Placed(false), Attempts(0) {}; // RA2: the executable's two-argument constructor clears the placed flag and the attempt count
 		BaseNodeClass(BaseNodeClass const & node) : Type(node.Type), CellID(node.CellID), Placed(node.Placed), Attempts(node.Attempts) {}; // RA2
 		bool operator == (BaseNodeClass const & node);
 		bool operator != (BaseNodeClass const & node);

@@ -281,6 +281,8 @@ bool TEventClass::operator () (TEventType event, HouseClass const * house, Objec
 		Event != TEVENT_BUILD_UNIT &&
 		Event != TEVENT_BUILD_INFANTRY &&
 		Event != TEVENT_BUILD_AIRCRAFT &&
+		Event != (TEventType)53 &&		// RA2: events 53 and 54 are not time based either
+		Event != (TEventType)54 &&		// RA2: as above
 		Is_Time_Based()) {
 		if ((event != Event) || Debug_Map) {
 			return(false);
@@ -294,9 +296,26 @@ bool TEventClass::operator () (TEventType event, HouseClass const * house, Objec
 	*/
 	if (Event == TEVENT_PLAYER_ENTERED || Event == TEVENT_CROSS_HORIZONTAL || Event == TEVENT_CROSS_VERTICAL || Event == TEVENT_ENTERS_ZONE) {
 		if (event != Event) return(false);
+		if (Data.House != HOUSE_NONE && House_From_HousesType(Data.House) == NULL) return(false);		// RA2: a named house must exist
 		if (!object || (Data.House != HOUSE_NONE && object->Owner() != House_From_HousesType(Data.House)->HeapID)) return(false);
 		tripped = true;
 		return(true);
+	}
+	else if (Event == (TEventType)53) {		// RA2: the object must be disguised as a unit of this house
+		if (event != Event) return(false);		// RA2: as above
+		if (!object || Data.House == HOUSE_NONE || House_From_HousesType(Data.House) == NULL) return(false);		// RA2: as above
+		if (!object->GetDisguiseHouse(true)) return(false);		// RA2: as above
+		if (object->GetDisguiseHouse(true)->HeapID != House_From_HousesType(Data.House)->HeapID) return(false);		// RA2: as above
+		tripped = true;		// RA2: as above
+		return(true);		// RA2: as above
+	}
+	else if (Event == (TEventType)54) {		// RA2: the object must be disguised as this infantry type
+		if (event != Event) return(false);		// RA2: as above
+		if (!object) return(false);		// RA2: as above
+		ObjectTypeClass * type = object->GetDisguise(true);		// RA2: as above
+		if (type->Fetch_RTTI() != RTTI_INFANTRYTYPE || Data.Value == -1 || type->Fetch_Heap_ID() != Data.Infantry) return(false);		// RA2: as above
+		tripped = true;		// RA2: as above
+		return(true);		// RA2: as above
 	}
 	else if (Event == TEVENT_NEAR_WAYPOINT) {
 		if (event != Event) return(false);
@@ -352,9 +371,9 @@ bool TEventClass::operator () (TEventType event, HouseClass const * house, Objec
 			*/
 			case TEVENT_NOFACTORIES:
 				if (house->CurBuildings > 0) {
-					for (int index = 0; index < Buildings.Count(); index++) {
-						BuildingClass * ptr = Buildings[index];
-						if (ptr != NULL && !ptr->IsInLimbo && ptr->House == house && ptr->Class->ToBuild != RTTI_NONE) {
+					for (int index = 0; index < house->Buildings.Count(); index++) {		// RA2: the house's own building vector, no owner test
+						BuildingClass * ptr = house->Buildings[index];		// RA2: as above
+						if (ptr != NULL && !ptr->IsInLimbo && ptr->Class->ToBuild != RTTI_NONE) {		// RA2: as above
 							return(false);
 						}
 					}
@@ -372,7 +391,12 @@ bool TEventClass::operator () (TEventType event, HouseClass const * house, Objec
 			**	Verify that the structure has been built.
 			*/
 			case TEVENT_BUILDING_EXISTS:
-				if (house->BQuantity.Value(Data.Structure) == 0) return(false);
+				if (house->ABQuantity.Value(Data.Structure) == 0) return(false);		// RA2: ABQuantity at 0x5460
+				tripped = true;		// RA2: as above
+				break;		// RA2: as above
+
+			case (TEventType)57:		// RA2: event 57 trips when no building of this type exists
+				if (house->ABQuantity.Value(Data.Structure) != 0) return(false);		// RA2: as above
 				tripped = true;
 				break;
 
@@ -459,6 +483,15 @@ bool TEventClass::operator () (TEventType event, HouseClass const * house, Objec
 			case TEVENT_UNITS_DESTROYED:
 				if (house->CurUnits > 0 || house->CurInfantry > 0) return(false);
 				break;
+
+			case (TEventType)55:		// RA2: no naval units left
+				if (house->OwnedNavy > 0) return(false);		// RA2: as above
+				break;		// RA2: as above
+
+			case (TEventType)56:		// RA2: no ground units except naval ones, and no infantry
+				if (house->CurUnits - house->OwnedNavy > 0) return(false);		// RA2: as above
+				if (house->CurInfantry > 0) return(false);		// RA2: as above
+				break;		// RA2: as above
 
 			/*
 			**	Verify that all buildings and units have been destroyed.
@@ -562,28 +595,31 @@ void TEventClass::Read_INI(void)
 NeedType Event_Needs(TEventType event)
 {
 	switch (event) {
-		case TEVENT_THIEVED:
-		case TEVENT_PLAYER_ENTERED:
-		case TEVENT_CROSS_HORIZONTAL:
-		case TEVENT_CROSS_VERTICAL:
-		case TEVENT_ENTERS_ZONE:
-		case TEVENT_HOUSE_DISCOVERED:
-		case TEVENT_BUILDINGS_DESTROYED:
-		case TEVENT_UNITS_DESTROYED:
-		case TEVENT_ALL_DESTROYED:
-		case TEVENT_LOW_POWER:
-		case TEVENT_ATTACKED_BY:
+		case TEVENT_PLAYER_ENTERED:		// RA2: house events (executable's table: 1,3,5,9,10,11,24,25,26,30,44,53,55,56)
+		case TEVENT_THIEVED:		// RA2: as above
+		case TEVENT_HOUSE_DISCOVERED:		// RA2: as above
+		case TEVENT_UNITS_DESTROYED:		// RA2: as above
+		case TEVENT_BUILDINGS_DESTROYED:		// RA2: as above
+		case TEVENT_ALL_DESTROYED:		// RA2: as above
+		case TEVENT_ENTERS_ZONE:		// RA2: as above
+		case TEVENT_CROSS_HORIZONTAL:		// RA2: as above
+		case TEVENT_CROSS_VERTICAL:		// RA2: as above
+		case TEVENT_LOW_POWER:		// RA2: as above
+		case TEVENT_ATTACKED_BY:		// RA2: as above
+		case (TEventType)53:		// RA2: events 53, 55 and 56 do not exist in TibSun's enumeration
+		case (TEventType)55:		// RA2: as above
+		case (TEventType)56:		// RA2: as above
 			return(NEED_HOUSE);
 
-		case TEVENT_NUNITS_DESTROYED:
-		case TEVENT_NBUILDINGS_DESTROYED:
-		case TEVENT_CREDITS:
-		case TEVENT_CREDITS_BELOW:
-		case TEVENT_TIME:
-		case TEVENT_RANDOM_TIME:
-		case TEVENT_GAME_TIME:
-		case TEVENT_AMBIENT_LESS_THAN:
-		case TEVENT_AMBIENT_GREATER_THAN:
+		case TEVENT_CREDITS:		// RA2: number events 12,13,15,16,45,46,47,51,52
+		case TEVENT_TIME:		// RA2: as above
+		case TEVENT_NBUILDINGS_DESTROYED:		// RA2: as above
+		case TEVENT_NUNITS_DESTROYED:		// RA2: as above
+		case TEVENT_AMBIENT_LESS_THAN:		// RA2: as above
+		case TEVENT_AMBIENT_GREATER_THAN:		// RA2: as above
+		case TEVENT_GAME_TIME:		// RA2: as above
+		case TEVENT_RANDOM_TIME:		// RA2: as above
+		case TEVENT_CREDITS_BELOW:		// RA2: as above
 			return(NEED_NUMBER);
 
 		case TEVENT_GLOBAL_SET:
@@ -594,14 +630,16 @@ NeedType Event_Needs(TEventType event)
 		case TEVENT_LOCAL_CLEAR:
 			return(NEED_LOCAL);
 
-		case TEVENT_BUILDING_EXISTS:
 		case TEVENT_BUILD:
+		case TEVENT_BUILDING_EXISTS:		// RA2: as above
+		case (TEventType)57:		// RA2: event 57 needs a structure as well
 			return(NEED_STRUCTURE);
 
 		case TEVENT_BUILD_UNIT:
 			return(NEED_UNIT);
 
 		case TEVENT_BUILD_INFANTRY:
+		case (TEventType)54:		// RA2: event 54 needs an infantry type
 			return(NEED_INFANTRY);
 
 		case TEVENT_BUILD_AIRCRAFT:
@@ -882,11 +920,11 @@ HRESULT STDMETHODCALLTYPE TEventClass::Save(IStream * stream, BOOL cleardirty)
 bool TEventClass::Is_Time_Based(void) const
 {
 	switch (Event) {
-		case 1: case 2: case 3: case 4: case 6: case 7: // RA2: the momentary events, by RA2's numbers
-		case 18: case 19: case 20: case 21: case 22: case 23: case 24: case 25: case 26: // RA2: by RA2's numbers
-		case 29: case 31: case 33: case 34: case 35: // RA2: by RA2's numbers
-		case 38: case 39: case 40: case 41: case 42: case 43: case 44: // RA2: by RA2's numbers
-		case 48: case 49: case 50: case 53: case 54: case 59: // RA2: including RA2's 53, 54 and 59
+		case 1: case 2: case 3: case 4: case 6: case 7: // RA2: the momentary events, 0x01-0x07 as in the executable's table
+		case 18: case 19: case 20: case 21: case 22: case 23: case 24: case 25: case 26: // RA2: as above (0x12-0x1A)
+		case 29: case 31: case 33: case 34: case 35: // RA2: as above (0x1D, 0x1F, 0x21-0x23)
+		case 38: case 39: case 40: case 41: case 42: case 43: case 44: // RA2: as above (0x26-0x2C)
+		case 48: case 49: case 50: case 53: case 54: // RA2: as above (0x30-0x32, 0x35, 0x36)
 			return(true);
 
 	}
@@ -904,7 +942,7 @@ bool TEventClass::Is_Time_Based(void) const
 bool TEventClass::Is_To_Flag_As_Tripped(void) const
 {
 	switch (Event) {
-		case 1: case 6: case 31: case 44: case 59: // RA2: never flagged as tripped, by RA2's numbers
+		case 1: case 6: case 44: // RA2: never flagged as tripped: events 1, 6 and 0x2C in the executable
 			return(false);
 	}
 	return(true);

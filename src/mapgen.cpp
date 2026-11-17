@@ -70,6 +70,7 @@
 #include "_theater.h" // RA2
 #include "_keyboar.h" // RA2: Keyboard->Clear in Map_Seed_Dialog_Proc
 #include "keyboard.h" // RA2: as above
+#include "findmake.h" // RA2: TGet_TypeList, used by Read_RMG_INI
 
 #define RA2_SOURCE "D:\\Ra2\\MapGen.cpp" // RA2: the file name RA2 passes to StringTable::LoadString
 
@@ -4566,7 +4567,7 @@ inline double Sample_Truncated_Normal_Inline(double mean, double scale, double l
 /// Reads the random map generator's settings from RMG.INI's General section: the tiberium limits, the level light
 /// and theater ambient light lists, the vegetation limits, the tree count and the buildings that light ore patches.
 /// </summary>
-void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960; near miss, the exe keeps the addresses of the second and third list in registers instead of the first
+void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960; near miss, exact size: the exe expands the second Get_IntList assignment inline (copying three fields) where this build still calls DynamicVectorClass<int>::operator= for it, so the exe keeps the second and third list address in registers
 {
 	static char const * section = "General"; // RA2: the section name is a static pointer (0x7E0BE4), read for every key
 	CCFileClass file("RMG.INI"); // RA2: as above
@@ -4596,23 +4597,8 @@ void MapGeneratorClass::Read_RMG_INI(void) // RA2: not in TibSun, at 0x579960; n
 	SnowAmbientBlue = ini->Get_IntList(section, "SnowAmbientBlue", SnowAmbientBlue); // RA2: as above
 	MaxTrees = ini->Get_Int(section, "MaxTrees", MaxTrees); // RA2: as above
 
-	char buffer[1024]; // RA2: as above
-	if (ini->Get_String(section, "TemperateOrePatchLamps", "", buffer, sizeof(buffer))) { // RA2: as above
-		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) { // RA2: as above
-			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name); // RA2: as above
-			if (lamp != NULL) { // RA2: as above
-				TemperateOrePatchLamps.Add(lamp); // RA2: as above
-			}
-		}
-	}
-	if (ini->Get_String(section, "SnowOrePatchLamps", "", buffer, sizeof(buffer))) { // RA2: as above
-		for (char const * name = strtok(buffer, ","); name != NULL && *name; name = strtok(NULL, ",")) { // RA2: as above
-			BuildingTypeClass * lamp = BuildingTypeClass::Find_Or_Make(name); // RA2: as above
-			if (lamp != NULL) { // RA2: as above
-				SnowOrePatchLamps.Add(lamp); // RA2: as above
-			}
-		}
-	}
+	TemperateOrePatchLamps = TGet_TypeList<BuildingTypeClass>(*ini, section, "TemperateOrePatchLamps", TemperateOrePatchLamps); // RA2: the lamp lists are read with the generic type-list reader (a 128 byte buffer inside), not by hand
+	SnowOrePatchLamps = TGet_TypeList<BuildingTypeClass>(*ini, section, "SnowOrePatchLamps", SnowOrePatchLamps); // RA2: as above
 
 	delete ini; // RA2: as above
 	file.Close(); // RA2: as above

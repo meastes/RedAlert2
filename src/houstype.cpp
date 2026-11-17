@@ -44,14 +44,17 @@
 
 #include "houstype.h"
 
+#include "airctype.h" // RA2: Read_INI looks up the veteran lists' types
 #include "ccini.h"
 #include "crc.h"
 #include "findmake.h"
 #include "globals.h"
+#include "infatype.h" // RA2: as above
 #include "side.h"
 #include "sun.h"
 #include "swizzle.h"
 #include "tracker.h"
+#include "unittype.h" // RA2: as above
 #include "vector.h"
 
 /***********************************************************************************************
@@ -102,9 +105,14 @@ HouseTypeClass::HouseTypeClass(char const * ininame) :
 /// stream rather than building it up from scratch.
 /// </summary>
 HouseTypeClass::HouseTypeClass(NoInitClass const & x) :
-	BASECLASS(x)
+	BASECLASS(x), // RA2: the base is still built without initialization
+	VeteranInfantry(x), // RA2: the three veteran lists are built without initialization too
+	VeteranUnits(x), // RA2: as above
+	VeteranAircraft(x) // RA2: as above
 {
 }
+
+
 
 
 /// <summary>
@@ -154,6 +162,74 @@ HousesType HouseTypeClass::From_Name(char const * name)
 }
 
 
+// RA2: the fixed length string the country name is kept in is built from a C string with a bounded copy, and assigned with a self check
+static inline void Country_Name_From(HouseTypeClass::CountryName & name, char const * source) // RA2: as above
+{
+	if (source == NULL) { // RA2: the empty case comes first
+		name.Buffer[0] = '\0'; // RA2: as above
+	} else { // RA2: as above
+		strncpy(name.Buffer, source, sizeof(name.Buffer) - 1); // RA2: as above
+		name.Buffer[sizeof(name.Buffer) - 1] = '\0'; // RA2: as above
+	}
+}
+
+static inline void Country_Name_Assign(HouseTypeClass::CountryName & dest, HouseTypeClass::CountryName const & source) // RA2: as above
+{
+	if (&dest != &source) { // RA2: as above
+		dest = source; // RA2: as above
+	}
+}
+
+// RA2: reads a comma separated list of type names from the INI; the executable keeps three copies of this (one per type)
+static inline TypeList<InfantryTypeClass const *> Get_Infantry_List(CCINIClass const & ini, char const * section, char const * entry, TypeList<InfantryTypeClass const *> const & defvalue) // RA2: one of three copies of the list reader (one per type)
+{
+	char buffer[128]; // RA2: as above
+	if (ini.Get_String(section, entry, "", buffer, sizeof(buffer))) { // RA2: as above
+		TypeList<InfantryTypeClass const *> list; // RA2: as above
+		for (char * name = strtok(buffer, ","); name != NULL && *name != '\0'; name = strtok(NULL, ",")) { // RA2: as above
+			InfantryTypeClass * object = InfantryTypeClass::Find_Or_Make(name); // RA2: as above
+			if (object != NULL) { // RA2: as above
+				list.Add(object); // RA2: as above
+			}
+		}
+		return(list); // RA2: as above
+	}
+	return(defvalue); // RA2: as above
+}
+
+static inline TypeList<UnitTypeClass const *> Get_Unit_List(CCINIClass const & ini, char const * section, char const * entry, TypeList<UnitTypeClass const *> const & defvalue) // RA2: one of three copies of the list reader (one per type)
+{
+	char buffer[128]; // RA2: as above
+	if (ini.Get_String(section, entry, "", buffer, sizeof(buffer))) { // RA2: as above
+		TypeList<UnitTypeClass const *> list; // RA2: as above
+		for (char * name = strtok(buffer, ","); name != NULL && *name != '\0'; name = strtok(NULL, ",")) { // RA2: as above
+			UnitTypeClass * object = UnitTypeClass::Find_Or_Make(name); // RA2: as above
+			if (object != NULL) { // RA2: as above
+				list.Add(object); // RA2: as above
+			}
+		}
+		return(list); // RA2: as above
+	}
+	return(defvalue); // RA2: as above
+}
+
+static inline TypeList<AircraftTypeClass const *> Get_Aircraft_List(CCINIClass const & ini, char const * section, char const * entry, TypeList<AircraftTypeClass const *> const & defvalue) // RA2: one of three copies of the list reader (one per type)
+{
+	char buffer[128]; // RA2: as above
+	if (ini.Get_String(section, entry, "", buffer, sizeof(buffer))) { // RA2: as above
+		TypeList<AircraftTypeClass const *> list; // RA2: as above
+		for (char * name = strtok(buffer, ","); name != NULL && *name != '\0'; name = strtok(NULL, ",")) { // RA2: as above
+			AircraftTypeClass * object = AircraftTypeClass::Find_Or_Make(name); // RA2: as above
+			if (object != NULL) { // RA2: as above
+				list.Add(object); // RA2: as above
+			}
+		}
+		return(list); // RA2: as above
+	}
+	return(defvalue); // RA2: as above
+}
+
+
 /***********************************************************************************************
  * HouseTypeClass::Read_INI -- Fetch the house control values from ini database.               *
  *                                                                                             *
@@ -178,6 +254,13 @@ bool HouseTypeClass::Read_INI(CCINIClass const & ini)
 			strcpy(Suffix, buffer);
 		}
 
+		ini.Get_String(Name(), "ParentCountry", Name(), buffer, sizeof(ParentCountry)); // RA2: the parent country name, defaulting to this country
+		{ // RA2: the temporary name lives in its own block, its stack slot is reused afterwards
+			CountryName name; // RA2: as above
+			Country_Name_From(name, buffer); // RA2: as above
+			Country_Name_Assign(ParentCountry, name); // RA2: as above
+		}
+
 		Scheme = ini.Get_Scheme_Index(Name(), "Color", Scheme);
 
 		char prefix[2];
@@ -199,6 +282,30 @@ bool HouseTypeClass::Read_INI(CCINIClass const & ini)
 		IsWallOwner = ini.Get_Bool(Name(), "WallOwner", IsWallOwner);
 		IsSmartAI = ini.Get_Bool(Name(), "SmartAI", IsSmartAI);
 
+		ArmorInfantryMult = ini.Get_Float(Name(), "ArmorInfantryMult", ArmorInfantryMult); // RA2: the per kind multipliers are RA2's
+		ArmorUnitsMult = ini.Get_Float(Name(), "ArmorUnitsMult", ArmorUnitsMult); // RA2: as above
+		ArmorAircraftMult = ini.Get_Float(Name(), "ArmorAircraftMult", ArmorAircraftMult); // RA2: as above
+		ArmorBuildingsMult = ini.Get_Float(Name(), "ArmorBuildingsMult", ArmorBuildingsMult); // RA2: as above
+		ArmorDefensesMult = ini.Get_Float(Name(), "ArmorDefensesMult", ArmorDefensesMult); // RA2: as above
+		CostInfantryMult = ini.Get_Float(Name(), "CostInfantryMult", CostInfantryMult); // RA2: as above
+		CostUnitsMult = ini.Get_Float(Name(), "CostUnitsMult", CostUnitsMult); // RA2: as above
+		CostAircraftMult = ini.Get_Float(Name(), "CostAircraftMult", CostAircraftMult); // RA2: as above
+		CostBuildingsMult = ini.Get_Float(Name(), "CostBuildingsMult", CostBuildingsMult); // RA2: as above
+		CostDefensesMult = ini.Get_Float(Name(), "CostDefensesMult", CostDefensesMult); // RA2: as above
+		SpeedInfantryMult = ini.Get_Float(Name(), "SpeedInfantryMult", SpeedInfantryMult); // RA2: as above
+		SpeedUnitsMult = ini.Get_Float(Name(), "SpeedUnitsMult", SpeedUnitsMult); // RA2: as above
+		SpeedAircraftMult = ini.Get_Float(Name(), "SpeedAircraftMult", SpeedAircraftMult); // RA2: as above
+		BuildtimeInfantryMult = ini.Get_Float(Name(), "BuildTimeInfantryMult", BuildtimeInfantryMult); // RA2: as above
+		BuildtimeUnitsMult = ini.Get_Float(Name(), "BuildTimeUnitsMult", BuildtimeUnitsMult); // RA2: as above
+		BuildtimeAircraftMult = ini.Get_Float(Name(), "BuildTimeAircraftMult", BuildtimeAircraftMult); // RA2: as above
+		BuildtimeBuildingsMult = ini.Get_Float(Name(), "BuildTimeBuildingsMult", BuildtimeBuildingsMult); // RA2: as above
+		BuildtimeDefensesMult = ini.Get_Float(Name(), "BuildTimeDefensesMult", BuildtimeDefensesMult); // RA2: as above
+		IncomeMult = ini.Get_Float(Name(), "IncomeMult", IncomeMult); // RA2: as above
+
+		VeteranInfantry = Get_Infantry_List(ini, Name(), "VeteranInfantry", VeteranInfantry); // RA2: the veteran lists
+		VeteranUnits = Get_Unit_List(ini, Name(), "VeteranUnits", VeteranUnits); // RA2: as above
+		VeteranAircraft = Get_Aircraft_List(ini, Name(), "VeteranAircraft", VeteranAircraft); // RA2: as above
+
 		SideType oldside = Side;
 		Side = ini.Get_Side(Name(), "Side", Side);
 
@@ -215,6 +322,7 @@ bool HouseTypeClass::Read_INI(CCINIClass const & ini)
 	}
 	return(false);
 }
+
 
 
 /// <summary>
