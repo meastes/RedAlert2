@@ -433,7 +433,7 @@ options,0x005D87D0,0x005DA3E0,tibsun,"functions compiled from src/options.cpp, m
 unk_005DA3E0,0x005DA3E0,0x005DA7D0,unknown,code not assigned to a module
 overlay,0x005DA7D0,0x005DC290,tibsun,"functions compiled from src/overlay.cpp, matched, without gaps; four placed by the gap"
 unk_005DC290,0x005DC290,0x005DC5A0,unknown,code not assigned to a module
-overtype,0x005DC5A0,0x005DD150,tibsun,"functions compiled from src/overtype.cpp, without gaps; matched except ?Init@OverlayTypeClass@@SIXW4TheaterType@@@Z and ?Read_INI@OverlayTypeClass@@UAE_NABVCCINIClass@@@Z and ?Load@OverlayTypeClass@@UAGJPAUIStream@@@Z; seven placed by the gap; ?Init@OverlayTypeClass@@SIXW4TheaterType@@@Z and ?Load@OverlayTypeClass@@UAGJPAUIStream@@@Z and ?Read_INI@OverlayTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts; ?Get_Image_Data@OverlayTypeClass@@UBEPBXXZ not placed"
+overtype,0x005DC5A0,0x005DD150,tibsun,"functions compiled from src/overtype.cpp, matched, without gaps; five placed by the gap; ?Get_Image_Data@OverlayTypeClass@@UBEPBXXZ not placed"
 unk_005DD150,0x005DD150,0x005DD590,unknown,code not assigned to a module
 ovrlight,0x005DD590,0x005DDB90,tibsun,"functions compiled from src/ovrlight.cpp, matched, without gaps; one placed by the gap; ?Draw_It@SpotLightClass@@QAEXXZ not placed; ?Draw_All@SpotLightClass@@SIXXZ not placed"
 unk_005DDB90,0x005DDB90,0x005DE880,unknown,code not assigned to a module
