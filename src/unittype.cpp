@@ -109,8 +109,10 @@ UnitTypeClass::UnitTypeClass(char const * ininame) :
 	DeathFrameRate(1),
 	IsLockTurret(false),
 	IsDeployToFire(false), // RA2: no IsNoFireWhileMoving (not in RA2's layout)
+	IsSimpleDeployer(false), // RA2: +0xBAB is cleared too
 	IsUseTurretShadow(false),
 	IsTooBigToFitUnderBridge(false),
+	CanBeach(false), // RA2: +0xBAF is cleared too
 	IsSmallVisceroid(false),
 	IsLargeVisceroid(false),
 	IsCarriesCrate(false),
@@ -133,7 +135,17 @@ UnitTypeClass::UnitTypeClass(char const * ininame) :
 	Rotation = 32;
 	UnitTypes.Add(this);
 	HeapID = (UnitType)UnitTypes.ID(this);
-	FiringSyncFrame[0] = FiringSyncFrame[1] = -1;
+	int index; // RA2: loops, not chained stores, give the executable's instruction order
+	for (index = 0; index < FIRING_SYNC_FRAME_MAX; index++) { // RA2: as above
+		FiringSyncFrame[index] = -1; // RA2: as above
+	} // RA2: as above
+	for (index = 0; index < 4; index++) { // RA2: the four burst delays start at -1
+		BurstDelay[index] = -1; // RA2: as above
+	} // RA2: as above
+	ImmuneToPsionics = false; // RA2: +0xAFD, TechnoTypeClass flags set after the member list
+	Parasiteable = true; // RA2: +0xAFF
+	Organic = false; // RA2: +0xB47
+	ConsideredAircraft = false; // RA2: +0xB46
 }
 
 
