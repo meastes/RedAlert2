@@ -11,6 +11,8 @@
 class HouseClass;
 class TechnoClass;
 
+EXTERN_C const CLSID CLSID_CaptureManagerClass; // RA2: 0x007A1DE0, the class identifier GetClassID returns
+
 class CaptureManagerClass : public AbstractClass
 {
 		typedef AbstractClass BASECLASS;
@@ -20,29 +22,27 @@ class CaptureManagerClass : public AbstractClass
 		HouseClass * OriginalOwner; // RA2: +0x28, its house before capture (YR: ControlNode::OriginalOwner)
 		TechnoClass * Owner; // RA2: +0x2C
 
-		CaptureManagerClass(void);
+		CaptureManagerClass(void); // RA2: 0x00467E40, no owner
 		CaptureManagerClass(TechnoClass * owner, int damage, bool infinite);
 		CaptureManagerClass(TechnoClass * owner); // RA2: 0x467DB0
-		CaptureManagerClass(NoInitClass const & x);
-		virtual ~CaptureManagerClass(void) override;
+		CaptureManagerClass(NoInitClass const & x); // RA2: 0x00467ED0
+		virtual ~CaptureManagerClass(void) override; // RA2: 0x00467F00, leaves the list
 
-		bool CaptureUnit(AbstractClass * target);
+		bool Capture(TechnoClass * target); // RA2: 0x00467FF0, gives back the controlled unit, then takes the target over
 		void HandleOverload(void);
 		void DecideUnitFate(TechnoClass * techno);
 		bool Detach_Target(AbstractClass const * target); // RA2: 0x468120, forgets the controlled unit when it is the target
 		void FreeAll(void); // RA2: 0x4681E0, returns the controlled unit to its original house and forgets it (one unit only in 1.006)
 		bool FreeUnit(TechnoClass * techno);
-		bool FUN_00472330(TechnoClass * techno);
-		bool FUN_004722E0(void) const;
 		bool CannotControlAnyMore(void);
-		bool FUN_00471F90(AbstractClass * ptr);
+		bool Detach_Unused(AbstractClass * target); // RA2: 0x468140, an empty function that returns true; nothing calls it
 		int GetControlledCount(void) const;
 		HouseClass * GetOriginalOwner(TechnoClass * techno) const;
-		bool CanCapture(TechnoClass * techno);
+		bool Can_Capture(TechnoClass * target); // RA2: 0x00467F80, whether the unit can be mind controlled
 		bool IsControllingSomething(void) const;
 		bool IsOverloading(bool * flag);
 		bool NeedsToDrawLinks(void) const;
-		void DrawLinks(void) const;
+		void Draw_Link(void) const; // RA2: 0x00468150, draws the link to the controlled unit
 
 		virtual HRESULT STDMETHODCALLTYPE GetClassID(CLSID * retval) override;
 		virtual HRESULT STDMETHODCALLTYPE Load(IStream * stream) override;

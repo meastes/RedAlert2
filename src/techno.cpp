@@ -4266,7 +4266,7 @@ FireErrorType TechnoClass::Can_Fire(AbstractClass * target, int weaponIndex, boo
 		if (weapon->WarheadPtr->Parasite && techno->IsIronCurtained()) {
 			return FIRE_ILLEGAL;
 		}
-		if (weapon->WarheadPtr->MindControl && !CaptureManager->CanCapture(techno)) {
+		if (weapon->WarheadPtr->MindControl && !CaptureManager->Can_Capture(techno)) { // RA2: the manager checks that the target can be mind controlled (0x467F80)
 			return FIRE_ILLEGAL;
 		}
 		if (weapon->WarheadPtr->Modifier[techno->Techno_Type_Class()->Armor] == 0.0) {
