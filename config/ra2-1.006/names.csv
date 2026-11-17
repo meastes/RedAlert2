@@ -5621,6 +5621,7 @@ address,symbol,evidence
 0x00639670,?Read_Line@@YIHAAVStraw@@PADHAA_N@Z,"compiled from src/readline.cpp, matched"
 0x00639710,??1ReferenceCounted@@UAE@XZ,"inferred: referenced by matched src/wdtnet.cpp (9 references); across all matched code never at another address, and no other symbol here"
 0x00639970,?Do_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z,"inferred: referenced by matched src/taction.cpp (2 references); across all matched code never at another address, and no other symbol here"
+0x0063A050,?Create_Reinforcement@@YI_NPBVTeamTypeClass@@PAVFootClass@@ABVCell@@_N@Z,"compiled from src/reinf.cpp, matched"
 0x0063A680,?Reinforcement_Refused@@YG_NHHH@Z,"compiled from src/reinf.cpp, matched"
 0x0063A690,?Create_Air_Reinforcement@@YIHPAVHouseClass@@W4AircraftType@@HW4MissionType@@PAVAbstractClass@@3W4InfantryType@@H@Z,"compiled from src/reinf.cpp, matched"
 0x0063A880,?Do_Chrono_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z,"inferred: referenced by matched src/taction.cpp (1 reference); across all matched code never at another address, and no other symbol here"
@@ -9012,7 +9013,7 @@ address,symbol,evidence
 0x0079568A,__setmode_lk,symbol of VC6 LIBCMT.LIB setmode.obj
 0x007956EB,___crtGetLocaleInfoW,symbol of VC6 LIBCMT.LIB w_loc.obj
 0x007957FE,___crtGetLocaleInfoA,symbol of VC6 LIBCMT.LIB a_loc.obj
-0x00795940,?_com_issue_error@@YGXJ@Z,"inferred: referenced by matched src/blowfish.cpp (233 references); across all matched code never at another address, and no other symbol here"
+0x00795940,?_com_issue_error@@YGXJ@Z,"inferred: referenced by matched src/blowfish.cpp (235 references); across all matched code never at another address, and no other symbol here"
 0x0079594E,?_com_issue_errorex@@YGXJPAUIUnknown@@ABU_GUID@@@Z,symbol of VC6 COMSUPP.LIB comsupp.obj
 0x007959AF,?_com_dispatch_raw_method@@YAJPAUIDispatch@@JGGPAXPBGZZ,symbol of VC6 COMSUPP.LIB comsupp.obj
 0x007959EB,?_com_invoke_helper@@YAJPAUIDispatch@@JGGPAXPBGPADPAPAUIErrorInfo@@@Z,symbol of VC6 COMSUPP.LIB comsupp.obj
@@ -9686,7 +9687,7 @@ address,symbol,evidence
 0x007A1EF0,_CLSID_VeinholeMonsterClass,"inferred: referenced by matched src/vein.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x007A1F70,_CLSID_DriveLocomotion,"inferred: referenced by matched src/drive.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x007A1F80,_CLSID_HoverLocomotion,"inferred: referenced by matched src/hover.cpp (5 references); across all matched code never at another address, and no other symbol here"
-0x007A1F90,_CLSID_TunnelLocomotion,"inferred: referenced by matched src/tunnel.cpp (4 references); across all matched code never at another address, and no other symbol here"
+0x007A1F90,_CLSID_TunnelLocomotion,"inferred: referenced by matched src/tunnel.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x007A1FA0,_CLSID_WalkLocomotion,"inferred: referenced by matched src/walk.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x007A1FB0,_CLSID_BallisticLocomotion,"inferred: referenced by matched src/droppod.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x007A1FC0,_CLSID_FlyerLocomotion,"inferred: referenced by matched src/fly.cpp (4 references); across all matched code never at another address, and no other symbol here"
@@ -14307,7 +14308,7 @@ address,symbol,evidence
 0x00832448,?IsometricTiles@@3V?$DynamicVectorClass@PAVIsometricTileClass@@@@A,"inferred: referenced by matched src/isotile.cpp (15 references); across all matched code never at another address, and no other symbol here"
 0x00832468,?Keyboard@@3PAUKeyboardClass@@A,"inferred: referenced by matched src/gadget.cpp (109 references); across all matched code never at another address, and no other symbol here"
 0x00832470,?Logic@@3VLogicClass@@A,"inferred: referenced by matched src/tracker.cpp (22 references); across all matched code never at another address, and no other symbol here"
-0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (2856 references); across all matched code never at another address, and no other symbol here"
+0x008324E0,?Map@@3VMouseClass@@A,"inferred: referenced by matched src/map.cpp (2865 references); across all matched code never at another address, and no other symbol here"
 0x008325D0,?MapSizeX@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x008325D4,?MapSizeY@@3HA,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00833694,?CurrentSuperWeaponType@@3W4SuperWeaponType@@A,"inferred: referenced by matched src/super.cpp (1 reference); across all matched code never at another address, and no other symbol here"
@@ -14430,7 +14431,7 @@ address,symbol,evidence
 0x00851170,?EncodedBuffer@@3PADA,"inferred: referenced by matched src/coopcamp.cpp (91 references); across all matched code never at another address, and no other symbol here"
 0x00851570,?DecodedBuffer@@3PADA,"inferred: referenced by matched src/coopcamp.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x008519C8,?CoopCampBuffer@@3PADA,"inferred: referenced by matched src/coopcamp.cpp (11 references); across all matched code never at another address, and no other symbol here"
-0x00851A70,?AdjacentCell@@3QBVCell@@B,"inferred: referenced by matched src/tube.cpp (437 references); across all matched code never at another address, and no other symbol here"
+0x00851A70,?AdjacentCell@@3QBVCell@@B,"inferred: referenced by matched src/tube.cpp (443 references); across all matched code never at another address, and no other symbol here"
 0x00851AC0,?AdjacentPoint@@3QBVPoint2D@@B,"inferred: referenced by matched src/walk.cpp (9 references); across all matched code never at another address, and no other symbol here"
 0x00851B3C,_LauncherMessage,"inferred: referenced by matched src/copyprotection.cpp (4 references); across all matched code never at another address, and no other symbol here"
 0x00851CA8,?LanguageResources@@3PAUHINSTANCE__@@A,"inferred: referenced by matched src/data.cpp (2 references); across all matched code never at another address, and no other symbol here"
@@ -14535,7 +14536,7 @@ address,symbol,evidence
 0x00A40398,?Aircraft@@3V?$DynamicVectorClass@PAVAircraftClass@@@@A,"inferred: referenced by matched src/empulse.cpp (42 references); across all matched code never at another address, and no other symbol here"
 0x00A403B0,?MissionControl@@3PAVMissionControlClass@@A,"inferred: referenced by matched src/mission.cpp (6 references); across all matched code never at another address, and no other symbol here"
 0x00A40770,?ScenarioCRC@@3IA,"inferred: referenced by matched src/queue.cpp (4 references); across all matched code never at another address, and no other symbol here"
-0x00A40774,?ScenarioInit@@3HA,"inferred: referenced by matched src/factory.cpp (162 references); across all matched code never at another address, and no other symbol here"
+0x00A40774,?ScenarioInit@@3HA,"inferred: referenced by matched src/factory.cpp (167 references); across all matched code never at another address, and no other symbol here"
 0x00A40778,?CryptRandom@@3VRandomStraw@@A,"inferred: referenced by matched src/mixfile.cpp (19 references); across all matched code never at another address, and no other symbol here"
 0x00A40890,?TaskForces@@3V?$DynamicVectorClass@PAVTaskForceClass@@@@A,"inferred: referenced by matched src/taskforc.cpp (37 references); across all matched code never at another address, and no other symbol here"
 0x00A408A8,?CDList@@3VGetCDClass@@A,"inferred: referenced by matched src/diskswap.cpp (6 references); across all matched code never at another address, and no other symbol here"

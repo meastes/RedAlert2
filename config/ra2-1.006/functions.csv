@@ -5855,6 +5855,7 @@ address,size,evidence
 0x00639670,160,"function of the Tiberian Sun reconstruction, matched"
 0x00639710,,"inferred: target of the jump at 0x0072BEA6 in matched src/wdtnet.cpp; size not known"
 0x00639970,,"inferred: target of the call at 0x006B147A in matched src/taction.cpp; size not known"
+0x0063A050,1584,"code of src/reinf.cpp, matched"
 0x0063A680,16,"code of src/reinf.cpp, matched: too short for the match rule"
 0x0063A690,496,"code of src/reinf.cpp, matched"
 0x0063A880,,"inferred: target of the call at 0x006B2821 in matched src/taction.cpp; size not known"
