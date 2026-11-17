@@ -294,7 +294,7 @@ struct SerialPacketType {
 	};
 };
 
-#define MAX_SEND_FILE_PACKET_SIZE MAX_SERIAL_PACKET_SIZE - 64
+#define MAX_SEND_FILE_PACKET_SIZE (MAX_SERIAL_PACKET_SIZE - 64) // RA2: parenthesised, it is a divisor in Receive_Remote_File
 #pragma pack(push, 1)
 struct RemoteFileTransferType {
 	SerialCommandType	Command;
@@ -302,7 +302,7 @@ struct RemoteFileTransferType {
 	unsigned short 	BlockNumber;
 	unsigned short		BlockLength;
 
-	unsigned char 		RawData	[546 - 64 - 3 - MPLAYER_NAME_MAX];
+	unsigned char 		RawData	[MAX_SEND_FILE_PACKET_SIZE]; // RA2: 192 data bytes, the packet is 220 bytes (the stack slot of Send_Remote_File shows it)
 };
 #pragma pack(pop)
 

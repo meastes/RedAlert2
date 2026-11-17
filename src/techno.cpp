@@ -258,41 +258,63 @@ CDTimerClass<SystemTimerClass> TechnoClass::TalkBubbleTimer;
  *=============================================================================================*/
 TechnoClass::TechnoClass(HouseClass * house) :
 	BASECLASS(),
-	IsUseless(false),
-	IsTickedOff(false),
-	IsCloakable(false),
-	IsLeader(false),
-	IsALoaner(false),
-	IsLocked(false),
-	IsTethered(false), // RA2: no IsInRecoilState (not in RA2's layout)
-	IsOwnedByPlayer(false),
-	IsDiscoveredByPlayer(false),
-	IsDiscoveredByComputer(false),
-	IsALemon(false),
-	ArmorBias(1),
-	FirepowerBias(1),
+	Cargo(), // RA2: as above
+	CurrentTurretNumber(-1), // RA2: no turret change yet
+	LastTurretNumber(-1), // RA2: as above
+	BehindAnim(NULL), // RA2: no animation behind the object
+	CurrentWeaponNumber(0), // RA2: as above
+	CurrentRanking(-1), // RA2: no ranking yet
+	ActLike(HOUSE_NONE), // RA2: as above
+	Veterancy(), // RA2: as above
+	ArmorBias(1.0), // RA2: as above
+	FirepowerBias(1.0), // RA2: as above
 	IdleTimer(0),
+	RadarFlashTimer(0), // RA2: as above
+	TargetingTimer(45), // RA2: 45 frames until the first look for targets
+	IronCurtainTimer(0), // RA2: the Iron Curtain, tint and disguise members are all cleared
+	IronTintTimer(0), // RA2: as above
+	Disguised(false), // RA2: as above
+	DisguiseCreationFrame(0), // RA2: as above
+	InfantryBlinkTimer(0), // RA2: as above
+	DisguiseBlinkTimer(0), // RA2: as above
+	UnlimboingInfantry(false), // RA2: as above
+	ReloadTimer(0), // RA2: as above
+	RadarPos(0,0), // RA2: as above
 	SpiedBy(0),
+	Group(-1), // RA2: as above
 	ArchivedTarget(NULL),
 	House(house),
 	Cloak(UNCLOAKED),
+	CloakingDevice(), // RA2: as above
+	CloakDelay(0), // RA2: as above
+	PredatorOffset(0), // RA2: as above
+	IsSightRevealed(false), // RA2: as above
+	LastSightCoords(COORD_NONE), // RA2: the sight reveal record starts empty
+	LastSightRange(0), // RA2: as above
+	LastSightHeight(0), // RA2: as above
+	GapSuperCharged(false), // RA2: the gap generator, warp and temporal members are all cleared
+	GeneratingGap(false), // RA2: as above
+	GapRadius(0), // RA2: as above
+	BeingWarpedOut(false), // RA2: as above
+	WarpingOut(false), // RA2: as above
+	Unused_206(false), // RA2: as above
+	TemporalImUsing(NULL), // RA2: as above
+	TemporalTargetingMe(NULL), // RA2: as above
+	IsImmobilized(false), // RA2: as above
+	TeleportState(0), // RA2: as above
+	ChronoLockRemaining(0), // RA2: as above
+	ChronoDestCoords(COORD_NONE), // RA2: as above
 	TarCom(NULL),
 	SuspendedTarCom(NULL),
-	PrimaryFacing(),
-	SecondaryFacing(),
+	CaptureManager(NULL), // RA2: the manager pointers start empty
+	MindControlledBy(NULL), // RA2: as above
+	SpawnManager(NULL), // RA2: as above
+	SpawnOwner(NULL), // RA2: as above
+	PitchAngle(0), // RA2: as above
 	Arm(0),
+	ChargeTurretDelay(0), // RA2: cleared
 	Ammo(-1),
 	PurchasePrice(0),
-	ActLike(HOUSE_NONE),
-	Cargo(),
-	Veterancy(),
-	RadarFlashTimer(),
-	RadarPos(0,0),
-	Group(-1),
-	CloakingDevice(),
-	CloakDelay(),
-	PredatorOffset(0),
-	PitchAngle(0),
 	Wave(NULL),
 	AngleRotatedSideways(0.0),
 	AngleRotatedForwards(0.0),
@@ -302,29 +324,64 @@ TechnoClass::TechnoClass(HouseClass * house) :
 	Storage(),
 	Door(),
 	BarrelPitch(3),
+	PrimaryFacing(), // RA2: as above
+	SecondaryFacing(), // RA2: as above
 	BurstIndex(0),
-	TargetingLaserTimer(),
+	TargetingLaserTimer(0), // RA2: as above
 	SinkingYOffset(0),
+	CountedAsOwned(false), // RA2: cleared
 	IsSinking(false),
+	WasSinkingAlready(false), // RA2: as above
 	IsNeedingRescue(false),
-	Unused1(0), // RA2: no UnusedCooldown (not in RA2's layout)
+	IsUseless(false), // RA2: as above
+	IsTickedOff(false), // RA2: as above
+	IsCloakable(false), // RA2: as above
+	IsLeader(false), // RA2: as above
+	IsALoaner(false), // RA2: as above
+	IsLocked(false), // RA2: as above
+	TurretRecoil(), // RA2: as above
+	BarrelRecoil(), // RA2: as above
+	IsTethered(false), // RA2: as above
+	IsAlternativeTether(false), // RA2: cleared
+	IsOwnedByPlayer(false), // RA2: as above
+	IsDiscoveredByPlayer(false), // RA2: as above
+	IsDiscoveredByComputer(false), // RA2: as above
+	IsALemon(false), // RA2: as above
+	Cooldown(0), // RA2: cleared
+	Unused1(0), // RA2: as above
 	SightIncrease(0),
 	IsTeamRecruitable(true),
 	IsAutocreateRecruitable(true),
 	IsRadarTracked(false),
 	IsInTransport(false),
 	IsRocking(false),
+	WasCrashingAlready(false), // RA2: the crash, hover and reselect flags and the old team start cleared
 	IsOnPatrol(false),
+	IsMouseHovering(false), // RA2: as above
+	ShouldBeReselectOnUnlimbo(false), // RA2: as above
+	OldTeam(NULL), // RA2: as above
 	IsOnWaypointPatrol(false),
-	QueueUpToEnter(NULL), // RA2: QueueUpToEnter, the object to enter once nearby
-	StunDuration(0) // RA2: last, no LimpetType
+	RadialFireSegment(0), // RA2: the fan starts at its first segment
+	CurrentTargetThreatValues(), // RA2: as above
+	CurrentTargets(), // RA2: as above
+	AttackedTargets(), // RA2: as above
+	IsTurretRotateSoundPlaying(1), // RA2: the turret sound state starts at 1 / 0, as Load leaves it
+	TurretIsRotating(0), // RA2: as above
+	LastTargetScanFrame(Frame), // RA2: the frame of construction
+	QueueUpToEnter(NULL), // RA2: as above
+	StunDuration(0), // RA2: as above
+	PlanningToken(NULL), // RA2: no planning token and no disguise yet
+	Disguise(NULL), // RA2: as above
+	DisguisedAsHouse(NULL) // RA2: as above
 {
 	if (house != NULL) {
 		ActLike = house->ActLike;
 	}
 
+	TurretRotateSoundController.Init(); // RA2: the turret sound controller starts out unused
 	Technos.Add(this);
 	HousePtrTracker.Add(this);
+	AbstractFlags |= 1; // RA2: marks the object as a techno (the flag the AbstractFlags & 1 tests read)
 
 	for (int i = 0; i < ARRAY_SIZE(ParticleSystems); i++) {
 		ParticleSystems[i] = NULL;

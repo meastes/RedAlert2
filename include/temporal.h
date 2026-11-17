@@ -50,11 +50,10 @@ class TemporalClass : public AbstractClass
 		void Detach_Techno(AbstractClass const * target); // RA2: 0x6E24C0, forgets the target (or lets go of it) when it is the one detached
 		void LetGo(void);
 		void JustLetGo(void);
-		void FUN_0071AB60(AbstractClass * ptr);
-		void FUN_0071ACB0(void);
-		void FUN_0071ACD0(void);
-		void FUN_0071AD30(void);
-		void FUN_0071ADB0(void);
+		void Release_Target(void); // RA2: 0x6E25F0, drops the target and clears its warp flags; nothing calls it
+		void Restore_Target(void); // RA2: 0x6E2610, frees the target (a building is powered again) and redraws it; nothing calls it
+		void Empty(void); // RA2: 0x6E2670, an empty function; nothing calls it
+		void Clear_Links(void); // RA2: 0x6E26F0, forgets the target and both neighbours; nothing calls it
 		bool CanWarpTarget(TechnoClass * target);
 		void Fire(TechnoClass * target);
 };

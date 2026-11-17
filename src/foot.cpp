@@ -161,48 +161,63 @@ DynamicVectorClass<FootClass *> Feet;
  *=============================================================================================*/
 FootClass::FootClass(HouseClass * house) :
 	BASECLASS(house),
-	IsToScatter(false),
-	IsScanLimited(false),
-	IsInitiated(false),
-	IsNewNavCom(false),
-	IsPlanningToLook(false),
-	IsDeploying(false),
-	IsFiring(false),
-	IsRotating(false),
-	IsUnloading(false),
-	IsNavQueueLoop(false),
-	IsScattering(false),
-	IsIdle(false),
-	IonBlastYDrawOffset(0),
-	IsCrushing(false),
-	IsOccupyingCell(true),
-	IsToPathAroundBlockage(false),
-	IsDroppedFromTeam(false),
 	CurrentPath(PATH_NONE),
 	WaypointOffsetCell(0,0),
 	WaypointTargetCell(0,0),
 	ThreatAvoidanceCoefficient(0),
 	TotalFramesWalked(0),
+	IsMoveSoundPlaying(false), // RA2: +0x434 and +0x438 are cleared right after TotalFramesWalked
+	MoveSoundDelay(0), // RA2: as above
 	LastPathingCell(0,0),
 	LastAdjacencyCell(0,0),
+	LastFlightMapCoords(0,0), // RA2: +0x458 is cleared with the other cells
 	LastTubeCoord(0,0,0),
 	Speed(0),
 	SpeedBias(1),
+	RouteQueue(0, NULL), // RA2: the vector is built out of line with (0, NULL)
+	FollowTarget(NULL), // RA2: +0x490 is cleared
 	NavCom(NULL),
 	SuspendedNavCom(NULL),
+	NavQueue(0, NULL), // RA2: as RouteQueue
+	MegaMission(MISSION_NONE), // RA2: +0x4B4 starts at -1
+	MegaDestination(NULL), // RA2: +0x4B8 is cleared
+	MegaTarget(NULL), // RA2: +0x4BC is cleared
+	HasAttackMoveTarget(false), // RA2: +0x4C1 is cleared
 	Team(0),
 	Member(0),
 	PatrolCell(0),
-	PathDelay(0),
 	TryTryAgain(PATH_RETRY),
-	BaseAttackTimer(0),
 	HeadToCoord(COORD_NONE),
 	CurrentTube(-1),
 	CurrentTubeDir(0),
-	NextWaypoint(0)
+	NextWaypoint(0), // RA2: as above
+	IsToScatter(false), // RA2: as above
+	IsScanLimited(false), // RA2: as above
+	IsInitiated(false), // RA2: as above
+	IsNewNavCom(false), // RA2: as above
+	IsPlanningToLook(false), // RA2: as above
+	IsDeploying(false), // RA2: as above
+	IsFiring(false), // RA2: as above
+	IsOverpowering(false), // RA2: +0x57E is cleared
+	ParasiteEatingMe(NULL), // RA2: +0x580 is cleared
+	LastBeParasitedStartFrame(0), // RA2: +0x584 is cleared
+	ParasiteImUsing(NULL), // RA2: +0x588 is cleared
+	IsMoveToSkipped(false), // RA2: +0x598 is cleared
+	IsRotating(false), // RA2: as above
+	IsUnloading(false), // RA2: as above
+	IsNavQueueLoop(false), // RA2: as above
+	IsScattering(false), // RA2: as above
+	IsIdle(false), // RA2: as above
+	IonBlastYDrawOffset(0), // RA2: as above
+	IsCrushing(false), // RA2: as above
+	IsOccupyingCell(true), // RA2: as above
+	IsToPathAroundBlockage(false), // RA2: as above
+	IsDroppedFromTeam(false) // RA2: as above
 {
 	Path[0] = FACING_NONE;
+	MoveSoundAudioController.Init(); // RA2: 0x405BF0 clears the sound handle at +0x43C
 	Feet.Add(this);
+	AbstractFlags |= 4; // RA2: bit 2 of the abstract flags (the one Is_Foot reads) is set between the two list adds
 	TeamPtrTracker.Add(this);
 }
 
@@ -218,7 +233,9 @@ FootClass::FootClass(NoInitClass const & x) :
 	NavQueue(x),
 	PathDelay(x),
 	BaseAttackTimer(x),
-	BlockagePathDelay(x)
+	SightTimer(x), // RA2: the timer at +0x54C and the one at +0x58C are built no-init too
+	BlockagePathDelay(x), // RA2: as above
+	ParalysisTimer(x) // RA2: as above
 {
 }
 
@@ -236,6 +253,14 @@ FootClass::~FootClass(void)
 
 	Feet.Delete(this);
 	TeamPtrTracker.Delete(this);
+
+	if (ParasiteImUsing != NULL) { // RA2: the parasite object this one owns is deleted (virtual deleting destructor, slot 8) and forgotten
+		delete ParasiteImUsing; // RA2: as above
+		ParasiteImUsing = NULL; // RA2: as above
+	}
+
+	MoveSoundAudioController.EndLooping(); // RA2: 0x406070, then 0x405C10, run on the sound handle at +0x43C
+	MoveSoundAudioController.Release(); // RA2: as above
 }
 
 
