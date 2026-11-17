@@ -2179,7 +2179,7 @@ address,size,evidence
 0x004AA4A0,,"inferred: target of the call at 0x004957F1 in matched src/ddraw.cpp; size not known"
 0x004AA5A0,112,"function of the Tiberian Sun reconstruction, matched"
 0x004AA610,80,"function of the Tiberian Sun reconstruction, matched"
-0x004AA660,,"inferred: target of the call at 0x0054361D in matched src/mainopt.cpp; size not known"
+0x004AA660,1280,"code of src/dsurface.cpp, matched"
 0x004AAB60,144,"function of the Tiberian Sun reconstruction, matched"
 0x004AABF0,64,"code of src/dsurface.cpp, matched"
 0x004AAC30,48,"function of the Tiberian Sun reconstruction, matched"
