@@ -319,7 +319,9 @@ unk_00535280,0x00535280,0x005352D0,unknown,code not assigned to a module
 lcwstraw,0x005352D0,0x005354E0,tibsun,"functions compiled from src/lcwstraw.cpp, matched, without gaps; one placed by alphabetical order"
 unk_005354E0,0x005354E0,0x00535530,unknown,code not assigned to a module
 lcwuncmp,0x00535530,0x00535720,tibsun,"functions compiled from src/lcwuncmp.cpp, matched, without gaps"
-unk_00535720,0x00535720,0x00537240,unknown,code not assigned to a module
+unk_00535720,0x00535720,0x00535910,unknown,code not assigned to a module
+ldprgmgr,0x00535910,0x00536ED0,source,"functions compiled from src/ldprgmgr.cpp, without gaps; matched except ?Draw@LoadProgressManager@@QAEXXZ"
+unk_00536ED0,0x00536ED0,0x00537240,unknown,code not assigned to a module
 light,0x00537240,0x00537C30,tibsun,"functions compiled from src/light.cpp, matched, without gaps; six placed by the gap"
 unk_00537C30,0x00537C30,0x005383C0,unknown,code not assigned to a module
 lightcalc,0x005383C0,0x00538670,tibsun,"functions compiled from src/lightcalc.cpp, matched, without gaps"
