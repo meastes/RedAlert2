@@ -11,7 +11,7 @@ From the Rich headers of the game executables, decoded with
 | Version | C++ objects | C objects | Compiler |
 |---|---|---|---|
 | 1.000 (built 2000-10-02) | 516 × cl 8168 | 190 × cl 8168 | Visual C++ 6.0, original release |
-| 1.006 (built 2001-06-06) | 505 × cl 8447, 12 × cl 8168 | 190 × cl 8168 | a Visual C++ 6.0 build stamping 8447 (see below) |
+| 1.006 (built 2001-06-06) | 505 × cl 8447, 12 × cl 8168 | 190 × cl 8168 | Visual C++ 6.0 Service Pack 3 (see below) |
 
 Both executables also contain 15 linker import/export records with build 8447,
 48 MASM 6.13 objects, Linker 5.12-era library objects and one resource object.
@@ -19,20 +19,37 @@ Base relocations are stripped in both.
 
 ### What "8447" is
 
-The database labels C++ build 8447 "VS6 SP3". The Visual Studio 6.0 Service
-Pack 3 disc does not bear that out for the compiler: it installs only the
-front ends `c1.dll` and `c1xx.dll` (12.0.8472), `link.exe` (6.0.8447) and
-`cvtres.exe`, and leaves the code generator `c2.dll` and the driver `cl.exe` at
-the original release. Objects compiled with that SP3 setup are still stamped
-build 8168. 8447 is SP3's linker version; which compiler stamps C++ objects 8447
-is not established.
+It is the build of the code generator. Visual C++ 6.0 runs its code generator
+as `VC98\Bin\c2.dll`, but the installation media do not carry a file of that
+name: they hold one code generator per edition in `os\system` (`msvcep.dll` for
+the Professional and Enterprise editions, `msse.dll`, `intro.dll`), and setup
+copies the edition's file to `c2.dll`. An object file is stamped with the
+build of the code generator that wrote it:
 
-It matters little for code generation: compiling the Tiberian Sun
-reconstruction with the SP3 front ends gives exactly the same matches in 1.000
-and 1.006 as the original release (1,497 and 1,467 functions, without
-`/DNDEBUG`). The functions that match 1.000 but not 1.006 therefore changed in
-source, not compiler. This project uses the original-release code generator
-with the SP3 front ends.
+| Media | `msvcep.dll` | Stamp of a C++ object |
+|---|---|---|
+| Visual C++ 6.0, original release | 12.00.8168 | 8168 |
+| Service Pack 3 | 12.00.8447 | 8447 |
+| Service Pack 4 | 12.00.8799 | 8799 |
+| Service Pack 5 | 12.00.8966 | 8966 |
+| Service Pack 6 | 12.00.9782 | 9782 |
+
+(measured by compiling one file with each). 1.006's C++ objects were therefore
+compiled with Service Pack 3's code generator, 1.000's with the original
+release's. The Service Pack 3 disc also updates the front ends `c1.dll` and
+`c1xx.dll` (12.0.8472), `link.exe` (6.0.8447) and `cvtres.exe` in `vc98\bin`.
+
+This project compiles with Service Pack 3 as setup installs it: its front ends
+and its code generator (`os\system\msvcep.dll` as `c2.dll`). Copying only the
+disc's `vc98\bin` leaves the original release's code generator in place; the
+difference in generated code is small (three functions of this repository
+match with the 8447 code generator and not with the 8168 one, none the other
+way round), but the stamp differs.
+
+Compiling the Tiberian Sun reconstruction with the SP3 front ends gives
+exactly the same matches in 1.000 and 1.006 as the original release (1,497 and
+1,467 functions, without `/DNDEBUG`). The functions that match 1.000 but not
+1.006 therefore changed in source, not compiler.
 
 ## Flags
 
@@ -61,8 +78,6 @@ code calls the reconstruction's `Assert_Failure`.
 
 ## Open questions
 
-- Which compiler build stamps C++ objects 8447, and whether it generates code
-  differently from the original release in any case that matters.
 - Whether `/GF` (read-only string pooling) was used on top of `/Gf`.
 
 ## Running VC6
