@@ -73,8 +73,8 @@ bitfont,0x00431040,0x00432270,source,"functions compiled from src/bitfont.cpp, m
 unk_00432270,0x00432270,0x00432290,unknown,code not assigned to a module
 bittext,0x00432290,0x00432DD0,source,"functions compiled from src/bittext.cpp, matched, without gaps; three copies the compiler emitted after the last function"
 unk_00432DD0,0x00432DD0,0x00432FC0,unknown,code not assigned to a module
-blight,0x00432FC0,0x00434920,tibsun,"functions compiled from src/blight.cpp, without gaps; matched except ?AI@BuildingLightClass@@UAEXXZ; four placed by the gap; four copies the compiler emitted after the last function"
-unk_00434920,0x00434920,0x00434940,unknown,code not assigned to a module
+blight,0x00432FC0,0x00434820,tibsun,"functions compiled from src/blight.cpp, without gaps; matched except ?AI@BuildingLightClass@@UAEXXZ; four placed by the gap"
+unk_00434820,0x00434820,0x00434940,unknown,code not assigned to a module
 blit,0x00434940,0x00435580,tibsun,"functions compiled from src/blit.cpp, matched, without gaps; two copies the compiler emitted after the last function"
 blowfish,0x00435580,0x00435690,tibsun,"functions compiled from src/blowfish.cpp, matched, without gaps; one placed by the gap"
 blowpipe,0x00435690,0x00435840,tibsun,"functions compiled from src/blowpipe.cpp, matched, without gaps; one placed by alphabetical order"
@@ -275,8 +275,8 @@ infantry,0x004FF640,0x00509810,tibsun,"functions compiled from src/infantry.cpp,
 unk_00509810,0x00509810,0x00509B20,unknown,code not assigned to a module
 infatype,0x00509B20,0x0050B0E0,tibsun,"functions compiled from src/infatype.cpp, matched, without gaps; seven placed by the gap; one copy the compiler emitted after the last function"
 unk_0050B0E0,0x0050B0E0,0x0050B8D0,unknown,code not assigned to a module
-ini,0x0050B8D0,0x00510BB0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap; eight copies the compiler emitted after the last function"
-unk_00510BB0,0x00510BB0,0x005127F0,unknown,code not assigned to a module
+ini,0x0050B8D0,0x00510A60,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap; one copy the compiler emitted after the last function"
+unk_00510A60,0x00510A60,0x005127F0,unknown,code not assigned to a module
 init,0x005127F0,0x0051DA30,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; four placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0; 310 copies the compiler emitted after the last function"
 unk_0051DA30,0x0051DA30,0x0051E820,unknown,code not assigned to a module
 interpal,0x0051E820,0x0051ECF0,tibsun,"functions compiled from src/interpal.cpp, matched, without gaps"
@@ -331,8 +331,8 @@ link,0x00538F60,0x00539170,tibsun,"functions compiled from src/link.cpp, matched
 unk_00539170,0x00539170,0x005393E0,unknown,code not assigned to a module
 link2,0x005393E0,0x00539870,source,"functions compiled from src/link2.cpp, matched, without gaps"
 unk_00539870,0x00539870,0x00539BF0,unknown,code not assigned to a module
-list,0x00539BF0,0x0053ABA0,tibsun,"functions compiled from src/list.cpp, matched, without gaps; three placed by the gap; five copies the compiler emitted after the last function"
-unk_0053ABA0,0x0053ABA0,0x0053AEB0,unknown,code not assigned to a module
+list,0x00539BF0,0x0053AAE0,tibsun,"functions compiled from src/list.cpp, matched, without gaps; three placed by the gap; one copy the compiler emitted after the last function"
+unk_0053AAE0,0x0053AAE0,0x0053AEB0,unknown,code not assigned to a module
 load,0x0053AEB0,0x0053AEF0,tibsun,"functions compiled from src/load.cpp, matched, without gaps"
 unk_0053AEF0,0x0053AEF0,0x0053B0E0,unknown,code not assigned to a module
 loaddlg,0x0053B0E0,0x0053C970,tibsun,"functions compiled from src/loaddlg.cpp, matched, without gaps"
@@ -725,8 +725,8 @@ wdtmap,0x007291C0,0x0072A880,tibsun,"functions compiled from src/wdtmap.cpp, wit
 unk_0072A880,0x0072A880,0x0072BDC0,unknown,code not assigned to a module
 wdtnet,0x0072BDC0,0x0072C9D0,tibsun,"functions compiled from src/wdtnet.cpp, matched, without gaps; one placed by the gap; ?Get_Game_Options@WDTTerritory@@QAEPAUGameOptionsType@@XZ not placed; ?To_String@WDTState@@QAEPADXZ not placed; ?To_String@WDTTerritory@@QAEPADXZ not placed"
 unk_0072C9D0,0x0072C9D0,0x0072D990,unknown,code not assigned to a module
-wdtsel,0x0072D990,0x007302D0,tibsun,"functions compiled from src/wdtsel.cpp, without gaps; matched except ?Pick_Territory@Selection@WorldDominationTour@@QAE?AV?$rc_ptr@VTerritory@WorldDominationTour@@@@XZ and ?Do_Target_Anim@Selection@WorldDominationTour@@QAEXABV?$rc_ptr@VState@WorldDominationTour@@@@_N1@Z; two placed by the gap; ??0Selection@WorldDominationTour@@QAE@ABV?$rc_ptr@VCampaign@WorldDominationTour@@@@H@Z not placed; two copies the compiler emitted after the last function"
-unk_007302D0,0x007302D0,0x00730700,unknown,code not assigned to a module
+wdtsel,0x0072D990,0x00730290,tibsun,"functions compiled from src/wdtsel.cpp, without gaps; matched except ?Pick_Territory@Selection@WorldDominationTour@@QAE?AV?$rc_ptr@VTerritory@WorldDominationTour@@@@XZ and ?Do_Target_Anim@Selection@WorldDominationTour@@QAEXABV?$rc_ptr@VState@WorldDominationTour@@@@_N1@Z; two placed by the gap; ??0Selection@WorldDominationTour@@QAE@ABV?$rc_ptr@VCampaign@WorldDominationTour@@@@H@Z not placed"
+unk_00730290,0x00730290,0x00730700,unknown,code not assigned to a module
 wdtstate,0x00730700,0x00730950,tibsun,"functions compiled from src/wdtstate.cpp, matched, without gaps"
 unk_00730950,0x00730950,0x00730B80,unknown,code not assigned to a module
 wdtterr,0x00730B80,0x007312D0,tibsun,"functions compiled from src/wdtterr.cpp, matched, without gaps; one copy the compiler emitted after the last function"
