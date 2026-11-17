@@ -303,7 +303,9 @@ unk_0052E660,0x0052E660,0x0052EE00,unknown,code not assigned to a module
 jshell,0x0052EE00,0x0052EF70,tibsun,"functions compiled from src/jshell.cpp, matched, without gaps"
 unk_0052EF70,0x0052EF70,0x0052F350,unknown,code not assigned to a module
 jumpjet,0x0052F350,0x00531320,tibsun,"functions compiled from src/jumpjet.cpp, without gaps; matched except ?Process_Descent@JumpjetLocomotionClass@@QAEXXZ; ?Process_Descent@JumpjetLocomotionClass@@QAEXXZ placed at their function starts; ??0JumpjetLocomotionClass@@QAE@XZ not placed; ??1JumpjetLocomotionClass@@UAE@XZ not placed"
-unk_00531320,0x00531320,0x00532130,unknown,code not assigned to a module
+unk_00531320,0x00531320,0x00531650,unknown,code not assigned to a module
+kamikaze,0x00531650,0x00531B80,source,"functions compiled from src/kamikaze.cpp, matched, without gaps"
+unk_00531B80,0x00531B80,0x00532130,unknown,code not assigned to a module
 keyboard,0x00532130,0x00532E80,tibsun,"functions compiled from src/keyboard.cpp, matched, without gaps; ?Stop_Execution@@YIXXZ not placed; ?Noop@WWKeyboardClass@@ABEHXZ not placed"
 unk_00532E80,0x00532E80,0x00533110,unknown,code not assigned to a module
 laser,0x00533110,0x00534340,tibsun,"functions compiled from src/laser.cpp, without gaps; matched except ?Draw_It@LaserDrawClass@@QAEXXZ; three placed by the gap"
