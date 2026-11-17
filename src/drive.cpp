@@ -74,6 +74,7 @@
 #include "unit.h"
 #include "unittype.h"
 #include "wave.h"
+#include "spawnmgr.h" // RA2: Start_Of_Move asks the spawn manager about launching spawns
 
 #include "layer.hh"
 #include "tube.hh"
@@ -623,8 +624,14 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 		*/
 		if (While_Moving()) return(false);
 		if (!LinkedTo->IsActive) return(false);
-		if (TrackNumber == -1 && (Is_Moving() || LinkedTo->Path[0] != FACING_NONE) && (LinkedTo->RTTI != RTTI_UNIT || !((UnitClass*)LinkedTo)->IsDumping)) {
+		if (TrackNumber == -1 && (Is_Moving() || LinkedTo->Path[0] != FACING_NONE) && (LinkedTo->Fetch_RTTI() != RTTI_UNIT || !((UnitClass*)LinkedTo)->IsDumping)) { // RA2: Fetch_RTTI() is the virtual slot, not the RTTI member
 			bool res = false;
+			if (LinkedTo->Fetch_RTTI() == RTTI_UNIT && LinkedTo->NavCom != NULL && LinkedTo->NavCom->Fetch_RTTI() == RTTI_INFANTRY) { // RA2: a unit chasing an infantry NavCom follows its coordinate
+				Coord dest = LinkedTo->NavCom->Destination_Coord(LinkedTo); // RA2: as above
+				if (dest != DestinationCoord) { // RA2: as above
+					Move_To(dest); // RA2: as above
+				} // RA2: as above
+			} // RA2: as above
 			Start_Of_Move(res);
 			if (res) return(false);
 			if (!LinkedTo->IsActive) return(false);
@@ -633,7 +640,7 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 		}
 	} else {
 
-		if (LinkedTo->NavCom != NULL && LinkedTo->NavCom->RTTI == RTTI_CELL && LinkedTo->PositionCell == ((CellClass *)LinkedTo->NavCom)->CellID) {
+		if (LinkedTo->NavCom != NULL && LinkedTo->NavCom->Fetch_RTTI() == RTTI_CELL && LinkedTo->PositionCell == ((CellClass *)LinkedTo->NavCom)->CellID) { // RA2: Fetch_RTTI() virtual call
 			Abandon_Navigation();
 			return(false);
 		} else {
@@ -653,7 +660,7 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 				if (IsRotating) {
 					IsRotating = false;
 					LinkedTo->Per_Cell_Process(PCP_ROTATION);
-					if (LinkedTo == NULL || !LinkedTo->IsActive || LinkedTo->IsInLimbo || LinkedTo->IsFalling) return(false);
+					if (!LinkedTo->IsActive || LinkedTo->IsInLimbo || LinkedTo->IsFalling) return(false); // RA2: no LinkedTo == NULL test
 				}
 
 				/*
@@ -688,7 +695,7 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 					} else {
 						//Stop_Driver();
 						if (LinkedTo->NavCom != NULL) {
-							Move_To(LinkedTo->NavCom->Destination_Coord());
+							Move_To(LinkedTo->NavCom->Destination_Coord(LinkedTo)); // RA2: Destination_Coord takes the unit
 						}
 					}
 				}
@@ -699,7 +706,7 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 	if (Is_Moving_Now() && (Frame % 10) == 0) {
 		if (!LinkedTo->IsOnBridge && LinkedTo->Get_Cell_Ptr()->Land_Type() == LAND_WATER) {
 			if (Rule->Wake != NULL) {
-				new AnimClass(Rule->Wake, LinkedTo->PositionCoord);
+				new AnimClass(Rule->Wake, LinkedTo->PositionCoord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: the executable passes the extra arguments 0, 1, 0x600, 0
 			}
 		}
 	}
@@ -712,6 +719,7 @@ boolean STDMETHODCALLTYPE DriveLocomotionClass::Process(void)
 
 	return(Is_Moving());
 }
+
 
 
 /***********************************************************************************************
@@ -1001,11 +1009,11 @@ bool DriveLocomotionClass::While_Moving(bool just_started)
 	int maxspeed = LinkedTo->Current_Speed();
 	//if (IsFormationMove) maxspeed = FormationMaxSpeed;
 
-	FacingType		nextface;		// Next facing queued in path.
-	nextface = LinkedTo->Path[0];
-
 	int actual;			// Working movement addition value.
-	actual = SpeedAccum + (just_started ? 0 : maxspeed);
+	actual = SpeedAccum + (just_started ? 0 : maxspeed); // RA2: the speed accumulation comes before the next facing is read
+
+	FacingType		nextface;		// Next facing queued in path. // RA2: declared after actual
+	nextface = LinkedTo->Path[0]; // RA2: as above
 
 	if (nextface == FACING_COUNT && TrackNumber == -1) {
 		LinkedTo->Mark(MARK_UP);
@@ -1019,12 +1027,13 @@ bool DriveLocomotionClass::While_Moving(bool just_started)
 			memcpy((char*)&LinkedTo->Path, (char*)&LinkedTo->Path[1], sizeof(LinkedTo->Path[0]) * (CONQUER_PATH_MAX-1));
 			LinkedTo->Path[CONQUER_PATH_MAX-1] = FACING_NONE;
 			LinkedTo->CurrentTube = tubenum;
+			TPoint2D<short> const & enter = tube->Enter; // RA2: the entry point is held in a reference before the tube direction is set
 			LinkedTo->CurrentTubeDir = FACING_FIRST;
-			LinkedTo->LastTubeCoord = Map[Adjacent_Cell((Cell)tube->Enter, tube->Dirs[0])].Cell_Coord();
+			LinkedTo->LastTubeCoord = Map[Adjacent_Cell(Cell(enter), tube->Dirs[0])].Cell_Coord(); // RA2: as above
 			int current_height = Map.Get_Height_GL(LinkedTo->PositionCoord);
+			Cell exit = tube->Exit; // RA2: the exit cell is a new local, read before the count
 			int count = tube->Count;
-			c = tube->Exit;
-			LinkedTo->LastTubeCoord.Z = current_height + (Map.Get_Height_GL(c) - current_height) / count;
+			LinkedTo->LastTubeCoord.Z = current_height + (Map.Get_Height_GL(exit) - current_height) / count; // RA2: uses the new local
 			IsDriving = true;
 			TrackNumber = -1;
 		} else {
@@ -1371,6 +1380,7 @@ bool DriveLocomotionClass::While_Moving(bool just_started)
 }
 
 
+
 /***********************************************************************************************
  * DriveClass::Start_Of_Move -- Tries to get a unit to advance toward cell.                    *
  *                                                                                             *
@@ -1414,14 +1424,16 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 
 	if (DestinationCoord == COORD_NONE) return(false);
 
-	if (LinkedTo->StunDuration > 0) return(true);
+	if (LinkedTo->IsBeingWarpedOut() || LinkedTo->IsWarpingIn()) return(false); // RA2: a unit being warped out or in does not start a move
+	if (LinkedTo->SpawnManager != NULL && LinkedTo->SpawnManager->CountLaunchingSpawns() != 0) return(true); // RA2: wait while spawns are launching
+	if (LinkedTo->IsUnderEMP() || LinkedTo->IsParalyzed()) return(true); // RA2: replaces the StunDuration test
 
 	/*
 	**	Reduce the path length if the target is a unit and the
 	**	range to the unit is less than the precalculated path steps.
 	*/
 	if (facing != FACING_NONE) {
-		if (dynamic_cast<UnitClass *>(LinkedTo->NavCom) || dynamic_cast<InfantryClass *>(LinkedTo->NavCom)) {
+		if ((LinkedTo->NavCom != NULL && LinkedTo->NavCom->Fetch_RTTI() == RTTI_UNIT) || (LinkedTo->NavCom != NULL && LinkedTo->NavCom->Fetch_RTTI() == RTTI_INFANTRY)) { // RA2: Fetch_RTTI() tests instead of dynamic_cast
 			int dist = Lepton_To_Cell((LEPTON)LinkedTo->Distance(DestinationCoord));
 
 			if (dist < ARRAY_SIZE(LinkedTo->Path)) {
@@ -2017,6 +2029,7 @@ bool DriveLocomotionClass::Start_Of_Move(bool & stop_processing, bool retry, boo
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************

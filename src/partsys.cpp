@@ -50,6 +50,34 @@ static inline void _Add_System(ParticleSystemClass * system) // RA2: systems are
 
 
 /// <summary>
+/// RA2
+/// </summary>
+static inline Coord Particle_Coord_Along_Facing(DirType const & facing, int distance, Coord coord) // RA2: the executable moves the aim point through an inline layer of its own
+{
+	double radians = facing.As_Radian(); // RA2: as above
+	int z = coord.Z; // RA2: as above
+	int y = (int)(coord.Y - fastmath::sin(radians) * distance); // RA2: as above
+	int x = (int)(coord.X + fastmath::cos(radians) * distance); // RA2: as above
+	TPoint3D<int> point(x, y, z); // RA2: built through TPoint3D's constructor (the executable calls 0x41B630 here; this build expands it)
+	Coord result(point); // RA2: as above
+	return(result); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline Vector3 Normalize_Direction(const Vector3 & vec) // RA2: the executable normalizes through an inline layer of its own
+{
+	float len = (float)fastmath::sqrt(vec.Z*vec.Z + vec.Y*vec.Y + vec.X*vec.X); // RA2: as above
+	if (len != 0.0) { // RA2: as above
+		return(vec / len); // RA2: as above
+	}
+	return(vec); // RA2: as above
+}
+
+
+/// <summary>
 /// Creates a particle system of the specified type.
 /// This routine adds the new system to the global particle system list and places
 /// it on the map. The system aims its particles at the target object, or at the
@@ -310,33 +338,34 @@ void ParticleSystemClass::Clear_System(void)
 /// </summary>
 void ParticleSystemClass::Gas_AI(void)
 {
-	int i;
+	int index; // RA2: one counter for both loops
 
-	for (i = SystemParticles.Count()-1; i >= 0; i--) {
-		SystemParticles[i]->Behavior_AI();
+	for (index = SystemParticles.Count() - 1; index >= 0; index--) { // RA2: as above
+		SystemParticles[index]->Behavior_AI(); // RA2: as above
 	}
 
-	for (i = SystemParticles.Count()-1; i >= 0; i--) {
-		ParticleClass *spart = SystemParticles[i];
-		if (spart->IsToDie) {
-			ParticleType nt = spart->Class->NextParticle; // RA2: the next particle type in a local
-			if (nt != PARTICLE_NONE) { // RA2: tested from that local
-				Coord const & coord = spart->PositionCoord; // RA2: the position by reference
-				ParticleTypeClass *next = ParticleTypes[nt]; // RA2: the type looked up from that local
-				Coord ncoord = coord + spart->Class->NextParticleOffset;
-				ParticleClass *npart = new ParticleClass(next, ncoord, COORD_NONE, this); // RA2: the particle is given this system
-				if (npart != NULL) {
-					SystemParticles.Add(npart);
-					npart->Speed = spart->Speed;
-					npart->GasDrift = spart->GasDrift;
+	for (index = SystemParticles.Count() - 1; index >= 0; index--) { // RA2: as above
+		ParticleClass *particle = SystemParticles[index]; // RA2: as above
+		if (particle->IsToDie) { // RA2: as above
+			ParticleTypeClass const *type = particle->Class; // RA2: the class kept in a local
+			if (type->NextParticle != PARTICLE_NONE) { // RA2: as above
+				Coord position = particle->PositionCoord; // RA2: the position copied by value
+				ParticleTypeClass *next = ParticleTypes[type->NextParticle]; // RA2: as above
+				Coord coord = position + type->NextParticleOffset; // RA2: as above
+				ParticleClass *spawned = new ParticleClass(next, coord, COORD_NONE, NULL); // RA2: no owning system is passed
+				if (spawned != NULL) { // RA2: as above
+					SystemParticles.Add(spawned); // RA2: as above
+					spawned->Speed = particle->Speed; // RA2: as above
+					spawned->GasDrift = particle->GasDrift; // RA2: as above
 				}
 			}
-			spart->Delete_Me();
+			particle->Delete_Me(); // RA2: as above
 		} else {
-			spart->Motion_AI();
+			particle->Motion_AI(); // RA2: as above
 		}
 	}
 }
+
 
 
 
@@ -351,6 +380,7 @@ void ParticleSystemClass::Gas_AI(void)
 /// </summary>
 void ParticleSystemClass::Spark_AI(void)
 {
+	int index; // RA2: the loop counter is declared first
 	if (SparkSpawnFrames > 0) {
 
 		if (SparkSpawnFrames == 1 || Random_Double(0.0, 1.0) <= Class->SpawnSparkPercentage) {
@@ -360,13 +390,15 @@ void ParticleSystemClass::Spark_AI(void)
 
 			ParticleTypeClass * held = ParticleTypes[Class->HoldsWhat];
 
-			int rand_a = Scen->RandomNumber();
-			int rand_b = Scen->RandomNumber();
+			Random2Class & generator = Scen->RandomNumber; // RA2: the generator kept by reference
+			int rand_y = generator; // RA2: as above
+			int rand_x = Scen->RandomNumber(); // RA2: as above
 
 			Vector3 spark;
-			spark.Z = (float)(Scen->RandomNumber() % held->ZVelocityRange);
-			spark.X = (float)(rand_b % held->XVelocity);
-			spark.Y = (float)(rand_a % held->YVelocity);
+			float vertical_velocity = (float)(int(generator) % held->ZVelocityRange); // RA2: as above
+			spark.X = (float)(rand_x % held->XVelocity); // RA2: as above
+			spark.Y = (float)(rand_y % held->YVelocity); // RA2: as above
+			spark.Z = vertical_velocity; // RA2: as above
 
 			while (count > 0) {
 				ParticleClass * particle = Spawn_Held_Particle(PositionCoord, PositionCoord);
@@ -383,9 +415,9 @@ void ParticleSystemClass::Spark_AI(void)
 					particle->MovementDirection = spark + particle->MovementDirection;
 				} else {
 					Vector3 & spawndir = (Vector3 &)Class->SpawnDirection;
-					particle->MovementDirection = spawndir + particle->MovementDirection;
+					particle->MovementDirection = spawndir + dir; // RA2: the direction reference is used
 				}
-				particle->MovementDirection = Normalize(particle->MovementDirection);
+				particle->MovementDirection = Normalize_Direction(particle->MovementDirection); // RA2: the local inline normalizer
 				particle->MovementDirection = speed * particle->MovementDirection;
 
 				count--;
@@ -405,9 +437,11 @@ void ParticleSystemClass::Spark_AI(void)
 
 		double chance = Random_Double(0.0, 1.0);
 		if (chance < 0.3) {
-			int radius = SparkRadius - 3;
-			if (radius <= 17) {
+			int radius; // RA2: as above
+			if (SparkRadius - 3 <= 17) { // RA2: the clamp tested on the expression
 				radius = 17;
+			} else {
+				radius = SparkRadius - 3; // RA2: as above
 			}
 			SparkRadius = radius;
 		} else if (chance < 0.6) {
@@ -419,17 +453,18 @@ void ParticleSystemClass::Spark_AI(void)
 		}
 	}
 
-	for (int i = 0; i < SystemParticles.Count(); i++) {
-		SystemParticles[i]->Behavior_AI();
+	for (index = 0; index < SystemParticles.Count(); index++) { // RA2: as above
+		SystemParticles[index]->Behavior_AI(); // RA2: as above
 	}
 
-	for (int j = SystemParticles.Count() - 1; j >= 0; j--) {
-		ParticleClass * particle = SystemParticles[j];
+	for (index = SystemParticles.Count() - 1; index >= 0; index--) { // RA2: as above
+		ParticleClass * particle = SystemParticles[index]; // RA2: as above
 		if (particle->IsToDie) {
 			particle->Delete_Me();
 		}
 	}
 }
+
 
 
 
@@ -445,8 +480,11 @@ void ParticleSystemClass::Smoke_AI(void)
 {
 	int i;
 
-	if (Source->As_ObjectClass() != NULL && Source->What_Am_I() != RTTI_BUILDING) {
-		Set_Coord(Source->Center_Coord() + CoordOffset);
+	if (Source != NULL) { // RA2: the object test is the abstract flag read into a byte temporary, no cast
+		unsigned char const & object = (Source->AbstractFlags >> 1) & 1; // RA2: as above
+		if (object && Source->What_Am_I() != RTTI_BUILDING) { // RA2: as above
+			Set_Coord(Source->Center_Coord() + CoordOffset); // RA2: as above
+		}
 	}
 
 	for (i = 0; i < SystemParticles.Count(); i++) {
@@ -485,7 +523,7 @@ void ParticleSystemClass::Smoke_AI(void)
 				ncoord.Y = y + yrand;
 				ncoord.Z = z;
 				ncoord.X = x + xrand;
-				ParticleClass *npart = new ParticleClass(next, ncoord);
+				ParticleClass *npart = new ParticleClass(next, ncoord, COORD_NONE, NULL); // RA2: no spawn point and no owning system are passed
 				if (npart != NULL) {
 					SystemParticles.Add(npart);
 					if (npart != NULL) {
@@ -498,7 +536,7 @@ void ParticleSystemClass::Smoke_AI(void)
 				pcoord.X = x - xrand;
 				pcoord.Y = y - yrand;
 				pcoord.Z = z;
-				ParticleClass *ppart = new ParticleClass(next, pcoord);
+				ParticleClass *ppart = new ParticleClass(next, pcoord, COORD_NONE, NULL); // RA2: as above
 				if (ppart != NULL) {
 					SystemParticles.Add(ppart);
 					ppart->Speed = spart->Speed;
@@ -544,6 +582,7 @@ void ParticleSystemClass::Smoke_AI(void)
 
 
 
+
 /// <summary>
 /// Handles the per-frame logic for a railgun particle system.
 /// The first pass lays a spiral of particles along the line from the firer to the
@@ -556,16 +595,16 @@ void ParticleSystemClass::Railgun_AI(void)
 	int i;
 
 	if (!IsMarkedForDeletion && !SystemParticles.Count()) {
-		Coord pos = Get_Coord();
-		int dx = SpawnCoord.X - pos.X;
-		int dy = SpawnCoord.Y - pos.Y;
-		int dz = SpawnCoord.Z - pos.Z;
+		Coord delta = SpawnCoord - Get_Coord(); // RA2: the offset as one subtraction
+		int dx = delta.X; // RA2: as above
+		int dy = delta.Y; // RA2: as above
+		int dz = delta.Z; // RA2: as above
 
-		double dz_double = (double)dz;
-		double dy_double = (double)dy;
-		double dx_double = (double)dx;
-		int total_dist = (int)fastmath::sqrt(dx_double * dx_double + dy_double * dy_double + dz_double * dz_double);
-		int horiz_dist = (int)fastmath::sqrt(dy_double * dy_double + dx_double * dx_double);
+		int total_dist = (int)fastmath::sqrt((double)dx * (double)dx + (double)dy * (double)dy + (double)dz * (double)dz); // RA2: the total distance from the integer offsets
+		double dy_double = (double)dy; // RA2: the doubles are made after it
+		double dx_double = (double)dx; // RA2: as above
+		double horiz = dy_double * dy_double; // RA2: as above
+		int horiz_dist = (int)fastmath::sqrt(horiz + dx_double * dx_double); // RA2: as above
 
 		int clamped_z = dz;
 		int clamped_x = dx;
@@ -597,13 +636,15 @@ void ParticleSystemClass::Railgun_AI(void)
 			float num_particles_f = (float)num_particles;
 			do {
 				float frac = (float)i / num_particles_f;
-				double angle = dist_f * frac * Class->SpiralDeltaPerCoord;
+				double angle = dist_f; // RA2: built up in steps
+				angle *= frac; // RA2: as above
+				angle *= Class->SpiralDeltaPerCoord; // RA2: as above
 
 				double sine = fastmath::sin(angle);
 				double cosine = fastmath::cos(angle);
 				Vector3 spiral(0.0f, cosine, sine);
 				spiral = mat * spiral;
-				Vector3 scaled = spiral * (float)Class->SpiralRadius;
+				Vector3 scaled = spiral * Class->SpiralRadius; // RA2: the radius is used as it is
 				Vector3 tmp = Vector3(Random_Double(-0.5, 0.5) * Class->PositionPerturbationCoefficient, Random_Double(-0.5, 0.5) * Class->PositionPerturbationCoefficient, Random_Double(-0.5, 0.5) * Class->PositionPerturbationCoefficient);
 
 				scaled += tmp;
@@ -614,7 +655,7 @@ void ParticleSystemClass::Railgun_AI(void)
 
 				particle->MovementDirection = spiral;
 				particle->MovementDirection += Vector3(Random_Double(-0.5, 0.5) * Class->MovementPerturbationCoefficient, Random_Double(-0.5, 0.5) * Class->MovementPerturbationCoefficient, Random_Double(-0.5, 0.5) * Class->MovementPerturbationCoefficient);
-				particle->MovementDirection = Normalize(particle->MovementDirection);
+				particle->MovementDirection = Normalize_Direction(particle->MovementDirection); // RA2: the local inline normalizer
 
 				double vp = (Random_Double(-0.5, 0.5) + velocity_accum) * (Class->VelocityPerturbationCoefficient * 0.5);
 				velocity_accum = (float)MAX(MIN(vp, Class->VelocityPerturbationCoefficient), -Class->MovementPerturbationCoefficient);
@@ -641,6 +682,7 @@ void ParticleSystemClass::Railgun_AI(void)
 		}
 	}
 }
+
 
 
 /*
@@ -682,7 +724,7 @@ void ParticleSystemClass::Fire_AI(void)
 				Coord cc = source->TarCom->Center_Coord();
 				Coord delta = cc - source->Get_Coord();
 				int dist = (int)fastmath::sqrt((double)delta.X * (double)delta.X + (double)delta.Y * (double)delta.Y + (double)delta.Z * (double)delta.Z);
-				SpawnCoord = Move_Coord(source->Get_Coord(), source->PrimaryFacing.Current(), dist);
+				SpawnCoord = Particle_Coord_Along_Facing(source->PrimaryFacing.Current(), dist, source->Get_Coord()); // RA2: the local inline layer
 				Set_Coord(source->Fire_Coord(0));
 				reaimed = true;
 			}
@@ -697,11 +739,8 @@ void ParticleSystemClass::Fire_AI(void)
 	if (!IsMarkedForDeletion && (!(Frame % Class->SpawnFrames) || (!(Frame % 3) && reaimed))) {
 		int index = Frame % 500;
 
-		Coord pos = Get_Coord();
-		int dx = pos.X - SpawnCoord.X;
-		int dz = pos.Z - SpawnCoord.Z;
-		int dy = pos.Y - SpawnCoord.Y;
-		int distsq = dx * dx + dy * dy + dz * dz;
+		Coord delta = Get_Coord() - SpawnCoord; // RA2: the offset as one subtraction
+		int distsq = delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z; // RA2: as above
 
 		int divisor;
 		if ((float)fastmath::sqrt((double)distsq) < 200.0f) {
@@ -712,13 +751,15 @@ void ParticleSystemClass::Fire_AI(void)
 
 		int offset = (int)((double)(12 * SineTable[index]) / ((float)divisor * 3.0f));
 
-		FacingType face = Facing_Between_Points(Get_Coord(), SpawnCoord);
+		Point2D to(SpawnCoord.X, SpawnCoord.Y); // RA2: the target point as a Point2D
+		Coord position = Get_Coord(); // RA2: as above
+		FacingType face = Facing_Between_Points(Point2D(position.X, position.Y), to); // RA2: as above
 
-		Coord spawn = Coord(SpawnCoord.X + offset * _FireStepX[face], SpawnCoord.Y + offset * _FireStepY[face], SpawnCoord.Z);
-
-		Spawn_Held_Particle_Random(Get_Coord() + Coord(0, 0, 1), spawn, 4);
+		Coord spread = Coord(_FireStepX[face] * offset, _FireStepY[face] * offset, 0); // RA2: the spread offset as a Coord
+		Spawn_Held_Particle_Random(Get_Coord() + Coord(0, 0, 1), SpawnCoord + spread, 4); // RA2: the spread added to the aim point
 	}
 }
+
 
 
 /// <summary>

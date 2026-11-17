@@ -687,6 +687,7 @@ void InfantryClass::Draw_It(Point2D const & xpoint, Rect const & cliprect) const
 }
 
 
+
 /***************************************************************************
 **	This is the array of constant data associated with infantry maneuvers. It
 **	specifies the frame rate as well as if the animation can be aborted.
@@ -1307,6 +1308,7 @@ void InfantryClass::Assign_Target(AbstractClass * target)
 		IsOverpowering = false;
 	}
 }
+
 
 
 /// <summary>
@@ -2114,6 +2116,7 @@ bool InfantryClass::Enter_Idle_Mode(bool initial, bool resume_waypoint)
 }
 
 
+
 /***********************************************************************************************
  * InfantryClass::Random_Animate -- Randomly animate the infantry (maybe)                      *
  *                                                                                             *
@@ -2195,6 +2198,7 @@ bool InfantryClass::Random_Animate(void)
 	}
 	return(false);
 }
+
 
 
 /// <summary>
@@ -2681,6 +2685,7 @@ bool InfantryClass::Unlimbo(Coord const & xcoord, Dir256 facing)
 }
 
 
+
 /***********************************************************************************************
  * InfantryClass::Greatest_Threat -- Determines greatest threat (target) for infantry unit.    *
  *                                                                                             *
@@ -3062,6 +3067,7 @@ done: // RA2: structured forms do not match; the exe returns the action register
 }
 
 
+
 /***********************************************************************************************
  * InfantryClass::Active_Click_With -- Handles action when clicking with infantry soldier.     *
  *                                                                                             *
@@ -3159,6 +3165,7 @@ wchar_t const * InfantryClass::Full_Name(void) const // RA2: wide
 
 	return(Class->UIName); // RA2
 }
+
 
 
 /// <summary>
@@ -3543,18 +3550,15 @@ void InfantryClass::Read_INI(CCINIClass const & ini)
 					/*
 					**	4th token: cell #.
 					*/
-					int x, y;
+					Coord coord; // RA2: as above
 					if (NewINIFormat >= 4) {
-						x = atoi(strtok(NULL, ","));
-						y = atoi(strtok(NULL, ","));
-						x = (short)x; // RA2: x is narrowed to a short
+						int x = atoi(strtok(NULL, ",")); // RA2: as above
+						int y = atoi(strtok(NULL, ",")); // RA2: as above
+						coord = Cell((short)x, y).As_Coord(); // RA2: the cell is built and converted inside each branch, x narrowed to a short
 					} else {
 						int cellnum = atoi(strtok(NULL, ","));
-						x = cellnum % 128;
-						y = cellnum / 128;
+						coord = Cell((short)(cellnum % 128), (short)(cellnum / 128)).As_Coord(); // RA2: as above
 					}
-					Cell cell(x, y);
-					Coord coord = cell.As_Coord();
 
 					/*
 					**	5th token: cell sub-location.
@@ -3751,6 +3755,7 @@ void InfantryClass::Fear_AI(void)
 		}
 	}
 }
+
 
 
 /***********************************************************************************************
@@ -3969,6 +3974,11 @@ void InfantryClass::Firing_AI(void)
  * HISTORY:                                                                                    *
  *   07/29/1996 JLB : Created.                                                                 *
  *=============================================================================================*/
+inline AnimTypeClass const * Pick_Dead_Body(unsigned draw, TypeList<AnimTypeClass const *> const & list) // RA2: a file-local inline (meastes' Pick_Animation): list[draw % Count]
+{
+	return(list[draw % (unsigned)list.Count()]); // RA2: as above
+}
+
 void InfantryClass::Doing_AI(void)
 {
 	if (Doing == DO_NOTHING || Fetch_Stage() >= Class->DoControls[Doing].Count) {
@@ -4006,6 +4016,9 @@ void InfantryClass::Doing_AI(void)
 				}
 				break;
 
+			case 33: // RA2: the paradrop sequence has an empty case of its own (jump-table entry to the end); the landing check is below
+				break; // RA2: as above
+
 			case 34: // RA2: a sequence that leads on into the next one
 				Do_Action((DoType)35, true, false); // RA2: as above
 				break;
@@ -4017,9 +4030,11 @@ void InfantryClass::Doing_AI(void)
 			case DO_FIRE_DEATH:
 				if (Fetch_Stage() >= Class->DoControls[Doing].Count) {
 					if (Class->DeadBodies.Count() > 0) { // RA2: the type's own dead bodies first
-						new AnimClass(Class->DeadBodies.Pick(Scen->RandomNumber()), Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+						new AnimClass(Pick_Dead_Body(Scen->RandomNumber(), Class->DeadBodies), // RA2: the draw is made before the list is read (as meastes' Pick_Dead_Body)
+						 Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
 					} else if (!Class->NotHuman) { // RA2: else the rules' for humans
-						new AnimClass(Rule->DeadBodies.Pick(Scen->RandomNumber()), Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
+						new AnimClass(Pick_Dead_Body(Scen->RandomNumber(), Rule->DeadBodies), // RA2: as above
+						 Center_Coord(), 0, 1, (ShapeFlags_Type)0x600, 0); // RA2: as above
 					}
 					Delete_Me();
 				}
@@ -4114,6 +4129,7 @@ void InfantryClass::Movement_AI(void)
 		return;
 	}
 }
+
 
 
 /// <summary>
@@ -4268,6 +4284,7 @@ bool InfantryClass::Paradrop(Coord const & coord)
 	}
 	return(false);
 }
+
 
 
 /***********************************************************************************************
