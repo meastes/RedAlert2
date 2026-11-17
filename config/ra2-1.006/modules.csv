@@ -276,10 +276,8 @@ unk_00509810,0x00509810,0x00509B20,unknown,code not assigned to a module
 infatype,0x00509B20,0x0050AF90,tibsun,"functions compiled from src/infatype.cpp, matched, without gaps; seven placed by the gap"
 unk_0050AF90,0x0050AF90,0x0050B8D0,unknown,code not assigned to a module
 ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap"
-unk_005109B0,0x005109B0,0x00513080,unknown,code not assigned to a module
-unk_00513080,0x00513080,0x00513260,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_00513260,0x00513260,0x00513290,unknown,code not assigned to a module
-init,0x00513290,0x0051AD10,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; one placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; ?Init_Campaigns@@YIXXZ not placed; ?Init_Rules@@YI_NXZ not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0"
+unk_005109B0,0x005109B0,0x005127F0,unknown,code not assigned to a module
+init,0x005127F0,0x0051AD10,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; four placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0"
 unk_0051AD10,0x0051AD10,0x0051E820,unknown,code not assigned to a module
 interpal,0x0051E820,0x0051ECF0,tibsun,"functions compiled from src/interpal.cpp, matched, without gaps"
 unk_0051ECF0,0x0051ECF0,0x0051EEE0,unknown,code not assigned to a module
