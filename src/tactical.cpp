@@ -4041,12 +4041,6 @@ HRESULT STDMETHODCALLTYPE Tactical::Save(IStream * stream, BOOL cleardirty)
 }
 
 
-void Tactical_noop(int,int,int,int)
-{
-
-}
-
-
 /// <summary>
 /// RA2
 /// </summary>
@@ -4059,35 +4053,62 @@ static inline void World_To_View_Pixel(Tactical const & view, Coord const & coor
 
 
 /// <summary>
-/// Rotates a rectangular world position onto the isometric screen axes.
-/// This is the forward half of the tactical map's coordinate pipeline. No scaling and no view
-/// offset are applied, so the result comes back in whatever units it was given.
-/// </summary>
-void Tactical::Rectangular_To_Isometric(int xin, int yin, int & xout, int & yout)
-{
-	xout = xin * 60 / 2; // RA2: Rectangular_To_Isometric at 0x6A2740 matches only so
-	yout = xin * 30 / 2; // RA2: as above
-	xout += yin * 60 / -2; // RA2: as above
-	yout += yin * 30 / 2; // RA2: as above
-}
-
-
-void Tactical::Noop(int)
-{
-}
-
-
-/// <summary>
 /// Draws the radial range indicators for the selected objects.
 /// This routine is used by the tactical map render pass to show the effect radius of any
 /// currently selected object whose type asks for one.
 /// </summary>
 void Tactical::Draw_Radial_Indicators(void)
 {
-	for (int i = 0; i < CurrentObject.Count(); i++) {
+	int count = CurrentObject.Count(); // RA2: the count is read once, before the loop (0x6AC42B)
+	for (int i = 0; i < count; i++) { // RA2: as above
 		ObjectClass * obj = CurrentObject[i];
 		if (obj->Class_Of() && obj->Class_Of()->IsHasRadialIndicator) {
 			obj->Draw_Radial_Indicator(1); // RA2: an argument (1, as 0x6AC420 passes)
+		}
+	}
+
+	// RA2: the rest of 0x6AC420: while the placement cursor carries a building with a radial range, its range ring pulses and the nearest like building in reach is marked
+	if (Options.ActionLines) { // RA2: Options byte +0x1A, tested at 0x6AC474
+		BuildingClass * pending = (BuildingClass *)Map.PendingObjectPtr; // RA2: the object on the placement cursor (0x833680)
+		if (pending != NULL && pending->Fetch_RTTI() == RTTI_BUILDING && pending->GetRadialIndicatorRange() > 0) { // RA2: 0x451930 is called twice
+			Coord center = Map[Cell(Map.ZoneCell)].Cell_Coord(); // RA2: center of the cell under the cursor
+			static RGBClass black; // RA2: function-local static with a guard bit, 0xABE54C
+			static int pulse = 0; // RA2: 0xABFD78
+			static int pulse_dir = 1; // RA2: 0x7F6974
+			pulse += pulse_dir * 10; // RA2: the ring color pulses 0..100
+			if (pulse >= 100) { // RA2: as above
+				pulse_dir = -1; // RA2: as above
+			} else if (pulse <= 0) { // RA2: as above
+				pulse_dir = 1; // RA2: as above
+			}
+			RGBClass color = pending->House->RemapColorRGB; // RA2: house color at +0x55E9
+			color.Adjust(pulse, black); // RA2: as above
+			int range = pending->GetRadialIndicatorRange(); // RA2: as above
+			Draw_Radial_Ellipse(range, false, center, color, true, false); // RA2: 0x451BF0 with these flags
+
+			int houses = PlayerPtr->Buildings.Count(); // RA2: read once, for both passes (0x6AC5B8)
+			int nearest = 0x7FFFFFFF; // RA2: first pass finds the shortest distance within twice the range
+			int j; // RA2: as above
+			for (j = 0; j < houses; j++) { // RA2: as above
+				BuildingClass * other = PlayerPtr->Buildings[j]; // RA2: as above
+				if (other != NULL && other->IsActive && other != pending && other->Class == pending->Class) { // RA2: as above
+					Cell zone = Map.ZoneCell; // RA2: as above
+					short dist = zone.Distance_To(Cell(other->Center_Coord())); // RA2: as above
+					if (dist <= range * 2 && dist < nearest) { // RA2: as above
+						nearest = dist; // RA2: as above
+					}
+				}
+			}
+			for (j = 0; j < houses; j++) { // RA2: second pass marks the building at that distance
+				BuildingClass * other = PlayerPtr->Buildings[j]; // RA2: as above
+				if (other != NULL && other->IsActive && other != pending && other->Class == pending->Class) { // RA2: as above
+					Cell zone = Map.ZoneCell; // RA2: as above
+					short dist = zone.Distance_To(Cell(other->Center_Coord())); // RA2: as above
+					if (dist == nearest) { // RA2: as above
+						other->Draw_Radial_Indicator(0); // RA2: as above
+					}
+				}
+			}
 		}
 	}
 }
@@ -4107,4 +4128,30 @@ int Tactical::Selectable_Count(void) const // RA2: 0x6AC7B0, not in TibSun
 ObjectClass * Tactical::Selectable_Object(int index) const // RA2: 0x6AC7C0, not in TibSun
 {
 	return(SelectableObjects[index].Object); // RA2: indexes the table of 12 byte entries
+}
+
+
+// RA2: the three functions below are not placed by address: they are inline in the exe (their copies sit where their callers expand them), so they trail the file
+void Tactical_noop(int,int,int,int) // RA2: as above
+{
+
+}
+
+
+/// <summary>
+/// Rotates a rectangular world position onto the isometric screen axes.
+/// This is the forward half of the tactical map's coordinate pipeline. No scaling and no view
+/// offset are applied, so the result comes back in whatever units it was given.
+/// </summary>
+void Tactical::Rectangular_To_Isometric(int xin, int yin, int & xout, int & yout) // RA2: as above
+{
+	xout = xin * 60 / 2; // RA2: Rectangular_To_Isometric at 0x6A2740 matches only so
+	yout = xin * 30 / 2; // RA2: as above
+	xout += yin * 60 / -2; // RA2: as above
+	yout += yin * 30 / 2; // RA2: as above
+}
+
+
+void Tactical::Noop(int) // RA2: as above
+{
 }

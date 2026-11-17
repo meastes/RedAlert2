@@ -14,4 +14,4 @@ template <typename T>
 class TVelocity3D;
 class DirType;
 
-int Projectile_Motion(Coord & coord, TVelocity3D<double> & velocity, Coord const & target_coord, DirType const & dir, bool aircraft, bool airburst, bool veryhigh);
+int Projectile_Motion(Coord & coord, TVelocity3D<double> & velocity, Coord const & target_coord, DirType const & dir, bool aircraft, bool airburst, bool veryhigh, bool level); // RA2: 0x00593870 takes an eighth argument, the projectile type's Level flag

@@ -171,6 +171,7 @@
 #include "wincomm.h"
 #include "wonline.h"
 #include "wsproto.h"
+#include "ldprgmgr.h" // RA2: the load screen manager (0x535910), which this file declared as a placeholder class before
 
 #include "bench.hh"
 #include "wstring.h"
@@ -193,8 +194,6 @@ void __fastcall Set_Frame_Rate_Limit(int value); // RA2: 0x53D820 (logic.cpp)
 void __fastcall Set_Buffer_Zone_Width(int value); // RA2: 0x53D830 (logic.cpp)
 ConvertClass * Get_Splash_Bar_Drawer(void); // RA2: 0x6F2490
 static inline int Player_Side(void); // RA2: defined below, with the other RA2 helpers
-class LoadProgressManager { public: void Compute_Rects(void); Point2D Text_Origin(void); int Unknown_00535B60(void); void Unknown_00535B90(void); void Unknown_00535BF0(void); void Unknown_00536E20(void); }; // RA2: the load screen manager of 0x535910 (YR: LoadProgressManager); 0x535BF0 builds its surfaces (placeholder names; Compute_Rects 0x5359E0 and Text_Origin 0x535AB0 are YR names)
-LoadProgressManager * Fetch_Load_Progress(void); // RA2: 0x535910, the load screen manager (made on first use)
 void Process_All_Task_Forces(void); // RA2: 0x6C0220, calls TeamTypeClass::Process_Task_Force (0x6C0180, YR name) for every team type
 extern CCINIClass UIINI; // RA2: 0x00839860, UI.INI (init.cpp declares it the same way)
 class MPScoreScreen { public: MPScoreScreen(void); void Presentation_005AAA40(void); }; // RA2: the multiplayer score screen (YR: MPScoreScreen, ctor 0x5AAA20); 0x5AAA40 shows it (placeholder name)
@@ -964,7 +963,7 @@ bool Read_Scenario(char const * fname)
 			prog_msg = prog_msg_buffer; // RA2: as above
 		}
 
-		loader = Fetch_Load_Progress(); // RA2: the load screen is set up here (0x65C903)
+		loader = LoadProgressManager::Create(); // RA2: the load screen is set up here (0x65C903)
 		loader->Compute_Rects(); // RA2: as above
 		Progress.Unknown_Virtual_0((int)loader); // RA2: the manager is told of the progress (0x6203E0)
 
@@ -972,7 +971,7 @@ bool Read_Scenario(char const * fname)
 		Scen->IsGDI = (side == 0); // RA2: as above
 		Progress.Set_Side(side); // RA2: as above
 
-		Fetch_Load_Progress()->Unknown_00535B90(); // RA2: as above
+		LoadProgressManager::Create()->Load_Mixes(); // RA2: as above
 
 		if (Session.Type == GAME_NORMAL) { // RA2: a campaign shows the splash bar, a multiplayer game the bars of its players
 			Progress.Set_Graphic_Data("SPLDBR.SHP", NULL, Get_Splash_Bar_Drawer()); // RA2: as above
@@ -981,7 +980,7 @@ bool Read_Scenario(char const * fname)
 		}
 		bool campaign = (Session.Type == GAME_NORMAL); // RA2: as above
 		Progress.Set_Layout(loader->Text_Origin(), prog_msg, !campaign, !campaign); // RA2: as above
-		Progress.Set_Row_Width(loader->Unknown_00535B60()); // RA2: as above
+		Progress.Set_Row_Width(loader->Get_Row_Width()); // RA2: as above
 
 		if (PacketTransport != NULL && Session.Type == GAME_INTERNET && Session.Players.Count() > 1) {
 			DebugString("Setting addresses for UDP broadcast\n");
@@ -1089,7 +1088,7 @@ bool Read_Scenario(char const * fname)
 
 	if (loader != NULL) { // RA2: the manager is released
 		Progress.Unknown_Virtual_0(0); // RA2: as above
-		loader->Unknown_00536E20(); // RA2: as above
+		loader->Release(); // RA2: as above
 	}
 
 	return(true);
@@ -2247,7 +2246,7 @@ bool Read_Scenario_INI(CCINIClass const & ini, bool is_mapgen)
 		}
 	}
 
-	Fetch_Load_Progress()->Unknown_00535BF0(); // RA2: the loading screen prepares its surfaces (0x535910, 0x535BF0)
+	LoadProgressManager::Create()->Draw(); // RA2: the loading screen prepares its surfaces (0x535910, 0x535BF0)
 
 	/*
 	**
