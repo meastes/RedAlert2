@@ -8490,6 +8490,8 @@ address,size,evidence
 0x0072A7B0,16,"code of src/wdtmap.cpp, matched: its code occurs at 2 addresses; the others are matched code of src/waypoint.cpp"
 0x0072A7C0,48,"function of the Tiberian Sun reconstruction, matched"
 0x0072A7F0,80,"function of the Tiberian Sun reconstruction, matched"
+0x0072A840,48,"code of src/wdtmap.cpp, matched: its code occurs at 2 addresses; placed by the gap the other functions of the file leave"
+0x0072A870,16,"code of src/wdtmap.cpp, matched: too short for the match rule"
 0x0072B720,256,"function of the Tiberian Sun reconstruction, matched"
 0x0072BB10,,"inferred: target of the call at 0x00729378 in matched src/wdtmap.cpp; size not known"
 0x0072BDC0,64,"code of src/wdtnet.cpp, matched"

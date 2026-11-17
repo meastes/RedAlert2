@@ -8225,6 +8225,8 @@ address,symbol,evidence
 0x0072A7B0,??0Centroid@WorldDominationTour@@QAE@XZ,"compiled from src/wdtmap.cpp, matched; code at 2 addresses, the others matched by src/waypoint.cpp"
 0x0072A7C0,??YCentroid@WorldDominationTour@@QAEABV01@ABVPoint2D@@@Z,"compiled from src/wdtmap.cpp, matched"
 0x0072A7F0,?Center_Point@Centroid@WorldDominationTour@@QBE?AVPoint2D@@XZ,"compiled from src/wdtmap.cpp, matched"
+0x0072A840,??8Centroid@WorldDominationTour@@QBE_NABV01@@Z,"compiled from src/wdtmap.cpp, matched; code at 2 addresses, placed by the gap"
+0x0072A870,?Territory_Of_Color@@YIII@Z,"compiled from src/wdtmap.cpp, matched"
 0x0072BB10,??0?$VectorClass@V?$rc_ptr@VTerritory@WorldDominationTour@@@@@@QAE@HPBV?$rc_ptr@VTerritory@WorldDominationTour@@@@@Z,"inferred: referenced by matched src/wdtmap.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0072BDC0,?Create@WDTTerritory@@SI?AV?$rc_ptr@VWDTTerritory@@@@XZ,"compiled from src/wdtnet.cpp, matched"
 0x0072BE00,??0WDTTerritory@@QAE@XZ,"compiled from src/wdtnet.cpp, matched"
