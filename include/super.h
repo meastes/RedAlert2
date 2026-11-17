@@ -148,9 +148,7 @@ class SuperClass : public AbstractClass
 			FIRESTORM_ON
 		} ChargeDrainState;
 
-		enum {
-			ANIMATION_STAGES=54
-		};
+		int Unused_64; // RA2: +0x64; no code reads it, but the executable allocates 0x68 bytes per super weapon (replaces TibSun's ANIMATION_STAGES enum, which nothing used)
 };
 
 extern SuperWeaponType CurrentSuperWeaponType; // RA2: 0x00833694; the type waiting for a target (SUPER_CHRONO_WARP, while the destination is chosen), else -1

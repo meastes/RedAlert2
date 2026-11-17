@@ -223,24 +223,38 @@ DynamicVectorClass<HouseClass::BuildChoiceClass *> HouseClass::BuildChoice;
 /// </summary>
 HouseClass::HouseClass(NoInitClass const & x) :
 	BASECLASS(x),
-	Control(x),
-	AlertTime(x),
-	BorrowedTime(x),
-	RemapColorRGB(x),
-	Base(x),
-	Tiberium(x),
-	Weed(x),
-	Attack(x),
-	AITimer(x),
-	PickEnemyTimer(x),
-	DamageTime(x),
-	TeamTime(x),
-	TriggerTime(x),
-	SpeakAttackDelay(x),
-	SpeakPowerDelay(x),
-	SpeakMoneyDelay(x),
-	SpeakMaxedDelay(x),
-	IniName(x)
+	Control(x), // RA2: the exe builds these members with the no-init constructor (nothing is stored); the vectors, counters, RepairTimer and loadouts are built empty
+	AlertTime(x), // RA2: as above
+	BorrowedTime(x), // RA2: as above
+	PowerBlackoutTimer(x), // RA2: as above
+	RadarBlackoutTimer(x), // RA2: as above
+	Tiberium(x), // RA2: as above
+	Weed(x), // RA2: as above
+	AircraftTotals(x), // RA2: as above
+	InfantryTotals(x), // RA2: as above
+	UnitTotals(x), // RA2: as above
+	BuildingTotals(x), // RA2: as above
+	DestroyedAircraft(x), // RA2: as above
+	DestroyedInfantry(x), // RA2: as above
+	DestroyedUnits(x), // RA2: as above
+	DestroyedBuildings(x), // RA2: as above
+	CapturedBuildings(x), // RA2: as above
+	TotalCrates(x), // RA2: as above
+	Attack(x), // RA2: as above
+	AITimer(x), // RA2: as above
+	PickEnemyTimer(x), // RA2: as above
+	RemapColorRGB(x), // RA2: as above
+	LaserColor(x), // RA2: as above
+	Base(x), // RA2: as above
+	DamageTime(x), // RA2: as above
+	TeamTime(x), // RA2: as above
+	TriggerTime(x), // RA2: as above
+	SpeakAttackDelay(x), // RA2: as above
+	SpeakPowerDelay(x), // RA2: as above
+	SpeakMoneyDelay(x), // RA2: as above
+	SpeakMaxedDelay(x), // RA2: as above
+	IniName(x), // RA2: as above
+	UINameString(x) // RA2: as above
 {
 
 }
@@ -282,6 +296,8 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	IsPlayerControl(false),
 	IsStarted(false),
 	IsAlerted(false),
+	IsNavalBaseAllowed(true), // RA2: +0x138 starts true
+	IsShipyardConYardWanted(false), // RA2: +0x139 is cleared here
 	IsAITriggersOn(false),
 	IsBaseBuilding(false),
 	IsDiscovered(false),
@@ -318,10 +334,20 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	RepairTimer(0),
 	AlertTime(0),
 	BorrowedTime(0),
+	Side1TechInfiltrated(false), // RA2: +0x204..+0x214 and +0x218 are stored explicitly
+	Side0TechInfiltrated(false), // RA2: as above
+	BarracksInfiltrated(false), // RA2: as above
+	WarFactoryInfiltrated(false), // RA2: as above
+	InfantryAltOwner(0), // RA2: as above
+	UnitAltOwner(0), // RA2: as above
+	AircraftAltOwner(0), // RA2: as above
+	BuildingAltOwner(0), // RA2: as above
+	AirportDocks(0), // RA2: as above
 	CreditsSpent(0),
 	HarvestedCredits(0),
 	StolenBuildingsCredits(0),
 	CurUnits(0),
+	OwnedNavy(0), // RA2: +0x22C is stored explicitly
 	CurBuildings(0),
 	CurInfantry(0),
 	CurAircraft(0),
@@ -331,12 +357,28 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	InfantryFactories(0),
 	UnitFactories(0),
 	BuildingFactories(0),
+	NumShipyards(0), // RA2: +0x52C8 and +0x52CC are stored explicitly
+	NumOrePurifiers(0), // RA2: as above
 	Power(0),
 	Drain(0),
 	AircraftFactory(NULL),
 	InfantryFactory(NULL),
 	UnitFactory(NULL),
+	Primary_ForShips(NULL), // RA2: +0x52E4, between the unit and the building factory
 	BuildingFactory(NULL),
+	Primary_Unused1(NULL), // RA2: the factory slots up to +0x52F8 are all cleared
+	Primary_Unused2(NULL), // RA2: as above
+	Primary_Unused3(NULL), // RA2: as above
+	Primary_ForDefenses(NULL), // RA2: as above
+	AircraftProductionPending(false), // RA2: the nine production-pending flags +0x52FC..+0x5304 are cleared
+	InfantryProductionPending(false), // RA2: as above
+	UnitProductionPending(false), // RA2: as above
+	ShipProductionPending(false), // RA2: as above
+	BuildingProductionPending(false), // RA2: as above
+	Unused1ProductionPending(false), // RA2: as above
+	Unused2ProductionPending(false), // RA2: as above
+	Unused3ProductionPending(false), // RA2: as above
+	DefenseProductionPending(false), // RA2: as above
 	FlagLocation(NULL),
 	FlagHome(0,0),
 	UnitsLost(0),
@@ -366,8 +408,10 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	BaseDefenseTeamCount(0),
 	CurrentDropship(0),
 	HasCloakGenerator(0),
+	LaserColor(255, 255, 255), // RA2: +0x55EC starts white
 	RecalcPower(true),
 	RecalcRadar(true),
+	SpySatActive(false), // RA2: +0x566A is cleared here
 	EMPDest(0,0),
 	NukeDest(0,0),
 	Allies(0),
@@ -394,6 +438,8 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 {
 	int index;
 
+	UINameString = TStringID<31>(""); // RA2: the display label starts as the empty string
+	UIName[0] = L'\0'; // RA2: the display name starts empty
 	Create_ID();
 
 	if (Class) {
@@ -434,7 +480,10 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 
 	memset(UnitsKilled, 0, sizeof(UnitsKilled));
 	memset(BuildingsKilled, 0, sizeof(BuildingsKilled));
-	IniName = Fetch_String(TXT_COMPUTER);	// Default computer name.
+	if (type != NULL) { // RA2: a house made from a type takes the type's name and label
+		IniName = type->Name(); // RA2: the type's own name, not a string table entry
+		wcscpy(UIName, type->UIName); // RA2: as above
+	}
 	memset((void *)&Regions[0], 0x00, sizeof(Regions));
 	//Allies |= (1L << HeapID);
 	Control.Allies |= (1L << HeapID);
@@ -447,20 +496,18 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 	Attack.Timer = attack;
 	Attack.InitialAttack = attack;
 
-	if (Session.Type == GAME_INTERNET) {
-		AircraftTotals.Populate_Unit_Count(AircraftTypes.Count()); // RA2: the totals are held inline
-		InfantryTotals.Populate_Unit_Count(InfantryTypes.Count()); // RA2: the totals are held inline
-		UnitTotals.Populate_Unit_Count(UnitTypes.Count()); // RA2: the totals are held inline
-		BuildingTotals.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
+	AircraftTotals.Populate_Unit_Count(AircraftTypes.Count()); // RA2: the totals are populated for every session type
+	InfantryTotals.Populate_Unit_Count(InfantryTypes.Count()); // RA2: as above
+	UnitTotals.Populate_Unit_Count(UnitTypes.Count()); // RA2: as above
+	BuildingTotals.Populate_Unit_Count(BuildingTypes.Count()); // RA2: as above
 
-		DestroyedAircraft.Populate_Unit_Count(AircraftTypes.Count()); // RA2: the totals are held inline
-		DestroyedInfantry.Populate_Unit_Count(InfantryTypes.Count()); // RA2: the totals are held inline
-		DestroyedUnits.Populate_Unit_Count(UnitTypes.Count()); // RA2: the totals are held inline
-		DestroyedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
+	DestroyedAircraft.Populate_Unit_Count(AircraftTypes.Count()); // RA2: as above
+	DestroyedInfantry.Populate_Unit_Count(InfantryTypes.Count()); // RA2: as above
+	DestroyedUnits.Populate_Unit_Count(UnitTypes.Count()); // RA2: as above
+	DestroyedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: as above
 
-		CapturedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: the totals are held inline
-		TotalCrates.Populate_Unit_Count(CRATE_COUNT); // RA2: the totals are held inline
-	}
+	CapturedBuildings.Populate_Unit_Count(BuildingTypes.Count()); // RA2: as above
+	TotalCrates.Populate_Unit_Count(CRATE_COUNT); // RA2: as above
 
 	for (index = 0; index < ARRAY_SIZE(Paths); index++) {
 		Paths[index] = 0;
@@ -472,9 +519,9 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 
 	ActLike = HOUSE_NONE;
 	if (Class != NULL) {
-		if (strnicmp(Class->Name(), "GDI", 3) == 0) {
+		if (Class->Side == SIDE_GDI) { // RA2: the side picks the faction, not the name prefix
 			ActLike = HOUSE_GOOD;
-		} else if (strnicmp(Class->Name(), "Nod", 3) == 0) {
+		} else if (Class->Side == SIDE_NOD) { // RA2: as above
 			ActLike = HOUSE_BAD;
 		}
 	}
@@ -501,11 +548,11 @@ HouseClass::HouseClass(HouseTypeClass const * type) :
 bool HouseClass::Can_Make_Money(void)
 {
 	int credits = Available_Money();
-	int refcost = Rule->BuildRefinery[0]->Cost_Of(this);
-	int harvcost = Rule->HarvesterUnit[0]->Cost_Of(this);
+	int refcost = Get_First_Ownable(Rule->BuildRefinery)->Cost_Of(this); // RA2: the first refinery this house may own, not the list's first
+	int harvcost = Get_First_Ownable(Rule->HarvesterUnit)->Cost_Of(this); // RA2: the first harvester this house may own
 
-	bool hasref = ABQuantity.Value(Rule->BuildRefinery[0]->HeapID) > 0;
-	bool hasharv = AUQuantity.Value(Rule->HarvesterUnit[0]->HeapID) > 0;
+	bool hasref = ABQuantity.Value(Rule->BuildRefinery[0]->HeapID) > 0 || ABQuantity.Value(Rule->BuildRefinery[1]->HeapID) > 0; // RA2: either of the first two refineries
+	bool hasharv = AUQuantity.Value(Rule->HarvesterUnit[0]->HeapID) > 0 || AUQuantity.Value(Rule->HarvesterUnit[1]->HeapID) > 0; // RA2: either of the first two harvesters
 
 	/*
 	 * If we don't have any refineries, building one is a priority.
@@ -521,11 +568,7 @@ bool HouseClass::Can_Make_Money(void)
 
 		bool hasfactory = false;
 		for (int index = 0; index < Rule->BuildWeapons.Count(); index++) {
-			if (hasfactory || ABQuantity.Value(Rule->BuildWeapons[index]->HeapID) > 0) {
-				hasfactory = true;
-			} else {
-				hasfactory = false;
-			}
+			hasfactory = hasfactory || ABQuantity.Value(Rule->BuildWeapons[index]->HeapID) > 0; // RA2: the flag is a plain or, as meastes
 		}
 
 		int factorycost = Rule->BuildWeapons[0]->Cost_Of(this);

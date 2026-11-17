@@ -35,6 +35,7 @@
 
 #pragma once
 
+#include "noinit.h" // RA2: the house's no-init constructor passes a NoInitClass to its trackers
 
 /*
 **	UnitTracker Class
@@ -44,6 +45,7 @@ class UnitTrackerClass
 {
 	public:
 		UnitTrackerClass(void); // RA2: no count; the totals are held inline
+		UnitTrackerClass(NoInitClass const &) { } // RA2: the house's no-init constructor builds its trackers without touching them
 		~UnitTrackerClass(void);
 
 		void Increment_Unit_Total(int unit_type);

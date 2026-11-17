@@ -906,7 +906,6 @@ class HouseClass : public AbstractClass, public IHouse, public IPublicHouse, pub
 		// RA2: TibSun's QuantityB/U/I/A (inline, called nowhere) are dropped: the parameters added below would otherwise unmatch wonline Draw_Player_List, ownrdraw Slide_Dialog and astar Build_Final_Path and firewall Analyse_Ports (header-count effect; Suspend_Production 0x4E63F0 stays held for the same reason)
 		void Set_Factory(FactoryClass * factory, RTTIType rtti, bool = false, int = 0); // RA2: 0x4EB8C0 takes the factory first, then the kind, the ship flag and the build category
 		void Update_Production_Mode(RTTIType type);
-		void Production_Status_Changed(void) {IsRecalcNeeded = true;}
 
 		int Can_Build(ObjectTypeClass const * type, bool illegal, bool nofactory) const;
 		FactoryClass * Factory_Producing_This(ObjectTypeClass const * object) const;
