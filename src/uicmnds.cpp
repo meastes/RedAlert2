@@ -338,6 +338,7 @@ bool __fastcall Group_Is_Selection(int group) // RA2: 0x006F5E80
 
 int GroupSelectFrame = -100; // RA2: 0x007F8BCC; the frame the last control group was selected
 int GroupSelectGroup = -1; // RA2: 0x007F8BD0; the control group that was selected last
+int RadarJumpFrame = -100; // RA2: 0x007F8BD4; the frame of the last jump to a radar event
 
 /// <summary>
 /// Leaves the modes that wait for a click on the map (power, waypoint, repair, sell and beacon).
@@ -397,7 +398,7 @@ void __fastcall Group_Reselect(int group) // RA2: 0x006F60D0
 		}
 	}
 	Map.Center_Map(); // RA2: as above
-	Map.Flag_To_Redraw(GS_REDRAW_TACTICAL); // RA2: as above
+	Map.Flag_To_Redraw((GScreenRedrawFlags)1); // RA2: as above
 	AllowVoice = true; // RA2: as above
 }
 
@@ -687,9 +688,12 @@ TechnoList * __fastcall Collect_Visible_Technos(TechnoTest test, int argument) /
 	TechnoList * list = new TechnoList(0, NULL); // RA2: walks the objects of the last render pass (Tactical 0x006AC7B0 and 0x006AC7C0)
 	int count = TacticalMap->Selectable_Count(); // RA2: as above
 	for (int index = 0; index < count; index++) { // RA2: as above
-		ObjectClass * object = TacticalMap->Selectable_Object(index); // RA2: as above
-		if (object->Is_Techno() && test((TechnoClass *)object, argument)) { // RA2: as above
-			list->Add((TechnoClass *)object); // RA2: as above
+		ObjectClass * object = TacticalMap->Selectable_Object(index); // RA2: the cast to TechnoClass is taken inside the if, so the executable keeps no register for it (matters for Select_Type, which expands this function)
+		if (object->Is_Techno()) { // RA2: as above
+			TechnoClass * techno = (TechnoClass *)object; // RA2: as above
+			if (test(techno, argument)) { // RA2: as above
+				list->Add(techno); // RA2: as above
+			}
 		}
 	}
 	return list; // RA2: as above
@@ -892,6 +896,341 @@ int __fastcall Is_Player_Alive_Unit_Of(TechnoClass * techno, char const * name) 
 		return 1; // RA2: returns an int, 1 or 0, like Is_Owned_Active
 	}
 	return 0; // RA2: as above
+}
+
+/// <summary>
+/// Selects every object of a kind: those on the screen, or on the whole map after a selection by type reached over it.
+/// </summary>
+void __fastcall Select_Type(char const * name) // RA2: 0x006F71E0
+{
+	bool voice = AllowVoice; // RA2: the voice flag is saved, switched off while the objects are selected and put back at the end
+	AllowVoice = false; // RA2: as above
+	TechnoTest test = (TechnoTest)Is_Player_Alive_Unit_Of; // RA2: as above
+	TechnoList * list = SelectAcrossMap ? Collect_Technos(test, (int)name) : Collect_Visible_Technos(test, (int)name); // RA2: as above
+	int count = list->Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		(*list)[index]->Select(); // RA2: as above
+	}
+	delete list; // RA2: as above
+	AllowVoice = voice; // RA2: as above
+}
+
+/// <summary>
+/// Whether the object is of any of the kinds in the list.
+/// </summary>
+bool __fastcall Matches_Any_Name(TechnoClass * techno, DynamicVectorClass<char const *> const & names) // RA2: 0x006F7610
+{
+	int count = names.Count(); // RA2: a loop over the names; the name goes through a local before Is_Type_Named, which the executable needs
+	for (int index = 0; index < count; index++) { // RA2: as above
+		char const * name = names[index]; // RA2: the name goes through a local first
+		if (techno->Is_Type_Named(name)) { // RA2: as above
+			return true; // RA2: as above
+		}
+	}
+	return false; // RA2: as above
+}
+
+bool TypeSelectKeyHeld; // RA2: 0x00AC133D; the type select key is down (set by Type_Select_Key_Down)
+unsigned long TypeSelectKeyTime; // RA2: 0x00AC1340; timeGetTime when the type select key went down
+
+/// <summary>
+/// The type select key went down: remembers the moment.
+/// </summary>
+void Type_Select_Key_Down(void) // RA2: 0x006F7650
+{
+	if (!TypeSelectKeyHeld) { // RA2: the key press is noted once: the flag at 0x00AC133D and timeGetTime in 0x00AC1340
+		TypeSelectKeyHeld = true; // RA2: as above
+		TypeSelectKeyTime = timeGetTime(); // RA2: as above
+	}
+}
+
+/// <summary>
+/// Whether the type select key is down.
+/// </summary>
+bool Is_Type_Select_Key_Held(void) // RA2: 0x006F76B0
+{
+	return TypeSelectKeyHeld; // RA2: returns the flag at 0x00AC133D
+}
+
+/// <summary>
+/// Collects the type names of the selected objects, each once.
+/// </summary>
+DynamicVectorClass<char const *> * Collect_Selected_Type_Names(void) // RA2: 0x006F76C0
+{
+	DynamicVectorClass<char const *> * names = new DynamicVectorClass<char const *>(0, NULL); // RA2: the kind names of the selected objects, each once; Find_Name_Index and Add are expanded here
+	int count = CurrentObject.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		char const * name = CurrentObject[index]->Class_Of()->Name(); // RA2: as above
+		if (Find_Name_Index(*names, name) == -1) { // RA2: as above
+			names->Add(name); // RA2: as above
+		}
+	}
+	return names; // RA2: as above
+}
+
+/// <summary>
+/// Applies the action to every object of a kind: those on the screen, or on the whole map after a selection by type reached over it.
+/// </summary>
+void __fastcall For_Each_Of_Type(char const * name, TechnoAction action, int argument) // RA2: 0x006F7800
+{
+	TechnoTest test = (TechnoTest)Is_Player_Alive_Unit_Of; // RA2: the same two walks as Unselect_Type, then the action for each object (a call through the pointer, the argument on the stack)
+	TechnoList * list; // RA2: as above
+	if (SelectAcrossMap) { // RA2: as above
+		list = Collect_Technos(test, (int)name); // RA2: as above
+	} else {
+		list = Collect_Visible_Technos(test, (int)name); // RA2: as above
+	}
+	int count = list->Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		action((*list)[index], argument); // RA2: as above
+	}
+	delete list; // RA2: as above
+}
+
+/// <summary>
+/// Takes an object that is going away out of the list a type, state or rank selection works on.
+/// </summary>
+void __fastcall Detach_From_Command_List(AbstractClass * object) // RA2: 0x006F7970
+{
+	if (TypeSelectList != NULL) { // RA2: the list is searched from its end and the first hit is removed with Delete_Index
+		for (int index = TypeSelectList->Count() - 1; index >= 0; index--) { // RA2: the executable searches from the end
+			if ((*TypeSelectList)[index] == object) { // RA2: as above
+				TypeSelectList->Delete_Index(index); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+	}
+}
+
+int __fastcall Is_Selectable_Player_Techno(TechnoClass * techno, int argument); // RA2: 0x006F7DF0; defined below
+
+/// <summary>
+/// Makes the list a state or rank selection works on: the selected objects, or when none is a techno, the player's objects on the screen that are not buildings.
+/// </summary>
+void __cdecl Refresh_Type_Select_List(void) // RA2: 0x006F79C0
+{
+	if (TypeSelectList != NULL) { // RA2: the old list is deleted, the selected technos are collected and, when there are none, the player technos on the screen that are not buildings
+		delete TypeSelectList; // RA2: as above
+		TypeSelectList = NULL; // RA2: as above
+	}
+	TypeSelectList = Collect_Selected_Technos(); // RA2: as above
+	if (TypeSelectList->Count() == 0) { // RA2: as above
+		delete TypeSelectList; // RA2: as above
+		TypeSelectList = NULL; // RA2: as above
+		TypeSelectList = Collect_Visible_Technos((TechnoTest)Is_Selectable_Player_Techno, 0); // RA2: as above
+	}
+}
+
+
+
+/// <summary>
+/// Whether the object is active, the player's, and not a building.
+/// </summary>
+int __fastcall Is_Selectable_Player_Techno(TechnoClass * techno, int argument) // RA2: 0x006F7DF0
+{
+	if (techno != NULL && techno->IsActive && Is_Player_Side(techno) && techno->Fetch_RTTI() != RTTI_BUILDING) { // RA2: the test the function above passes to Collect_Visible_Technos; RA2 expands it there
+		return 1; // RA2: returns an int, 1 or 0, like Is_Owned_Active
+	}
+	return 0; // RA2: as above
+}
+
+/// <summary>
+/// The message that says which health state a selection by health picked.
+/// </summary>
+wchar_t const * __fastcall Health_Message(int kind) // RA2: 0x006F7E40
+{
+	if (kind == 0) { // RA2: MSG:Critical, MSG:HeavilyDamaged, MSG:Healthy by UICmnds.cpp lines 1454, 1456, 1458; an empty string otherwise
+		return StringTable::LoadString("MSG:Critical", NULL, "D:\\Ra2\\UICmnds.cpp", 1454); // RA2: UICmnds.cpp lines 1454, 1456 and 1458
+	}
+	if (kind == 1) { // RA2: as above
+		return StringTable::LoadString("MSG:HeavilyDamaged", NULL, "D:\\Ra2\\UICmnds.cpp", 1456); // RA2: as above
+	}
+	if (kind == 2) { // RA2: as above
+		return StringTable::LoadString("MSG:Healthy", NULL, "D:\\Ra2\\UICmnds.cpp", 1458); // RA2: as above
+	}
+	return L""; // RA2: as above
+}
+
+/// <summary>
+/// The health state the next selection by health picks: the one after the last, -1 stands for none yet.
+/// </summary>
+int __fastcall Next_Health_Kind(int last) // RA2: 0x006F7EA0
+{
+	if (last == -1) { // RA2: -1 gives 0, 0 gives 1, 1 gives 2, anything else 0
+		return 0; // RA2: as above
+	}
+	if (last == 0) { // RA2: as above
+		return 1; // RA2: as above
+	}
+	return last == 1 ? 2 : 0; // RA2: as above
+}
+
+
+/// <summary>
+/// The message that says which rank a selection by rank picked.
+/// </summary>
+wchar_t const * __fastcall Rank_Message(int kind) // RA2: 0x006F8130
+{
+	if (kind == 0) { // RA2: MSG:Elite, MSG:Veteran, MSG:LittleExperience by UICmnds.cpp lines 1528, 1530, 1532; an empty string otherwise
+		return StringTable::LoadString("MSG:Elite", NULL, "D:\\Ra2\\UICmnds.cpp", 1528); // RA2: UICmnds.cpp lines 1528, 1530 and 1532
+	}
+	if (kind == 1) { // RA2: as above
+		return StringTable::LoadString("MSG:Veteran", NULL, "D:\\Ra2\\UICmnds.cpp", 1530); // RA2: as above
+	}
+	if (kind == 2) { // RA2: as above
+		return StringTable::LoadString("MSG:LittleExperience", NULL, "D:\\Ra2\\UICmnds.cpp", 1532); // RA2: as above
+	}
+	return L""; // RA2: as above
+}
+
+/// <summary>
+/// The rank the next selection by rank picks: the one after the last, -1 stands for none yet.
+/// </summary>
+int __fastcall Next_Rank_Kind(int last) // RA2: 0x006F8190
+{
+	if (last == -1) { // RA2: the same steps as Next_Health_Kind, at its own address
+		return 0; // RA2: as above
+	}
+	if (last == 0) { // RA2: as above
+		return 1; // RA2: as above
+	}
+	return last == 1 ? 2 : 0; // RA2: as above
+}
+
+
+/// <summary>
+/// Collects the type names of a list of objects, each once.
+/// </summary>
+DynamicVectorClass<char const *> * __fastcall Collect_Type_Names(TechnoList const & objects) // RA2: 0x006F84A0
+{
+	DynamicVectorClass<char const *> * names = new DynamicVectorClass<char const *>(0, NULL); // RA2: the same walk as Collect_Selected_Type_Names over a list the caller gives
+	int count = objects.Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		char const * name = objects[index]->Class_Of()->Name(); // RA2: as above
+		if (Find_Name_Index(*names, name) == -1) { // RA2: as above
+			names->Add(name); // RA2: as above
+		}
+	}
+	return names; // RA2: as above
+}
+
+/// <summary>
+/// Picks the kind of the list's objects that is worth the most but still less than the limit, or the one worth the most; returns its name in a new buffer.
+/// </summary>
+char * __fastcall Pick_Type_By_Cost(TechnoList const & objects, char const * name, int limit, int * best) // RA2: 0x006F85E0
+{
+	DynamicVectorClass<char const *> * names = Collect_Type_Names(objects); // RA2: the kinds of the list with what the objects of each cost (Cost_Of of the type for the house of the object, vtable offset 132)
+	DynamicVectorClass<int> * costs = new DynamicVectorClass<int>(0, NULL); // RA2: the cost of the objects of each kind
+	int count = names->Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		costs->Add(0); // RA2: as above
+	}
+	int total = objects.Count(); // RA2: as above
+	for (int item = 0; item < total; item++) { // RA2: as above
+		TechnoClass * object = objects[item]; // RA2: as above
+		char const * id = object->Class_Of()->Name(); // RA2: as above
+		int found = Find_Name_Index(*names, id); // RA2: as above
+		HouseClass * house = object->House; // RA2: as above
+		int sum = (*costs)[found]; // RA2: as above
+		int cost = ((TechnoTypeClass const *)object->Class_Of())->Cost_Of(house); // RA2: as above
+		(*costs)[found] = sum + cost; // RA2: as above
+	}
+	*best = 0; // RA2: as above
+	int pick = -1; // RA2: as above
+	if (name != NULL) { // RA2: as above
+		for (int entry = 0; entry < count; entry++) { // RA2: as above
+			if (strcmp(name, (*names)[entry]) != 0) { // RA2: as above
+				int cost = (*costs)[entry]; // RA2: as above
+				if (cost < limit && cost > *best) { // RA2: as above
+					*best = cost; // RA2: as above
+					pick = entry; // RA2: as above
+				}
+			}
+		}
+	}
+	if (name == NULL || *best == 0) { // RA2: as above
+		int most = 0; // RA2: as above
+		int which = -1; // RA2: as above
+		for (int slot = 0; slot < count; slot++) { // RA2: as above
+			if ((*costs)[slot] > most) { // RA2: as above
+				most = (*costs)[slot]; // RA2: as above
+				which = slot; // RA2: as above
+			}
+		}
+		*best = most; // RA2: as above
+		pick = which; // RA2: as above
+	}
+	char const * selected = name; // RA2: as above
+	if (pick != -1) { // RA2: as above
+		selected = (*names)[pick]; // RA2: as above
+	}
+	char * result = new char[100]; // RA2: as above
+	if (selected != NULL) { // RA2: as above
+		strcpy(result, selected); // RA2: as above
+	}
+	delete names; // RA2: as above
+	delete costs; // RA2: as above
+	return result; // RA2: as above
+}
+
+/// <summary>
+/// Forgets the control group and the radar event the last selection came from.
+/// </summary>
+void Reset_Group_Select(void) // RA2: 0x006F89E0
+{
+	GroupSelectGroup = -1; // RA2: forgets the control group and the frame (-1 and -100)
+	GroupSelectFrame = -100; // RA2: as above
+	RadarJumpFrame = -100; // RA2: the frame of the last jump to a radar event, 0x007F8BD4, goes back too
+}
+
+TechnoClass * SidebarStructureTabObject; // RA2: 0x00AC1334; the building the structure tab shows
+TechnoClass * SidebarDefenseTabObject; // RA2: 0x00AC1338; the building the defense tab shows
+
+/// <summary>
+/// Makes a building the one the structure tab or the defense tab shows, by the building type's build category.
+/// </summary>
+void __fastcall Set_Tab_Building(BuildingClass * building) // RA2: 0x006F8A00
+{
+	if (building->Class->BuildCat == 5) { // RA2: build category 5 (BuildCat at +0xBA0 of the type) goes to the defense tab slot, any other to the structure tab slot
+		SidebarDefenseTabObject = building; // RA2: as above
+	} else {
+		SidebarStructureTabObject = building; // RA2: as above
+	}
+}
+
+/// <summary>
+/// Forgets an object in the two sidebar tab slots; all of them for NULL.
+/// </summary>
+void __fastcall Clear_Sidebar_Tab_Object(TechnoClass * techno) // RA2: 0x006F8A20
+{
+	if (techno == NULL) { // RA2: NULL clears both slots, an object only the slot that holds it
+		SidebarStructureTabObject = NULL; // RA2: as above
+		SidebarDefenseTabObject = NULL; // RA2: as above
+		return; // RA2: as above
+	}
+	if (techno == SidebarStructureTabObject) { // RA2: as above
+		SidebarStructureTabObject = NULL; // RA2: as above
+		return; // RA2: as above
+	}
+	if (techno == SidebarDefenseTabObject) { // RA2: as above
+		SidebarDefenseTabObject = NULL; // RA2: as above
+	}
+}
+
+/// <summary>
+/// The building the structure tab shows.
+/// </summary>
+TechnoClass * Get_Structure_Tab_Object(void) // RA2: 0x006F8A50
+{
+	return SidebarStructureTabObject; // RA2: returns the slot at 0x00AC1334
+}
+
+/// <summary>
+/// The building the defense tab shows.
+/// </summary>
+TechnoClass * Get_Defense_Tab_Object(void) // RA2: 0x006F8A60
+{
+	return SidebarDefenseTabObject; // RA2: returns the slot at 0x00AC1338
 }
 
 /// <summary>

@@ -166,6 +166,10 @@ namespace Unsorted { extern bool ScenarioStarted; } // RA2: as above
 namespace Game { extern unsigned char RecordingFlag; } // RA2: as above
 namespace Game { extern int SpecialDialog; } // RA2: as above
 namespace Unsorted { extern int WSDialogCount; } // RA2: as above
+Rect * Drawing_GetTextDimensions(Rect * out, wchar_t const * text, Point2D loc, unsigned short flags, int marginX, int marginY); // RA2: 0x497360 (dialog.cpp)
+static inline Rect Text_Rect(wchar_t const * text, Point2D loc, unsigned short flags, int marginx, int marginy) {Rect rect; return(*Drawing_GetTextDimensions(&rect, text, loc, flags, marginx, marginy));} // RA2: the box a text needs
+void __fastcall Blend_Rect(Rect * area, Surface * surface, int color, int alpha); // RA2: 0x5FEB60 (ownrdraw.cpp), dims the box behind the text
+extern RGBClass TooltipColor; // RA2: 0xAC1028, the outline colour of a tooltip, also the text colour of the strips
 
 
 ShapeSet const * SidebarClass::SidebarShapes[SBSHAPE_COUNT]; // RA2: 0xABCD20; one array instead of TibSun's four shapes
@@ -1839,6 +1843,7 @@ bool SidebarClass::StripClass::AI(KeyNumType & input, Point2D const & xy) // RA2
 	**	logic handler. This might result in up or down scrolling.
 	*/
 	if (!IsScrolling && Scroller) { // RA2: as above
+		int columns = COLUMNS; // RA2: two cameos to a row
 		int rows = Map.Get_Row_Count(); // RA2: the rows are computed once and used twice
 		if (BuildableCount <= rows * 2) { // RA2: two cameos to a row
 			Scroller = 0;
@@ -2120,201 +2125,258 @@ int SidebarClass::StripClass::Get_Progress(int index) // RA2: as above
  *=============================================================================================*/
 void SidebarClass::StripClass::Draw_It(bool complete)
 {
-	if (IsToRedraw || complete) {
+	if (AllowedToDraw && (IsToRedraw || complete)) { // RA2: only an active strip is drawn
 		IsToRedraw = false;
 		IsToBlitSidebar = true;
-		Rect cliprect = SidebarRect;
-		cliprect.X = 0;
+		Rect cliprect; // RA2: the whole sidebar surface
+		cliprect.X = 0; // RA2: as above
+		cliprect.Y = 0; // RA2: as above
+		cliprect.Width = SidebarSurface->Get_Width(); // RA2: as above
+		cliprect.Height = SidebarSurface->Get_Height(); // RA2: as above
 
 		/*
-		**	Redraw the scroll buttons.
+		**	RA2: while a building is being made or is on hold, no other building can be started.
 		*/
-		ScrollUpButton.Draw_Me(true); // RA2: as above
-		ScrollDownButton.Draw_Me(true); // RA2: as above
+		bool busy = false; // RA2: as above
+		for (int i = 0; i < BuildableCount; i++) { // RA2: as above
+			if (Buildables[i].Unknown_10 == 1 || Buildables[i].Unknown_10 == 2) { // RA2: as above
+				busy = true; // RA2: as above
+				break; // RA2: as above
+			}
+		}
 
 		/*
 		**	Loop through all the buildable objects that are visible in the strip and render
 		**	them. Their Y offset may be adjusted if the strip is in the process of scrolling.
 		*/
-		for (int i = 0; i < Map.Get_Row_Count() + (IsScrolling ? 1 : 0); i++) { // RA2: as above
-			ShapeSet const * shapefile = NULL;
+		int columns = COLUMNS; // RA2: two cameos to a row
+		int rows = Map.Get_Row_Count() + (IsScrolling ? 1 : 0); // RA2: the rows are counted once, and two cameos make a row
+		for (int row = 0; row < rows; row++) { // RA2: as above
+			for (int col = 0; col < columns; col++) { // RA2: as above
+				bool draw = complete; // RA2: only changed cameos are drawn unless the strip is redrawn in full
+				int stage = 0; // RA2: as above
+				ShapeSet const * shapefile = NULL; // RA2: as above
+				FactoryClass * factory = NULL; // RA2: as above
+				wchar_t const * state = NULL; // RA2: the readout is wide text
+				int index = col + (TopIndex + row) * columns; // RA2: as above
+				bool production = false; // RA2: as above
+				bool completed = false; // RA2: as above
+				bool darken = false; // RA2: as above
+				bool hover = false; // RA2: the mouse is over this cameo
+				int x = CameoWidth * col - SidebarRect.X + X; // RA2: the cameo sizes are the sidebar's
+				int y = CameoHeight * row + 1 + Y; // RA2: as above
+				SelectClass * button = &SelectButton[row * columns + ID * MAX_SLOTS_PER_STRIP + col]; // RA2: as above
 
-			int index = i+TopIndex;
-			int x = X;
-			int y = COLUMN_ONE_Y + i * OBJECT_HEIGHT;
+				/*
+				**	If the strip is scrolling, then the offset is adjusted accordingly.
+				*/
+				if (IsScrolling) { // RA2: as above
+					y += Slid - CameoHeight; // RA2: as above
+				}
 
-			bool production = false;
-			bool completed = false;
-			int stage = 0;
-			bool darken = false;
-			FactoryClass * factory = NULL;
-			wchar_t const * state = NULL; // RA2: the readout is wide text
-			bool isready = false;
+				wchar_t const * name = NULL; // RA2: wide names
+				TechnoTypeClass const * obj = NULL; // RA2: as above
 
-			/*
-			**	If the strip is scrolling, then the offset is adjusted accordingly.
-			*/
-			if (IsScrolling) {
-				y -= OBJECT_HEIGHT - Slid;
-			}
+				/*
+				**	Fetch the shape number for the object type located at this current working
+				**	slot. This shape pointer is used to draw the underlying graphic there.
+				*/
+				if (index < BuildableCount) { // RA2: as above
+					hover = button->IsHovered && !IgnoreInput; // RA2: the mouse is over the button and input is on (Is_Hovered, 0x681690, is a separate function)
 
-			wchar_t const * name = NULL; // RA2: wide names
-			TechnoTypeClass const * obj = NULL;
+					if (Buildables[index].BuildableType != RTTI_SPECIAL) { // RA2: as above
 
-			/*
-			**	Fetch the shape number for the object type located at this current working
-			**	slot. This shape pointer is used to draw the underlying graphic there.
-			*/
-			if (index < BuildableCount) {
-				SuperWeaponType spc = SUPER_NONE;
+						obj = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID); // RA2: as above
+						if (obj != NULL) { // RA2: as above
 
-				if (Buildables[index].BuildableType != RTTI_SPECIAL) {
-
-					obj = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID);
-					if (obj != NULL) {
-
-						name = obj->UIName; // RA2: the wide UI name
-
-						/*
-						**	If there is already a factory producing this kind of object, then all
-						**	objects of this type are displays in a disabled state.
-						*/
-						bool isbusy = false;
-						if (obj->RTTI == RTTI_BUILDINGTYPE) {
-							isbusy = (PlayerPtr->Fetch_Factory(Buildables[index].BuildableType) != NULL);
-						}
-
-						if (obj->Who_Can_Build_Me(true, true, true, PlayerPtr) == NULL) {
-							isbusy = true;
-						}
-
-						if (!isbusy && PlayerPtr->Can_Build(Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID), false, false) == -1) {
-							isbusy = true;
-						}
-
-						shapefile = (ShapeSet const *)obj->Get_Cameo_Data();
-						factory = Buildables[index].Factory;
-						if (factory != NULL) {
-							production	= true;
-							completed	= factory->Has_Completed();
-							if (completed) {
-								state = StringTable::LoadString("TXT_READY", NULL, "D:\\Ra2\\Sidebar.CPP", 2845); // RA2: wide text
-							}
-							stage		= factory->Completion();
-							darken		= false;
-						} else {
-							production  = false;
-						//							darken      = IsBuilding;
+							name = obj->UIName; // RA2: the wide UI name
 
 							/*
-							**	Darken the imagery if a factory of a matching type is
-							**	already busy.
+							**	If there is already a factory producing this kind of object, then all
+							**	objects of this type are displays in a disabled state.
 							*/
-							darken = isbusy;
-						}
-					} else {
-						darken = false;
-					}
+							bool isbusy = false; // RA2: as above
+							if (obj->RTTI == RTTI_BUILDINGTYPE && busy) { // RA2: the strip's own busy flag
+								isbusy = true; // RA2: as above
+							} else if (obj->Who_Can_Build_Me(true, true, true, PlayerPtr) == NULL) { // RA2: as above
+								isbusy = true; // RA2: as above
+							} else {
+								TechnoTypeClass const * type = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID); // RA2: as above
+								bool none = PlayerPtr->Can_Build(type, false, false) == -1; // RA2: as above
+								bool limited = PlayerPtr->Is_Build_Limited(type); // RA2: as above
+								if (none || limited) { // RA2: as above
+									isbusy = true; // RA2: as above
+								}
+							}
 
-				} else {
+							shapefile = (ShapeSet const *)obj->Get_Cameo_Data(); // RA2: as above
+							factory = Buildables[index].Factory; // RA2: as above
+							if (factory != NULL) { // RA2: as above
+								production = true; // RA2: as above
+								completed = factory->Has_Completed(); // RA2: as above
+								if (completed) { // RA2: as above
+									state = StringTable::LoadString("TXT_READY", NULL, "D:\\Ra2\\Sidebar.CPP", 2845); // RA2: wide text
+								} else {
+									draw = true; // RA2: a cameo that is being built is redrawn every time
+								}
+								stage = Get_Progress(index); // RA2: as above
+								darken = false; // RA2: as above
+							} else {
+								production = false; // RA2: as above
 
-					spc = SuperWeaponType(Buildables[index].BuildableID);
-					name = SuperWeaponTypes[spc]->UIName; // RA2: as above
-					shapefile = Get_Special_Cameo(spc);
+								/*
+								**	Darken the imagery if a factory of a matching type is
+								**	already busy.
+								*/
+								darken = isbusy; // RA2: as above
 
-					production = true;
-					completed = PlayerPtr->SuperWeapon[spc]->Is_Charging() == false;
-					isready = PlayerPtr->SuperWeapon[spc]->Can_Place();
-					state = PlayerPtr->SuperWeapon[spc]->State_String();
-					stage = PlayerPtr->SuperWeapon[spc]->Anim_Stage();
-					darken = false;
-				}
+								/*
+								**	RA2: an entry without a factory is still shown as in progress while it is
+								**	queued (1), on hold (2) or waits to be placed (3).
+								*/
+								switch (Buildables[index].Unknown_10) { // RA2: as above
+									case 1: // RA2: as above
+										draw = true; // RA2: as above
+										production = true; // RA2: as above
+										stage = Get_Progress(index); // RA2: as above
+										darken = false; // RA2: as above
+										break; // RA2: as above
 
-				if (obj != NULL || spc != SUPER_NONE) {
-					/*
-					**	If this item is flashing then take care of it.
-					**
-					*/
-					// if (Flasher == index && (Fetch_Stage() & 0x01)) {
-					// 	remapper = Map.FadingLight;
-					// }
+									case 3: // RA2: as above
+										production = true; // RA2: as above
+										completed = true; // RA2: as above
+										darken = false; // RA2: as above
+										break; // RA2: as above
 
-				} else {
-					shapefile	= LogoShapes;
-					// if (!darken) {
-					// 	shapenum		= SB_BLANK;
-					// }
-				}
-			} else {
-				shapefile	= LogoShapes;
-				production	= false;
-			}
+									case 2: // RA2: as above
+										production = true; // RA2: as above
+										completed = false; // RA2: as above
+										darken = true; // RA2: as above
+										stage = Get_Progress(index); // RA2: as above
+										break; // RA2: as above
 
-			/*
-			**	Now that the shape of the object at the current working slot has been found,
-			**	draw it and any graphic overlays as necessary.
-			*/
-			if (shapefile != LogoShapes) {
-
-				if (shapefile != NULL) {
-					Draw_Shape(*SidebarSurface, *CameoDrawer, shapefile, 0, Point2D(x, y), cliprect, ShapeFlags_Type(SHAPE_WIN_REL));
-				}
-
-				/*
-				**	Darken this object because it cannot be produced or is otherwise
-				**	unavailable.
-				*/
-				if (darken) {
-					Draw_Shape(*SidebarSurface, *SidebarDrawer, DarkenShapes, 0, Point2D(x, y), cliprect, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_DARKEN));
-				}
-			}
-
-			if (name != NULL) {
-				Print_Cameo_Text(name, Point2D(x, y + CAMEO_TEXT_Y_OFFSET), cliprect, OBJECT_WIDTH-2);
-			}
-
-			bool hasqueuecount = false;
-			if (obj != NULL) {
-				FactoryClass * factory = PlayerPtr->Fetch_Factory(obj->RTTI);
-
-				if (factory != NULL) {
-					int total = factory->Total(obj);
-					if (total > 1 || total > 0 && !factory->Is_Currently_Producing(obj)) {
-						Fancy_Text_Print("%d", *SidebarSurface, cliprect, Point2D(x + QUEUE_COUNT_X_OFFSET, y + TEXT_Y_OFFSET), Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_RIGHT|TPF_FULLSHADOW|TPF_8POINT), total);
-						hasqueuecount = true;
-					}
-				}
-			}
-
-			/*
-			**	Draw the overlapping clock shape if this is object is being constructed.
-			**	If the object is completed, then display "Ready" with no clock shape.
-			*/
-			if (production) {
-
-				/*
-				**	Display text showing that the object is ready to place.
-				*/
-				if (state != NULL) {
-					Fancy_Text_Print(state, *SidebarSurface, cliprect, Point2D(x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET), Fetch_Scheme_By_Name("LightBlue"), TBLACK, TextPrintType(TPF_CENTER|TPF_FULLSHADOW|TPF_8POINT));
-				}
-
-				if (!completed) {
-
-					if (!isready) {
-						Draw_Shape(*SidebarSurface, *SidebarDrawer, ClockShapes, stage + 1, Point2D(x, y), cliprect, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_TRANSLUCENT50));
-					} else {
-						Draw_Shape(*SidebarSurface, *SidebarDrawer, RechargeClockShapes, stage + 1, Point2D(x, y), cliprect, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_TRANSLUCENT50));
-					}
-
-					/*
-					**	Display text showing that the construction is temporarily on hold.
-					*/
-					if (factory && !factory->Is_Building()) {
-						if (!hasqueuecount) {
-							Fancy_Text_Print(TXT_HOLD, *SidebarSurface, cliprect, Point2D(x + TEXT_X_OFFSET, y + TEXT_Y_OFFSET), Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_CENTER|TPF_FULLSHADOW|TPF_8POINT));
+									case 0: // RA2: as above
+										if (!complete) { // RA2: nothing changed, so the cameo is left as it is
+											continue; // RA2: as above
+										}
+										break; // RA2: as above
+								}
+							}
 						} else {
-							Fancy_Text_Print(TXT_HOLD, *SidebarSurface, cliprect, Point2D(x, y + TEXT_Y_OFFSET), Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_FULLSHADOW|TPF_8POINT));
+							darken = false; // RA2: as above
+						}
+
+					} else {
+
+						int id = Buildables[index].BuildableID; // RA2: as above
+						name = SuperWeaponTypes[id]->UIName; // RA2: as above
+						shapefile = Get_Special_Cameo(SuperWeaponType(id)); // RA2: as above
+
+						production = true; // RA2: as above
+						completed = PlayerPtr->SuperWeapon[id]->Is_Charging() == false; // RA2: as above
+						state = PlayerPtr->SuperWeapon[id]->State_String(); // RA2: as above
+						stage = PlayerPtr->SuperWeapon[id]->Anim_Stage(); // RA2: as above
+						darken = false; // RA2: as above
+						draw = true; // RA2: a superweapon cameo is redrawn every time
+					}
+
+				} else {
+					production = false; // RA2: as above
+				}
+
+				/*
+				**	Now that the shape of the object at the current working slot has been found,
+				**	draw it and any graphic overlays as necessary.
+				*/
+				Rect window(0, 0, x + 60, y + 48); // RA2: the clipping window follows the cameo
+				if (draw) { // RA2: as above
+					if (shapefile != NULL) { // RA2: as above
+						Draw_Shape(*SidebarSurface, *CameoDrawer, shapefile, 0, Point2D(x, y), window, ShapeFlags_Type(SHAPE_WIN_REL)); // RA2: as above
+					}
+
+					/*
+					**	RA2: the mouse is over this cameo, so it gets an outline in the tooltip colour.
+					*/
+					if (hover) { // RA2: as above
+						RGBClass color = TooltipColor; // RA2: as above
+						int outline = DSurface::Build_Hicolor_Pixel(color); // RA2: as above
+						SidebarSurface->Draw_Rect(window, Rect(x, y, 60, 48), outline); // RA2: as above
+					}
+
+					/*
+					**	Darken this object because it cannot be produced or is otherwise
+					**	unavailable.
+					*/
+					if (darken) { // RA2: as above
+						Draw_Shape(*SidebarSurface, *SidebarDrawer, DarkenShapes, 0, Point2D(x, y), window, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_DARKEN)); // RA2: as above
+					}
+
+					/*
+					**	RA2: a cameo flashes (darkened every other half second) until its flash frame is past.
+					*/
+					if (Buildables[index].FlashEndFrame > Frame && Frame % 16 > 8) { // RA2: as above
+						Draw_Shape(*SidebarSurface, *SidebarDrawer, DarkenShapes, 0, Point2D(x, y), window, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_TRANSLUCENT50)); // RA2: as above
+					}
+
+					if (name != NULL) { // RA2: as above
+						Print_Cameo_Text(name, Point2D(x, y + 36), cliprect, 60); // RA2: the caption sits 36 below the cameo's top and is 60 wide
+					}
+
+					bool hasqueuecount = false; // RA2: as above
+					unsigned pixel = DSurface::Build_Hicolor_Pixel(TooltipColor); // RA2: the text colour is the tooltip colour
+					if (obj != NULL) { // RA2: as above
+						FactoryClass * queue = PlayerPtr->Fetch_Factory(obj->Fetch_RTTI(), obj->Naval, 0); // RA2: the factory is picked by type and naval flag
+						if (queue != NULL) { // RA2: as above
+							int total = queue->Total(obj); // RA2: as above
+							if (total > 1 || total > 0 && !queue->Is_Currently_Producing(obj)) { // RA2: as above
+								wchar_t buffer[256]; // RA2: the queued count, with a dimmed box behind it
+								swprintf(buffer, L"%d", total); // RA2: as above
+								Point2D point(x + QUEUE_COUNT_X_OFFSET, y + 1); // RA2: as above
+								Rect rect = Text_Rect(buffer, point, 0x242, 2, 1); // RA2: as above
+								Blend_Rect(&rect, SidebarSurface, 0, 175); // RA2: as above
+								Fancy_Text_Print(L"%d", *SidebarSurface, cliprect, point, pixel, 0, TextPrintType(0x242), total); // RA2: as above
+								hasqueuecount = true; // RA2: as above
+							}
+						}
+					}
+
+					/*
+					**	Draw the overlapping clock shape if this is object is being constructed.
+					**	If the object is completed, then display "Ready" with no clock shape.
+					*/
+					if (production) { // RA2: as above
+
+						/*
+						**	Display text showing that the object is ready to place.
+						*/
+						if (state != NULL) { // RA2: as above
+							Point2D point(x + TEXT_X_OFFSET, y + 1); // RA2: the readout sits on a dimmed box
+							Rect rect = Text_Rect(state, point, 0x142, 2, 1); // RA2: as above
+							Blend_Rect(&rect, SidebarSurface, 0, 175); // RA2: as above
+							Fancy_Text_Print(state, *SidebarSurface, cliprect, point, pixel, 0, TextPrintType(0x142)); // RA2: as above
+						}
+
+						if (!completed) { // RA2: as above
+
+							Draw_Shape(*SidebarSurface, *SidebarDrawer, SidebarShapes[SBSHAPE_CLOCK], stage + 1, Point2D(x, y), window, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_TRANSLUCENT50)); // RA2: one clock for all
+
+							/*
+							**	Display text showing that the construction is temporarily on hold.
+							*/
+							if (factory && !factory->Is_Building() || Buildables[index].Unknown_10 == 2) { // RA2: also an entry on hold (2)
+								wchar_t const * hold = StringTable::LoadString("TXT_HOLD", NULL, "D:\\Ra2\\Sidebar.CPP", 3070); // RA2: wide text
+								if (hasqueuecount) { // RA2: as above
+									Point2D point(x + 2, y + 1); // RA2: left aligned next to the count
+									Rect rect = Text_Rect(hold, point, 0x42, 2, 1); // RA2: as above
+									Blend_Rect(&rect, SidebarSurface, 0, 175); // RA2: as above
+									Fancy_Text_Print(hold, *SidebarSurface, cliprect, point, pixel, 0, TextPrintType(0x42)); // RA2: as above
+								} else {
+									Point2D point(x + TEXT_X_OFFSET, y + 1); // RA2: as above
+									Rect rect = Text_Rect(hold, point, 0x142, 2, 1); // RA2: as above
+									Blend_Rect(&rect, SidebarSurface, 0, 175); // RA2: as above
+									Fancy_Text_Print(hold, *SidebarSurface, cliprect, point, pixel, 0, TextPrintType(0x142)); // RA2: as above
+								}
+							}
 						}
 					}
 				}
@@ -2323,17 +2385,6 @@ void SidebarClass::StripClass::Draw_It(bool complete)
 
 		LastSlid = Slid;
 
-	} else {
-
-		if (ScrollUpButton.IsDrawn) { // RA2: as above
-			IsToBlitSidebar = true;
-			ScrollUpButton.IsDrawn = false; // RA2: as above
-		}
-
-		if (ScrollDownButton.IsDrawn) { // RA2: as above
-			IsToBlitSidebar = true;
-			ScrollDownButton.IsDrawn = false; // RA2: as above
-		}
 	}
 }
 
