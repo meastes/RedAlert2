@@ -38,6 +38,8 @@
 #include "always.h"
 
 #include "palette.h"
+#include "hashtable.h" // RA2: as above
+#include "scheme.h" // RA2: as above
 
 #include <cstring>
 
@@ -270,4 +272,259 @@ int PaletteClass::Closest_Color(RGBClass const & rgb) const
 		}
 	}
 	return(closest);
+}
+
+
+/*
+**	RA2: the color scheme library. Every palette file that has color schemes is generated once per theater and kept
+**	in a hash table under the file's name. Nothing of this is in the Tiberian Sun reconstruction, so each line
+**	below is what the executable shows (0x00603200 to 0x00603FA0, without Set_Scheme_Table_Theater at 0x00603750).
+*/
+class HashString { // RA2: the table key, a 256 byte name (the hash functions are outside this file)
+	public: // RA2: as above
+		HashString(void); // RA2: 0x004E1130
+		HashString(char const * str); // RA2: 0x004E1140
+		HashString(HashString const & that); // RA2: 0x004E1180
+		HashString & operator = (HashString const & that); // RA2: 0x004E11C0
+		bool operator == (HashString const & that) const; // RA2: 0x004E11F0
+		bool operator != (HashString const & that) const { return(!(*this == that)); } // RA2: the table's entry compare asks for it, the executable never calls it
+		bool operator ! (void) const; // RA2: 0x004E11B0, true for an empty name
+
+		char Str[256]; // RA2: +0x0
+};
+
+struct HashIterator { // RA2: where a walk over the table stands
+	int BucketIndex; // RA2: +0x0
+	int InBucketIndex; // RA2: +0x4
+	bool OutOfBuckets; // RA2: +0x8
+};
+
+class SchemeNode { // RA2: the schemes generated from one palette file
+	public: // RA2: as above
+		SchemeNode(char const * name, DynamicVectorClass<ColorScheme *> * schemes); // RA2: 0x00603200
+		~SchemeNode(void); // RA2: 0x00603240
+		void Replace(DynamicVectorClass<ColorScheme *> * schemes); // RA2: 0x006032A0
+		void Release(void); // RA2: 0x00603320
+
+		char Name[256]; // RA2: +0x0
+		DynamicVectorClass<ColorScheme *> * Schemes; // RA2: +0x100
+};
+
+typedef HashTableClass<HashString, SchemeNode *> SchemeHashTable; // RA2: as above
+
+struct SchemeTable : public SchemeHashTable { // RA2: the members of the table that the executable has out of line
+	SchemeNode ** Find(HashString const & key); // RA2: 0x006050C0
+	HashString * Next(HashIterator * iterator); // RA2: 0x00605120
+};
+
+int __fastcall SchemeHash(HashString const & key); // RA2: 0x00603610, defined below
+
+static inline bool Add_Node(SchemeTable * table, HashString const & key, SchemeNode * const & node) // RA2: files a node under its name, the executable has it inline
+{
+	SchemeHashTable::BucketType & bucket = table->Buckets[table->HashFunction(key) % table->NumBuckets]; // RA2: as above
+	bool found = false; // RA2: as above
+	for (int index = bucket.Count() - 1; index >= 0; index--) { // RA2: as above
+		if (bucket[index].Key == key) { // RA2: as above
+			found = true; // RA2: as above
+			break; // RA2: as above
+		}
+	}
+	if (found) { // RA2: as above
+		return(false); // RA2: as above
+	}
+	return(bucket.Add(SchemeHashTable::ObjectType(key, node))); // RA2: as above
+}
+
+class SchemeLibrary { // RA2: the table of palette files and the list of player colors
+	public: // RA2: as above
+		SchemeLibrary(void) : // RA2: 0x00604120
+			Mode(-1), // RA2: as above
+			Names(new DynamicVectorClass<char *>), // RA2: as above
+			Colors(new DynamicVectorClass<HSVClass>), // RA2: as above
+			Table((SchemeTable *)new SchemeHashTable(10, 31, (SchemeHashTable::HASH_FUNC)SchemeHash)) // RA2: as above
+		{
+		}
+		~SchemeLibrary(void); // RA2: 0x00604250
+
+		DynamicVectorClass<ColorScheme *> * Lookup(char const * name) // RA2: the schemes of a palette file, NULL when it is not in the table
+		{
+			HashString key(name); // RA2: as above
+			SchemeNode ** node = Table->Find(key); // RA2: as above
+			if (node == NULL) { // RA2: as above
+				return(NULL); // RA2: as above
+			}
+			return((*node)->Schemes); // RA2: as above
+		}
+		DynamicVectorClass<ColorScheme *> * Generate(char const * name); // RA2: 0x00604540
+		void Add(char const * name) // RA2: generates the schemes of a palette file and files them under its name
+		{
+			DynamicVectorClass<ColorScheme *> * schemes = Generate(name); // RA2: as above
+			SchemeNode * node = new SchemeNode(name, schemes); // RA2: as above
+			Add_Node(Table, name, node); // RA2: as above
+		}
+
+		int Mode; // RA2: +0x0, the theater, -1 before the first Set_Scheme_Table_Theater
+		DynamicVectorClass<char *> * Names; // RA2: +0x4, the names of the player colors
+		DynamicVectorClass<HSVClass> * Colors; // RA2: +0x8, the player colors
+		SchemeTable * Table; // RA2: +0xC
+};
+
+extern SchemeLibrary * TheSchemeLibrary; // RA2: 0x00A76414
+
+inline SchemeLibrary * Scheme_Library(void) // RA2: the library is made on first use
+{
+	if (TheSchemeLibrary == NULL) { // RA2: as above
+		TheSchemeLibrary = new SchemeLibrary; // RA2: as above
+	}
+	return(TheSchemeLibrary); // RA2: as above
+}
+
+SchemeNode::SchemeNode(char const * name, DynamicVectorClass<ColorScheme *> * schemes) // RA2: 0x00603200
+{
+	strcpy(Name, name); // RA2: as above
+	Schemes = schemes; // RA2: as above
+}
+
+
+SchemeNode::~SchemeNode(void) // RA2: 0x00603240, only deletes the schemes
+{
+	Release(); // RA2: as above
+}
+
+
+void SchemeNode::Replace(DynamicVectorClass<ColorScheme *> * schemes) // RA2: 0x006032A0, deletes the schemes and takes new ones
+{
+	Release(); // RA2: as above
+	Schemes = schemes; // RA2: as above
+}
+
+
+void SchemeNode::Release(void) // RA2: 0x00603320, deletes the schemes (the executable calls it for the delete of a node too)
+{
+	if (Schemes) { // RA2: as above
+		int count = Schemes->Count(); // RA2: as above
+		for (int index = 0; index < count; index++) { // RA2: as above
+			delete (*Schemes)[index]; // RA2: as above
+		}
+		delete Schemes; // RA2: as above
+		Schemes = NULL; // RA2: as above
+	}
+}
+
+
+DynamicVectorClass<ColorScheme *> * __fastcall Generate_Palette(char const * name) // RA2: 0x00603380, the schemes of a palette file, generated on first use
+{
+	SchemeLibrary * library = Scheme_Library(); // RA2: as above
+	DynamicVectorClass<ColorScheme *> * schemes = library->Lookup(name); // RA2: as above
+	if (schemes != NULL) { // RA2: as above
+		return(schemes); // RA2: as above
+	}
+	TheSchemeLibrary->Add(name); // RA2: as above
+	return(TheSchemeLibrary->Lookup(name)); // RA2: as above
+}
+
+
+int __fastcall SchemeHash(HashString const & key) // RA2: 0x00603610, the bucket of a palette name
+{
+	char const * str = key.Str; // RA2: as above
+	int hash = 0; // RA2: as above
+	while (*str) { // RA2: as above
+		hash = (*str++ + hash * 26) % 31; // RA2: as above
+	}
+	return(hash); // RA2: as above
+}
+
+
+struct SchemeListIterator : public HashIterator { // RA2: ion.cpp declares the same walk
+	DynamicVectorClass<ColorScheme *> * Next(void); // RA2: 0x00603640
+	SchemeListIterator(void) { BucketIndex = 0; InBucketIndex = 0; OutOfBuckets = false; } // RA2: as above
+};
+
+DynamicVectorClass<ColorScheme *> * SchemeListIterator::Next(void) // RA2: 0x00603640, the next palette's schemes
+{
+	HashString * key = TheSchemeLibrary->Table->Next(this); // RA2: as above
+	if (key == NULL) { // RA2: as above
+		return(NULL); // RA2: as above
+	}
+	SchemeNode ** node = TheSchemeLibrary->Table->Find(*key); // RA2: as above
+	if (node == NULL) { // RA2: as above
+		return(NULL); // RA2: as above
+	}
+	return((*node)->Schemes); // RA2: as above
+}
+
+
+void SchemeLibrary_Free(void) // RA2: 0x00603950, empties the lists of player colors
+{
+	SchemeLibrary * library = Scheme_Library(); // RA2: as above
+	int count = library->Names->Count(); // RA2: as above
+	for (int index = 0; index < count; index++) { // RA2: as above
+		delete (*TheSchemeLibrary->Names)[index]; // RA2: as above
+	}
+	TheSchemeLibrary->Names->Clear(); // RA2: as above
+	TheSchemeLibrary->Colors->Clear(); // RA2: as above
+}
+
+
+void __fastcall SchemeLibrary_Add(char const * name, HSVClass const & color) // RA2: 0x00603A60, records a player color
+{
+	Scheme_Library(); // RA2: as above
+	char * copy = new char[256]; // RA2: as above
+	strcpy(copy, name); // RA2: as above
+	TheSchemeLibrary->Names->Add(copy); // RA2: as above
+	TheSchemeLibrary->Colors->Add(color); // RA2: as above
+}
+
+
+int Scheme_List_Count(void) // RA2: 0x00603C10, how many player colors there are
+{
+	return(Scheme_Library()->Names->Count()); // RA2: as above
+}
+
+
+int Palette_Scheme_Count(void) // RA2: 0x00603D50, how many palettes have a scheme list
+{
+	SchemeLibrary * library = Scheme_Library(); // RA2: the executable keeps the library in a local here (the loop's register use depends on it)
+	SchemeListIterator it; // RA2: as above
+	int count = 0; // RA2: as above
+	DynamicVectorClass<ColorScheme *> * schemes = it.Next(); // RA2: as above
+	while (schemes != NULL) { // RA2: as above
+		count++; // RA2: as above
+		schemes = it.Next(); // RA2: as above
+	}
+	return(count); // RA2: as above
+}
+
+
+SchemeNode ** SchemeTable::Find(HashString const & key) // RA2: 0x006050C0, the node filed under a name
+{
+	SchemeHashTable::BucketType & bucket = Buckets[HashFunction(key) % NumBuckets]; // RA2: as above
+	for (int index = bucket.Count() - 1; index >= 0; index--) { // RA2: as above
+		SchemeHashTable::ObjectType * object = &bucket[index]; // RA2: as above
+		if (object->Key == key) { // RA2: as above
+			return(&object->Value); // RA2: as above
+		}
+	}
+	return(NULL); // RA2: as above
+}
+
+
+HashString * SchemeTable::Next(HashIterator * it) // RA2: 0x00605120, the next name in the walk over the table
+{
+	if (!it->OutOfBuckets) { // RA2: as above
+		while (it->BucketIndex < NumBuckets) { // RA2: as above
+			SchemeHashTable::BucketType & bucket = Buckets[it->BucketIndex]; // RA2: as above
+			while (it->InBucketIndex < bucket.Count()) { // RA2: as above
+				SchemeHashTable::ObjectType * object = &bucket[it->InBucketIndex]; // RA2: as above
+				it->InBucketIndex++; // RA2: as above
+				if (!!object->Key) { // RA2: as above
+					return(&object->Key); // RA2: as above
+				}
+			}
+			it->BucketIndex++; // RA2: as above
+			it->InBucketIndex = 0; // RA2: as above
+		}
+		it->OutOfBuckets = true; // RA2: as above
+	}
+	return(NULL); // RA2: as above
 }
