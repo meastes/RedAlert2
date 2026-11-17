@@ -98,6 +98,10 @@ class LoadOptionsClass
 		virtual bool Save_File(const char * file_name, wchar_t const * descr); // RA2: a wide description
 		virtual bool Delete_File(const char * file_name);
 		virtual bool Read_File(FileEntryClass * entry, WIN32_FIND_DATAA * ff);
+		virtual wchar_t const * Load_Caption(void) const; // RA2: vtable slot 5, 0x53C970 (MapSeedClass 0x5796F0); the load dialog's title
+		virtual wchar_t const * Save_Caption(void) const; // RA2: slot 6, 0x53C990 (MapSeedClass 0x579710); the save dialog's title
+		virtual wchar_t const * Delete_Caption(void) const; // RA2: slot 7, 0x53C9B0 (MapSeedClass 0x579730); the delete dialog's title
+		virtual wchar_t const * Saved_Message(void) const; // RA2: slot 8, 0x53C9D0 (MapSeedClass 0x579750); the text shown after a save
 
 	protected:
 		/*
