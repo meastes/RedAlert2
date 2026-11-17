@@ -1,7 +1,6 @@
 unit,start,end,category,evidence
 audattr,0x00401000,0x004011B0,source,"functions compiled from src/audattr.cpp, matched, without gaps"
-audbag,0x004011B0,0x00401940,source,"functions compiled from src/audbag.cpp, matched, without gaps"
-unk_00401940,0x00401940,0x004019E0,unknown,code not assigned to a module
+audbag,0x004011B0,0x004019E0,source,"functions compiled from src/audbag.cpp, matched, without gaps; four copies the compiler emitted after the last function"
 audcache,0x004019E0,0x00402040,source,"functions compiled from src/audcache.cpp, matched, without gaps; two placed by the gap"
 audchanl,0x00402040,0x00402860,source,"functions compiled from src/audchanl.cpp, matched, without gaps"
 auddev,0x00402860,0x00403CE0,source,"functions compiled from src/auddev.cpp, matched, without gaps; six placed by the gap"
@@ -28,28 +27,28 @@ abstract,0x0040FF10,0x00410340,tibsun,"functions compiled from src/abstract.cpp,
 unk_00410340,0x00410340,0x00410580,unknown,code not assigned to a module
 abstype,0x00410580,0x004109A0,tibsun,"functions compiled from src/abstype.cpp, without gaps; matched except ??0AbstractTypeClass@@QAE@ABVNoInitClass@@@Z; ??0AbstractTypeClass@@QAE@ABVNoInitClass@@@Z placed at their function starts"
 unk_004109A0,0x004109A0,0x00410A60,unknown,code not assigned to a module
-abuffer,0x00410A60,0x00411270,tibsun,"functions compiled from src/abuffer.cpp, matched, without gaps; one placed by the gap"
-unk_00411270,0x00411270,0x00411420,unknown,code not assigned to a module
+abuffer,0x00410A60,0x00411400,tibsun,"functions compiled from src/abuffer.cpp, matched, without gaps; one placed by the gap; 16 copies the compiler emitted after the last function"
+unk_00411400,0x00411400,0x00411420,unknown,code not assigned to a module
 ahandle,0x00411420,0x00412370,tibsun,"functions compiled from src/ahandle.cpp, matched, without gaps; one placed by the gap; ?Lock_Audio_Handler@@YAJXZ not placed; ?Unlock_Audio_Handler@@YAJXZ not placed"
 unk_00412370,0x00412370,0x00412390,unknown,code not assigned to a module
 ahtoi,0x00412390,0x004123E0,tibsun,"functions compiled from src/ahtoi.cpp, matched, without gaps"
 unk_004123E0,0x004123E0,0x00412710,unknown,code not assigned to a module
 atracker,0x00412710,0x00413770,source,"functions compiled from src/atracker.cpp, without gaps; matched except ?Append_Radius_Bins@AircraftTrackerClass@@QAEXPAVCellClass@@H@Z; one placed by the gap"
 unk_00413770,0x00413770,0x004139F0,unknown,code not assigned to a module
-aircraft,0x004139F0,0x0041B610,tibsun,"functions compiled from src/aircraft.cpp, without gaps; matched except ?Fire_At@AircraftClass@@UAEPAVBulletClass@@PAVAbstractClass@@H@Z and ?Read_INI@AircraftClass@@SIXABVCCINIClass@@@Z; ?Fire_At@AircraftClass@@UAEPAVBulletClass@@PAVAbstractClass@@H@Z and ?Read_INI@AircraftClass@@SIXABVCCINIClass@@@Z placed at their function starts; inline ?Target_Coord@ObjectClass@@UBE?AVCoord@@XZ at 0x0041B240; inline ?Target_Coord@ObjectClass@@UBE?AVCoord@@XZ at 0x0041B270; inline ?Docking_Coord@ObjectClass@@UBE?AVCoord@@PAVTechnoClass@@@Z at 0x0041B2A0; inline ?GetDisguise@ObjectClass@@UBEPAVObjectTypeClass@@_N@Z at 0x0041B2D0; inline ?GetDisguise@ObjectClass@@UBEPAVObjectTypeClass@@_N@Z at 0x0041B2E0; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B2F0; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B300; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B310; inline ?Get_Cell@ObjectClass@@UBE?AVCell@@XZ at 0x0041B320; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B360; inline ?Is_Ready_To_Move@TechnoClass@@UBE_NXZ at 0x0041B370; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B380; inline ?Unknown_Virtual_32C@TechnoClass@@UBE_NXZ at 0x0041B390; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B3D0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B3E0; inline ?Is_Turret_Equipped@TechnoClass@@UBE_NXZ at 0x0041B3F0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B400; inline ?IsDisguised@TechnoClass@@UBE_NXZ at 0x0041B410; inline ?IsDisguisedAs@TechnoClass@@UBE_NPAVHouseClass@@@Z at 0x0041B420; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B440; inline ?Is_In_Team@FootClass@@UBE_NXZ at 0x0041B450; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B460; inline ?Occupies_Cells@FootClass@@UBE_NXZ at 0x0041B470; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B480; inline ?Draw_Object@FootClass@@UBEXPBVShapeSet@@HABVPoint2D@@ABV?$TRect@H@@W4Dir256@@HHW4ZGradientType@@_NH0HV3@W4ShapeFlags_Type@@@Z at 0x0041B490; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B4F0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B500; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B510; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B520; inline ?Overrun_Square@FootClass@@UAEXABVCell@@_N@Z at 0x0041B530; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B540; inline ?GetLastFlightMapCoords@FootClass@@UBE?AVCell@@XZ at 0x0041B550; inline ?SetLastFlightMapCoords@FootClass@@UAEXVCell@@@Z at 0x0041B560"
-unk_0041B610,0x0041B610,0x0041BC90,unknown,code not assigned to a module
+aircraft,0x004139F0,0x0041B750,tibsun,"functions compiled from src/aircraft.cpp, without gaps; matched except ?Fire_At@AircraftClass@@UAEPAVBulletClass@@PAVAbstractClass@@H@Z and ?Read_INI@AircraftClass@@SIXABVCCINIClass@@@Z; ?Fire_At@AircraftClass@@UAEPAVBulletClass@@PAVAbstractClass@@H@Z and ?Read_INI@AircraftClass@@SIXABVCCINIClass@@@Z placed at their function starts; inline ?Target_Coord@ObjectClass@@UBE?AVCoord@@XZ at 0x0041B240; inline ?Target_Coord@ObjectClass@@UBE?AVCoord@@XZ at 0x0041B270; inline ?Docking_Coord@ObjectClass@@UBE?AVCoord@@PAVTechnoClass@@@Z at 0x0041B2A0; inline ?GetDisguise@ObjectClass@@UBEPAVObjectTypeClass@@_N@Z at 0x0041B2D0; inline ?GetDisguise@ObjectClass@@UBEPAVObjectTypeClass@@_N@Z at 0x0041B2E0; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B2F0; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B300; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B310; inline ?Get_Cell@ObjectClass@@UBE?AVCell@@XZ at 0x0041B320; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B360; inline ?Is_Ready_To_Move@TechnoClass@@UBE_NXZ at 0x0041B370; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B380; inline ?Unknown_Virtual_32C@TechnoClass@@UBE_NXZ at 0x0041B390; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B3D0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B3E0; inline ?Is_Turret_Equipped@TechnoClass@@UBE_NXZ at 0x0041B3F0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B400; inline ?IsDisguised@TechnoClass@@UBE_NXZ at 0x0041B410; inline ?IsDisguisedAs@TechnoClass@@UBE_NPAVHouseClass@@@Z at 0x0041B420; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B440; inline ?Is_In_Team@FootClass@@UBE_NXZ at 0x0041B450; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B460; inline ?Occupies_Cells@FootClass@@UBE_NXZ at 0x0041B470; inline ?IsIronCurtained@ObjectClass@@UBE_NXZ at 0x0041B480; inline ?Draw_Object@FootClass@@UBEXPBVShapeSet@@HABVPoint2D@@ABV?$TRect@H@@W4Dir256@@HHW4ZGradientType@@_NH0HV3@W4ShapeFlags_Type@@@Z at 0x0041B490; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B4F0; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B500; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x0041B510; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B520; inline ?Overrun_Square@FootClass@@UAEXABVCell@@_N@Z at 0x0041B530; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x0041B540; inline ?GetLastFlightMapCoords@FootClass@@UBE?AVCell@@XZ at 0x0041B550; inline ?SetLastFlightMapCoords@FootClass@@UAEXVCell@@@Z at 0x0041B560; four copies the compiler emitted after the last function"
+unk_0041B750,0x0041B750,0x0041BC90,unknown,code not assigned to a module
 airctype,0x0041BC90,0x0041C2E0,tibsun,"functions compiled from src/airctype.cpp, matched, without gaps; 11 placed by the gap"
 unk_0041C2E0,0x0041C2E0,0x0041C5C0,unknown,code not assigned to a module
 aitrig,0x0041C5C0,0x0041E270,tibsun,"functions compiled from src/aitrig.cpp, matched, without gaps; five placed by the gap"
 unk_0041E270,0x0041E270,0x0041E3E0,unknown,code not assigned to a module
 alphalighting,0x0041E3E0,0x0041E600,tibsun,"functions compiled from src/alphalighting.cpp, matched, without gaps; ??0AlphaLightingRemapInitClass@@QAE@XZ not placed; ??1AlphaLightingRemapInitClass@@QAE@XZ not placed; ??1AlphaLightingRemapClass@@QAE@XZ not placed"
 unk_0041E600,0x0041E600,0x0041EBE0,unknown,code not assigned to a module
-alphashp,0x0041EBE0,0x0041F9C0,tibsun,"functions compiled from src/alphashp.cpp, without gaps; matched except ?Draw_In_Area@AlphaShapeClass@@SIXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_All@AlphaShapeClass@@SIXABV?$TRect@H@@@Z; three placed by the gap; ?Draw_In_Area@AlphaShapeClass@@SIXABVPoint2D@@ABV?$TRect@H@@@Z to ?Draw_All@AlphaShapeClass@@SIXABV?$TRect@H@@@Z share the room between their neighbours"
-unk_0041F9C0,0x0041F9C0,0x00420110,unknown,code not assigned to a module
+alphashp,0x0041EBE0,0x0041FF20,tibsun,"functions compiled from src/alphashp.cpp, without gaps; matched except ?Draw_In_Area@AlphaShapeClass@@SIXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_All@AlphaShapeClass@@SIXABV?$TRect@H@@@Z; three placed by the gap; ?Draw_In_Area@AlphaShapeClass@@SIXABVPoint2D@@ABV?$TRect@H@@@Z to ?Draw_All@AlphaShapeClass@@SIXABV?$TRect@H@@@Z share the room between their neighbours; 14 copies the compiler emitted after the last function"
+unk_0041FF20,0x0041FF20,0x00420110,unknown,code not assigned to a module
 anim,0x00420110,0x00423ED0,tibsun,"functions compiled from src/anim.cpp, without gaps; matched except ?AI@AnimClass@@UAEXXZ and ?Flaming_Guy_AI@AnimClass@@QAEXXZ; ?AI@AnimClass@@UAEXXZ and ?Flaming_Guy_AI@AnimClass@@QAEXXZ placed at their function starts; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423D10; inline ?Visual_Character@ObjectClass@@UBE?AW4VisualType@@_NPBVHouseClass@@@Z at 0x00423D20; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423D30; inline ?Full_Name@ObjectClass@@UBEPBGXZ at 0x00423D40; inline ?Fire_Coord@ObjectClass@@UBE?AVCoord@@H@Z at 0x00423D50; inline ?Occupies_Cells@ObjectClass@@UBE_NXZ at 0x00423D90; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423DA0; inline ?IsDisguisedAs@ObjectClass@@UBE_NPAVHouseClass@@@Z at 0x00423DB0; inline ?Draw_Pre_Render@ObjectClass@@UBEXABVPoint2D@@ABV?$TRect@H@@@Z at 0x00423DC0; inline ?Draw_Pre_Render@ObjectClass@@UBEXABVPoint2D@@ABV?$TRect@H@@@Z at 0x00423DD0; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x00423DE0; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x00423DF0; inline ?Can_Enter_Cell@ObjectClass@@UBE?AW4MoveType@@PBVCellClass@@W4FacingType@@H0_N@Z at 0x00423E00; inline ?Can_Enter_Cell@ObjectClass@@UBE?AW4MoveType@@PBVCellClass@@W4FacingType@@H0_N@Z at 0x00423E10; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423E20; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423E30; inline ?Is_Players_Army@ObjectClass@@UBE_NXZ at 0x00423E40; inline ?Occupies_Cells@ObjectClass@@UBE_NXZ at 0x00423E50; inline ?GetRemapColour@ObjectClass@@UBEPAXXZ at 0x00423E60"
 unk_00423ED0,0x00423ED0,0x00423F90,unknown,code not assigned to a module
-animfile,0x00423F90,0x00424B90,tibsun,"functions compiled from src/animfile.cpp, matched, without gaps"
-unk_00424B90,0x00424B90,0x00424E30,unknown,code not assigned to a module
+animfile,0x00423F90,0x00424C40,tibsun,"functions compiled from src/animfile.cpp, matched, without gaps; three copies the compiler emitted after the last function"
+unk_00424C40,0x00424C40,0x00424E30,unknown,code not assigned to a module
 animtype,0x00424E30,0x00426760,tibsun,"functions compiled from src/animtype.cpp, matched, without gaps"
 unk_00426760,0x00426760,0x00426B70,unknown,code not assigned to a module
 app,0x00426B70,0x00426E70,tibsun,"functions compiled from src/app.cpp, matched, without gaps; seven placed by the gap; ?QueryInterface@TiberianSunClassFactory@@UAGJABU_GUID@@PAPAX@Z not placed"
@@ -60,35 +59,33 @@ b64straw,0x0042B850,0x0042B950,tibsun,"functions compiled from src/b64straw.cpp,
 unk_0042B950,0x0042B950,0x0042B970,unknown,code not assigned to a module
 bar,0x0042B970,0x0042BCD0,tibsun,"functions compiled from src/bar.cpp, matched, without gaps"
 unk_0042BCD0,0x0042BCD0,0x0042BEE0,unknown,code not assigned to a module
-base,0x0042BEE0,0x0042CB90,tibsun,"functions compiled from src/base.cpp, matched, without gaps; one placed by the gap"
-unk_0042CB90,0x0042CB90,0x0042D520,unknown,code not assigned to a module
+base,0x0042BEE0,0x0042D520,tibsun,"functions compiled from src/base.cpp, matched, without gaps; one placed by the gap; 27 copies the compiler emitted after the last function"
 base64,0x0042D520,0x0042D770,tibsun,"functions compiled from src/base64.cpp, matched, without gaps"
 unk_0042D770,0x0042D770,0x0042D9E0,unknown,code not assigned to a module
 beacon,0x0042D9E0,0x0042F0A0,source,"functions compiled from src/beacon.cpp, matched, without gaps; four placed by the gap"
 unk_0042F0A0,0x0042F0A0,0x0042F0C0,unknown,code not assigned to a module
 bench,0x0042F0C0,0x0042F200,tibsun,"functions compiled from src/bench.cpp, matched, without gaps"
-bfiofile,0x0042F200,0x0042FDF0,tibsun,"functions compiled from src/bfiofile.cpp, matched, without gaps"
-unk_0042FDF0,0x0042FDF0,0x0042FE70,unknown,code not assigned to a module
+bfiofile,0x0042F200,0x0042FE50,tibsun,"functions compiled from src/bfiofile.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_0042FE50,0x0042FE50,0x0042FE70,unknown,code not assigned to a module
 bfiofile2,0x0042FE70,0x00431020,source,"functions compiled from src/bfiofile2.cpp, matched, without gaps; two placed by the gap"
 unk_00431020,0x00431020,0x00431040,unknown,code not assigned to a module
-bitfont,0x00431040,0x00432200,source,"functions compiled from src/bitfont.cpp, matched, without gaps"
-unk_00432200,0x00432200,0x00432290,unknown,code not assigned to a module
-bittext,0x00432290,0x00432D20,source,"functions compiled from src/bittext.cpp, matched, without gaps"
-unk_00432D20,0x00432D20,0x00432FC0,unknown,code not assigned to a module
-blight,0x00432FC0,0x00434820,tibsun,"functions compiled from src/blight.cpp, without gaps; matched except ?AI@BuildingLightClass@@UAEXXZ; four placed by the gap"
-unk_00434820,0x00434820,0x00434940,unknown,code not assigned to a module
-blit,0x00434940,0x00435540,tibsun,"functions compiled from src/blit.cpp, matched, without gaps"
-unk_00435540,0x00435540,0x00435580,unknown,code not assigned to a module
+bitfont,0x00431040,0x00432270,source,"functions compiled from src/bitfont.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_00432270,0x00432270,0x00432290,unknown,code not assigned to a module
+bittext,0x00432290,0x00432DD0,source,"functions compiled from src/bittext.cpp, matched, without gaps; three copies the compiler emitted after the last function"
+unk_00432DD0,0x00432DD0,0x00432FC0,unknown,code not assigned to a module
+blight,0x00432FC0,0x00434920,tibsun,"functions compiled from src/blight.cpp, without gaps; matched except ?AI@BuildingLightClass@@UAEXXZ; four placed by the gap; four copies the compiler emitted after the last function"
+unk_00434920,0x00434920,0x00434940,unknown,code not assigned to a module
+blit,0x00434940,0x00435580,tibsun,"functions compiled from src/blit.cpp, matched, without gaps; two copies the compiler emitted after the last function"
 blowfish,0x00435580,0x00435690,tibsun,"functions compiled from src/blowfish.cpp, matched, without gaps; one placed by the gap"
 blowpipe,0x00435690,0x00435840,tibsun,"functions compiled from src/blowpipe.cpp, matched, without gaps; one placed by alphabetical order"
 blwstraw,0x00435840,0x00435970,tibsun,"functions compiled from src/blwstraw.cpp, matched, without gaps; one placed by alphabetical order"
 unk_00435970,0x00435970,0x00435BE0,unknown,code not assigned to a module
-bomb,0x00435BE0,0x004369F0,source,"functions compiled from src/bomb.cpp, matched, without gaps; five placed by the gap"
-unk_004369F0,0x004369F0,0x00436C70,unknown,code not assigned to a module
+bomb,0x00435BE0,0x00436A80,source,"functions compiled from src/bomb.cpp, matched, without gaps; five placed by the gap; one copy the compiler emitted after the last function"
+unk_00436A80,0x00436A80,0x00436C70,unknown,code not assigned to a module
 bounce,0x00436C70,0x004370E0,tibsun,"functions compiled from src/bounce.cpp, matched, without gaps; ?AI@BounceClass@@QAE?AW4BounceResultType@@XZ not placed"
 unk_004370E0,0x004370E0,0x00437910,unknown,code not assigned to a module
-brain,0x00437910,0x00437F60,tibsun,"functions compiled from src/brain.cpp, matched, without gaps; three placed by the gap"
-unk_00437F60,0x00437F60,0x004382C0,unknown,code not assigned to a module
+brain,0x00437910,0x004380E0,tibsun,"functions compiled from src/brain.cpp, matched, without gaps; three placed by the gap; four copies the compiler emitted after the last function"
+unk_004380E0,0x004380E0,0x004382C0,unknown,code not assigned to a module
 buff,0x004382C0,0x00438470,tibsun,"functions compiled from src/buff.cpp, matched, without gaps; five placed by definition order"
 buffer,0x00438470,0x00438500,tibsun,"functions compiled from src/buffer.cpp, matched, without gaps"
 unk_00438500,0x00438500,0x00438A60,unknown,code not assigned to a module
@@ -129,32 +126,32 @@ cell,0x00470680,0x0047CF90,tibsun,"functions compiled from src/cell.cpp, without
 unk_0047CF90,0x0047CF90,0x0047D150,unknown,code not assigned to a module
 checkbox,0x0047D150,0x0047D2C0,tibsun,"functions compiled from src/checkbox.cpp, matched, without gaps"
 unk_0047D2C0,0x0047D2C0,0x0047D2E0,unknown,code not assigned to a module
-cheklist,0x0047D2E0,0x0047D6F0,tibsun,"functions compiled from src/cheklist.cpp, matched, without gaps; one placed by the gap"
-unk_0047D6F0,0x0047D6F0,0x0047D7C0,unknown,code not assigned to a module
-colrlist,0x0047D7C0,0x0047DF40,tibsun,"functions compiled from src/colrlist.cpp, matched, without gaps"
-unk_0047DF40,0x0047DF40,0x0047E1C0,unknown,code not assigned to a module
+cheklist,0x0047D2E0,0x0047D7A0,tibsun,"functions compiled from src/cheklist.cpp, matched, without gaps; one placed by the gap; six copies the compiler emitted after the last function"
+unk_0047D7A0,0x0047D7A0,0x0047D7C0,unknown,code not assigned to a module
+colrlist,0x0047D7C0,0x0047DFD0,tibsun,"functions compiled from src/colrlist.cpp, matched, without gaps; two copies the compiler emitted after the last function"
+unk_0047DFD0,0x0047DFD0,0x0047E1C0,unknown,code not assigned to a module
 combat,0x0047E1C0,0x0047FCF0,tibsun,"functions compiled from src/combat.cpp, without gaps; matched except ?Explosion_Damage@@YIXABVCoord@@HPAVTechnoClass@@PBVWarheadTypeClass@@_N@Z; one placed by the gap; ?Explosion_Damage@@YIXABVCoord@@HPAVTechnoClass@@PBVWarheadTypeClass@@_N@Z placed at their function starts"
 unk_0047FCF0,0x0047FCF0,0x004800C0,unknown,code not assigned to a module
 combuf,0x004800C0,0x00480AE0,tibsun,"functions compiled from src/combuf.cpp, matched, without gaps; two placed by the gap; ?Mono_Debug_Print@CommBufferClass@@QAEXH@Z not placed; ?Mono_Debug_Print2@CommBufferClass@@QAEXH@Z not placed"
 unk_00480AE0,0x00480AE0,0x00480E20,unknown,code not assigned to a module
-connect,0x00480E20,0x00481610,tibsun,"functions compiled from src/connect.cpp, matched, without gaps; one placed by the gap"
-unk_00481610,0x00481610,0x00481850,unknown,code not assigned to a module
+connect,0x00480E20,0x00481650,tibsun,"functions compiled from src/connect.cpp, matched, without gaps; one placed by the gap; one copy the compiler emitted after the last function"
+unk_00481650,0x00481650,0x00481850,unknown,code not assigned to a module
 conquer,0x00481850,0x004831A0,tibsun,"functions compiled from src/conquer.cpp, matched, without gaps; seven placed by the gap"
 unk_004831A0,0x004831A0,0x00483430,unknown,code not assigned to a module
 control,0x00483430,0x00483560,tibsun,"functions compiled from src/control.cpp, matched, without gaps; one placed by the gap"
 unk_00483560,0x00483560,0x00483650,unknown,code not assigned to a module
-convert,0x00483650,0x00486120,tibsun,"functions compiled from src/convert.cpp, matched, without gaps"
-unk_00486120,0x00486120,0x0048DE60,unknown,code not assigned to a module
-coopcamp,0x0048DE60,0x00490E80,source,"functions compiled from src/coopcamp.cpp, matched, without gaps"
-unk_00490E80,0x00490E80,0x00491620,unknown,code not assigned to a module
+convert,0x00483650,0x00487050,tibsun,"functions compiled from src/convert.cpp, matched, without gaps; 35 copies the compiler emitted after the last function"
+unk_00487050,0x00487050,0x0048DE60,unknown,code not assigned to a module
+coopcamp,0x0048DE60,0x00490FF0,source,"functions compiled from src/coopcamp.cpp, matched, without gaps; two copies the compiler emitted after the last function"
+unk_00490FF0,0x00490FF0,0x00491620,unknown,code not assigned to a module
 unk_00491620,0x00491620,0x004916D0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_004916D0,0x004916D0,0x00491750,unknown,code not assigned to a module
 coord,0x00491750,0x004918F0,tibsun,"functions compiled from src/coord.cpp, matched, without gaps"
 copyprotection,0x004918F0,0x00491C00,source,"functions compiled from src/copyprotection.cpp, matched, without gaps"
 counter,0x00491C00,0x00491F00,tibsun,"functions compiled from src/counter.cpp, matched, without gaps; one placed by the gap"
 unk_00491F00,0x00491F00,0x00492140,unknown,code not assigned to a module
-cpoint,0x00492140,0x00493010,tibsun,"functions compiled from src/cpoint.cpp, matched, without gaps; one placed by the gap"
-unk_00493010,0x00493010,0x00493930,unknown,code not assigned to a module
+cpoint,0x00492140,0x00493440,tibsun,"functions compiled from src/cpoint.cpp, matched, without gaps; one placed by the gap; 15 copies the compiler emitted after the last function"
+unk_00493440,0x00493440,0x00493930,unknown,code not assigned to a module
 crate,0x00493930,0x00493DF0,tibsun,"functions compiled from src/crate.cpp, matched, without gaps"
 crc,0x00493DF0,0x00494210,tibsun,"functions compiled from src/crc.cpp, matched, without gaps; two placed by definition order"
 crcpipe,0x00494210,0x00494290,tibsun,"functions compiled from src/crcpipe.cpp, matched, without gaps; one object inferred from alphabetical link order"
@@ -162,8 +159,8 @@ crcstraw,0x00494290,0x00494320,tibsun,"functions compiled from src/crcstraw.cpp,
 unk_00494320,0x00494320,0x00494510,unknown,code not assigned to a module
 credits,0x00494510,0x00494760,tibsun,"functions compiled from src/credits.cpp, matched, without gaps"
 cstraw,0x00494760,0x00494800,tibsun,"functions compiled from src/cstraw.cpp, matched, without gaps"
-cstream,0x00494800,0x004950F0,tibsun,"functions compiled from src/cstream.cpp, matched, without gaps"
-unk_004950F0,0x004950F0,0x00495230,unknown,code not assigned to a module
+cstream,0x00494800,0x004951D0,tibsun,"functions compiled from src/cstream.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_004951D0,0x004951D0,0x00495230,unknown,code not assigned to a module
 data,0x00495230,0x004955B0,tibsun,"functions compiled from src/data.cpp, matched, without gaps; two placed by the gap"
 unk_004955B0,0x004955B0,0x004955D0,unknown,code not assigned to a module
 ddraw,0x004955D0,0x00496460,tibsun,"functions compiled from src/ddraw.cpp, matched, without gaps"
@@ -183,14 +180,14 @@ display,0x00498BE0,0x0049EC80,tibsun,"functions compiled from src/display.cpp, w
 unk_0049EC80,0x0049EC80,0x0049EE00,unknown,code not assigned to a module
 dllver,0x0049EE00,0x0049EE80,tibsun,"functions compiled from src/dllver.cpp, matched, without gaps"
 unk_0049EE80,0x0049EE80,0x0049EEA0,unknown,code not assigned to a module
-draw,0x0049EEA0,0x0049F430,tibsun,"functions compiled from src/draw.cpp, matched, without gaps"
-unk_0049F430,0x0049F430,0x0049F710,unknown,code not assigned to a module
+draw,0x0049EEA0,0x0049F450,tibsun,"functions compiled from src/draw.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_0049F450,0x0049F450,0x0049F710,unknown,code not assigned to a module
 drive,0x0049F710,0x004A4C80,tibsun,"functions compiled from src/drive.cpp, without gaps; matched except ?While_Moving@DriveLocomotionClass@@AAE_N_N@Z and ?Start_Of_Move@DriveLocomotionClass@@AAE_NAA_N_N1@Z and ?Draw_Matrix@DriveLocomotionClass@@UAG?AUMatrix3DStruct@@PAH@Z; ?Draw_Matrix@DriveLocomotionClass@@UAG?AUMatrix3DStruct@@PAH@Z and ?Start_Of_Move@DriveLocomotionClass@@AAE_NAA_N_N1@Z and ?While_Moving@DriveLocomotionClass@@AAE_N_N@Z placed at their function starts; ??0DriveLocomotionClass@@QAE@XZ not placed; ??1DriveLocomotionClass@@UAE@XZ not placed; inline ?IsDirty@LocomotionClass@@UAGJXZ at 0x004A4BF0; inline ?Is_Really_Moving_Now@LocomotionClass@@UAGEXZ at 0x004A4C10; inline ?Get_Status@LocomotionClass@@UAGHXZ at 0x004A4C20; inline ?Acquire_Hunter_Seeker_Target@LocomotionClass@@UAGXXZ at 0x004A4C30; inline ?Is_Surfacing@LocomotionClass@@UAGEXZ at 0x004A4C40; inline ?Acquire_Hunter_Seeker_Target@LocomotionClass@@UAGXXZ at 0x004A4C50"
 unk_004A4C80,0x004A4C80,0x004A4DC0,unknown,code not assigned to a module
-drop,0x004A4DC0,0x004A5550,tibsun,"functions compiled from src/drop.cpp, matched, without gaps; two placed by the gap"
-unk_004A5550,0x004A5550,0x004A5A40,unknown,code not assigned to a module
-droppod,0x004A5A40,0x004A6590,tibsun,"functions compiled from src/droppod.cpp, matched, without gaps; five placed by the gap"
-unk_004A6590,0x004A6590,0x004A6910,unknown,code not assigned to a module
+drop,0x004A4DC0,0x004A5780,tibsun,"functions compiled from src/drop.cpp, matched, without gaps; two placed by the gap; seven copies the compiler emitted after the last function"
+unk_004A5780,0x004A5780,0x004A5A40,unknown,code not assigned to a module
+droppod,0x004A5A40,0x004A66C0,tibsun,"functions compiled from src/droppod.cpp, matched, without gaps; five placed by the gap; 14 copies the compiler emitted after the last function"
+unk_004A66C0,0x004A66C0,0x004A6910,unknown,code not assigned to a module
 dropship,0x004A6910,0x004A6B90,tibsun,"functions compiled from src/dropship.cpp, matched, without gaps; one placed by the gap; ?Dropship_Screen@@YIXXZ not placed; ?Draw_Cost@@YIXHHAAVSurface@@ABVPoint2D@@PBD_NAAVConvertClass@@PBVBlitter@@@Z not placed; ?Draw_Unit_Info@@YIXPAVSurface@@PAVConvertClass@@PAVTechnoTypeClass@@_N@Z not placed"
 unk_004A6B90,0x004A6B90,0x004AA4A0,unknown,code not assigned to a module
 dsurface,0x004AA4A0,0x004B1340,tibsun,"functions compiled from src/dsurface.cpp, without gaps; matched except ?Draw_Depth_Antialiased_Line@DSurface@@UAE_NABV?$TRect@H@@ABVPoint2D@@1AAVRGBClass@@HH_N333M@Z; eight placed by the gap; ?Draw_Depth_Antialiased_Line@DSurface@@UAE_NABV?$TRect@H@@ABVPoint2D@@1AAVRGBClass@@HH_N333M@Z placed at their function starts"
@@ -205,8 +202,8 @@ egos,0x004B3620,0x004B37C0,tibsun,"functions compiled from src/egos.cpp, matched
 unk_004B37C0,0x004B37C0,0x004B4860,unknown,code not assigned to a module
 emember,0x004B4860,0x004B4970,tibsun,"functions compiled from src/emember.cpp, matched, without gaps"
 unk_004B4970,0x004B4970,0x004B4C00,unknown,code not assigned to a module
-empulse,0x004B4C00,0x004B5410,tibsun,"functions compiled from src/empulse.cpp, matched, without gaps; five placed by the gap"
-unk_004B5410,0x004B5410,0x004B5A70,unknown,code not assigned to a module
+empulse,0x004B4C00,0x004B54B0,tibsun,"functions compiled from src/empulse.cpp, matched, without gaps; five placed by the gap; one copy the compiler emitted after the last function"
+unk_004B54B0,0x004B54B0,0x004B5A70,unknown,code not assigned to a module
 enviro,0x004B5A70,0x004B5C90,tibsun,"functions compiled from src/enviro.cpp, matched, without gaps; one placed by the gap"
 unk_004B5C90,0x004B5C90,0x004B5EB0,unknown,code not assigned to a module
 event,0x004B5EB0,0x004B65C0,tibsun,"functions compiled from src/event.cpp, without gaps; matched except ?Execute@EventClass@@QAEXXZ; ?Execute@EventClass@@QAEXXZ not placed"
@@ -217,8 +214,8 @@ expand,0x004B8970,0x004B89C0,tibsun,"functions compiled from src/expand.cpp, mat
 unk_004B89C0,0x004B89C0,0x004B89D0,unknown,code not assigned to a module
 facing,0x004B89D0,0x004B8EB0,tibsun,"functions compiled from src/facing.cpp, matched, without gaps"
 unk_004B8EB0,0x004B8EB0,0x004B90A0,unknown,code not assigned to a module
-factory,0x004B90A0,0x004B9F20,tibsun,"functions compiled from src/factory.cpp, matched, without gaps; two placed by the gap"
-unk_004B9F20,0x004B9F20,0x004BA410,unknown,code not assigned to a module
+factory,0x004B90A0,0x004BA060,tibsun,"functions compiled from src/factory.cpp, matched, without gaps; two placed by the gap; three copies the compiler emitted after the last function"
+unk_004BA060,0x004BA060,0x004BA410,unknown,code not assigned to a module
 fastmath,0x004BA410,0x004BAD50,tibsun,"functions compiled from src/fastmath.cpp, matched, without gaps; three placed by the gap"
 field,0x004BAD50,0x004BB160,tibsun,"functions compiled from src/field.cpp, matched, without gaps"
 unk_004BB160,0x004BB160,0x004BB350,unknown,code not assigned to a module
@@ -230,14 +227,14 @@ flasher,0x004BBF00,0x004BBF20,tibsun,"functions compiled from src/flasher.cpp, m
 unk_004BBF20,0x004BBF20,0x004BC110,unknown,code not assigned to a module
 fly,0x004BC110,0x004BFAF0,tibsun,"functions compiled from src/fly.cpp, without gaps; matched except ?Move_To@FlyLocomotionClass@@UAGXUCoordStruct@@@Z and ?Movement_AI@FlyLocomotionClass@@QAEXXZ and ?Process_Landing@FlyLocomotionClass@@QAE_NXZ and ?Nearing_Target@FlyLocomotionClass@@QAEH_NUCoordStruct@@@Z; three placed by the gap; ?Nearing_Target@FlyLocomotionClass@@QAEH_NUCoordStruct@@@Z and ?Process_Landing@FlyLocomotionClass@@QAE_NXZ placed at their function starts"
 unk_004BFAF0,0x004BFAF0,0x004BFFD0,unknown,code not assigned to a module
-fog,0x004BFFD0,0x004C2080,tibsun,"functions compiled from src/fog.cpp, matched, without gaps; two placed by the gap"
-unk_004C2080,0x004C2080,0x004C2930,unknown,code not assigned to a module
+fog,0x004BFFD0,0x004C25B0,tibsun,"functions compiled from src/fog.cpp, matched, without gaps; two placed by the gap; 14 copies the compiler emitted after the last function"
+unk_004C25B0,0x004C25B0,0x004C2930,unknown,code not assigned to a module
 foot,0x004C2930,0x004CDDD0,tibsun,"functions compiled from src/foot.cpp, without gaps; matched except ?AI@FootClass@@UAEXXZ and ?Active_Click_With@FootClass@@UAE_NW4ActionType@@PAVObjectClass@@_N@Z and ?Search_For_Tiberium_Weighted@FootClass@@QAE?AVCell@@H@Z; three placed by the gap; ?AI@FootClass@@UAEXXZ and ?Active_Click_With@FootClass@@UAE_NW4ActionType@@PAVObjectClass@@_N@Z and ?Search_For_Tiberium_Weighted@FootClass@@QAE?AVCell@@H@Z placed at their function starts; ?On_Ground@FootClass@@UBE_NXZ not placed; inline ?Reacquire_Target@TechnoClass@@UAEXXZ at 0x004CA340"
 unk_004CDDD0,0x004CDDD0,0x004CEDF0,unknown,code not assigned to a module
 fuse,0x004CEDF0,0x004CEFA0,tibsun,"functions compiled from src/fuse.cpp, matched, without gaps"
 unk_004CEFA0,0x004CEFA0,0x004CEFC0,unknown,code not assigned to a module
-gadget,0x004CEFC0,0x004CF6A0,tibsun,"functions compiled from src/gadget.cpp, matched, without gaps; six placed by the gap"
-unk_004CF6A0,0x004CF6A0,0x004CF920,unknown,code not assigned to a module
+gadget,0x004CEFC0,0x004CF710,tibsun,"functions compiled from src/gadget.cpp, matched, without gaps; six placed by the gap; one copy the compiler emitted after the last function"
+unk_004CF710,0x004CF710,0x004CF920,unknown,code not assigned to a module
 gamedlg,0x004CF920,0x004D0030,tibsun,"functions compiled from src/gamedlg.cpp, matched, without gaps"
 unk_004D0030,0x004D0030,0x004D0040,unknown,code not assigned to a module
 gametime,0x004D0040,0x004D00D0,tibsun,"functions compiled from src/gametime.cpp, matched, without gaps; _$E2 not placed"
@@ -254,34 +251,34 @@ goptions,0x004DDF20,0x004DE180,tibsun,"functions compiled from src/goptions.cpp,
 unk_004DE180,0x004DE180,0x004DE260,unknown,code not assigned to a module
 grphmenu,0x004DE260,0x004DEEF0,tibsun,"functions compiled from src/grphmenu.cpp, without gaps; matched except ?_Graphic_Menu@@YIPAVGraphicMenu@@AAVINIClass@@ABVWstring@@@Z and ?Presentation@GraphicMenu@@QAEHXZ"
 unk_004DEEF0,0x004DEEF0,0x004DF350,unknown,code not assigned to a module
-grphmenu2,0x004DF350,0x004DF7B0,source,"functions compiled from src/grphmenu2.cpp, matched, without gaps"
-unk_004DF7B0,0x004DF7B0,0x004DF810,unknown,code not assigned to a module
-grphmimg,0x004DF810,0x004DFF10,tibsun,"functions compiled from src/grphmimg.cpp, matched, without gaps"
-unk_004DFF10,0x004DFF10,0x004DFF80,unknown,code not assigned to a module
-grphmitm,0x004DFF80,0x004E01F0,tibsun,"functions compiled from src/grphmitm.cpp, matched, without gaps; four placed by the gap"
-unk_004E01F0,0x004E01F0,0x004E0250,unknown,code not assigned to a module
-grphmsct,0x004E0250,0x004E0630,tibsun,"functions compiled from src/grphmsct.cpp, matched, without gaps"
-unk_004E0630,0x004E0630,0x004E08D0,unknown,code not assigned to a module
+grphmenu2,0x004DF350,0x004DF7F0,source,"functions compiled from src/grphmenu2.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_004DF7F0,0x004DF7F0,0x004DF810,unknown,code not assigned to a module
+grphmimg,0x004DF810,0x004DFF60,tibsun,"functions compiled from src/grphmimg.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_004DFF60,0x004DFF60,0x004DFF80,unknown,code not assigned to a module
+grphmitm,0x004DFF80,0x004E0230,tibsun,"functions compiled from src/grphmitm.cpp, matched, without gaps; four placed by the gap; one copy the compiler emitted after the last function"
+unk_004E0230,0x004E0230,0x004E0250,unknown,code not assigned to a module
+grphmsct,0x004E0250,0x004E0690,tibsun,"functions compiled from src/grphmsct.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_004E0690,0x004E0690,0x004E08D0,unknown,code not assigned to a module
 gscreen,0x004E08D0,0x004E1110,tibsun,"functions compiled from src/gscreen.cpp, matched, without gaps; three placed by the gap"
 unk_004E1110,0x004E1110,0x004E12B0,unknown,code not assigned to a module
 hicolor,0x004E12B0,0x004E13F0,tibsun,"functions compiled from src/hicolor.cpp, matched, without gaps"
 unk_004E13F0,0x004E13F0,0x004E1680,unknown,code not assigned to a module
 house,0x004E1680,0x004F6BA0,tibsun,"functions compiled from src/house.cpp, without gaps; matched except ?AI@HouseClass@@UAEXXZ and ?Begin_Production@HouseClass@@QAE?AW4ProdFailType@@W4RTTIType@@H_N1@Z and ?Suspend_Production@HouseClass@@QAE?AW4ProdFailType@@W4RTTIType@@@Z and ?Place_Object@HouseClass@@QAE_NW4RTTIType@@ABVCell@@@Z and ?MPlayer_Defeated@HouseClass@@QAEXXZ and ?AI_Building@HouseClass@@AAEHXZ and ?AI_Unit@HouseClass@@AAEHXZ and ?Random_Cell_In_Zone@HouseClass@@QBE?AVCell@@W4ZoneType@@@Z and ?Where_To_Place_Building@HouseClass@@QAE?AVCell@@PAVBuildingTypeClass@@P6IHABV1@ABV2@HH@ZH@Z and ?AI_Build_Defense@HouseClass@@QAE_NHPAV?$DynamicVectorClass@VCell@@@@@Z and ?AI_Build_Wall@HouseClass@@QAEXXZ and ?AI_Takeover@HouseClass@@QAEXXZ and ?Update_Present_Super_Weapons@HouseClass@@QAEXXZ and ?Add_Wall_Nodes@HouseClass@@QAE_NH@Z; four placed by the gap; ?AI@HouseClass@@UAEXXZ and ?AI_Build_Defense@HouseClass@@QAE_NHPAV?$DynamicVectorClass@VCell@@@@@Z and ?AI_Build_Wall@HouseClass@@QAEXXZ and ?AI_Building@HouseClass@@AAEHXZ and ?AI_Takeover@HouseClass@@QAEXXZ and ?AI_Unit@HouseClass@@AAEHXZ and ?Add_Wall_Nodes@HouseClass@@QAE_NH@Z and ?Begin_Production@HouseClass@@QAE?AW4ProdFailType@@W4RTTIType@@H_N1@Z and ?MPlayer_Defeated@HouseClass@@QAEXXZ and ?Place_Object@HouseClass@@QAE_NW4RTTIType@@ABVCell@@@Z and ?Suspend_Production@HouseClass@@QAE?AW4ProdFailType@@W4RTTIType@@@Z and ?Update_Present_Super_Weapons@HouseClass@@QAEXXZ and ?Where_To_Place_Building@HouseClass@@QAE?AVCell@@PAVBuildingTypeClass@@P6IHABV1@ABV2@HH@ZH@Z placed at their function starts; ?Fetch_Factory@HouseClass@@QBEPAVFactoryClass@@W4RTTIType@@@Z not placed"
 unk_004F6BA0,0x004F6BA0,0x004F9350,unknown,code not assigned to a module
-houstype,0x004F9350,0x004FA430,tibsun,"functions compiled from src/houstype.cpp, without gaps; matched except ?Read_INI@HouseTypeClass@@UAE_NABVCCINIClass@@@Z and ?Load@HouseTypeClass@@UAGJPAUIStream@@@Z; four placed by the gap; ?Read_INI@HouseTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts; ??0HouseTypeClass@@QAE@PBD@Z not placed"
-unk_004FA430,0x004FA430,0x004FB8D0,unknown,code not assigned to a module
+houstype,0x004F9350,0x004FA570,tibsun,"functions compiled from src/houstype.cpp, without gaps; matched except ?Read_INI@HouseTypeClass@@UAE_NABVCCINIClass@@@Z and ?Load@HouseTypeClass@@UAGJPAUIStream@@@Z; four placed by the gap; ?Read_INI@HouseTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts; ??0HouseTypeClass@@QAE@PBD@Z not placed; one copy the compiler emitted after the last function"
+unk_004FA570,0x004FA570,0x004FB8D0,unknown,code not assigned to a module
 hover,0x004FB8D0,0x004FEDD0,tibsun,"functions compiled from src/hover.cpp, without gaps; matched except ?Process@HoverLocomotionClass@@UAGEXZ and ?While_Moving@HoverLocomotionClass@@AAE?AW4MoveType@@_N@Z and ?Start_Of_Move@HoverLocomotionClass@@AAEXH@Z; four placed by the gap; ?Mark_All_Occupation_Bits@HoverLocomotionClass@@UAGXH@Z not placed; ?Is_Moving_Here@HoverLocomotionClass@@UAGEUCoordStruct@@@Z not placed"
 unk_004FEDD0,0x004FEDD0,0x004FEF70,unknown,code not assigned to a module
 hsv,0x004FEF70,0x004FF170,tibsun,"functions compiled from src/hsv.cpp, matched, without gaps; _$E3 not placed"
 unk_004FF170,0x004FF170,0x004FF640,unknown,code not assigned to a module
 infantry,0x004FF640,0x00509810,tibsun,"functions compiled from src/infantry.cpp, without gaps; matched except ?Start_Driver@InfantryClass@@UAE_NAAVCoord@@@Z and ?Assign_Destination@InfantryClass@@UAEXPAVAbstractClass@@_N@Z and ?Per_Cell_Process@InfantryClass@@UAEXW4PCPType@@@Z and ?Tunnel_AI@InfantryClass@@QAEXXZ; two placed by the gap; ?Assign_Destination@InfantryClass@@UAEXPAVAbstractClass@@_N@Z and ?Per_Cell_Process@InfantryClass@@UAEXW4PCPType@@@Z and ?Start_Driver@InfantryClass@@UAE_NAAVCoord@@@Z and ?Tunnel_AI@InfantryClass@@QAEXXZ placed at their function starts; ?Is_Immobilized@InfantryClass@@QBE_NXZ not placed; inline ?Draw_Radial_Indicator@ObjectClass@@UAEXK@Z at 0x00509580"
 unk_00509810,0x00509810,0x00509B20,unknown,code not assigned to a module
-infatype,0x00509B20,0x0050AF90,tibsun,"functions compiled from src/infatype.cpp, matched, without gaps; seven placed by the gap"
-unk_0050AF90,0x0050AF90,0x0050B8D0,unknown,code not assigned to a module
-ini,0x0050B8D0,0x005109B0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap"
-unk_005109B0,0x005109B0,0x005127F0,unknown,code not assigned to a module
-init,0x005127F0,0x0051AD10,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; four placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0"
-unk_0051AD10,0x0051AD10,0x0051E820,unknown,code not assigned to a module
+infatype,0x00509B20,0x0050B0E0,tibsun,"functions compiled from src/infatype.cpp, matched, without gaps; seven placed by the gap; one copy the compiler emitted after the last function"
+unk_0050B0E0,0x0050B0E0,0x0050B8D0,unknown,code not assigned to a module
+ini,0x0050B8D0,0x00510BB0,tibsun,"functions compiled from src/ini.cpp, matched, without gaps; three placed by the gap; eight copies the compiler emitted after the last function"
+unk_00510BB0,0x00510BB0,0x005127F0,unknown,code not assigned to a module
+init,0x005127F0,0x0051DA30,tibsun,"functions compiled from src/init.cpp, without gaps; matched except ?Allocate_Surfaces@@YI_NABV?$TRect@H@@000_N@Z; four placed by the gap; ?Init_Game@@YIHHQAPAD@Z not placed; inline ?DebugString@@YAXPBDZZ at 0x005173B0; 310 copies the compiler emitted after the last function"
+unk_0051DA30,0x0051DA30,0x0051E820,unknown,code not assigned to a module
 interpal,0x0051E820,0x0051ECF0,tibsun,"functions compiled from src/interpal.cpp, matched, without gaps"
 unk_0051ECF0,0x0051ECF0,0x0051EEE0,unknown,code not assigned to a module
 intro,0x0051EEE0,0x0051EF10,tibsun,"functions compiled from src/intro.cpp, matched, without gaps"
@@ -296,12 +293,12 @@ ipxaddr,0x00523410,0x00523980,tibsun,"functions compiled from src/ipxaddr.cpp, m
 unk_00523980,0x00523980,0x00523B70,unknown,code not assigned to a module
 ipxconn,0x00523B70,0x00523F90,tibsun,"functions compiled from src/ipxconn.cpp, matched, without gaps; one placed by the gap"
 unk_00523F90,0x00523F90,0x005241B0,unknown,code not assigned to a module
-ipxgconn,0x005241B0,0x00524DD0,tibsun,"functions compiled from src/ipxgconn.cpp, matched, without gaps; three placed by the gap"
-unk_00524DD0,0x00524DD0,0x00525030,unknown,code not assigned to a module
+ipxgconn,0x005241B0,0x00524E40,tibsun,"functions compiled from src/ipxgconn.cpp, matched, without gaps; three placed by the gap; one copy the compiler emitted after the last function"
+unk_00524E40,0x00524E40,0x00525030,unknown,code not assigned to a module
 ipxmgr,0x00525030,0x00527850,tibsun,"functions compiled from src/ipxmgr.cpp, without gaps; matched except ?Service@IPXManagerClass@@UAEHXZ; two placed by the gap"
 unk_00527850,0x00527850,0x00527A80,unknown,code not assigned to a module
-isotile,0x00527A80,0x00528260,tibsun,"functions compiled from src/isotile.cpp, matched, without gaps; five placed by the gap"
-unk_00528260,0x00528260,0x00528EE0,unknown,code not assigned to a module
+isotile,0x00527A80,0x00528380,tibsun,"functions compiled from src/isotile.cpp, matched, without gaps; five placed by the gap; one copy the compiler emitted after the last function"
+unk_00528380,0x00528380,0x00528EE0,unknown,code not assigned to a module
 isotype,0x00528EE0,0x0052E660,tibsun,"functions compiled from src/isotype.cpp, without gaps; matched except ?Draw_Tile@IsometricTileTypeClass@@QBEXPAVLightConvertClass@@HAAVSurface@@HHV?$TRect@H@@HH_NH333H@Z and ?Preview_Tile@IsometricTileTypeClass@@QAEPAGHH@Z; six placed by the gap"
 unk_0052E660,0x0052E660,0x0052EE00,unknown,code not assigned to a module
 jshell,0x0052EE00,0x0052EF70,tibsun,"functions compiled from src/jshell.cpp, matched, without gaps"
@@ -322,10 +319,10 @@ lcwstraw,0x005352D0,0x005354E0,tibsun,"functions compiled from src/lcwstraw.cpp,
 unk_005354E0,0x005354E0,0x00535530,unknown,code not assigned to a module
 lcwuncmp,0x00535530,0x00535720,tibsun,"functions compiled from src/lcwuncmp.cpp, matched, without gaps"
 unk_00535720,0x00535720,0x00535910,unknown,code not assigned to a module
-ldprgmgr,0x00535910,0x00536ED0,source,"functions compiled from src/ldprgmgr.cpp, without gaps; matched except ?Draw@LoadProgressManager@@QAEXXZ"
-unk_00536ED0,0x00536ED0,0x00537240,unknown,code not assigned to a module
-light,0x00537240,0x00537C30,tibsun,"functions compiled from src/light.cpp, matched, without gaps; six placed by the gap"
-unk_00537C30,0x00537C30,0x005383C0,unknown,code not assigned to a module
+ldprgmgr,0x00535910,0x00536F30,source,"functions compiled from src/ldprgmgr.cpp, without gaps; matched except ?Draw@LoadProgressManager@@QAEXXZ; one copy the compiler emitted after the last function"
+unk_00536F30,0x00536F30,0x00537240,unknown,code not assigned to a module
+light,0x00537240,0x00537CE0,tibsun,"functions compiled from src/light.cpp, matched, without gaps; six placed by the gap; one copy the compiler emitted after the last function"
+unk_00537CE0,0x00537CE0,0x005383C0,unknown,code not assigned to a module
 lightcalc,0x005383C0,0x00538670,tibsun,"functions compiled from src/lightcalc.cpp, matched, without gaps"
 unk_00538670,0x00538670,0x00538860,unknown,code not assigned to a module
 lightcon,0x00538860,0x00538F20,tibsun,"functions compiled from src/lightcon.cpp, matched, without gaps; ??1LightConvertClass@@UAE@XZ not placed"
@@ -334,8 +331,8 @@ link,0x00538F60,0x00539170,tibsun,"functions compiled from src/link.cpp, matched
 unk_00539170,0x00539170,0x005393E0,unknown,code not assigned to a module
 link2,0x005393E0,0x00539870,source,"functions compiled from src/link2.cpp, matched, without gaps"
 unk_00539870,0x00539870,0x00539BF0,unknown,code not assigned to a module
-list,0x00539BF0,0x0053AA20,tibsun,"functions compiled from src/list.cpp, matched, without gaps; three placed by the gap"
-unk_0053AA20,0x0053AA20,0x0053AEB0,unknown,code not assigned to a module
+list,0x00539BF0,0x0053ABA0,tibsun,"functions compiled from src/list.cpp, matched, without gaps; three placed by the gap; five copies the compiler emitted after the last function"
+unk_0053ABA0,0x0053ABA0,0x0053AEB0,unknown,code not assigned to a module
 load,0x0053AEB0,0x0053AEF0,tibsun,"functions compiled from src/load.cpp, matched, without gaps"
 unk_0053AEF0,0x0053AEF0,0x0053B0E0,unknown,code not assigned to a module
 loaddlg,0x0053B0E0,0x0053C970,tibsun,"functions compiled from src/loaddlg.cpp, matched, without gaps"
@@ -350,8 +347,8 @@ lzopipe,0x0053EB40,0x0053EF60,tibsun,"functions compiled from src/lzopipe.cpp, m
 unk_0053EF60,0x0053EF60,0x0053EFB0,unknown,code not assigned to a module
 lzostraw,0x0053EFB0,0x0053F220,tibsun,"functions compiled from src/lzostraw.cpp, matched, without gaps"
 unk_0053F220,0x0053F220,0x0053F460,unknown,code not assigned to a module
-mainloop,0x0053F460,0x00541E90,tibsun,"functions compiled from src/mainloop.cpp, matched, without gaps"
-unk_00541E90,0x00541E90,0x00542160,unknown,code not assigned to a module
+mainloop,0x0053F460,0x00541EC0,tibsun,"functions compiled from src/mainloop.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_00541EC0,0x00541EC0,0x00542160,unknown,code not assigned to a module
 mainopt,0x00542160,0x00543CF0,tibsun,"functions compiled from src/mainopt.cpp, without gaps; matched except ?Main_Options_Dialog_Proc@@YGHPAUHWND__@@IIJ@Z"
 unk_00543CF0,0x00543CF0,0x005461A0,unknown,code not assigned to a module
 unk_005461A0,0x005461A0,0x00547930,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
@@ -371,8 +368,8 @@ unk_00593680,0x00593680,0x00594500,unknown,code not assigned to a module
 mission,0x00594500,0x005950F0,tibsun,"functions compiled from src/mission.cpp, matched, without gaps; 27 placed by the gap"
 unk_005950F0,0x005950F0,0x00595190,unknown,code not assigned to a module
 unk_00595190,0x00595190,0x005952D0,unknown,code not assigned to a module
-mixfile,0x005952D0,0x00595BC0,tibsun,"functions compiled from src/mixfile.cpp, matched, without gaps"
-unk_00595BC0,0x00595BC0,0x00596010,unknown,code not assigned to a module
+mixfile,0x005952D0,0x00595D40,tibsun,"functions compiled from src/mixfile.cpp, matched, without gaps; five copies the compiler emitted after the last function"
+unk_00595D40,0x00595D40,0x00596010,unknown,code not assigned to a module
 modemgst,0x00596010,0x00598C20,tibsun,"functions compiled from src/modemgst.cpp, matched, without gaps"
 unk_00598C20,0x00598C20,0x00598E10,unknown,code not assigned to a module
 modemhst,0x00598E10,0x0059CB80,tibsun,"functions compiled from src/modemhst.cpp, matched, without gaps; three placed by the gap"
@@ -383,12 +380,12 @@ mono,0x0059E160,0x0059EB60,tibsun,"functions compiled from src/mono.cpp, matched
 motlib,0x0059EB60,0x0059EDC0,tibsun,"functions compiled from src/motlib.cpp, matched, without gaps; one placed by the gap; ?Clear@MotionLibrary@@QAEXXZ not placed"
 unk_0059EDC0,0x0059EDC0,0x0059EDE0,unknown,code not assigned to a module
 unk_0059EDE0,0x0059EDE0,0x0059F020,unknown,code not assigned to a module
-mouse,0x0059F020,0x0059FF60,tibsun,"functions compiled from src/mouse.cpp, matched, without gaps; two placed by the gap"
-unk_0059FF60,0x0059FF60,0x005A0250,unknown,code not assigned to a module
+mouse,0x0059F020,0x0059FF90,tibsun,"functions compiled from src/mouse.cpp, matched, without gaps; two placed by the gap; one copy the compiler emitted after the last function"
+unk_0059FF90,0x0059FF90,0x005A0250,unknown,code not assigned to a module
 movie,0x005A0250,0x005A0B50,tibsun,"functions compiled from src/movie.cpp, matched, without gaps"
 unk_005A0B50,0x005A0B50,0x005A0DC0,unknown,code not assigned to a module
-movies,0x005A0DC0,0x005A1F00,tibsun,"functions compiled from src/movies.cpp, matched, without gaps; 14 placed by the gap"
-unk_005A1F00,0x005A1F00,0x005A2800,unknown,code not assigned to a module
+movies,0x005A0DC0,0x005A1FC0,tibsun,"functions compiled from src/movies.cpp, matched, without gaps; 14 placed by the gap; two copies the compiler emitted after the last function"
+unk_005A1FC0,0x005A1FC0,0x005A2800,unknown,code not assigned to a module
 mpcoop,0x005A2800,0x005A6280,source,"functions compiled from src/mpcoop.cpp, matched, without gaps; four placed by the gap; ?vt_entry_04@MPCooperative@@UAE_NXZ not placed; ?vt_entry_08@MPCooperative@@UAE_NXZ not placed; ?vt_entry_A0@MPCooperative@@UAE_NXZ not placed"
 unk_005A6280,0x005A6280,0x005A70C0,unknown,code not assigned to a module
 mpfreeforall,0x005A70C0,0x005A71B0,source,"functions compiled from src/mpfreeforall.cpp, matched, without gaps; ??0FreeForAll@@QAE@ABVWideWstring@@0ABVWstring@@1_NH@Z not placed; ??1FreeForAll@@UAE@XZ not placed; ?AssignTeams@FreeForAll@@UAE_NXZ not placed; ?IsSkirmishAllowed@FreeForAll@@UAE_NXZ not placed"
@@ -403,8 +400,8 @@ mpsiegeteam,0x005ABDC0,0x005ABEB0,source,"functions compiled from src/mpsiegetea
 unk_005ABEB0,0x005ABEB0,0x005ABF20,unknown,code not assigned to a module
 mpu,0x005ABF20,0x005AC140,tibsun,"functions compiled from src/mpu.cpp, matched, without gaps"
 unk_005AC140,0x005AC140,0x005AC560,unknown,code not assigned to a module
-msanim,0x005AC560,0x005AFC00,tibsun,"functions compiled from src/msanim.cpp, matched, without gaps; four placed by the gap"
-unk_005AFC00,0x005AFC00,0x005AFF10,unknown,code not assigned to a module
+msanim,0x005AC560,0x005AFEF0,tibsun,"functions compiled from src/msanim.cpp, matched, without gaps; four placed by the gap; 14 copies the compiler emitted after the last function"
+unk_005AFEF0,0x005AFEF0,0x005AFF10,unknown,code not assigned to a module
 mschoice,0x005AFF10,0x005B16C0,tibsun,"functions compiled from src/mschoice.cpp, matched, without gaps; ??1MSSfxEntry@@QAE@XZ not placed; ?Play@MSSfxEntry@@QAEXXZ not placed"
 unk_005B16C0,0x005B16C0,0x005B2BE0,unknown,code not assigned to a module
 msengine,0x005B2BE0,0x005B3830,tibsun,"functions compiled from src/msengine.cpp, matched, without gaps"
@@ -419,10 +416,10 @@ msgloop,0x005B5EE0,0x005B6210,tibsun,"functions compiled from src/msgloop.cpp, m
 unk_005B6210,0x005B6210,0x005B6A00,unknown,code not assigned to a module
 mstimer,0x005B6A00,0x005B6A40,tibsun,"functions compiled from src/mstimer.cpp, matched, without gaps; two placed by definition and alphabetical order; one placed by the gap"
 unk_005B6A40,0x005B6A40,0x005B6C30,unknown,code not assigned to a module
-multiplayer,0x005B6C30,0x005B8E10,source,"functions compiled from src/multiplayer.cpp, without gaps; matched except ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z and ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z and ?GenerateStartingUnits@MultiplayerGameMode@@UAE_NPAVHouseClass@@AAH@Z; 13 placed by the gap; ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z to ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z share the room between their neighbours"
-unk_005B8E10,0x005B8E10,0x005B9B20,unknown,code not assigned to a module
-multiplayerteam,0x005B9B20,0x005B9C20,source,"functions compiled from src/multiplayerteam.cpp, matched, without gaps"
-unk_005B9C20,0x005B9C20,0x005B9E60,unknown,code not assigned to a module
+multiplayer,0x005B6C30,0x005B91E0,source,"functions compiled from src/multiplayer.cpp, without gaps; matched except ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z and ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z and ?GenerateStartingUnits@MultiplayerGameMode@@UAE_NPAVHouseClass@@AAH@Z; 13 placed by the gap; ?Fill_Game_Mode_Combo@@YIXPAUHWND__@@H@Z to ?Fill_Game_Mode_List@@YIXPAUHWND__@@H@Z share the room between their neighbours; 20 copies the compiler emitted after the last function"
+unk_005B91E0,0x005B91E0,0x005B9B20,unknown,code not assigned to a module
+multiplayerteam,0x005B9B20,0x005B9C50,source,"functions compiled from src/multiplayerteam.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_005B9C50,0x005B9C50,0x005B9E60,unknown,code not assigned to a module
 firewall,0x005B9E60,0x005BB350,source,"functions compiled from src/firewall.cpp, matched, without gaps; one placed by the gap"
 unk_005BB350,0x005BB350,0x005BB540,unknown,code not assigned to a module
 netdlg,0x005BB540,0x005BBB20,tibsun,"functions compiled from src/netdlg.cpp, matched, without gaps"
@@ -433,10 +430,10 @@ netshare,0x005C2BA0,0x005CD590,tibsun,"functions compiled from src/netshare.cpp,
 unk_005CD590,0x005CD590,0x005CDB40,unknown,code not assigned to a module
 nullconn,0x005CDB40,0x005CDCB0,tibsun,"functions compiled from src/nullconn.cpp, matched, without gaps; ?Packet_Overhead_Size@NullModemConnClass@@SIHXZ not placed"
 unk_005CDCB0,0x005CDCB0,0x005CE920,unknown,code not assigned to a module
-nulldlg,0x005CE920,0x005CFDB0,tibsun,"functions compiled from src/nulldlg.cpp, matched, without gaps"
-unk_005CFDB0,0x005CFDB0,0x005CFFC0,unknown,code not assigned to a module
-nullmgr,0x005CFFC0,0x005D1F20,tibsun,"functions compiled from src/nullmgr.cpp, matched, without gaps; four placed by the gap"
-unk_005D1F20,0x005D1F20,0x005D22E0,unknown,code not assigned to a module
+nulldlg,0x005CE920,0x005CFDD0,tibsun,"functions compiled from src/nulldlg.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_005CFDD0,0x005CFDD0,0x005CFFC0,unknown,code not assigned to a module
+nullmgr,0x005CFFC0,0x005D20F0,tibsun,"functions compiled from src/nullmgr.cpp, matched, without gaps; four placed by the gap; ten copies the compiler emitted after the last function"
+unk_005D20F0,0x005D20F0,0x005D22E0,unknown,code not assigned to a module
 object,0x005D22E0,0x005D54F0,tibsun,"functions compiled from src/object.cpp, matched, without gaps; 26 placed by the gap"
 unk_005D54F0,0x005D54F0,0x005D57F0,unknown,code not assigned to a module
 objtype,0x005D57F0,0x005D7FF0,tibsun,"functions compiled from src/objtype.cpp, matched, without gaps; two placed by the gap; ?Theater_Naming_Convention@ObjectTypeClass@@QBEXPADW4TheaterType@@@Z not placed"
@@ -458,8 +455,8 @@ palette,0x00602FD0,0x00603750,tibsun,"functions compiled from src/palette.cpp, m
 unk_00603750,0x00603750,0x00603FA0,unknown,code not assigned to a module
 unk_00603FA0,0x00603FA0,0x00603FD0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00603FD0,0x00603FD0,0x006061A0,unknown,code not assigned to a module
-parasite,0x006061A0,0x00607DF0,source,"functions compiled from src/parasite.cpp, matched, without gaps; three placed by the gap"
-unk_00607DF0,0x00607DF0,0x00608440,unknown,code not assigned to a module
+parasite,0x006061A0,0x00607EF0,source,"functions compiled from src/parasite.cpp, matched, without gaps; three placed by the gap; one copy the compiler emitted after the last function"
+unk_00607EF0,0x00607EF0,0x00608440,unknown,code not assigned to a module
 particle,0x00608440,0x0060A7E0,tibsun,"functions compiled from src/particle.cpp, without gaps; matched except ?Gas_Behavior_AI@ParticleClass@@QAEXXZ and ?Spark_Behavior_AI@ParticleClass@@QAEXXZ; five placed by the gap; ?Web_Behavior_AI@ParticleClass@@QAEXXZ not placed"
 unk_0060A7E0,0x0060A7E0,0x0060AA70,unknown,code not assigned to a module
 partsys,0x0060AA70,0x0060D010,tibsun,"functions compiled from src/partsys.cpp, without gaps; matched except ?Spark_AI@ParticleSystemClass@@AAEXXZ and ?Smoke_AI@ParticleSystemClass@@AAEXXZ and ?Railgun_AI@ParticleSystemClass@@AAEXXZ and ?Fire_AI@ParticleSystemClass@@AAEXXZ; two placed by the gap; ?Fire_AI@ParticleSystemClass@@AAEXXZ and ?Railgun_AI@ParticleSystemClass@@AAEXXZ and ?Smoke_AI@ParticleSystemClass@@AAEXXZ and ?Spark_AI@ParticleSystemClass@@AAEXXZ placed where matched code calls them; ?Fetch_RTTI@ParticleSystemClass@@UBE?AW4RTTIType@@XZ not placed; ?Class_Of@ParticleSystemClass@@UBEPBVObjectTypeClass@@XZ not placed; ?Web_AI@ParticleSystemClass@@AAEXXZ not placed"
@@ -468,8 +465,7 @@ phoneed,0x0060D970,0x0060EA60,tibsun,"functions compiled from src/phoneed.cpp, m
 pipe,0x0060EA60,0x0060EB20,tibsun,"functions compiled from src/pipe.cpp, matched, without gaps"
 pixelfx,0x0060EB20,0x0060ED10,source,"functions compiled from src/pixelfx.cpp, matched, without gaps; ??1PixelFXClass@@UAE@XZ not placed"
 unk_0060ED10,0x0060ED10,0x0060ED40,unknown,code not assigned to a module
-pk,0x0060ED40,0x0060F7A0,tibsun,"functions compiled from src/pk.cpp, matched, without gaps"
-unk_0060F7A0,0x0060F7A0,0x0060FA90,unknown,code not assigned to a module
+pk,0x0060ED40,0x0060FA90,tibsun,"functions compiled from src/pk.cpp, matched, without gaps; ten copies the compiler emitted after the last function"
 pkpipe,0x0060FA90,0x0060FD70,tibsun,"functions compiled from src/pkpipe.cpp, matched, without gaps; two placed by alphabetical order"
 unk_0060FD70,0x0060FD70,0x0060FE30,unknown,code not assigned to a module
 pkstraw,0x0060FE30,0x00610140,tibsun,"functions compiled from src/pkstraw.cpp, matched, without gaps; two placed by alphabetical order"
@@ -480,35 +476,34 @@ polygon,0x0061BE40,0x0061C260,tibsun,"functions compiled from src/polygon.cpp, m
 unk_0061C260,0x0061C260,0x0061C450,unknown,code not assigned to a module
 power,0x0061C450,0x0061D220,tibsun,"functions compiled from src/power.cpp, matched, without gaps; two placed by the gap"
 unk_0061D220,0x0061D220,0x0061D440,unknown,code not assigned to a module
-preview,0x0061D440,0x0061EA80,tibsun,"functions compiled from src/preview.cpp, matched, without gaps; ??0MapPreviewClass@@QAE@XZ not placed"
-unk_0061EA80,0x0061EA80,0x0061ED00,unknown,code not assigned to a module
-progress,0x0061ED00,0x00620410,tibsun,"functions compiled from src/progress.cpp, matched, without gaps; one placed by the gap"
-unk_00620410,0x00620410,0x00620600,unknown,code not assigned to a module
+preview,0x0061D440,0x0061EAB0,tibsun,"functions compiled from src/preview.cpp, matched, without gaps; ??0MapPreviewClass@@QAE@XZ not placed; one copy the compiler emitted after the last function"
+unk_0061EAB0,0x0061EAB0,0x0061ED00,unknown,code not assigned to a module
+progress,0x0061ED00,0x00620430,tibsun,"functions compiled from src/progress.cpp, matched, without gaps; one placed by the gap; one copy the compiler emitted after the last function"
+unk_00620430,0x00620430,0x00620600,unknown,code not assigned to a module
 psystype,0x00620600,0x00620EA0,tibsun,"functions compiled from src/psystype.cpp, matched, without gaps; five placed by the gap; ?Create_And_Place@ParticleSystemTypeClass@@UBE_NABVCell@@PAVHouseClass@@@Z not placed; ?Create_One_Of@ParticleSystemTypeClass@@UBEPAVObjectClass@@PAVHouseClass@@@Z not placed"
 unk_00620EA0,0x00620EA0,0x00621120,unknown,code not assigned to a module
-ptype,0x00621120,0x00621E80,tibsun,"functions compiled from src/ptype.cpp, matched, without gaps; five placed by the gap"
-unk_00621E80,0x00621E80,0x00622090,unknown,code not assigned to a module
+ptype,0x00621120,0x00621FA0,tibsun,"functions compiled from src/ptype.cpp, matched, without gaps; five placed by the gap; one copy the compiler emitted after the last function"
+unk_00621FA0,0x00621FA0,0x00622090,unknown,code not assigned to a module
 quarry,0x00622090,0x006220D0,tibsun,"functions compiled from src/quarry.cpp, matched, without gaps; ?Name_From_Quarry@@YIPBDW4QuarryType@@@Z not placed"
 unk_006220D0,0x006220D0,0x00622180,unknown,code not assigned to a module
 quat,0x00622180,0x00622FB0,tibsun,"functions compiled from src/quat.cpp, without gaps; matched except ?Make_Closest@Quaternion@@QAEAAV1@ABV1@@Z; two placed by the gap; ??0Quaternion@@QAE@MMMM@Z not placed"
 unk_00622FB0,0x00622FB0,0x006233A0,unknown,code not assigned to a module
 queue,0x006233A0,0x0062E9E0,tibsun,"functions compiled from src/queue.cpp, without gaps; matched except ?Draw_Sync_Bars@@YIXPAUHWND__@@@Z and ?Extract_Compressed_Events@@YIHPAXH@Z and ?Spread_Units_Around_Cell@@YIXHH@Z and ?Execute_DoList@@YIHHW4HousesType@@PAVConnManClass@@PAV?$CDTimerClass@VFrameTimerClass@@@@PAUFrameSyncStruct@@@Z and ?Print_CRCs@@YIXPAVEventClass@@@Z; ?Execute_DoList@@YIHHW4HousesType@@PAVConnManClass@@PAV?$CDTimerClass@VFrameTimerClass@@@@PAUFrameSyncStruct@@@Z and ?Print_CRCs@@YIXPAVEventClass@@@Z placed at their function starts; ??0FrameSyncStruct@@QAE@XZ not placed; ?Queue_Ipx_Set@@YIXXZ not placed; ?Queue_Ipx_Clear@@YIXXZ not placed"
 unk_0062E9E0,0x0062E9E0,0x0062EDE0,unknown,code not assigned to a module
-radar,0x0062EDE0,0x00634AB0,tibsun,"functions compiled from src/radar.cpp, without gaps; matched except ?Update_Diplomacy_Row@RadarDiplomacy@@QAEXPAUHWND__@@HPAVHouseClass@@@Z; two placed by the gap; inline ??_GRTacticalClass@RadarClass@@UAEPAXI@Z at 0x00634AB0"
-unk_00634AB0,0x00634AB0,0x00635440,unknown,code not assigned to a module
+radar,0x0062EDE0,0x006351B0,tibsun,"functions compiled from src/radar.cpp, without gaps; matched except ?Update_Diplomacy_Row@RadarDiplomacy@@QAEXPAUHWND__@@HPAVHouseClass@@@Z; two placed by the gap; inline ??_GRTacticalClass@RadarClass@@UAEPAXI@Z at 0x00634AB0; 16 copies the compiler emitted after the last function"
+unk_006351B0,0x006351B0,0x00635440,unknown,code not assigned to a module
 radbeam,0x00635440,0x00636130,source,"functions compiled from src/radbeam.cpp, without gaps; matched except ?Compute_Pulse_Step@RadBeam@@QAEXXZ; ?Compute_Swing_Step@RadBeam@@QAEXXZ not placed"
 unk_00636130,0x00636130,0x00636830,unknown,code not assigned to a module
-radio,0x00636830,0x00636F90,tibsun,"functions compiled from src/radio.cpp, matched, without gaps; two placed by the gap"
-unk_00636F90,0x00636F90,0x006372A0,unknown,code not assigned to a module
+radio,0x00636830,0x00637030,tibsun,"functions compiled from src/radio.cpp, matched, without gaps; two placed by the gap; one copy the compiler emitted after the last function"
+unk_00637030,0x00637030,0x006372A0,unknown,code not assigned to a module
 radsite,0x006372A0,0x00637F90,source,"functions compiled from src/radsite.cpp, matched, without gaps; four placed by the gap"
 unk_00637F90,0x00637F90,0x00638310,unknown,code not assigned to a module
-ramfile,0x00638310,0x00638610,tibsun,"functions compiled from src/ramfile.cpp, matched, without gaps; two placed by definition order; two placed by the gap"
-unk_00638610,0x00638610,0x006386F0,unknown,code not assigned to a module
+ramfile,0x00638310,0x006386B0,tibsun,"functions compiled from src/ramfile.cpp, matched, without gaps; two placed by definition order; two placed by the gap; six copies the compiler emitted after the last function"
+unk_006386B0,0x006386B0,0x006386F0,unknown,code not assigned to a module
 random,0x006386F0,0x00638AC0,tibsun,"functions compiled from src/random.cpp, matched, without gaps"
-rawfile,0x00638AC0,0x00639450,tibsun,"functions compiled from src/rawfile.cpp, matched, without gaps; two placed by the gap"
-unk_00639450,0x00639450,0x006394F0,unknown,code not assigned to a module
-rc_ptr_base,0x006394F0,0x00639580,source,"functions compiled from src/rc_ptr_base.cpp, matched, without gaps; ??0rc_ptr_base@@QAE@XZ not placed"
-unk_00639580,0x00639580,0x006395C0,unknown,code not assigned to a module
+rawfile,0x00638AC0,0x006394D0,tibsun,"functions compiled from src/rawfile.cpp, matched, without gaps; two placed by the gap; one copy the compiler emitted after the last function"
+unk_006394D0,0x006394D0,0x006394F0,unknown,code not assigned to a module
+rc_ptr_base,0x006394F0,0x006395C0,source,"functions compiled from src/rc_ptr_base.cpp, matched, without gaps; ??0rc_ptr_base@@QAE@XZ not placed; one copy the compiler emitted after the last function"
 readline,0x006395C0,0x00639710,tibsun,"functions compiled from src/readline.cpp, matched, without gaps"
 unk_00639710,0x00639710,0x00639970,unknown,code not assigned to a module
 reinf,0x00639970,0x0063A880,tibsun,"functions compiled from src/reinf.cpp, without gaps; matched except ?Do_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z and ?_Create_Group@@YIPAVFootClass@@PBVTeamTypeClass@@@Z and ?Do_Chrono_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z; ?_Create_Group@@YIPAVFootClass@@PBVTeamTypeClass@@@Z placed at their function starts; ?Create_Special_Reinforcement@@YI_NPAVHouseClass@@PBVTechnoTypeClass@@1W4TeamMissionType@@H@Z not placed; ?_Need_To_Take@@YI_NPBVAircraftClass@@@Z not placed; ?Do_Chrono_Reinforcements@@YI_NPBVTeamTypeClass@@H@Z not placed"
@@ -519,8 +514,8 @@ revent,0x0063B5B0,0x0063C7C0,tibsun,"functions compiled from src/revent.cpp, mat
 unk_0063C7C0,0x0063C7C0,0x0063CC80,unknown,code not assigned to a module
 rgb,0x0063CC80,0x0063D150,tibsun,"functions compiled from src/rgb.cpp, matched, without gaps; _$E3 not placed"
 rle,0x0063D150,0x0063D2D0,tibsun,"functions compiled from src/rle.cpp, matched, without gaps"
-rndstraw,0x0063D2D0,0x0063D890,tibsun,"functions compiled from src/rndstraw.cpp, matched, without gaps"
-unk_0063D890,0x0063D890,0x0063DAC0,unknown,code not assigned to a module
+rndstraw,0x0063D2D0,0x0063D8D0,tibsun,"functions compiled from src/rndstraw.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_0063D8D0,0x0063D8D0,0x0063DAC0,unknown,code not assigned to a module
 rocket,0x0063DAC0,0x0063ED30,source,"functions compiled from src/rocket.cpp, without gaps; matched except ?Process@RocketLocomotionClass@@UAGEXZ; four placed by the gap"
 unk_0063ED30,0x0063ED30,0x0063F040,unknown,code not assigned to a module
 ownertalk,0x0063F040,0x0063FF10,source,"functions compiled from src/ownertalk.cpp, matched, without gaps"
@@ -535,8 +530,8 @@ scenario,0x0065B830,0x00663490,tibsun,"functions compiled from src/scenario.cpp,
 unk_00663490,0x00663490,0x00663690,unknown,code not assigned to a module
 scheme,0x00663690,0x00663DF0,tibsun,"functions compiled from src/scheme.cpp, matched, without gaps"
 unk_00663DF0,0x00663DF0,0x00665E50,unknown,code not assigned to a module
-score,0x00665E50,0x00668300,tibsun,"functions compiled from src/score.cpp, matched, without gaps; two placed by the gap; ?Presentation@ScoreClass@@QAEXXZ not placed"
-unk_00668300,0x00668300,0x00668730,unknown,code not assigned to a module
+score,0x00665E50,0x00668370,tibsun,"functions compiled from src/score.cpp, matched, without gaps; two placed by the gap; ?Presentation@ScoreClass@@QAEXXZ not placed; two copies the compiler emitted after the last function"
+unk_00668370,0x00668370,0x00668730,unknown,code not assigned to a module
 script,0x00668730,0x006691A0,tibsun,"functions compiled from src/script.cpp, matched, without gaps; ten placed by the gap"
 unk_006691A0,0x006691A0,0x006695E0,unknown,code not assigned to a module
 scroll,0x006695E0,0x0066AC60,tibsun,"functions compiled from src/scroll.cpp, matched, without gaps"
@@ -545,8 +540,8 @@ sendfile,0x0066AEA0,0x0066C880,tibsun,"functions compiled from src/sendfile.cpp,
 unk_0066C880,0x0066C880,0x0066CA70,unknown,code not assigned to a module
 serialed,0x0066CA70,0x0066E0A0,tibsun,"functions compiled from src/serialed.cpp, matched, without gaps"
 unk_0066E0A0,0x0066E0A0,0x0066E290,unknown,code not assigned to a module
-session,0x0066E290,0x006737D0,tibsun,"functions compiled from src/session.cpp, without gaps; matched except ??0MultiMission@@QAE@PBDPBG0_N0HH@Z; two placed by the gap"
-unk_006737D0,0x006737D0,0x00674BF0,unknown,code not assigned to a module
+session,0x0066E290,0x00674070,tibsun,"functions compiled from src/session.cpp, without gaps; matched except ??0MultiMission@@QAE@PBDPBG0_N0HH@Z; two placed by the gap; 30 copies the compiler emitted after the last function"
+unk_00674070,0x00674070,0x00674BF0,unknown,code not assigned to a module
 sha,0x00674BF0,0x00675000,tibsun,"functions compiled from src/sha.cpp, matched, without gaps"
 unk_00675000,0x00675000,0x00675020,unknown,code not assigned to a module
 shapebtn,0x00675020,0x00675370,tibsun,"functions compiled from src/shapebtn.cpp, matched, without gaps; ?Is_Flash_On@ShapeButtonClass@@QAE_NXZ not placed"
@@ -556,8 +551,8 @@ shastraw,0x006753C0,0x00675410,tibsun,"functions compiled from src/shastraw.cpp,
 unk_00675410,0x00675410,0x00675600,unknown,code not assigned to a module
 ship,0x00675600,0x0067AB40,source,"functions compiled from src/ship.cpp, without gaps; matched except ?Draw_Matrix@ShipLocomotionClass@@UAG?AUMatrix3DStruct@@PAH@Z and ?While_Moving@ShipLocomotionClass@@AAE_N_N@Z and ?Start_Of_Move@ShipLocomotionClass@@AAE_NAA_N_N1@Z; six placed by the gap; ?Draw_Matrix@ShipLocomotionClass@@UAG?AUMatrix3DStruct@@PAH@Z and ?Start_Of_Move@ShipLocomotionClass@@AAE_NAA_N_N1@Z and ?While_Moving@ShipLocomotionClass@@AAE_N_N@Z placed at their function starts; ?AddRef@ShipLocomotionClass@@UAGKXZ not placed; ?Release@ShipLocomotionClass@@UAGKXZ not placed"
 unk_0067AB40,0x0067AB40,0x0067AE10,unknown,code not assigned to a module
-side,0x0067AE10,0x0067B1D0,tibsun,"functions compiled from src/side.cpp, matched, without gaps; two placed by the gap"
-unk_0067B1D0,0x0067B1D0,0x0067B6E0,unknown,code not assigned to a module
+side,0x0067AE10,0x0067B2C0,tibsun,"functions compiled from src/side.cpp, matched, without gaps; two placed by the gap; three copies the compiler emitted after the last function"
+unk_0067B2C0,0x0067B2C0,0x0067B6E0,unknown,code not assigned to a module
 sidebar,0x0067B6E0,0x006802D0,tibsun,"functions compiled from src/sidebar.cpp, without gaps; matched except ??0SidebarClass@@QAE@ABVNoInitClass@@@Z and ?AI@SidebarClass@@UAEXAAW4KeyNumType@@ABVPoint2D@@@Z and ?Activate@SidebarClass@@UAE_NH@Z and ?Draw_It@StripClass@SidebarClass@@QAEX_N@Z; ??0SidebarClass@@QAE@ABVNoInitClass@@@Z and ?AI@SidebarClass@@UAEXAAW4KeyNumType@@ABVPoint2D@@@Z and ?Activate@SidebarClass@@UAE_NH@Z placed at their function starts; _$E7 not placed; _$E153 not placed; _$E150 not placed; _$E159 not placed; _$E156 not placed; _$E164 not placed; _$E162 not placed; _$E169 not placed; _$E167 not placed; _$E174 not placed; _$E172 not placed; _$E179 not placed; _$E177 not placed; _$E184 not placed; _$E182 not placed; ?Recalc@StripClass@SidebarClass@@QAE_NXZ not placed; ??0SelectClass@StripClass@SidebarClass@@QAE@XZ not placed; ?Set_Owner@SelectClass@StripClass@SidebarClass@@QAEXAAV23@H@Z not placed; ?Action@SelectClass@StripClass@SidebarClass@@MAEHIAAW4KeyNumType@@@Z not placed; ?Action@SBGadgetClass@SidebarClass@@MAEHIAAW4KeyNumType@@@Z not placed; ?Factory_Link@StripClass@SidebarClass@@QAE_NPAVFactoryClass@@W4RTTIType@@H@Z not placed; ?Has_Buildables@StripClass@SidebarClass@@QBE_NXZ not placed; ?Abandon_Production@SidebarClass@@QAE_NW4RTTIType@@PAVFactoryClass@@@Z not placed; ?Abandon_Production@StripClass@SidebarClass@@QAE_NPBVFactoryClass@@@Z not placed; ?Zoom_Mode_Control@SidebarClass@@QAEXXZ not placed; ?First_Used_Column@SidebarClass@@QAEHXZ not placed; ?Reposition_Sidebar@SidebarClass@@UAEXXZ not placed; ?Help_Text@SidebarClass@@UAEPBDH@Z not placed; ?Get_Row_Count@SidebarClass@@QAEHXZ not placed; ?Get_Doubled_Row_Count@SidebarClass@@QAEHXZ not placed; ?Print_Cameo_Text@@YIXPBGABVPoint2D@@ABV?$TRect@H@@H@Z not placed; ?Load@SidebarClass@@UAEJPAUIStream@@@Z not placed; ?Save@SidebarClass@@UAEJPAUIStream@@@Z not placed; ?Set_Flash@StripClass@SidebarClass@@QAEXHH@Z not placed; ?Reload_Sidebar@SidebarClass@@QAEXXZ not placed; ?Which_Column@SidebarClass@@AAEHW4RTTIType@@@Z not placed; ?Activate_Upgrade@SidebarClass@@AAE_NH@Z not placed; ?Abandon_Production@SidebarClass@@QAE_NW4RTTIType@@HPAVFactoryClass@@@Z not placed; ?Sidebar_Which_Tab_By_Category@@YIHW4RTTIType@@H_N@Z not placed"
 unk_006802D0,0x006802D0,0x006809D0,unknown,code not assigned to a module
 unk_006809D0,0x006809D0,0x006809F0,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
@@ -568,8 +563,8 @@ skirmish,0x006827F0,0x006846C0,tibsun,"functions compiled from src/skirmish.cpp,
 unk_006846C0,0x006846C0,0x006846E0,unknown,code not assigned to a module
 slider,0x006846E0,0x00684D50,tibsun,"functions compiled from src/slider.cpp, matched, without gaps"
 unk_00684D50,0x00684D50,0x00684FC0,unknown,code not assigned to a module
-smartdeform,0x00684FC0,0x00686F40,tibsun,"functions compiled from src/smartdeform.cpp, matched, without gaps"
-unk_00686F40,0x00686F40,0x006875C0,unknown,code not assigned to a module
+smartdeform,0x00684FC0,0x006872F0,tibsun,"functions compiled from src/smartdeform.cpp, matched, without gaps; nine copies the compiler emitted after the last function"
+unk_006872F0,0x006872F0,0x006875C0,unknown,code not assigned to a module
 smudge,0x006875C0,0x00687AB0,tibsun,"functions compiled from src/smudge.cpp, matched, without gaps; six placed by the gap; ?GetClassID@SmudgeClass@@UAGJPAU_GUID@@@Z not placed"
 unk_00687AB0,0x00687AB0,0x00687DA0,unknown,code not assigned to a module
 smudtype,0x00687DA0,0x00688BF0,tibsun,"functions compiled from src/smudtype.cpp, matched, without gaps; six placed by the gap"
@@ -587,8 +582,8 @@ unk_0068CCE0,0x0068CCE0,0x0068DBC0,unknown,code not assigned to a module
 startup,0x0068DBC0,0x006913F0,tibsun,"functions compiled from src/startup.cpp, without gaps; matched except ?Prog_End@@YAXXZ and _WinMain@16; ?Prog_End@@YAXXZ and _WinMain@16 placed at their function starts"
 unk_006913F0,0x006913F0,0x006915B0,unknown,code not assigned to a module
 unk_006915B0,0x006915B0,0x00698760,unknown,code not assigned to a module
-statbtn,0x00698760,0x00698AA0,tibsun,"functions compiled from src/statbtn.cpp, matched, without gaps"
-unk_00698AA0,0x00698AA0,0x00698D00,unknown,code not assigned to a module
+statbtn,0x00698760,0x00698AE0,tibsun,"functions compiled from src/statbtn.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_00698AE0,0x00698AE0,0x00698D00,unknown,code not assigned to a module
 stats,0x00698D00,0x0069A180,tibsun,"functions compiled from src/stats.cpp, matched, without gaps"
 unk_0069A180,0x0069A180,0x0069A1A0,unknown,code not assigned to a module
 stbuffer,0x0069A1A0,0x0069A430,tibsun,"functions compiled from src/stbuffer.cpp, matched, without gaps"
@@ -600,8 +595,8 @@ unk_0069B170,0x0069B170,0x0069B190,unknown,code not assigned to a module
 subtitle,0x0069B190,0x0069B680,source,"functions compiled from src/subtitle.cpp, matched, without gaps"
 subtitle2,0x0069B680,0x0069C180,source,"functions compiled from src/subtitle2.cpp, matched, without gaps; one placed by the gap; inline ?Clear@?$DynamicVectorClass@PAVSubTitle@@@@UAEXXZ at 0x0069BF80; inline ?ID@?$DynamicVectorClass@PAVSubTitle@@@@UAEHPBQAVSubTitle@@@Z at 0x0069BFB0; inline ?GetItem@?$VectorClass@PAVSubTitle@@@@UBEPAVSubTitle@@H@Z at 0x0069BFD0; inline ??8?$VectorClass@PAVSubTitle@@@@UBE_NABV0@@Z at 0x0069BFE0; inline ?Resize@?$DynamicVectorClass@PAVSubTitle@@@@UAE_NHPBQAVSubTitle@@@Z at 0x0069C020; inline ?ID@?$DynamicVectorClass@PAVSubTitle@@@@UAEHABQAVSubTitle@@@Z at 0x0069C0D0"
 unk_0069C180,0x0069C180,0x0069C660,unknown,code not assigned to a module
-super,0x0069C660,0x0069ECA0,tibsun,"functions compiled from src/super.cpp, without gaps; matched except ?Discharged@SuperClass@@QAE_N_NABVCell@@@Z and ?Place@SuperClass@@QAEXABVCell@@_N@Z; three placed by the gap"
-unk_0069ECA0,0x0069ECA0,0x0069F000,unknown,code not assigned to a module
+super,0x0069C660,0x0069ED20,tibsun,"functions compiled from src/super.cpp, without gaps; matched except ?Discharged@SuperClass@@QAE_N_NABVCell@@@Z and ?Place@SuperClass@@QAEXABVCell@@_N@Z; three placed by the gap; five copies the compiler emitted after the last function"
+unk_0069ED20,0x0069ED20,0x0069F000,unknown,code not assigned to a module
 suprtype,0x0069F000,0x0069F8C0,tibsun,"functions compiled from src/suprtype.cpp, matched, without gaps; five placed by the gap; ?Special_From_Name@@YI?AW4SuperWeaponType@@PBD@Z not placed"
 unk_0069F8C0,0x0069F8C0,0x0069F950,unknown,code not assigned to a module
 swizzle,0x0069F950,0x0069FD90,tibsun,"functions compiled from src/swizzle.cpp, matched, without gaps; two placed by the gap"
@@ -610,8 +605,8 @@ tab,0x006A0540,0x006A20C0,tibsun,"functions compiled from src/tab.cpp, matched, 
 unk_006A20C0,0x006A20C0,0x006A24B0,unknown,code not assigned to a module
 tactical,0x006A24B0,0x006AC7E0,tibsun,"functions compiled from src/tactical.cpp, without gaps; matched except ?Draw_Shroud@Tactical@@QAEXABV?$TRect@H@@@Z and ?Draw_Tile_Shadows@Tactical@@QAEXABV?$TRect@H@@0@Z and ?Flag_Cell@Tactical@@QAEXAAVCellClass@@@Z and ?Render@Tactical@@QAEXAAVSurface@@_NH@Z and ?Draw_Fence_Placement@Tactical@@QAEX_NVCell@@@Z and ?Draw_Firestorm_Wall_Placement@Tactical@@QAEX_NVCell@@@Z and ?Pixel_To_Cell@Tactical@@QAE?AVCell@@ABVPoint2D@@@Z and ?Draw_Tiles@Tactical@@QAEXABVCell@@ABV?$TRect@H@@@Z and ?Draw_Pixel_Effects@Tactical@@QAEXABV?$TRect@H@@0@Z and ?Draw_Radial_Indicators@Tactical@@SIXXZ and ??0Tactical@@QAE@XZ; one placed by the gap; ?Draw_Fence_Placement@Tactical@@QAEX_NVCell@@@Z and ?Draw_Firestorm_Wall_Placement@Tactical@@QAEX_NVCell@@@Z and ?Draw_Pixel_Effects@Tactical@@QAEXABV?$TRect@H@@0@Z and ?Draw_Radial_Indicators@Tactical@@SIXXZ and ?Draw_Shroud@Tactical@@QAEXABV?$TRect@H@@@Z and ?Draw_Tile_Shadows@Tactical@@QAEXABV?$TRect@H@@0@Z and ?Draw_Tiles@Tactical@@QAEXABVCell@@ABV?$TRect@H@@@Z and ?Flag_Cell@Tactical@@QAEXAAVCellClass@@@Z and ?Pixel_To_Cell@Tactical@@QAE?AVCell@@ABVPoint2D@@@Z and ?Render@Tactical@@QAEXAAVSurface@@_NH@Z placed at their function starts; ?Tactical_noop@@YIXHHHH@Z not placed; ?Noop@Tactical@@QAEXH@Z not placed; ?Rectangular_To_Isometric@Tactical@@SIXHHAAH0@Z not placed; inline ?Tactical_noop@@YIXHHHH@Z at 0x006A33E0; inline ?Rectangular_To_Isometric@Tactical@@SIXHHAAH0@Z at 0x006A6800; inline ?Noop@Tactical@@QAEXH@Z at 0x006AA980"
 unk_006AC7E0,0x006AC7E0,0x006AD4F0,unknown,code not assigned to a module
-taction,0x006AD4F0,0x006B30A0,tibsun,"functions compiled from src/taction.cpp, without gaps; matched except ??RTActionClass@@QAE_NPAVHouseClass@@PAVObjectClass@@PAVTriggerClass@@ABVCell@@@Z; 16 placed by the gap; ??RTActionClass@@QAE_NPAVHouseClass@@PAVObjectClass@@PAVTriggerClass@@ABVCell@@@Z placed at their function starts; ??0TActionClass@@QAE@XZ not placed"
-unk_006B30A0,0x006B30A0,0x006B3870,unknown,code not assigned to a module
+taction,0x006AD4F0,0x006B3300,tibsun,"functions compiled from src/taction.cpp, without gaps; matched except ??RTActionClass@@QAE_NPAVHouseClass@@PAVObjectClass@@PAVTriggerClass@@ABVCell@@@Z; 16 placed by the gap; ??RTActionClass@@QAE_NPAVHouseClass@@PAVObjectClass@@PAVTriggerClass@@ABVCell@@@Z placed at their function starts; ??0TActionClass@@QAE@XZ not placed; ten copies the compiler emitted after the last function"
+unk_006B3300,0x006B3300,0x006B3870,unknown,code not assigned to a module
 tag,0x006B3870,0x006B42C0,tibsun,"functions compiled from src/tag.cpp, matched, without gaps; 13 placed by the gap"
 unk_006B42C0,0x006B42C0,0x006B4570,unknown,code not assigned to a module
 tagtype,0x006B4570,0x006B4EA0,tibsun,"functions compiled from src/tagtype.cpp, matched, without gaps; six placed by the gap"
@@ -629,8 +624,8 @@ techno,0x006C0CD0,0x006D9750,tibsun,"functions compiled from src/techno.cpp, wit
 unk_006D9750,0x006D9750,0x006D9B40,unknown,code not assigned to a module
 techtype,0x006D9B40,0x006DF620,tibsun,"functions compiled from src/techtype.cpp, without gaps; matched except ?Read_INI@TechnoTypeClass@@UAE_NABVCCINIClass@@@Z and ??0TechnoTypeClass@@QAE@PBDW4SpeedType@@@Z; one placed by the gap; ?Read_INI@TechnoTypeClass@@UAE_NABVCCINIClass@@@Z placed at their function starts; ?In_Range@TechnoTypeClass@@QBE_NABVCoord@@PAVAbstractClass@@PAVWeaponTypeClass@@@Z not placed; ?Set_Weapon@TechnoTypeClass@@QAEXABUWeaponDataStruct@@H@Z not placed"
 unk_006DF620,0x006DF620,0x006DFCA0,unknown,code not assigned to a module
-teleport,0x006DFCA0,0x006E1BF0,tibsun,"functions compiled from src/teleport.cpp, without gaps; matched except ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z; ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z placed at their function starts; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BA0; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BB0; inline ?Is_Piggybacking@TeleportLocomotionClass@@UAGEXZ at 0x006E1BC0"
-unk_006E1BF0,0x006E1BF0,0x006E1EF0,unknown,code not assigned to a module
+teleport,0x006DFCA0,0x006E1C20,tibsun,"functions compiled from src/teleport.cpp, without gaps; matched except ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z; ?Clear_Arrival@TeleportLocomotionClass@@QAE_NVCoord@@_N@Z placed at their function starts; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BA0; inline ?AddRef@TeleportLocomotionClass@@UAGKXZ at 0x006E1BB0; inline ?Is_Piggybacking@TeleportLocomotionClass@@UAGEXZ at 0x006E1BC0; one copy the compiler emitted after the last function"
+unk_006E1C20,0x006E1C20,0x006E1EF0,unknown,code not assigned to a module
 temporal,0x006E1EF0,0x006E2A20,source,"functions compiled from src/temporal.cpp, matched, without gaps; five placed by the gap"
 unk_006E2A20,0x006E2A20,0x006E3000,unknown,code not assigned to a module
 terrain,0x006E3000,0x006E4B10,tibsun,"functions compiled from src/terrain.cpp, without gaps; matched except ?Take_Damage@TerrainClass@@UAE?AW4ResultType@@AAHHPBVWarheadTypeClass@@PAVTechnoClass@@_N3@Z; one placed by the gap; ?GetClassID@TerrainClass@@UAGJPAU_GUID@@@Z not placed; ?Is_Animating@TerrainClass@@QBE_NXZ not placed"
@@ -650,8 +645,8 @@ tmission,0x006EAF60,0x006EB100,tibsun,"functions compiled from src/tmission.cpp,
 unk_006EB100,0x006EB100,0x006EB120,unknown,code not assigned to a module
 toggle,0x006EB120,0x006EB2C0,tibsun,"functions compiled from src/toggle.cpp, matched, without gaps"
 unk_006EB2C0,0x006EB2C0,0x006EB2E0,unknown,code not assigned to a module
-tooltip,0x006EB2E0,0x006EBEF0,tibsun,"functions compiled from src/tooltip.cpp, matched, without gaps; two placed by the gap"
-unk_006EBEF0,0x006EBEF0,0x006ECB90,unknown,code not assigned to a module
+tooltip,0x006EB2E0,0x006EC3A0,tibsun,"functions compiled from src/tooltip.cpp, matched, without gaps; two placed by the gap; 18 copies the compiler emitted after the last function"
+unk_006EC3A0,0x006EC3A0,0x006ECB90,unknown,code not assigned to a module
 tracker,0x006ECB90,0x006ED030,tibsun,"functions compiled from src/tracker.cpp, matched, without gaps"
 unk_006ED030,0x006ED030,0x006ED220,unknown,code not assigned to a module
 trigger,0x006ED220,0x006EDB80,tibsun,"functions compiled from src/trigger.cpp, matched, without gaps; ten placed by the gap"
@@ -660,8 +655,8 @@ trigtype,0x006EDEB0,0x006EEEC0,tibsun,"functions compiled from src/trigtype.cpp,
 unk_006EEEC0,0x006EEEC0,0x006EEF10,unknown,code not assigned to a module
 trim,0x006EEF10,0x006EEF80,tibsun,"functions compiled from src/trim.cpp, matched, without gaps"
 unk_006EEF80,0x006EEF80,0x006EF1D0,unknown,code not assigned to a module
-tube,0x006EF1D0,0x006EF910,tibsun,"functions compiled from src/tube.cpp, matched, without gaps; two placed by the gap"
-unk_006EF910,0x006EF910,0x006EFBE0,unknown,code not assigned to a module
+tube,0x006EF1D0,0x006EF9F0,tibsun,"functions compiled from src/tube.cpp, matched, without gaps; two placed by the gap; one copy the compiler emitted after the last function"
+unk_006EF9F0,0x006EF9F0,0x006EFBE0,unknown,code not assigned to a module
 tunnel,0x006EFBE0,0x006F13A0,tibsun,"functions compiled from src/tunnel.cpp, without gaps; matched except ?Process_Tunneling@TunnelLocomotionClass@@QAEXXZ; three placed by the gap"
 unk_006F13A0,0x006F13A0,0x006F15C0,unknown,code not assigned to a module
 txtlabel,0x006F15C0,0x006F1620,tibsun,"functions compiled from src/txtlabel.cpp, matched, without gaps; ?Draw_Me@TextLabelClass@@UAEHH@Z not placed"
@@ -682,20 +677,19 @@ utracker,0x0070C440,0x0070C610,tibsun,"functions compiled from src/utracker.cpp,
 unk_0070C610,0x0070C610,0x0070C800,unknown,code not assigned to a module
 vanim,0x0070C800,0x0070DF90,tibsun,"functions compiled from src/vanim.cpp, without gaps; matched except ??0VoxelAnimClass@@QAE@PBVVoxelAnimTypeClass@@ABVCoord@@PAVHouseClass@@@Z and ?AI@VoxelAnimClass@@UAEXXZ"
 unk_0070DF90,0x0070DF90,0x0070E1A0,unknown,code not assigned to a module
-vanimtype,0x0070E1A0,0x0070EE10,tibsun,"functions compiled from src/vanimtype.cpp, matched, without gaps; four placed by the gap"
-unk_0070EE10,0x0070EE10,0x0070EFC0,unknown,code not assigned to a module
+vanimtype,0x0070E1A0,0x0070EFC0,tibsun,"functions compiled from src/vanimtype.cpp, matched, without gaps; four placed by the gap; six copies the compiler emitted after the last function"
 vector,0x0070EFC0,0x0070F3B0,tibsun,"functions compiled from src/vector.cpp, matched, without gaps"
 unk_0070F3B0,0x0070F3B0,0x0070F820,unknown,code not assigned to a module
-vein,0x0070F820,0x00712700,tibsun,"functions compiled from src/vein.cpp, matched, without gaps; four placed by the gap"
-unk_00712700,0x00712700,0x00712B20,unknown,code not assigned to a module
+vein,0x0070F820,0x00712A40,tibsun,"functions compiled from src/vein.cpp, matched, without gaps; four placed by the gap; 15 copies the compiler emitted after the last function"
+unk_00712A40,0x00712A40,0x00712B20,unknown,code not assigned to a module
 version,0x00712B20,0x00713300,tibsun,"functions compiled from src/version.cpp, matched, without gaps; two placed by the gap"
 unk_00713300,0x00713300,0x00713360,unknown,code not assigned to a module
 veteran,0x00713360,0x007135A0,tibsun,"functions compiled from src/veteran.cpp, matched, without gaps; three placed by the gap; ?Ability_From_Name@@YI?AW4AbilityType@@PBD@Z not placed; ??0VeterancyClass@@QAE@XZ not placed; ??1VeterancyClass@@QAE@XZ not placed"
 unk_007135A0,0x007135A0,0x00713810,unknown,code not assigned to a module
 voc,0x00713810,0x00714D30,tibsun,"functions compiled from src/voc.cpp, matched, without gaps; two placed by the gap"
 unk_00714D30,0x00714D30,0x00715090,unknown,code not assigned to a module
-volinfo,0x00715090,0x00715230,tibsun,"functions compiled from src/volinfo.cpp, matched, without gaps"
-unk_00715230,0x00715230,0x007156D0,unknown,code not assigned to a module
+volinfo,0x00715090,0x00715480,tibsun,"functions compiled from src/volinfo.cpp, matched, without gaps; two copies the compiler emitted after the last function"
+unk_00715480,0x00715480,0x007156D0,unknown,code not assigned to a module
 vox,0x007156D0,0x00716A20,tibsun,"functions compiled from src/vox.cpp, matched, without gaps; nine placed by the gap"
 unk_00716A20,0x00716A20,0x00716EE0,unknown,code not assigned to a module
 unk_00716EE0,0x00716EE0,0x00716F10,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
@@ -711,46 +705,46 @@ vqa,0x0071C590,0x0071D790,tibsun,"functions compiled from src/vqa.cpp, matched, 
 unk_0071D790,0x0071D790,0x0071DB20,unknown,code not assigned to a module
 vqoption,0x0071DB20,0x0071DC10,tibsun,"functions compiled from src/vqoption.cpp, matched, without gaps"
 unk_0071DC10,0x0071DC10,0x0071DE00,unknown,code not assigned to a module
-walk,0x0071DE00,0x0071FDE0,tibsun,"functions compiled from src/walk.cpp, without gaps; matched except ?Movement_AI@WalkLocomotionClass@@QAEX_N@Z; six placed by the gap"
-unk_0071FDE0,0x0071FDE0,0x007200C0,unknown,code not assigned to a module
-warhead,0x007200C0,0x00721090,tibsun,"functions compiled from src/warhead.cpp, matched, without gaps; two placed by the gap"
-unk_00721090,0x00721090,0x007213A0,unknown,code not assigned to a module
-wave,0x007213A0,0x00724600,tibsun,"functions compiled from src/wave.cpp, without gaps; matched except ?Load@WaveClass@@UAGJPAUIStream@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z; four placed by the gap; ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z placed where matched code calls them; ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z placed at their function starts"
-unk_00724600,0x00724600,0x007249F0,unknown,code not assigned to a module
-waypoint,0x007249F0,0x00725200,tibsun,"functions compiled from src/waypoint.cpp, matched, without gaps; _$E5 and _$E3 not placed; four placed by the gap"
-unk_00725200,0x00725200,0x00725DE0,unknown,code not assigned to a module
-wdtcampaign,0x00725DE0,0x007269B0,tibsun,"functions compiled from src/wdtcampaign.cpp, matched, without gaps"
-unk_007269B0,0x007269B0,0x007273A0,unknown,code not assigned to a module
-wdtconflict,0x007273A0,0x00727B90,tibsun,"functions compiled from src/wdtconflict.cpp, matched, without gaps; two placed by the gap; ?Create@Conflict@WorldDominationTour@@SI?AV?$rc_ptr@VConflict@WorldDominationTour@@@@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; ??0Conflict@WorldDominationTour@@QAE@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; inline ??_GConflict@WorldDominationTour@@UAEPAXI@Z at 0x00727B30"
-unk_00727B90,0x00727B90,0x00728670,unknown,code not assigned to a module
-wdtgameoptions,0x00728670,0x00728BF0,tibsun,"functions compiled from src/wdtgameoptions.cpp, matched, without gaps; one placed by the gap"
-unk_00728BF0,0x00728BF0,0x00728E50,unknown,code not assigned to a module
+walk,0x0071DE00,0x0071FE90,tibsun,"functions compiled from src/walk.cpp, without gaps; matched except ?Movement_AI@WalkLocomotionClass@@QAEX_N@Z; six placed by the gap; six copies the compiler emitted after the last function"
+unk_0071FE90,0x0071FE90,0x007200C0,unknown,code not assigned to a module
+warhead,0x007200C0,0x007211B0,tibsun,"functions compiled from src/warhead.cpp, matched, without gaps; two placed by the gap; one copy the compiler emitted after the last function"
+unk_007211B0,0x007211B0,0x007213A0,unknown,code not assigned to a module
+wave,0x007213A0,0x007246D0,tibsun,"functions compiled from src/wave.cpp, without gaps; matched except ?Load@WaveClass@@UAGJPAUIStream@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z; four placed by the gap; ?Draw_Laser@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z and ?Draw_Sonic@WaveClass@@QAEXABVPoint2D@@ABV?$TRect@H@@@Z placed where matched code calls them; ?Build_Wave_Shape@WaveClass@@AAEXABVCoord@@0@Z placed at their function starts; one copy the compiler emitted after the last function"
+unk_007246D0,0x007246D0,0x007249F0,unknown,code not assigned to a module
+waypoint,0x007249F0,0x00725BF0,tibsun,"functions compiled from src/waypoint.cpp, matched, without gaps; _$E5 and _$E3 not placed; four placed by the gap; 26 copies the compiler emitted after the last function"
+unk_00725BF0,0x00725BF0,0x00725DE0,unknown,code not assigned to a module
+wdtcampaign,0x00725DE0,0x00726A30,tibsun,"functions compiled from src/wdtcampaign.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_00726A30,0x00726A30,0x007273A0,unknown,code not assigned to a module
+wdtconflict,0x007273A0,0x00727C80,tibsun,"functions compiled from src/wdtconflict.cpp, matched, without gaps; two placed by the gap; ?Create@Conflict@WorldDominationTour@@SI?AV?$rc_ptr@VConflict@WorldDominationTour@@@@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; ??0Conflict@WorldDominationTour@@QAE@ABV?$rc_ptr@VWDTTerritory@@@@@Z not placed; inline ??_GConflict@WorldDominationTour@@UAEPAXI@Z at 0x00727B30; four copies the compiler emitted after the last function"
+unk_00727C80,0x00727C80,0x00728670,unknown,code not assigned to a module
+wdtgameoptions,0x00728670,0x00728C30,tibsun,"functions compiled from src/wdtgameoptions.cpp, matched, without gaps; one placed by the gap; one copy the compiler emitted after the last function"
+unk_00728C30,0x00728C30,0x00728E50,unknown,code not assigned to a module
 wdthistory,0x00728E50,0x00728F60,tibsun,"functions compiled from src/wdthistory.cpp, matched, without gaps"
 unk_00728F60,0x00728F60,0x007291C0,unknown,code not assigned to a module
 wdtmap,0x007291C0,0x0072A880,tibsun,"functions compiled from src/wdtmap.cpp, without gaps; matched except ?Load@Map@WorldDominationTour@@QAEXAAVINIClass@@PAVMSEngine@@H@Z; two placed by the gap; ?WDT_Write_Map_Ini@@YIXABVWstring@@0@Z not placed"
 unk_0072A880,0x0072A880,0x0072BDC0,unknown,code not assigned to a module
 wdtnet,0x0072BDC0,0x0072C9D0,tibsun,"functions compiled from src/wdtnet.cpp, matched, without gaps; one placed by the gap; ?Get_Game_Options@WDTTerritory@@QAEPAUGameOptionsType@@XZ not placed; ?To_String@WDTState@@QAEPADXZ not placed; ?To_String@WDTTerritory@@QAEPADXZ not placed"
 unk_0072C9D0,0x0072C9D0,0x0072D990,unknown,code not assigned to a module
-wdtsel,0x0072D990,0x00730290,tibsun,"functions compiled from src/wdtsel.cpp, without gaps; matched except ?Pick_Territory@Selection@WorldDominationTour@@QAE?AV?$rc_ptr@VTerritory@WorldDominationTour@@@@XZ and ?Do_Target_Anim@Selection@WorldDominationTour@@QAEXABV?$rc_ptr@VState@WorldDominationTour@@@@_N1@Z; two placed by the gap; ??0Selection@WorldDominationTour@@QAE@ABV?$rc_ptr@VCampaign@WorldDominationTour@@@@H@Z not placed"
-unk_00730290,0x00730290,0x00730700,unknown,code not assigned to a module
+wdtsel,0x0072D990,0x007302D0,tibsun,"functions compiled from src/wdtsel.cpp, without gaps; matched except ?Pick_Territory@Selection@WorldDominationTour@@QAE?AV?$rc_ptr@VTerritory@WorldDominationTour@@@@XZ and ?Do_Target_Anim@Selection@WorldDominationTour@@QAEXABV?$rc_ptr@VState@WorldDominationTour@@@@_N1@Z; two placed by the gap; ??0Selection@WorldDominationTour@@QAE@ABV?$rc_ptr@VCampaign@WorldDominationTour@@@@H@Z not placed; two copies the compiler emitted after the last function"
+unk_007302D0,0x007302D0,0x00730700,unknown,code not assigned to a module
 wdtstate,0x00730700,0x00730950,tibsun,"functions compiled from src/wdtstate.cpp, matched, without gaps"
 unk_00730950,0x00730950,0x00730B80,unknown,code not assigned to a module
-wdtterr,0x00730B80,0x00731290,tibsun,"functions compiled from src/wdtterr.cpp, matched, without gaps"
-unk_00731290,0x00731290,0x007314C0,unknown,code not assigned to a module
+wdtterr,0x00730B80,0x007312D0,tibsun,"functions compiled from src/wdtterr.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_007312D0,0x007312D0,0x007314C0,unknown,code not assigned to a module
 wdtvoice,0x007314C0,0x00732C30,tibsun,"functions compiled from src/wdtvoice.cpp, matched, without gaps; eight placed by the gap"
 unk_00732C30,0x00732C30,0x00732EA0,unknown,code not assigned to a module
-weapon,0x00732EA0,0x00733FE0,tibsun,"functions compiled from src/weapon.cpp, matched, without gaps; three placed by the gap"
-unk_00733FE0,0x00733FE0,0x00734120,unknown,code not assigned to a module
-wincomm,0x00734120,0x00735610,tibsun,"functions compiled from src/wincomm.cpp, matched, without gaps"
-unk_00735610,0x00735610,0x00735690,unknown,code not assigned to a module
+weapon,0x00732EA0,0x00734100,tibsun,"functions compiled from src/weapon.cpp, matched, without gaps; three placed by the gap; two copies the compiler emitted after the last function"
+unk_00734100,0x00734100,0x00734120,unknown,code not assigned to a module
+wincomm,0x00734120,0x00735670,tibsun,"functions compiled from src/wincomm.cpp, matched, without gaps; one copy the compiler emitted after the last function"
+unk_00735670,0x00735670,0x00735690,unknown,code not assigned to a module
 windlg,0x00735690,0x00736210,tibsun,"functions compiled from src/windlg.cpp, matched, without gaps; four placed by the gap"
 unk_00736210,0x00736210,0x00736230,unknown,code not assigned to a module
 winfix,0x00736230,0x007371B0,tibsun,"functions compiled from src/winfix.cpp, matched, without gaps; one placed by the gap"
 unk_007371B0,0x007371B0,0x007373A0,unknown,code not assigned to a module
 winstub,0x007373A0,0x00738420,tibsun,"functions compiled from src/winstub.cpp, matched, without gaps; eight placed by the gap"
 unk_00738420,0x00738420,0x00738670,unknown,code not assigned to a module
-wolpersonainformation,0x00738670,0x0073A090,source,"functions compiled from src/wolpersonainformation.cpp, matched, without gaps; eight placed by the gap"
-unk_0073A090,0x0073A090,0x0073A2E0,unknown,code not assigned to a module
+wolpersonainformation,0x00738670,0x0073A0C0,source,"functions compiled from src/wolpersonainformation.cpp, matched, without gaps; eight placed by the gap; one copy the compiler emitted after the last function"
+unk_0073A0C0,0x0073A0C0,0x0073A2E0,unknown,code not assigned to a module
 wolstart,0x0073A2E0,0x0073A680,source,"functions compiled from src/wolstart.cpp, matched, without gaps"
 unk_0073A680,0x0073A680,0x0073A8E0,unknown,code not assigned to a module
 unk_0073A8E0,0x0073A8E0,0x0073A900,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
@@ -759,16 +753,16 @@ wonline,0x0073C040,0x007424C0,tibsun,"functions compiled from src/wonline.cpp, w
 unk_007424C0,0x007424C0,0x00752710,unknown,code not assigned to a module
 unk_00752710,0x00752710,0x00752730,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
 unk_00752730,0x00752730,0x00768800,unknown,code not assigned to a module
-worlddom,0x00768800,0x00769740,tibsun,"functions compiled from src/worlddom.cpp, matched, without gaps; 11 placed by the gap; ?Faction_Name@@YIABVWstring@@H@Z not placed; _$E43 not placed; _$E42 not placed; _$E41 not placed; _$E40 not placed; ?Faction_Code@@YIABVWstring@@H@Z not placed; _$E48 not placed; _$E47 not placed; _$E46 not placed; _$E45 not placed"
-unk_00769740,0x00769740,0x007698C0,unknown,code not assigned to a module
+worlddom,0x00768800,0x007698A0,tibsun,"functions compiled from src/worlddom.cpp, matched, without gaps; 11 placed by the gap; ?Faction_Name@@YIABVWstring@@H@Z not placed; _$E43 not placed; _$E42 not placed; _$E41 not placed; _$E40 not placed; ?Faction_Code@@YIABVWstring@@H@Z not placed; _$E48 not placed; _$E47 not placed; _$E46 not placed; _$E45 not placed; two copies the compiler emitted after the last function"
+unk_007698A0,0x007698A0,0x007698C0,unknown,code not assigned to a module
 writepcx,0x007698C0,0x00769EA0,tibsun,"functions compiled from src/writepcx.cpp, matched, without gaps"
 unk_00769EA0,0x00769EA0,0x0076A070,unknown,code not assigned to a module
 wspipx,0x0076A070,0x0076AA00,tibsun,"functions compiled from src/wspipx.cpp, matched, without gaps"
 unk_0076AA00,0x0076AA00,0x0076AC80,unknown,code not assigned to a module
 wsproto,0x0076AC80,0x0076B9E0,tibsun,"functions compiled from src/wsproto.cpp, matched, without gaps"
 unk_0076B9E0,0x0076B9E0,0x0076C050,unknown,code not assigned to a module
-wspudp,0x0076C050,0x0076D460,tibsun,"functions compiled from src/wspudp.cpp, matched, without gaps; one placed by the gap"
-unk_0076D460,0x0076D460,0x0076D920,unknown,code not assigned to a module
+wspudp,0x0076C050,0x0076D5B0,tibsun,"functions compiled from src/wspudp.cpp, matched, without gaps; one placed by the gap; one copy the compiler emitted after the last function"
+unk_0076D5B0,0x0076D5B0,0x0076D920,unknown,code not assigned to a module
 wstring,0x0076D920,0x007717A0,tibsun,"functions compiled from src/wstring.cpp, without gaps; matched except ?removeChar@WideWstring@@QAEDG@Z and ?trimLeading@WideWstring@@QAEXABV1@@Z and ?trimTrailing@WideWstring@@QAEXABV1@@Z; 16 placed by the gap; ??0Wstring@@QAE@XZ not placed"
 unk_007717A0,0x007717A0,0x007717C0,unknown,code not assigned to a module
 wwmouse,0x007717C0,0x00773670,tibsun,"functions compiled from src/wwmouse.cpp, without gaps; matched except ?Show_Mouse@WWMouseClass@@UAEXXZ and ?Capture_Mouse@WWMouseClass@@UAEXXZ; ?Capture_Mouse@WWMouseClass@@UAEXXZ and ?Show_Mouse@WWMouseClass@@UAEXXZ placed at their function starts"
@@ -776,8 +770,8 @@ unk_00773670,0x00773670,0x00773730,unknown,code not assigned to a module
 xpipe,0x00773730,0x00773840,tibsun,"functions compiled from src/xpipe.cpp, matched, without gaps"
 xstraw,0x00773840,0x00773930,tibsun,"functions compiled from src/xstraw.cpp, matched, without gaps"
 unk_00773930,0x00773930,0x00773950,unknown,code not assigned to a module
-xsurface,0x00773950,0x00775980,tibsun,"functions compiled from src/xsurface.cpp, without gaps; matched except ?Plot_Line@XSurface@@UAE_NABV?$TRect@H@@AAVPoint2D@@1P6IXABV3@@Z@Z and ?Draw_Ellipse@XSurface@@UAE_NVPoint2D@@HHV?$TRect@H@@H@Z; five placed by definition order; three placed by the gap"
-unk_00775980,0x00775980,0x00775B80,unknown,code not assigned to a module
+xsurface,0x00773950,0x00775B30,tibsun,"functions compiled from src/xsurface.cpp, without gaps; matched except ?Plot_Line@XSurface@@UAE_NABV?$TRect@H@@AAVPoint2D@@1P6IXABV3@@Z@Z and ?Draw_Ellipse@XSurface@@UAE_NVPoint2D@@HHV?$TRect@H@@H@Z; five placed by definition order; three placed by the gap; 11 copies the compiler emitted after the last function"
+unk_00775B30,0x00775B30,0x00775B80,unknown,code not assigned to a module
 zbuffer,0x00775B80,0x00776380,tibsun,"functions compiled from src/zbuffer.cpp, matched, without gaps"
 vqalib_audio,0x00776380,0x007768A0,source,"functions compiled from src/vqalib_audio.cpp, matched, without gaps"
 vqalib_buffer_,0x007768A0,0x00777850,source,"functions compiled from src/vqalib_buffer_.cpp, matched, without gaps"
