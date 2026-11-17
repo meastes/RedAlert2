@@ -11,434 +11,215 @@
  * disclaimers apply; see LICENSE.md.
  ******************************************************************************/
 
-/* $Header: /CounterStrike/NETDLG.CPP 13    10/13/97 2:20p Steve_t $ */
-/***********************************************************************************************
- ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
- ***********************************************************************************************
- *                                                                                             *
- *                 Project Name : Command & Conquer                                            *
- *                                                                                             *
- *                    File Name : NETDLG.CPP                                                   *
- *                                                                                             *
- *                   Programmer : Bill Randolph                                                *
- *                                                                                             *
- *                   Start Date : January 23, 1995                                             *
- *                                                                                             *
- *                  Last Update : December 12, 1995 [BRR]                                      *
- *                                                                                             *
- *---------------------------------------------------------------------------------------------*
- *                                                                                             *
- * These routines establish & maintain peer-to-peer connections between this system            *
- * and all others in the game.  Each system finds out the IPX address of the others,           *
- * and forms a direct connection (IPXConnectionClass) to that system.  Systems are             *
- * found out via broadcast queries.  Every system broadcasts its queries, and every            *
- * system replies to queries it receives.  At the point when the game owner signals            *
- * 'OK', every system must know about all the other systems in the game.                       *
- *                                                                                             *
- * How Bridges are handled:                                                                    *
- * Currently, bridges are handled by specifying the destination IPX address of the             *
- * "server" (game owner's system) on the command-line.  This address is used to                *
- * derive a broadcast address to that destination network, and this system's queries           *
- * are broadcast over its network & the server's network; replies to the queries come          *
- * with each system's IPX address attached, so once we have the address, we can form           *
- * a connection with any system on the bridged net.                                            *
- *                                                                                             *
- * The flaw in this plan is that we can only cross one bridge.  If there are 3 nets            *
- * bridged (A, B, & C), and the server is on net B, and we're on net A, our broadcasts         *
- * will reach nets A & B, but not C.  The way to circumvent this (if it becomes a problem)     *
- * would be to have the server tell us what other systems are in its game, not each            *
- * individual player's system.  Thus, each system would find out about all the other systems   *
- * by interacting with the game's owner system (this would be more involved than what          *
- * I'm doing here).                                                                            *
- *                                                                                             *
- * Here's a list of all the different packets sent over the Global Channel:                    *
- *                                                                                             *
- * NET_QUERY_GAME                                                                              *
- *                   (no other data)                                                           *
- * NET_ANSWER_GAME                                                                             *
- *                   Name:             game owner's name                                       *
- *                   GameInfo:         game's version & open state                             *
- * NET_QUERY_PLAYER                                                                            *
- *                   Name:             name of game we want players to respond for             *
- * NET_ANSWER_PLAYER                                                                           *
- *                   Name:             player's name                                           *
- *                   PlayerInfo:       info about player                                       *
- * NET_CHAT_ANNOUNCE                                                                           *
- *                   Chat:             unique id of the local node, so I can tell              *
- *                                     if this chat announcement is from myself                *
- * NET_QUERY_JOIN                                                                              *
- *                   Name:             name of player wanting to join                          *
- *                   PlayerInfo:       player's requested house, color, & version range        *
- * NET_CONFIRM_JOIN                                                                            *
- *                   PlayerInfo:       approves player's house & color                         *
- * NET_REJECT_JOIN                                                                             *
- *                   Reject.Why:       tells why we got rejected                               *
- * NET_GAME_OPTIONS                                                                            *
- *                   ScenarioInfo:     info about scenario                                     *
- * NET_SIGN_OFF                                                                                *
- *                   Name:             name of player signing off                              *
- * NET_PING                                                                                    *
- *                   (no other data)                                                           *
- * NET_GO                                                                                      *
- *                   Delay:            value of one-way response time, in frames               *
- *                                                                                             *
- *---------------------------------------------------------------------------------------------*
- * Functions:                                                                                  *
- *   Init_Network -- initializes network stuff                                                 *
- *   Shutdown_Network -- shuts down network stuff                                              *
- *   Process_Global_Packet -- responds to remote queries                                       *
- *   Destroy_Connection -- destroys the given connection                                       *
- *   Remote_Connect -- handles connecting this user to others                                  *
- *   Net_Join_Dialog -- lets user join an existing game, or start a new one                    *
- *   Request_To_Join -- Sends a JOIN request packet to game owner                              *
- *   Unjoin_Game -- Cancels joining a game                                                     *
- *   Send_Join_Queries -- sends queries for the Join Dialog                                    *
- *   Get_Join_Responses -- sends queries for the Join Dialog                                   *
- *   Net_New_Dialog -- lets user start a new game                                              *
- *   Get_NewGame_Responses -- processes packets for New Game dialog                            *
- *   Compute_Name_CRC -- computes CRC from char string                                         *
- *   Net_Reconnect_Dialog -- Draws/updates the network reconnect dialog                        *
- * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-//   Warning - Most disgusting cpp file of all time. ajw
-
-#include "always.h"
-
-#include "netdlg.h"
-
-#include "_map.h"
-#include "_rules.h"
-#include "data.h"
-#include "dbgprint.h"
-#include "globals.h"
-#include "houstype.h"
-#include "ipxmgr.h"
-#include "language\language.h"
-#include "list.h"
-#include "nulldlg.h"
-#include "queue.h"
-#include "rules.h"
-#include "wonline.h"
-#include "wsproto.h"
-
-#include <ctime>
-
-class ListClass;
-class ColorListClass;
-
-//#define SHOW_MONO		0			// Replaced with _DEBUG
-//#define OLDWAY			1
-
 /*
-******************************** Prototypes *********************************
+**	RA2: the network setup helpers of Tiberian Sun's NETDLG.CPP that RA2 still has at 0x005BB540:
+**	starting and stopping the packet transport, dropping a player's connection, the CRC of a game
+**	name and clearing a list box. RA2 moved the dialogs of that file to netdlg2.cpp.
 */
-static int Net_Join_Dialog(void);
-static int Request_To_Join (char *playername, int join_index,
-	HousesType house, int color);
-static void Unjoin_Game(char *namebuf,JoinStateType joinstate,
-	ListClass *gamelist, ColorListClass *playerlist, int game_index,
-	int goto_lobby, int msg_x, int msg_y, int msg_h, int send_x, int send_y,
-	int msg_len);
-static void Send_Join_Queries(int curgame, JoinStateType joinstate,
-	int gamenow, int playernow, int chatnow, char *myname, int init = 0);
-static JoinEventType Get_Join_Responses(JoinStateType *joinstate,
-	ListClass *gamelist, ColorListClass *playerlist, int join_index,
-	char *my_name, RejectType *why);
-static int Net_New_Dialog(void);
-static JoinEventType Get_NewGame_Responses(ColorListClass *playerlist,
-	int *color_used);
-void Start_WWChat(ColorListClass *playerlist);
-int Update_WWChat(void);
 
+#include "always.h" // RA2: the includes this file needs
+#include <string.h> // RA2: the includes this file needs
+#include <stdio.h> // RA2: the includes this file needs
+#include <wchar.h> // RA2: the includes this file needs
+#undef LoadString // RA2: as above
+#include "_map.h" // RA2: the includes this file needs
+#include "_rules.h" // RA2: the includes this file needs
+#include "dbgprint.h" // RA2: the includes this file needs
+#include "event.h" // RA2: the includes this file needs
+#include "globals.h" // RA2: the includes this file needs
+#include "house.h" // RA2: the includes this file needs
+#include "houstype.h" // RA2: the includes this file needs
+#include "ipxmgr.h" // RA2: the includes this file needs
+#include "list.h" // RA2: the includes this file needs
+#include "msglist.h" // RA2: the includes this file needs
+#include "netdlg.h"
+#include "ownertalk.h" // RA2: OwnerTalk
+#include "queue.h" // RA2: Add_CRC and OutList
+#include "rules.h" // RA2: the includes this file needs
+#include "session.h" // RA2: the includes this file needs
+#include "stringtable.h" // RA2: the includes this file needs
+#include "wonline.h" // RA2: WestwoodOnline_Tournament
+#include "wsproto.h" // RA2: PacketTransport, deleted by Shutdown_Network
 
-#define PCOLOR_BROWN	PCOLOR_GREY
-
-
-/***********************************************************************************************
- * Init_Network -- initializes network stuff                                                   *
- *                                                                                             *
- * INPUT:                                                                                      *
- *      none.                                                                                  *
- *                                                                                             *
- * OUTPUT:                                                                                     *
- *      true = Initialization OK, false = error                                                *
- *                                                                                             *
- * WARNINGS:                                                                                   *
- *      none.                                                                                  *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   02/14/1995 BR : Created.                                                                  *
- *=============================================================================================*/
-bool Init_Network (void)
+/// <summary>
+/// Initializes network stuff: starts IPX and, when a bridge was given on the command line, tells it which network lies behind it.
+/// </summary>
+bool Init_Network(void)
 {
 	NetNumType net;
 	NetNodeType node;
 
-	assert ( PacketTransport != NULL );
-
-	//------------------------------------------------------------------------
-	// This call allocates all necessary queue buffers, allocates Real-mode
-	// memory, and commands IPX to start listening on the Global Channel.
-	//------------------------------------------------------------------------
-	if (!Ipx.Init()) {
+	if (!Ipx.Init()) { // RA2: no assert on PacketTransport; Init alone is called (0x005251C0)
 		return(false);
 	}
 
-	//------------------------------------------------------------------------
-	// Set up the IPX manager to cross a bridge
-	//------------------------------------------------------------------------
-	if (Session.Type != GAME_INTERNET) {
-		if (Session.IsBridge) {
-			Session.BridgeNet.Get_Address(net,node);
+	if (Session.Type != GAME_INTERNET) { // RA2: the type is compared with 4, as in TibSun
+		if (Session.IsBridge) { // RA2: the flag at Session +0x236C, tested before BridgeNet (+0x2370) is read
+			Session.BridgeNet.Get_Address(net, node);
 			Ipx.Set_Bridge(net);
 		}
 	}
 
 	return(true);
+}
 
-}	/* end of Init_Network */
-
-
-/***********************************************************************************************
- * Shutdown_Network -- shuts down network stuff                                                *
- *                                                                                             *
- * INPUT:                                                                                      *
- *      none.                                                                                  *
- *                                                                                             *
- * OUTPUT:                                                                                     *
- *      none.                                                                                  *
- *                                                                                             *
- * WARNINGS:                                                                                   *
- *      none.                                                                                  *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   02/14/1995 BR : Created.                                                                  *
- *=============================================================================================*/
-void Shutdown_Network (void)
+/// <summary>
+/// Shuts down network stuff: forgets the game name and deletes the packet transport.
+/// </summary>
+void Shutdown_Network(void)
 {
-//
-// Note: The thought behind this section of code was that if the program
-// terminates early, without an EventClass::EXIT event, it still needs to
-// tell the other systems that it's gone, so it would send a SIGN_OFF packet.
-// BUT, this causes a sync bug if the systems are running slow and this system
-// is running ahead of the others; it will send the NET_SIGN_OFF >>before<<
-// the other system execute their EventClass::EXIT event, and the other systems
-// will kill the connection at some random Frame # & turn my stuff over to
-// the computer possibly at different times.
-// BRR, 10/29/96
-//
-#if 0
-	//------------------------------------------------------------------------
-	// If the Players vector contains at least one name, send a sign-off
-	// packet.  If 'Players' is empty, I have no name, so there's no point
-	// in sending a sign-off.
-	//------------------------------------------------------------------------
-	if (Session.Players.Count()) {
-		//.....................................................................
-		// Build a sign-off packet & send it
-		//.....................................................................
-		memset (&Session.GPacket, 0, sizeof(GlobalPacketType));
-		Session.GPacket.Command = NET_SIGN_OFF;
-		strcpy (Session.GPacket.Name, Session.Players[0]->Name);
+	Session.GameName[0] = 0; // RA2: the game name is wide, so a 16 bit zero is stored at Session +0x2380
 
-		Ipx.Send_Global_Message (&Session.GPacket, sizeof (GlobalPacketType),
-			0, NULL);
-		Ipx.Send_Global_Message (&Session.GPacket, sizeof (GlobalPacketType),
-			0, NULL);
-
-		if (Session.IsBridge	&& !Winsock.Get_Connected()) {
-			Ipx.Send_Global_Message (&Session.GPacket, sizeof(GlobalPacketType), 0,
-				&Session.BridgeNet);
-			Ipx.Send_Global_Message (&Session.GPacket, sizeof(GlobalPacketType), 0,
-				&Session.BridgeNet);
-		}
-
-		//.....................................................................
-		//	Wait for the packets to finish going out (or the Global Channel
-		// times out)
-		//.....................................................................
-		for (;;) {
-			if (Ipx.Global_Num_Send()==0) {
-				break;
-			}
-			Ipx.Service();
-		}
-	}
-#endif
-
-	//------------------------------------------------------------------------
-	// If I was in a game, I'm not now, so clear the game name
-	//------------------------------------------------------------------------
-	Session.GameName[0] = 0;
-
-	if ( PacketTransport ) {
-		delete  PacketTransport;
+	if (PacketTransport) { // RA2: as in TibSun; the delete calls the virtual destructor with the delete flag
+		delete PacketTransport;
 	}
 	PacketTransport = NULL;
+}
 
-}	/* end of Shutdown_Network */
-
-
-/***********************************************************************************************
- * Destroy_Connection -- destroys the given connection                                         *
- *                                                                                             *
- * Call this routine when a connection goes bad, or another player signs off.                  *
- *                                                                                             *
- * INPUT:                                                                                      *
- *      id         connection ID to destroy; this should be the HousesType of the player       *
- *             on this connection                                                              *
- *      error      0 = user signed off; 1 = connection error; otherwise, no error is shown.    *
- *                                                                                             *
- * OUTPUT:                                                                                     *
- *      none.                                                                                  *
- *                                                                                             *
- * WARNINGS:                                                                                   *
- *      none.                                                                                  *
- *                                                                                             *
- * HISTORY:                                                                                    *
- *   04/22/1995 BR : Created.                                                                  *
- *=============================================================================================*/
+/// <summary>
+/// Destroys the given connection. id is the house of the player on it; error 0 = signed off, 1 = connection error.
+/// </summary>
 void Destroy_Connection(int id, int error)
 {
 	int i;
 	HouseClass *housep;
-	char txt[80];
+	wchar_t txt[80];
 
-	housep = Houses[(HousesType)id];
+	housep = Houses[id]; // RA2: the house is fetched before the debug print and the null test
 
 	if (Debug_Print_Events) {
-		DebugString("Destroying connection for house %d (%s)\n",
-			id,housep->IniName);
+		DebugString("Destroying connection for house %d (%ls)\n", id, housep->UIName); // RA2: the house name is the wide UIName (+0x15F16)
 	}
 
-	//------------------------------------------------------------------------
-	// Do nothing if the house isn't human.
-	//------------------------------------------------------------------------
 	if (!housep || !housep->IsHuman)
 		return;
 
-	//------------------------------------------------------------------------
-	// Create a message to display to the user
-	//------------------------------------------------------------------------
-	txt[0] = '\0';
-	if (error==1) {
-		sprintf(txt,Fetch_String(TXT_CONNECTION_LOST), (char *)housep->IniName);
-	} else if (error==0) {
-		sprintf(txt,Fetch_String(TXT_LEFT_GAME), (char *)housep->IniName);
+	txt[0] = L'\0'; // RA2: the text is wide (80 wchar_t at esp+28)
+	if (error == 1) {
+		swprintf(txt, StringTable::LoadString("TXT_CONNECTION_LOST", NULL, "D:\\Ra2\\NetDlg.CPP", 463), housep->UIName);
+	} else if (error == 0) {
+		swprintf(txt, StringTable::LoadString("TXT_LEFT_GAME", NULL, "D:\\Ra2\\NetDlg.CPP", 465), housep->UIName);
 	}
 
-	if (strlen(txt)) {
-		Session.Messages.Add_Message (NULL,0, txt, housep->Class->Scheme, TextPrintType(TPF_6PT_GRAD|TPF_FULLSHADOW|TPF_USE_GRAD_PAL), int(Rule->MessageDelay * TICKS_PER_MINUTE));
+	if (wcslen(txt)) { // RA2: wcslen of the wide text
+		Session.Messages.Add_Message(NULL, 0, txt, housep->Class->Scheme, TextPrintType(TPF_6PT_GRAD | TPF_FULLSHADOW | TPF_USE_GRAD_PAL), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: the sender name is NULL, the colour scheme is the house type's (+0xC0), Add_Message takes a final flag (false)
 		Map.Flag_To_Redraw();
 	}
 
-	//------------------------------------------------------------------------
-	// Remove this player from the Players vector
-	//------------------------------------------------------------------------
-	for (i = 0; i < Session.Players.Count(); i++) {
-		if (!_stricmp(Session.Players[i]->Name,(char *)housep->IniName)) {
+	Ipx.Delete_Connection(id); // RA2: the connection is deleted before the player is dropped from the list, which TibSun does first
+
+	if (error) { // RA2: the error branch tests the frame: before the first frame the house dies at once
+		if (Frame == 0) {
+			housep->Flag_To_Die();
+		} else {
+			OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::REMOVEPLAYER, id)); // RA2: the REMOVEPLAYER event (0x23) is queued, as in TibSun
+		}
+	} else {
+		if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) { // RA2: a clean sign-off; no AI_Takeover any more
+			housep->Flag_To_Die();
+		}
+		if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) { // RA2: the byte at Session +0x2910 (0x00A3FBA8); the router is told the player left
+			OwnerTalk.Send_Remove_Player(id);
+		}
+	}
+
+	if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter && Session.Am_I_Master(housep)) { // RA2: the leaver was the game master: choose a new host
+		Session.AboutToExitActive = true; // RA2: the byte at Session +0x3040 (0x00A402D8) is set to 1 here; the name is the one the other writer (event.cpp) gave it
+		int host = OwnerTalk.Update_Master(); // RA2: the new master's house, -1 when none
+		if (host != -1) { // RA2: as above
+			HouseClass *hostp = Houses[host]; // RA2: as above
+			if (hostp) { // RA2: as above
+				if (Session.Players.Count() > 2) { // RA2: with two players left no router is needed
+					IPXAddressClass *address = NULL; // RA2: the new host's address
+					for (i = 0; i < Session.Players.Count(); i++) {
+						if (Session.Players[i]->Player.ID == host) { // RA2: the ID (+0x5F) is compared, not the name
+							address = &Session.Players[i]->Address; // RA2: as above
+							Session.PacketRouterPort = Session.PlayerPorts[i]; // RA2: the router port is that of the same slot (Session +0x3022)
+							break;
+						}
+					}
+					NetNumType network;
+					NetNodeType node;
+					address->Get_Address(network, node); // RA2: as above
+					Session.PacketRouterAddress.Set_Address(network, node, 0); // RA2: the address is copied to the router address (+0x2914) with port 0
+					DebugString("Session.PacketRouterAddress = %s\n", Session.PacketRouterAddress.As_String(0)); // RA2: the format string at 0x007D696C
+					DebugString("Session.PacketRouterPort = %d\n", Session.PacketRouterPort);
+					Ipx.Set_Lobby_Address(&Session.PacketRouterAddress); // RA2: IPX sends lobby traffic to the router (0x005277C0)
+				}
+				wcscpy(Session.MasterPlayerName, hostp->UIName); // RA2: the new master's wide name is copied to Session +0x2FC8
+				DebugString("New game host is %ls\n", Session.MasterPlayerName);
+				Session.MasterPlayerID = host; // RA2: as above
+				if (Session.Am_I_Master(NULL)) { // RA2: when this system became the master, the router gets the player list
+					OwnerTalk.Send_Player_List();
+				}
+			}
+		}
+	}
+
+	for (i = 0; i < Session.Players.Count(); i++) { // RA2: the player is found by ID (+0x5F), not by name
+		if (Session.Players[i]->Player.ID == id) {
 			delete Session.Players[i];
 			Session.Players.Delete(Session.Players[i]);
+			Session.Remove_Player_Port(i); // RA2: the port slot of that player is released (0x00672F20)
+			if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) {
+				OwnerTalk.Send_Remove_Player(id);
+			}
 			break;
 		}
 	}
 
-	if (Session.Type == GAME_INTERNET && ! stricmp(Session.MasterPlayerName, (char *)housep->IniName)) {
-		Session.MasterPlayerID = -1;
-		Session.MasterPlayerName[0] = '\0';
-	}
+	Session.NumPlayers--; // RA2: no "just you and me" message any more
+}
 
-	//------------------------------------------------------------------------
-	// Delete the IPX connection
-	//------------------------------------------------------------------------
-	Ipx.Delete_Connection(id);
-
-	if (error) {
-		OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::REMOVEPLAYER, id));
-	} else if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) {
-		housep->Flag_To_Die();
-	} else {
-		//------------------------------------------------------------------------
-		// Turn the player's house over to the computer's AI
-		//------------------------------------------------------------------------
-		housep->AI_Takeover();
-	}
-
-	Session.NumPlayers--;
-
-	//------------------------------------------------------------------------
-	// If we're the last player left, tell the user.
-	//------------------------------------------------------------------------
-	if (Session.NumPlayers == 1) {
-		sprintf(txt,"%s",Fetch_String(TXT_JUST_YOU_AND_ME));
-		Session.Messages.Add_Message (NULL, 0, txt, housep->Class->Scheme,
-			TextPrintType(TPF_6PT_GRAD|TPF_FULLSHADOW|TPF_USE_GRAD_PAL), int(Rule->MessageDelay * TICKS_PER_MINUTE));
-		Map.Flag_To_Redraw();
-	}
-}	/* end of Destroy_Connection */
-
-
-/***************************************************************************
- * Compute_Name_CRC -- computes CRC from char string                       *
- *                                                                         *
- * INPUT:                                                                  *
- *      name      string to create CRC for                                 *
- *                                                                         *
- * OUTPUT:                                                                 *
- *      CRC                                                                *
- *                                                                         *
- * WARNINGS:                                                               *
- *      none.                                                              *
- *                                                                         *
- * HISTORY:                                                                *
- *   06/29/1995 BRR : Created.                                             *
- *=========================================================================*/
+/// <summary>
+/// Computes the CRC of an upper-cased name (a narrow game name).
+/// </summary>
 unsigned int Compute_Name_CRC(char *name)
 {
 	char buf[80];
 	unsigned int crc = 0L;
 	int i;
 
-	strcpy (buf, name);
-	_strupr (buf);
+	strcpy(buf, name);
+	_strupr(buf);
 
 	for (i = 0; (unsigned)i < strlen(buf); i++) {
-		Add_CRC (&crc, (unsigned int)buf[i]);
+		Add_CRC(&crc, (unsigned int)buf[i]);
 	}
 
 	return(crc);
+}
 
-}	/* end of Compute_Name_CRC */
+/// <summary>
+/// Computes the CRC of an upper-cased name (a wide game name, which is what the session keeps).
+/// </summary>
+unsigned int __fastcall Compute_Name_CRC(wchar_t const * name) // RA2: the wide form, 0x005BBA50 (the other files declare it with this prototype)
+{
+	wchar_t buf[80]; // RA2: 80 wchar_t
+	unsigned int crc = 0L;
+	unsigned int i;
 
+	wcscpy(buf, name); // RA2: as above
+	_wcsupr(buf); // RA2: as above
 
-/************************************************************************** *
- * Clear_Listbox -- clears the given list box                               *
- *                                                                          *
- * This routine assumes the items in the given list box are character       *
- * buffers; it deletes each item in the list, then clears the list.         *
- *                                                                          *
- * INPUT:                                                                   *
- *      list         ptr to listbox                                         *
- *                                                                          *
- * OUTPUT:                                                                  *
- *      none.                                                               *
- *                                                                          *
- * WARNINGS:                                                                *
- *      none.                                                               *
- *                                                                          *
- * HISTORY:                                                                 *
- *   11/29/1995 BRR : Created.                                              *
- *=========================================================================*/
+	for (i = 0; i < wcslen(buf); i++) { // RA2: i is unsigned, the compare is unsigned (jb)
+		Add_CRC(&crc, (unsigned int)buf[i]); // RA2: the 16 bit character is zero extended (no sign extension as in the narrow form)
+	}
+
+	return(crc);
+}
+
+/// <summary>
+/// Clears the given list box: deletes every item (a wide string buffer), then flags the list to redraw.
+/// </summary>
 void Clear_Listbox(ListClass * list)
 {
-	char * item;
+	wchar_t const * item; // RA2: the items are wide strings
 
-	//------------------------------------------------------------------------
-	// Clear the list box
-	//------------------------------------------------------------------------
 	while (list->Count()) {
-		item = (char *)(list->Get_Item(0));
-		list->Remove_Item(item);
-		delete [] item;
+		item = list->Get_Item(0); // RA2: as above
+		list->Remove_Item(item); // RA2: the overload taking the text (vtable +0xAC), not the index
+		delete [] (wchar_t *)item; // RA2: as above
 	}
 	list->Flag_To_Redraw();
-}	// end of Clear_Listbox
+}
