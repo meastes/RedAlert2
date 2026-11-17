@@ -1461,10 +1461,7 @@ bool TActionClass::TAction_SET_TIMER(HouseClass * , ObjectClass * , TriggerClass
 /// </summary>
 bool TActionClass::TAction_SET_TIMER_TEXT(HouseClass * , ObjectClass * , TriggerClass * , Cell const & ) // RA2: not in TibSun, at 0x006B0C50
 {
-	char const * text = NULL; // RA2: the text pointer is chosen by a branch on Text[0] (0x6B0C5D), not the accessor's neg/sbb select
-	if (Text[0] != 0) { // RA2: as above
-		text = Text; // RA2: as above
-	}
+	char const * text = Text[0] ? Text : NULL; // RA2: the standalone copy 0x6B0C5D folds the select into a branch on Text[0]; the copy expanded in operator() keeps the neg/sbb select
 	TStringID<31> label(text); // RA2: built before the test, from the possibly empty text (0x6B0C71 clears it when there is none)
 	if (text != NULL) {
 		Scen->MissionTimerTextCSF = StringTable::LoadString(text, NULL, "D:\\Ra2\\TAction.CPP", 2050);
