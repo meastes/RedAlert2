@@ -520,7 +520,7 @@ rocket,0x0063DAC0,0x0063ED30,source,"functions compiled from src/rocket.cpp, wit
 unk_0063ED30,0x0063ED30,0x0063F040,unknown,code not assigned to a module
 ownertalk,0x0063F040,0x0063FF10,source,"functions compiled from src/ownertalk.cpp, matched, without gaps"
 unk_0063FF10,0x0063FF10,0x00640460,unknown,code not assigned to a module
-rules,0x00640460,0x00652790,tibsun,"functions compiled from src/rules.cpp, without gaps; matched except ??0RulesClass@@QAE@XZ and ?Initialize@RulesClass@@QAEXAAVCCINIClass@@@Z and ?Audio_Visual_Rules@RulesClass@@QAE_NABVCCINIClass@@@Z and ?Combat_Damage@RulesClass@@QAE_NABVCCINIClass@@@Z and ?General@RulesClass@@QAE_NABVCCINIClass@@@Z; 16 placed by the gap; ??0RulesClass@@QAE@XZ and ?Audio_Visual_Rules@RulesClass@@QAE_NABVCCINIClass@@@Z and ?Combat_Damage@RulesClass@@QAE_NABVCCINIClass@@@Z and ?General@RulesClass@@QAE_NABVCCINIClass@@@Z and ?Initialize@RulesClass@@QAEXAAVCCINIClass@@@Z placed at their function starts"
+rules,0x00640460,0x00652790,tibsun,"functions compiled from src/rules.cpp, without gaps; matched except ??0RulesClass@@QAE@XZ and ?Audio_Visual_Rules@RulesClass@@QAE_NABVCCINIClass@@@Z and ?Combat_Damage@RulesClass@@QAE_NABVCCINIClass@@@Z and ?General@RulesClass@@QAE_NABVCCINIClass@@@Z"
 unk_00652790,0x00652790,0x00654C40,unknown,code not assigned to a module
 saveload,0x00654C40,0x00658050,tibsun,"functions compiled from src/saveload.cpp, without gaps; matched except ?Get_All@@YI_NPAUIStream@@_N@Z and ?Save_Game@@YI_NPBDPBG_N@Z and ?Put_All@@YI_NPAUIStream@@H@Z; ?Get_All@@YI_NPAUIStream@@_N@Z and ?Put_All@@YI_NPAUIStream@@H@Z and ?Save_Game@@YI_NPBDPBG_N@Z placed at their function starts; ?MPlayer_Save_Message@@YIXXZ not placed"
 unk_00658050,0x00658050,0x00659240,unknown,code not assigned to a module
