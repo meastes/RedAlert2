@@ -287,7 +287,9 @@ unk_0051EF10,0x0051EF10,0x0051F2F0,unknown,code not assigned to a module
 ion,0x0051F2F0,0x00520C40,tibsun,"functions compiled from src/ion.cpp, matched, without gaps; three placed by the gap"
 unk_00520C40,0x00520C40,0x00521270,unknown,code not assigned to a module
 ionblast,0x00521270,0x005221A0,tibsun,"functions compiled from src/ionblast.cpp, without gaps; matched except ?AI@IonBlastClass@@QAEXXZ and ?One_Time@IonBlastClass@@SIXXZ and ?Draw_It@IonBlastClass@@QAEXXZ; three placed by the gap; ?AI@IonBlastClass@@QAEXXZ and ?Draw_It@IonBlastClass@@QAEXXZ and ?One_Time@IonBlastClass@@SIXXZ placed at their function starts"
-unk_005221A0,0x005221A0,0x00523410,unknown,code not assigned to a module
+unk_005221A0,0x005221A0,0x00522560,unknown,code not assigned to a module
+audfile,0x00522560,0x005233D0,source,"functions compiled from src/audfile.cpp, matched, without gaps; one placed by the gap; ?Get_Key_State@@YIFI@Z not placed; ?Get_Async_Key_State@@YIFI@Z not placed"
+unk_005233D0,0x005233D0,0x00523410,unknown,code not assigned to a module
 ipxaddr,0x00523410,0x00523980,tibsun,"functions compiled from src/ipxaddr.cpp, matched, without gaps; one placed by the gap"
 unk_00523980,0x00523980,0x00523B70,unknown,code not assigned to a module
 ipxconn,0x00523B70,0x00523F90,tibsun,"functions compiled from src/ipxconn.cpp, matched, without gaps; one placed by the gap"
