@@ -74,6 +74,9 @@
 							 }
 
 
+/// <summary>Reads a PCX file into a new BSurface: 8-bit, or three colour planes packed into hicolor pixels; Buff, when given, receives the pixels.</summary>
+// RA2: 0x60D110 (1635 bytes) is this function as written; the build is 1632 bytes and differs only in register allocation and instruction order
+// RA2: (the executable loads byte_per_line before the width test in the 3-plane loop, and reloads the file handle in edi before each branch's Unlock)
 Surface * Read_PCX_File(FileClass & file_handle, PaletteClass * palette, void * Buff, int Size)
 {
 	unsigned					i, j;
