@@ -1671,6 +1671,11 @@ void STDMETHODCALLTYPE FlyLocomotionClass::Acquire_Hunter_Seeker_Target(void)
 /// <returns>bool; Should the aircraft slow down and land?</returns>
 bool FlyLocomotionClass::Needs_To_Land(void)
 {
+	FootClass *object = LinkedTo; // RA2: the executable tests the linked aircraft first (0x004BF8F0)
+	if (object != NULL && object->Fetch_RTTI() == RTTI_AIRCRAFT && ((IFlyControl *)(AircraftClass *)object)->Is_Locked()) { // RA2: an aircraft locked into straight flight never has to land
+		return(false); // RA2: as above
+	} // RA2: as above
+
 	if (IsLanding) {
 		return(true);
 	}
@@ -1680,7 +1685,7 @@ bool FlyLocomotionClass::Needs_To_Land(void)
 	}
 
 	IFlyControlPtr flyctrl(LinkedTo);
-	if (flyctrl != NULL && !flyctrl->Is_Strafe()) {
+	if (flyctrl != NULL && !flyctrl->Is_Strafe() && !flyctrl->Is_Fighter()) { // RA2: a fighter does not settle down for an approach
 		return(true);
 	}
 
