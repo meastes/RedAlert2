@@ -124,10 +124,8 @@ void __fastcall AudioFrameDeinit(AudioFrame * frame)
 	frame->sample = NULL;
 }
 
-int __fastcall AudioFormatReadWaveFile(FileClass * file, AudioFormat * format, int * bytes)
+int __fastcall AudioFormatReadWaveFile(FileClass * file, AudioFormat * format, int * bytes) // RA2: new function, 0x408530 (468 B); the data chunk leaves the switch and its handling follows it, every other chunk continues the loop
 {
-	RiffHeader rh;
-	RiffChunk chunk;
 	WaveFormat * wformat = NULL;
 	int result = 0;
 
@@ -135,72 +133,58 @@ int __fastcall AudioFormatReadWaveFile(FileClass * file, AudioFormat * format, i
 		*bytes = 0;
 	}
 
-	if (!file) {
-		goto done;
-	}
+	if (file) {
+		RiffHeader rh;
 
-	file->Seek(0, 0);
+		file->Seek(0, 0);
 
-	if (file->Read(&rh, sizeof(rh)) != sizeof(rh)) {
-		goto done;
-	}
+		if (file->Read(&rh, sizeof(rh)) == sizeof(rh) && rh.form == 0x46464952 && rh.type == 0x45564157) {
+			RiffChunk chunk;
 
-	if (rh.form != 0x46464952 || rh.type != 0x45564157) {
-		goto done;
-	}
+			while (file->Read(&chunk, sizeof(chunk)) == sizeof(chunk)) {
+				switch (chunk.type) {
+				case 0x20746d66:
+					if (chunk.length < 0x12) {
+						wformat = (WaveFormat *)malloc(0x12);
+						memset(wformat, 0, 0x12);
+					} else {
+						wformat = (WaveFormat *)malloc(chunk.length);
+						memset(wformat, 0, chunk.length);
+					}
+					file->Read(wformat, chunk.length);
+					wformat->cbSize = (unsigned short)chunk.length;
+					continue;
+				case 0x61746164:
+					break;
+				default:
+					file->Seek(chunk.length, 1);
+					continue;
+				}
 
-	while (file->Is_Open()) {
-		if (file->Read(&chunk, sizeof(chunk)) != sizeof(chunk)) {
-			goto done;
-		}
-
-		switch (chunk.type) {
-		case 0x20746d66:
-			if (chunk.length < 0x12) {
-				wformat = (WaveFormat *)malloc(0x12);
-				memset(wformat, 0, 0x12);
-			} else {
-				wformat = (WaveFormat *)malloc(chunk.length);
-				memset(wformat, 0, chunk.length);
+				*bytes = chunk.length;
+				if (wformat) {
+					if (wformat->wFormatTag == 0x11) {
+						format->BlockSize = wformat->nBlockAlign;
+						format->Compression = AUDIO_COMPRESS_IMA_ADPCM;
+						format->SampleWidth = 2;
+					} else if (wformat->wFormatTag == 1) {
+						format->Compression = AUDIO_COMPRESS_NONE;
+						format->SampleWidth = wformat->wBitsPerSample / 8;
+					} else {
+						break;
+					}
+					format->Channels = wformat->nChannels;
+					format->BytesPerSecond = wformat->nAvgBytesPerSec;
+					format->Rate = wformat->nSamplesPerSec;
+					format->Flags = mAUDIO_FORMAT_PCM;
+					AudioFormatUpdate(format);
+					result = 1;
+				}
+				break;
 			}
-			file->Read(wformat, chunk.length);
-			wformat->cbSize = (unsigned short)chunk.length;
-			break;
-		case 0x61746164:
-			*bytes = chunk.length;
-			goto got_data;
-		default:
-			file->Seek(chunk.length, 1);
-			break;
 		}
 	}
 
-	goto done;
-
-got_data:
-	if (!wformat) {
-		goto done;
-	}
-
-	if (wformat->wFormatTag == 0x11) {
-		format->BlockSize = wformat->nBlockAlign;
-		format->Compression = AUDIO_COMPRESS_IMA_ADPCM;
-		format->SampleWidth = 2;
-	} else if (wformat->wFormatTag == 1) {
-		format->Compression = AUDIO_COMPRESS_NONE;
-		format->SampleWidth = wformat->wBitsPerSample / 8;
-	} else {
-		goto done;
-	}
-
-	format->Channels = wformat->nChannels;
-	format->BytesPerSecond = wformat->nAvgBytesPerSec;
-	format->Rate = wformat->nSamplesPerSec;
-	format->Flags = mAUDIO_FORMAT_PCM;
-	AudioFormatUpdate(format);
-	result = 1;
-
-done:
 	if (wformat) {
 		free(wformat);
 	}
