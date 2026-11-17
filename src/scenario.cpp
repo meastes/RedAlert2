@@ -201,6 +201,7 @@ class MPScoreScreen { public: MPScoreScreen(void); void Presentation_005AAA40(vo
 void Darken_Surface(Surface * surface, bool update); // RA2: 0x005159B0 (init.cpp declares it the same way)
 class UnknownScore_0069A640 { public: UnknownScore_0069A640(void); void Presentation_0069A650(void); }; // RA2: the single player score screen (ctor 0x69A640, Presentation 0x69A650; names_proposed: UnknownScore_0069A640::Presentation_0069A650)
 void Show_Credits(void); // RA2: 0x4B37C0 (init.cpp declares it the same way; TibSun: Show_Who_Was_Responsible)
+void __fastcall Free_Interface_Art(void); // RA2: 0x006F30F0, frees the interface art (txtlabel2.cpp defines it, saveload.cpp declares it the same way)
 void Reset_Radar_Event_Cells(void); // RA2: 0x63C790, clears the radar event cell table (YR name)
 
 namespace Game { extern HWND hWnd; bool __cdecl CallBack(void); }
@@ -252,6 +253,8 @@ ScenarioClass::ScenarioClass(void)
 	}
 	wcscpy(Description, L""); // RA2: wide
 	strcpy(ScenarioName, "");
+	strcpy(BriefingCSF, ""); // RA2: the briefing's CSF label (+0x11D8) is cleared here, between the file name and the UI name
+	strcpy(UIName, ""); // RA2: the UI name (+0x99A) is cleared before the briefing text
 	wcscpy(BriefingText, L""); // RA2: wide
 	for (i = 0; i < ARRAY_SIZE(GlobalFlags); i++) {
 		GlobalFlags[i].VariableName[0] = '\0';
@@ -271,7 +274,9 @@ ScenarioClass::ScenarioClass(void)
 /// with the data it reads from the save game stream.
 /// </summary>
 ScenarioClass::ScenarioClass(NoInitClass const & x) :
+	ElapsedTimer(x), // RA2: the elapsed timer is left alone (no system timer read for it)
 	MissionTimer(x),
+	MissionTimerText(x), // RA2: the saved label is kept (no clearing)
 	ShroudTimer(x),
 	FogTimer(x),
 	IceGrowthTimer(x),
@@ -279,7 +284,11 @@ ScenarioClass::ScenarioClass(NoInitClass const & x) :
 	AmbientChangeTimer(x),
 	FadeTimer(x)
 {
-	// nothing
+	if (MissionTimerText[0] != '\0') { // RA2: the timer's label is loaded again (the string table is not saved)
+		MissionTimerTextCSF = StringTable::LoadString(MissionTimerText, NULL, "D:\\Ra2\\Scenario.CPP", 340); // RA2: as above
+	} else {
+		MissionTimerTextCSF = L""; // RA2: as above
+	}
 }
 
 
@@ -297,8 +306,14 @@ void ScenarioClass::Reset(void)
 	CDifficulty = DIFF_NORMAL;
 	ElapsedTimer = 0;
 	ElapsedTimer.Stop();
+	PauseTimer = 0; // RA2: the pause timer (+0x620) and its count (+0x62C) are reset here
+	PauseTimer.Stop(); // RA2: as above
+	Unknown_62C = 0; // RA2: as above
+	IsGamePaused = false; // RA2: as above
 	MissionTimer = 0;
 	MissionTimer.Stop();
+	MissionTimerTextCSF = L""; // RA2: the timer's label starts empty
+	MissionTimerText = TStringID<31>(""); // RA2: as above
 	ShroudTimer = 0;
 	FogTimer = 0;
 	IceGrowthTimer = 0;
@@ -345,23 +360,48 @@ void ScenarioClass::Reset(void)
 	RedTint = 100;
 	GreenTint = 100;
 	BlueTint = 100;
-	GroundLight = NORMAL_LIGHT / 10;
-	LevelLight = NORMAL_LIGHT / 60;
+	GroundLight = 100; // RA2: the ground and level light are plain numbers here
+	LevelLight = 16; // RA2: as above
 	IonAmbientLight = 100;
 	IonRedTint = 0;
 	IonGreenTint = 0;
 	IonBlueTint = 0;
-	IonGroundLight = NORMAL_LIGHT / 10;
-	IonLevelLight = NORMAL_LIGHT / 60;
+	IonGroundLight = 100; // RA2: as above
+	IonLevelLight = 16; // RA2: as above
+	NukeAmbient = 200; // RA2: the nuclear flash light set (not in TibSun)
+	NukeRedTint = 175; // RA2: as above
+	NukeGreenTint = 150; // RA2: as above
+	NukeBlueTint = 125; // RA2: as above
+	NukeGroundLight = 100; // RA2: as above
+	NukeLevelLight = 100; // RA2: as above
+	NukeAmbientChangeRate = 1; // RA2: as above
 	InitTime = 10000;
 	Stage = 0;
 	IsInputLocked = false;
 	IsTiberiumDeathToVisceroid = true;
+	ParTimeEasy = 3600; // RA2: the par times and the score and load screen texts are reset here
+	ParTimeMedium = 3600; // RA2: as above
+	ParTimeDifficult = 3600; // RA2: as above
+	UnderParTitle[0] = '\0'; // RA2: as above
+	UnderParMessage[0] = '\0'; // RA2: as above
+	OverParTitle[0] = '\0'; // RA2: as above
+	OverParMessage[0] = '\0'; // RA2: as above
+	LSLoadMessage[0] = '\0'; // RA2: as above
+	LSBrief[0] = '\0'; // RA2: as above
+	LS640BriefLocX = 0; // RA2: as above
+	LS640BriefLocY = 0; // RA2: as above
+	LS800BriefLocX = 0; // RA2: as above
+	LS800BriefLocY = 0; // RA2: as above
+	LS640BkgdName[0] = '\0'; // RA2: as above
+	LS800BkgdName[0] = '\0'; // RA2: as above
 
 	AllowableUnits.Clear();
 	AllowableUnitMaximums.Clear();
 	AllowableUnitCounts.Clear();
 
+	if (Session.Type == GAME_SKIRMISH) { // RA2: a skirmish game is named from the string table
+		wcscpy(Scen->Description, StringTable::LoadString("GUI:SkirmishGame", NULL, "D:\\Ra2\\Scenario.CPP", 486)); // RA2: as above
+	}
 } // RA2: no SpeechSide, RequiredAddOn (not in RA2's layout)
 
 
@@ -401,59 +441,58 @@ bool Start_Scenario(char const * name, bool briefing, CampaignType campaign)
 	strcpy(Scen->ScenarioName, name);
 	strupr(Scen->ScenarioName);
 
-	Theme.Stop();
+	CD::Set_Required_Disk(DISK_ANY); // RA2: no Theme.Stop() here and no _DEBUG swap override test
 
-#ifdef _DEBUG
-	/// If swap override then assume everything is available locally.
-	if (!CD::Is_Override_Swap()) {
-#endif
-		CD::Set_Required_Disk(DISK_ANY);
-
-		if (Session.Type == GAME_NORMAL) {
-			if (Scen->Campaign != CAMPAIGN_NONE) {
-				CD::Set_Required_Disk((DiskID)Campaigns[Scen->Campaign]->CDNumber);
+	if (Session.Type == GAME_NORMAL) { // RA2: as above
+		if (Scen->Campaign != CAMPAIGN_NONE) { // RA2: as above
+			CD::Set_Required_Disk((DiskID)Campaigns[Scen->Campaign]->CDNumber); // RA2: as above
+		}
+	} else {
+		if (Session.Options.ScenarioIndex != -1) { // RA2: as above
+			MultiMission * multi = Session.Scenarios[Session.Options.ScenarioIndex]; // RA2: as above
+			if (!multi->Is_On_CD(CD::Get_Current_Disk(60))) { // RA2: the multiplayer map names the disc it is on
+				CD::Set_Required_Disk(multi->On_Which_CD()); // RA2: as above
 			}
-		} else {
-			if (Session.Options.ScenarioIndex != -1) {
-				MultiMission * multi = Session.Scenarios[Session.Options.ScenarioIndex];
-			} // RA2: no Get_Current_Disk (TibSun's use does not compile against RA2's declaration)
 		}
-
-		Session.Suspended++;
-
-		if (!CD::Force_Available()) {
-			Session.Suspended--;
-			return(false);
-		}
-		Session.Suspended--;
-#ifdef _DEBUG
 	}
-#endif
 
-	if (briefing == true &&
-		campaign != CAMPAIGN_NONE &&
-		Scen->Scenario == 1 &&
-		Campaigns[Scen->Campaign]->CDNumber < 2) {
-		Play_Movie("INTRO.VQA", THEME_NONE, true);
+	Session.Suspended++; // RA2: as above
+
+	if (!CD::Force_Available()) { // RA2: as above
+		return(false); // RA2: the suspend count stays raised when the disc does not come
+	}
+	Session.Suspended--; // RA2: as above
+
+	Hide_Mouse(); // RA2: the mouse is hidden while the movies and the scenario load
+
+	{ // RA2: the scenario's own intro (or briefing) movie plays before it is read
+		CCINIClass ini; // RA2: as above
+		CCFileClass file(name); // RA2: as above
+		if (ini.Load(file, true, false)) { // RA2: as above
+			VQType movie = ini.Get_VQType("Basic", "Intro", VQ_NONE); // RA2: as above
+			if (movie == VQ_NONE) { // RA2: as above
+				movie = ini.Get_VQType("Basic", "Brief", movie); // RA2: as above
+			}
+			if (movie != VQ_NONE) { // RA2: as above
+				Theme.Stop(false); // RA2: as above
+				Play_Movie(movie, THEME_NONE, true, true, true); // RA2: as above
+			}
+		}
 	}
 
 	DebugString("Reading scenario: %s\n", name);
 
+	Theme.Play_Song(Theme.From_Name("LOADING")); // RA2: the loading score plays while the scenario is read
+
 	if (!Read_Scenario(name)) {
+		Show_Mouse(); // RA2: the mouse comes back when the scenario cannot be read
 		return(false);
-	}
-
-	Theme.Stop();
-
-	if (briefing) {
-		Play_Movie(Scen->IntroMovie);
-		Play_Movie(Scen->BriefMovie);
 	}
 
 	/*
 	**	If there's no briefing movie, restate the mission at the beginning.
 	*/
-	char buffer[25];
+	char buffer[28]; // RA2: as above
 
 	if (Scen->BriefMovie != VQ_NONE) {
 		wsprintf(buffer, "%s.VQA", Movies[Scen->BriefMovie]);
@@ -464,14 +503,10 @@ bool Start_Scenario(char const * name, bool briefing, CampaignType campaign)
 	}
 
 	if (briefing) {
-		Play_Movie(Scen->ActionMovie, Scen->TransitTheme);
+		Play_Movie(Scen->ActionMovie, THEME_NONE, true, true, true); // RA2: the action movie only, with no score
 	}
 
-	if (Scen->ActionMovie == VQ_NONE && Scen->TransitTheme != THEME_NONE) {
-		Theme.Play_Song(Scen->TransitTheme);
-	} else {
-		Theme.Queue_Song(THEME_PICK_ANOTHER);
-	}
+	Free_Interface_Art(); // RA2: the interface art is freed once the scenario is read (0x6F30F0)
 
 	/*
 	**	Set the options values, since the palette has been initialized by Read_Scenario
@@ -479,10 +514,16 @@ bool Start_Scenario(char const * name, bool briefing, CampaignType campaign)
 	Options.Set();
 
 	HiddenSurface->Fill(0);
-	Update_Visible_Surface();
+	Update_Visible_Surface(true, HiddenSurface, NULL); // RA2: as above
 
 	Toggle_Display_Mode(true);
 	Scen->ElapsedTimer.Start();
+
+	if (Scen->TransitTheme != THEME_NONE) { // RA2: the scenario's score is queued, or the music stops
+		Theme.Queue_Song(Scen->TransitTheme); // RA2: as above
+	} else {
+		Theme.Stop(true); // RA2: as above
+	}
 
 	ScenarioActive = true;
 	TacticalActive = true;
@@ -499,8 +540,12 @@ bool Start_Scenario(char const * name, bool briefing, CampaignType campaign)
 /// </summary>
 void Pause_Scenario(void)
 {
+	Audio_Pause_All(); // RA2: the sound stops with the game
+	SavedSpeechVolume = AudioLevelGetVal(&AudioGroupAttribs1->VolumeLevel); // RA2: EVA's volume is kept and set to AUDIO_VOLUME_MAX
+	AudioLevelSet(&AudioGroupAttribs1->VolumeLevel, AUDIO_VOLUME_MAX); // RA2: as above
+
 	if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH) {
-		DebugString("Paused ElapsedTimer = %ld\n", Scen->ElapsedTimer);
+		DebugString("Paused ElapsedTimer = %ld\n", (int)Scen->ElapsedTimer); // RA2: the timer is passed as its value
 		Scen->ElapsedTimer.Stop();
 	}
 
@@ -531,13 +576,17 @@ void Resume_Scenario(void)
 	Map.Revert_Mouse_Shape();
 
 	Scen->ElapsedTimer.Start();
-	DebugString("Resume ElapsedTimer = %ld\n", Scen->ElapsedTimer);
+	DebugString("Resume ElapsedTimer = %ld\n", (int)Scen->ElapsedTimer); // RA2: as above
 
 	if (ToolTips != NULL) {
 		ToolTips->Activate(Options.ToolTips);
 	}
 
+	AudioLevelSet(&AudioGroupAttribs1->VolumeLevel, SavedSpeechVolume); // RA2: EVA's volume comes back
+	SavedSpeechVolume = AUDIO_VOLUME_MAX; // RA2: as above
+
 	Pause_Ingame_Movie(false);
+	Audio_Resume_All(); // RA2: the sound goes on again
 }
 
 

@@ -743,10 +743,10 @@ class SessionClass
 		unsigned short PeerPorts[MAX_PLAYERS]; // RA2: +0x2DC0, cleared by Start_Network_Session
 		char NatPeerNames[MAX_PLAYERS][36]; // RA2: +0x2DD0, names of the players behind the local player's NAT (Allocate_Player_Ports)
 		bool SendDelay; // RA2: [MultiPlayer] SendDelay of RA2.INI
-		unsigned char unknown_2F49[0x23];
-		int unknown_2F6C[MAX_PLAYERS];
-		CDTimerClass<SystemTimerClass> unknown_2F8C[MAX_PLAYERS];
-		int unknown_2FEC;
+		unsigned char PeerAttemptBlock[0x23]; // RA2: +0x2EF1, three bytes and then eight ints (+0x2EF4) that Connect_Player_Pairs clears; what else they hold is not known
+		int KeepAliveSlot[MAX_PLAYERS]; // RA2: +0x2F14, the slot of each peer whose keepalive (NET_PING) is due (Queue_Peer_Timeout, Retry_Requests)
+		CDTimerClass<SystemTimerClass> KeepAliveTimer[MAX_PLAYERS]; // RA2: +0x2F34, the countdown of each (1200 ticks)
+		int KeepAliveCount; // RA2: +0x2F94, how many keepalives wait
 		int PortBase;
 		int ForcePortBase;
 		int PlayerPortBase[MAX_PLAYERS]; // RA2: +0x2FA0, the port each player listens on (Address.Set_Port reads it)
