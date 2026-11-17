@@ -50,6 +50,7 @@
 #include "_map.h"
 #include "_rules.h"
 #include "anim.h"
+#include "bomb.h" // RA2
 #include "building.h"
 #include "cell.h"
 #include "conquer.h"
@@ -59,19 +60,33 @@
 #include "foot.h"
 #include "ftimer.h"
 #include "goptions.h"
+#include "ipxmgr.h" // RA2
 #include "house.h"
 #include "language\language.h"
 #include "mouse.h"
 #include "msgbox.h"
+#include "queue.h" // RA2
+#include "planning.h" // RA2
+#include "ownertalk.h" // RA2
 #include "rules.h"
 #include "saveload.h"
 #include "scenario.h"
+#include "spawnmgr.h" // RA2
 #include "session.h"
+#include "stringtable.h" // RA2
 #include "surface.h"
 #include "techno.h"
 #include "unit.h"
 #include "unittype.h"
 #include "wonline.h"
+
+extern void __fastcall Planning_Clear_Techno(TechnoClass * techno, EventClass * event); // RA2: 0x00615480 (planmgr.cpp), lets go of the planning token of a techno that was given an order
+
+// RA2: house.h is header-count sensitive, so the two production calls that take the object id and the ship flag are declared on a file-local data-free class
+struct EventHouse : public HouseClass { // RA2: as above
+	ProdFailType Suspend_Production(RTTIType type, int id, bool naval); // RA2: 0x004E63F0 (house.cpp keeps TibSun's one-argument body, held)
+	bool Place_Object(RTTIType type, int id, bool naval, Cell const & cell); // RA2: 0x004E6950 (house.cpp keeps TibSun's body, held)
+};
 
 #include "color.hh"
 #include "house.hh"
@@ -275,12 +290,11 @@ EventClass::EventClass(int index, unsigned char type)
 	if (index >= 0) {
 		ID = index;
 		Type = type;
-		Frame = ::Frame;
 	} else {
 		ID = -1;
 		Type = EMPTY;
-		Frame = ::Frame;
 	}
+	Frame = ::Frame; // RA2: one store after the branches (expanded in Execute, the stores are not merged otherwise)
 }
 
 
@@ -703,15 +717,13 @@ void EventClass::Execute(void)
 	AnimClass * anim = NULL;
 	HouseClass * house = Houses[ID];
 	HouseClass * hptr = NULL;
-	const char *str = NULL;
+	wchar_t const * str = NULL; // RA2: wide strings
 //	Cell cell;
 //	Coord coord;
-	char txt[80];
-	char msg[256];
+	wchar_t txt[80]; // RA2: wide
 //	bool formation = false;
 	int i;
 	int index;
-	unsigned int ul;
 //	RTTIType rt;
 
 	//if (Debug_Print_Events) {
@@ -721,8 +733,15 @@ void EventClass::Execute(void)
 
 	switch (Type) {
 
+		case PLAN_CONNECT: // RA2: the planning events go to the planning manager
+		case PLAN_COMMIT: // RA2: as above
+		case PLAN_NODE_DELETE: // RA2: as above
+			Planning_Execute(this); // RA2: as above
+			return; // RA2: as above
+
 		case POWERON:
 			building = Data.Target.Whom.As_Building();
+			Planning_Clear_Techno(building, NULL); // RA2: lets go of the planning token first
 			if (building && building->IsActive && !building->IsInLimbo && !building->Class->IsFirestormWall) {
 				building->Turn_On();
 			}
@@ -730,6 +749,7 @@ void EventClass::Execute(void)
 
 		case POWEROFF:
 			building = Data.Target.Whom.As_Building();
+			Planning_Clear_Techno(building, NULL); // RA2: as above
 			if (building && building->IsActive && !building->IsInLimbo && !building->Class->IsFirestormWall) {
 				building->Turn_Off();
 			}
@@ -740,8 +760,9 @@ void EventClass::Execute(void)
 		*/
 		case ARCHIVE:
 			techno = Data.NavCom.Whom.As_Techno();
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
 			if (techno && techno->IsActive) {
-				techno->ArchiveTarget = Data.NavCom.Where.As_Abstract();
+				techno->Assign_Archive_Target(Data.NavCom.Where.As_Abstract()); // RA2: a call
 			}
 			break;
 
@@ -751,17 +772,19 @@ void EventClass::Execute(void)
 		case ALLY:
 			hptr = Houses[Data.General.Value];
 			if (house->Is_Ally(hptr)) {
-				house->Make_Enemy((HousesType)Data.General.Value);
+				house->Make_Enemy((HousesType)Data.General.Value, true); // RA2: the flag
 			} else {
-				house->Make_Ally((HousesType)Data.General.Value);
+				house->Make_Ally((HousesType)Data.General.Value, true); // RA2: as above
 			}
 			break;
 
 		/*
-		**	Special self destruct action requested. This is active in the multiplayer mode.
+		**	The player's infantry cheer.
 		*/
-		case DESTRUCT:
-			house->Flag_To_Die();
+		case ALL_CHEER: // RA2
+			if (house != NULL) { // RA2: as above
+				house->Cheer(); // RA2: the house cheers (ALL_CHEER, a new event)
+			}
 			break;
 
 		/*
@@ -774,8 +797,9 @@ void EventClass::Execute(void)
 				Special = Data.Options.Data;
 				Scen->Special = Data.Options.Data;
 
-				sprintf(txt, Fetch_String(TXT_SPECIAL_WARNING), house->IniName);
-				Map.Flag_To_Redraw(); // RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
+				swprintf(txt, StringTable::LoadString("TXT_SPECIAL_WARNING", NULL, "D:\\Ra2\\Event.CPP", 950), house->UIName); // RA2: the warning goes into the message list
+				Session.Messages.Add_Message(NULL, 0, txt, house->Scheme, TextPrintType(0x4046), 1200, false); // RA2: as above
+				Map.Flag_To_Redraw(GScreenRedrawFlags(0)); // RA2: no redraw flags
 			}
 			break;
 
@@ -785,6 +809,7 @@ void EventClass::Execute(void)
 		*/
 		case REPAIR:
 			techno = Data.Target.Whom.As_Techno();
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
 			if (techno && techno->IsActive) {
 				techno->Repair(-1);
 			}
@@ -796,14 +821,11 @@ void EventClass::Execute(void)
 		*/
 		case SELL:
 			techno = Data.Target.Whom.As_Techno();
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
 			if (techno && techno->IsActive && techno->House->HeapID == ID) {
 				if (techno->RTTI == RTTI_BUILDING || ((techno->RTTI == RTTI_UNIT || techno->RTTI == RTTI_AIRCRAFT) && Map[techno->Center_Coord()].Cell_Building() != NULL)) {
 					techno->Sell_Back(-1);
 				}
-			} else {
-//				if (Is_Target_Cell(Data.Target.Whom)) {
-//					Houses.Raw_Ptr(ID)->Sell_Wall(As_Cell(Data.Target.Whom));
-//				}
 			}
 			break;
 
@@ -827,9 +849,9 @@ void EventClass::Execute(void)
 				coord.Z += BRIDGE_LEPTON_HEIGHT;
 			}
 			if (Data.Anim.What == ANIM_NONE) {
-				anim = new AnimClass(Rule->MoveFlash, coord);
+				anim = new AnimClass(Rule->MoveFlash, coord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: the arguments are written out
 			} else {
-				anim = new AnimClass(AnimTypes[Data.Anim.What], coord);
+				anim = new AnimClass(AnimTypes[Data.Anim.What], coord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
 			}
 			if (anim) {
 				if (Data.Anim.Owner != HOUSE_NONE && !Houses[Data.Anim.Owner]->Is_Player_Control()) {
@@ -846,7 +868,7 @@ void EventClass::Execute(void)
 		**	exact factory and real object pointer to use.
 		*/
 		case PLACE:
-			house->Place_Object(Data.Place.Type, Cell(Data.Place.Where.X, Data.Place.Where.Y));
+			((EventHouse *)house)->Place_Object(Data.Place.Type, Data.Place.ID, Data.Place.IsNaval != 0, Cell(Data.Place.Where.X, Data.Place.Where.Y)); // RA2: the object id and the ship flag
 			break;
 
 		/*
@@ -855,14 +877,15 @@ void EventClass::Execute(void)
 		**	what factory to use.
 		*/
 		case PRODUCE:
-			break; // RA2: no Begin_Production (TibSun's use does not compile against RA2's declaration)
+			house->Begin_Production(Data.Specific.Type, Data.Specific.ID, Data.Specific.IsNaval != 0, false); // RA2: the object id and the ship flag
+			break; // RA2: as above
 
 		/*
 		**	This event is generated when the player puts production on hold. From the
 		**	object type, the factory can be inferred.
 		*/
 		case SUSPEND:
-			house->Suspend_Production(Data.Specific.Type);
+			((EventHouse *)house)->Suspend_Production(Data.Specific.Type, Data.Specific.ID, Data.Specific.IsNaval != 0); // RA2: the object id and the ship flag
 			break;
 
 		/*
@@ -870,7 +893,7 @@ void EventClass::Execute(void)
 		**	object type. From the object type, the exact factory can be inferred.
 		*/
 		case ABANDON:
-			house->Abandon_Production(Data.Specific.Type, Data.Specific.ID);
+			house->Abandon_Production(Data.Specific.Type, Data.Specific.ID, Data.Specific.IsNaval != 0); // RA2: the ship flag
 			break;
 
 		/*
@@ -879,6 +902,7 @@ void EventClass::Execute(void)
 		case PRIMARY:
 			{
 				BuildingClass * building = Data.Target.Whom.As_Building();
+				Planning_Clear_Techno(building, NULL); // RA2: as above
 				if (building && building->IsActive) {
 					building->Toggle_Primary();
 				}
@@ -891,28 +915,15 @@ void EventClass::Execute(void)
 		**	and NavCom to the values specified.
 		*/
 		case MEGAMISSION_F:
-#if 0
-			techno = Data.MegaMission_F.Whom.As_Techno();
-			if (techno && techno->IsActive && techno->Is_Foot()) {
-				((FootClass *)techno)->IsFormationMove = true;
-				((FootClass *)techno)->FormationSpeed = Data.MegaMission_F.Speed;
-				((FootClass *)techno)->FormationMaxSpeed = Data.MegaMission_F.MaxSpeed;
-				FormMove = true;
-				FormSpeed = Data.MegaMission_F.Speed;
-				FormMaxSpeed = Data.MegaMission_F.MaxSpeed;
-				formation = true;
-			}
-#endif
 			// Fall thru to next case...
 
 		case MEGAMISSION:
-			//if (Debug_Print_Events) {
-			//	printf("Whom:%x Tgt:%x Dest:%x ",
-			//		Data.MegaMission.Whom.As_TARGET(),
-			//		Data.MegaMission.Target.As_TARGET(),
-			//		Data.MegaMission.Destination.As_TARGET());
-			//}
 			techno = Data.MegaMission.Whom.As_Techno();
+			if (Data.MegaMission.IsPlanningEvent == 1) { // RA2: a planning event goes to the planning manager
+				Planning_Execute(this); // RA2: as above
+				break; // RA2: as above
+			}
+			Planning_Clear_Techno(techno, this); // RA2: lets go of the planning token first
 			if (techno != NULL && techno->IsActive && techno->Strength > 0 && !techno->IsInLimbo) {
 
 				/*
@@ -924,8 +935,6 @@ void EventClass::Execute(void)
 					object = Data.MegaMission.Target.As_Object();
 					if (object != NULL && (!object->IsActive || object->Strength == 0 || object->IsInLimbo)) {
 						break;
-//						object = NULL;
-//						Data.MegaMission.Target.Invalidate();
 					}
 				}
 
@@ -937,14 +946,12 @@ void EventClass::Execute(void)
 					object = Data.MegaMission.Destination.As_Object();
 					if (object != NULL && (!object->IsActive || object->Strength == 0 || object->IsInLimbo)) {
 						break;
-//						object = NULL;
-//						Data.MegaMission.Destination.Invalidate();
 					}
 				}
 
 				if (Data.MegaMission.Mission == MISSION_ENTER && techno->CurrentMission == MISSION_ENTER && techno->Is_Foot()) {
 					AbstractClass * target = Data.MegaMission.Destination.As_Abstract();
-					if (target != NULL && target->RTTI == RTTI_BUILDING && techno->Contact_With_Whom() == target) {
+					if (target != NULL && target->RTTI == RTTI_BUILDING && techno->Radio_Link(0) == target) { // RA2: Radio_Link, not Contact_With_Whom
 						break;
 					}
 				}
@@ -955,42 +962,40 @@ void EventClass::Execute(void)
 				if (!techno->IsTethered) {
 					techno->Transmit_Message(RADIO_OVER_OUT);
 				} else {
-					TechnoClass * radio = techno->Contact_With_Whom();
-					if (radio != NULL && radio->IsActive) {
-						BuildingClass * building = dynamic_cast<BuildingClass *>(radio); /// Note, not As_BuildingClass(), that uses Abstract to Building, this is Techno to Building
-						if (building != NULL && building->Class->IsRefinery) {
-							techno->Transmit_Message(RADIO_OVER_OUT);
-							techno->IsTethered = false;
-						}
+					TechnoClass * radio = techno->Radio_Link(0); // RA2: as above
+					if (radio != NULL && radio->IsActive && radio->RTTI == RTTI_BUILDING && ((BuildingClass *)radio)->Class->IsDockUnload) { // RA2: a building that takes docked units
+						techno->Transmit_Message(RADIO_OVER_OUT); // RA2: as above
+						techno->IsTethered = false; // RA2: as above
 					}
 				}
 				if (techno->QueueUpToEnter != NULL) { // RA2: QueueUpToEnter
 					techno->QueueUpToEnter = NULL; // RA2: QueueUpToEnter
 				}
 				if (techno->Is_Foot()) {
-					//if (!formation) ((FootClass *)techno)->IsFormationMove = false;
 					if (((FootClass *)techno)->Team && Data.MegaMission.Mission != MISSION_UNLOAD) {
-						((FootClass *)techno)->Team->Remove((FootClass *)techno);
+						((FootClass *)techno)->Team->Remove((FootClass *)techno, -1, true); // RA2: the third argument
 					}
 				}
 
 				if (object != NULL) {
 					if (PlayerPtr->Is_Ally(techno)) {
-						object->Clicked_As_Target();
+						object->Clicked_As_Target(7); // RA2: Clicked_As_Target takes the click kind, 7
 					}
 				}
 
 				/*
 				**	Test to see if the navigation target should really be queued rather
-				**	than assigned to the object. This would be the case if this is a
-				**	special queued move mission and there is already a valid navigation
-				**	target for this unit.
+				**	than assigned to the object.
 				*/
-				bool q = (Data.MegaMission.Mission == MISSION_QMOVE);
+				int mission = techno->RespondMegaEventMission(this); // RA2: the mission comes from the event
+				techno->QueueMission((MissionType)mission, false); // RA2: as above
 
-				techno->Assign_Mission((MissionType)Data.MegaMission.Mission);
-
-				FootClass * foot = dynamic_cast<FootClass *>(techno); /// Note, not As_FootClass(), that uses Abstract to Foot, this is Techno to Foot
+				FootClass * foot; // RA2: the flag test, not a dynamic cast
+				if (techno->AbstractFlags & 4) { // RA2: as above
+					foot = (FootClass *)techno; // RA2: as above
+				} else {
+					foot = NULL; // RA2: as above
+				}
 				if (foot != NULL) {
 					foot->SuspendedNavCom = NULL;
 				}
@@ -1003,30 +1008,19 @@ void EventClass::Execute(void)
 				*/
 				if (Data.MegaMission.Mission == MISSION_GUARD_AREA && techno->Is_Foot()) {
 					techno->Assign_Target(NULL);
-					techno->Assign_Destination(Data.MegaMission.Target.As_Abstract());
-					techno->ArchiveTarget = Data.MegaMission.Target.As_Abstract();
+					techno->Assign_Destination(Data.MegaMission.Target.As_Abstract(), true); // RA2: the flag
+					techno->Assign_Archive_Target(Data.MegaMission.Target.As_Abstract()); // RA2: a call
 				} else {
 					if (foot != NULL) {
-						foot->ArchiveTarget = NULL;
+						foot->Assign_Archive_Target(NULL); // RA2: a call
+						foot->Clear_Navigation_List(); // RA2: as above
 					}
-					if (q && foot != NULL) {
-						foot->Queue_Navigation_List(Data.MegaMission.Destination.As_Abstract());
-					} else {
-						if (foot != NULL) {
-							foot->Clear_Navigation_List();
-						}
-						techno->Assign_Target(Data.MegaMission.Target.As_Abstract());
-						techno->Assign_Destination(Data.MegaMission.Destination.As_Abstract());
+					techno->Assign_Target(Data.MegaMission.Target.As_Abstract()); // RA2: as above
+					techno->Assign_Destination(Data.MegaMission.Destination.As_Abstract(), true); // RA2: the flag
+					if (Data.MegaMission.Follow.Is_Valid()) { // RA2: the follow target
+						techno->Set_Follow_Target(Data.MegaMission.Follow.As_Abstract()); // RA2: as above
 					}
 				}
-
-#ifdef NEVER
-				if ((techno->What_Am_I() == RTTI_UNIT || techno->What_Am_I() == RTTI_INFANTRY) &&
-						Data.MegaMission.Mission == MISSION_GUARD_AREA) {
-
-					((FootClass *)techno)->ArchiveTarget = Data.MegaMission.Destination;
-				}
-#endif
 			}
 			break;
 
@@ -1035,13 +1029,10 @@ void EventClass::Execute(void)
 		*/
 		case IDLE:
 			techno = Data.Target.Whom.As_Techno();
-			if (techno != NULL && techno->IsActive && !techno->IsInLimbo && !techno->IsTethered) {
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
+			if (techno != NULL && techno->IsActive && !techno->IsInLimbo && !techno->IsTethered && techno->CurrentMission != MISSION_CONSTRUCTION && techno->CurrentMission != MISSION_DECONSTRUCTION) { // RA2: no construction/deconstruction break inside, they are tested here
 
-				if (techno->CurrentMission == MISSION_CONSTRUCTION || techno->CurrentMission == MISSION_DECONSTRUCTION) {
-					break;
-				}
-
-				if (!techno->IsOnBridge && Map[(Coord const &)techno->PositionCoord].Ramp == RAMP_NONE && techno->Is_On_Elevation()) {
+				if (!techno->IsOnBridge && Map[Coord(techno->Position)].Ramp == RAMP_NONE && techno->Is_On_Elevation()) { // RA2: the ramp test builds a Coord copy
 					break;
 				}
 
@@ -1053,11 +1044,14 @@ void EventClass::Execute(void)
 					((FootClass *)techno)->WaypointOffsetCell = Cell(0, 0);
 					((FootClass *)techno)->WaypointTargetCell = Cell(0, 0);
 				}
-				techno->Transmit_Message(RADIO_OVER_OUT);
-				techno->Assign_Destination(NULL);
+				techno->SendToEachLink(RADIO_OVER_OUT); // RA2: to every link
+				techno->Assign_Destination(NULL, true); // RA2: the flag
 				techno->Assign_Target(NULL);
-				if (techno->RTTI == RTTI_UNIT && ((UnitClass *)techno)->Class->IsToHarvest && techno->CurrentMission == MISSION_HARVEST) {
-					techno->Assign_Mission(MISSION_GUARD);
+				if (techno->SpawnManager) { // RA2: spawned objects let go of their target
+					techno->SpawnManager->ResetTarget(); // RA2: as above
+				}
+				if (techno->RTTI == RTTI_UNIT && ((UnitClass *)techno)->Class->IsToHarvest && (techno->CurrentMission == MISSION_HARVEST || techno->CurrentMission == MISSION_RETURN)) { // RA2: also while returning
+					techno->QueueMission(MISSION_GUARD, false); // RA2: MISSION_GUARD is queued, not assigned
 					techno->Commence();
 				}
 			}
@@ -1065,43 +1059,48 @@ void EventClass::Execute(void)
 
 		case DEPLOY:
 			techno = Data.Target.Whom.As_Techno();
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
 			if (techno != NULL && techno->IsActive && !techno->IsInLimbo && !techno->IsTethered && techno->StunDuration == 0) {
 
 				if (!techno->IsOnBridge) {
-					if (!Map[(Coord const &)techno->PositionCoord].Ramp != 0 && techno->Is_On_Elevation()) {
+					if (!Map[Coord(techno->Position)].Ramp != 0 && techno->Is_On_Elevation()) { // RA2: the exe reads the object position
 						break;
 					}
 				}
 
-				if (techno->CurrentMission == MISSION_CONSTRUCTION || techno->CurrentMission == MISSION_DECONSTRUCTION || techno->RTTI == RTTI_AIRCRAFT) {
-					break;
-				}
-
-				bool should_unload = false;
-				Cell cell = techno->PositionCell;
-				if (cell == CELL_NONE) {
-					should_unload = true;
-				} else {
-					building = Map[cell].Cell_Building();
-					if (building == NULL || !building->Class->IsWeaponsFactory) {
-						should_unload = true;
+				if (techno->CurrentMission != MISSION_CONSTRUCTION && techno->CurrentMission != MISSION_DECONSTRUCTION && techno->RTTI != RTTI_AIRCRAFT) { // RA2: the three tests are one condition
+					Cell cell = techno->Get_Cell(); // RA2: the cell of the object
+					if (cell != CELL_NONE) { // RA2: as above
+						building = Map[cell].Cell_Building(); // RA2: as above
+						if (building && building->Class->IsWeaponsFactory) { // RA2: as above
+							break; // RA2: as above
+						}
 					}
-				}
-
-				if (should_unload) {
 					techno->Transmit_Message(RADIO_OVER_OUT);
-					techno->Assign_Destination(NULL);
+					techno->Assign_Destination(NULL, true); // RA2: the flag
 					techno->Assign_Target(NULL);
-					techno->Assign_Mission(MISSION_UNLOAD);
+					techno->QueueMission(MISSION_UNLOAD, false); // RA2: MISSION_UNLOAD is queued
 				}
 			}
 			break;
+
+		/*
+		**	Detonate the bomb attached to the object. RA2
+		*/
+		case DETONATE: // RA2: DETONATE is a new event: the bomb attached to the object goes off
+			techno = Data.Target.Whom.As_Techno(); // RA2: as above
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
+			if (techno && techno->AttachedBomb) { // RA2: as above
+				techno->AttachedBomb->Detonate(); // RA2: as above
+			}
+			break; // RA2: as above
 
 		/*
 		**	Request that the unit/infantry/aircraft scatter from its current location.
 		*/
 		case SCATTER:
 			techno = Data.Target.Whom.As_Techno();
+			Planning_Clear_Techno(techno, NULL); // RA2: as above
 			if (techno != NULL && techno->Is_Foot() && techno->IsActive && !techno->IsInLimbo && !techno->IsTethered) {
 				((FootClass *)techno)->IsScattering = true;
 				techno->Scatter(COORD_NONE, true, false);
@@ -1121,13 +1120,7 @@ void EventClass::Execute(void)
 		**	Give parting message while palette is fading to black.
 		*/
 		case EXIT:
-			//Theme.Queue_Song(THEME_NONE);
-			//Stop_Speaking();
-			//Speak(VOX_CONTROL_EXIT);
-			//while (Is_Speaking()) {
-			//	Call_Back();
-			//}
-			//GameActive = false;
+			DebugString("Processing EXIT event on frame %d\n", ::Frame); // RA2: logs the frame
 			PlayerAborts = true;
 			break;
 
@@ -1148,10 +1141,12 @@ void EventClass::Execute(void)
 
 			house = Houses[ID];
 			if (house != PlayerPtr && house != NULL) {
-				str = Fetch_String(TXT_PLAYER_CHANGED_SPEED);
-				if (str != NULL && strlen(str) != 0) {
-					sprintf(msg, str, (char *)house->IniName);
-				} // RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
+				str = StringTable::LoadString("TXT_PLAYER_CHANGED_SPEED", NULL, "D:\\Ra2\\Event.CPP", 1401); // RA2: wide
+				if (str != NULL && wcslen(str) != 0) { // RA2: the executable measures the text with wcslen
+					wchar_t buffer[256]; // RA2: the buffer is a local wide string
+					swprintf(buffer, str, house->UIName); // RA2: as above
+					Session.Messages.Add_Message(NULL, 0, buffer, house->Scheme, TextPrintType(0x4046), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: the message is shown
+				}
 			}
 			break;
 
@@ -1172,13 +1167,12 @@ void EventClass::Execute(void)
 			*/
 			if (SpecialDialog == SDLG_NONE) {
 				CDTimerClass<SystemTimerClass> timer;
-				//timer.Start();
 				timer = TICKS_PER_SECOND * 4;
 
-				WWMessageBox().Process(TXT_SAVING_GAME, TXT_NONE);
+				WWMessageBox().Process(StringTable::LoadString("TXT_SAVING_GAME", NULL, "D:\\Ra2\\Event.CPP", 1434), StringTable::LoadString("TXT_NONE", NULL, "D:\\Ra2\\Event.CPP", 1434), NULL, NULL, false); // RA2: wide text
+				Save_Game("SAVEGAME.NET", StringTable::LoadString("TXT_MULTIPLAYER_GAME", NULL, "D:\\Ra2\\Event.CPP", 1436), false); // RA2: the game is saved
 
-
-				while (timer > 0) { // RA2: no Save_Game (TibSun's use does not compile against RA2's declaration)
+				while (timer > 0) { // RA2: as above
 					Call_Back();
 				}
 
@@ -1187,7 +1181,8 @@ void EventClass::Execute(void)
 				Map.Render();
 			}
 			else {
-			} // RA2: no Save_Game (TibSun's use does not compile against RA2's declaration)
+				Save_Game("SAVEGAME.NET", StringTable::LoadString("TXT_MULTIPLAYER_GAME", NULL, "D:\\Ra2\\Event.CPP", 1447), false); // RA2: as above
+			}
 			break;
 
 		/*
@@ -1198,11 +1193,6 @@ void EventClass::Execute(void)
 		**	- Place his units on the map
 		*/
 		case ADDPLAYER:
-			// int i;
-			// printf("ADDPLAYER EVENT!\n");
-			// for (i=0;i<Data.Variable.Size;i++) {
-			// 	printf("%d\n", ((char *)Data.Variable.Pointer)[i]);
-			// }
 			if (ID != PlayerPtr->HeapID) {
 				delete [] Data.Variable.Pointer;
 			}
@@ -1213,14 +1203,98 @@ void EventClass::Execute(void)
 			index = Data.General.Value;
 
 			house = Houses[index];
-			if (Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) {
-				house->Flag_To_Die();
-			} else {
+			if (Session.Type == GAME_INTERNET && Session.ViaPacketRouter) { // RA2: a game through the packet router
 				if (house->Is_Human_Player()) {
-					house->AI_Takeover();
+					OwnerTalk.Send_Remove_Player(index); // RA2: tells the packet router
+				}
+			}
+			if ((Session.Type == GAME_INTERNET && WestwoodOnline_Tournament) || house->Is_Human_Player()) { // RA2: as above
+				house->Flag_To_Die(); // RA2: as above
+			}
+			break; // RA2: as above
+
+		/*
+		**	Special self destruct action requested. This is active in the multiplayer mode.
+		*/
+		case DESTRUCT: // RA2: as above
+			house->Flag_To_Die(); // RA2: as above
+			break; // RA2: as above
+
+		case FALLBACK_HOST: // RA2
+			DebugString("Received FALLBACKHOST event\n"); // RA2: FALLBACK_HOST is a new event: the host that answers the timing
+			Session.LastTimingID = Data.General.Value; // RA2: as above
+			break; // RA2: as above
+
+		case ADDRESS_CHANGE: // RA2
+			{
+				DebugString("Executing ADDRESSCHANGE event for player %d\n", Data.Address.Value); // RA2: ADDRESS_CHANGE is a new event: the address of a player changes
+				unsigned char node[6]; // RA2: as above
+				unsigned char network[4]; // RA2: as above
+				memset(node, 0, sizeof(node)); // RA2: as above
+				memset(network, 0, sizeof(network)); // RA2: as above
+				*(long *)node = Data.Address.Node; // RA2: as above
+				IPXAddressClass address(network, node, 0); // RA2: as above
+				DebugString("New address is %s\n", address.As_String(&address)); // RA2: as above
+				Ipx.Set_Connection_Address(Data.Address.Value, &address); // RA2: as above
+				OwnerTalk.Set_Address(Data.Address.Value, &address); // RA2: as above
+				int count = Session.Players.Count(); // RA2: as above
+				for (i = 0; i < count; i++) { // RA2: as above
+					if (Session.Players[i]->Player.ID == Data.Address.Value) { // RA2: as above
+						break; // RA2: as above
+					}
+				}
+				if (i < count) { // RA2: as above
+					Session.Players[i]->Address = address; // RA2: as above
 				}
 			}
 			break;
+
+		case ABOUT_TO_EXIT: // RA2
+			{
+				DebugString("Processing ABOUTTOEXIT event on frame %d\n", ::Frame); // RA2: ABOUT_TO_EXIT is a new event: the host leaves, the next one takes over
+				if (Session.Am_I_Master(NULL)) { // RA2: as above
+					OutList.Add(EventClass(PlayerPtr->HeapID, EXIT)); // RA2: as above
+					Session.RouterProbeActive = true; // RA2: the byte at Session +0x3020
+				}
+				Session.AboutToExitActive = true; // RA2: the byte at Session +0x3040, set while the event is processed
+				int host = OwnerTalk.Update_Master(); // RA2: as above
+				if (host != -1) { // RA2: as above
+					HouseClass * hostp = Houses[host]; // RA2: as above
+					if (hostp) { // RA2: as above
+						if (Session.Players.Count() > 2) { // RA2: as above
+							IPXAddressClass * address = NULL; // RA2: as above
+							for (i = 0; i < Session.Players.Count(); i++) { // RA2: as above
+								if (Session.Players[i]->Player.ID == host) { // RA2: as above
+									address = &Session.Players[i]->Address; // RA2: as above
+									Session.PacketRouterPort = Session.PlayerPorts[i]; // RA2: as above
+									break; // RA2: as above
+								}
+							}
+							unsigned char network[4]; // RA2: as above
+							unsigned char node[6]; // RA2: as above
+							address->Get_Address(network, node); // RA2: as above
+							Session.PacketRouterAddress.Set_Address(network, node, 0); // RA2: as above
+							DebugString("Session.PacketRouterAddress = %s\n", Session.PacketRouterAddress.As_String(NULL)); // RA2: as above
+							DebugString("Session.PacketRouterPort = %d\n", Session.PacketRouterPort); // RA2: as above
+							if (!Session.Am_I_Master(NULL)) { // RA2: as above
+								Ipx.Set_Lobby_Address(&Session.PacketRouterAddress); // RA2: as above
+							}
+						}
+						wcscpy(Session.MasterPlayerName, hostp->UIName); // RA2: as above
+						DebugString("New game host is %ls\n", Session.MasterPlayerName); // RA2: as above
+						Session.MasterPlayerID = host; // RA2: as above
+						if (Session.Am_I_Master(NULL)) { // RA2: as above
+							OwnerTalk.Send_Player_List(); // RA2: as above
+						}
+					}
+					Session.ExitEventPending = ::Frame; // RA2: as above
+					Session.ExitEventPlayer = host; // RA2: as above
+					Session.ExitEventFrame = ((Session.MaxAhead + ::Frame + 10) / 10) * 10; // RA2: as above
+					Session.LastTimingID = -1; // RA2: as above
+				}
+				Session.AboutToExitActive = false; // RA2: as above
+			}
+			break; // RA2: as above
 
 		case LATENCYFUDGE:
 			DebugString("Executing LATENCYFUDGE event. Frame is %d\n", ::Frame);
@@ -1229,10 +1303,12 @@ void EventClass::Execute(void)
 
 			house = Houses[ID];
 			if (house != PlayerPtr && house != NULL) {
-				str = Fetch_String(TXT_PLAYER_CHANGED_LATENCY);
-				if (str != NULL && strlen(str) != 0) {
-					sprintf(msg, str, (char *)house->IniName);
-				} // RA2: no Add_Message (TibSun's use does not compile against RA2's declaration)
+				str = StringTable::LoadString("TXT_PLAYER_CHANGED_LATENCY", NULL, "D:\\Ra2\\Event.CPP", 1718); // RA2: wide
+				if (str != NULL && wcslen(str) != 0) { // RA2: the executable measures the text with wcslen
+					wchar_t buffer[256]; // RA2: as above
+					swprintf(buffer, str, house->UIName); // RA2: as above
+					Session.Messages.Add_Message(NULL, 0, buffer, house->Scheme, TextPrintType(0x4046), int(Rule->MessageDelay * TICKS_PER_MINUTE), false); // RA2: as above
+				}
 			}
 			break;
 
@@ -1242,16 +1318,8 @@ void EventClass::Execute(void)
 		// COMM_MULTI_E_COMP protocol.
 		//
 		case TIMING:
-			Data.Timing.MaxAhead -= Scen->Special.IsFogOfWar ? 10 : 0;
+			Data.Timing.MaxAhead -= (Scen->Special.IsFogOfWar) ? 10 : 0; // RA2: the fog of war special takes 10 from the delay
 
-#if (TIMING_FIX)
-			//
-			// If MaxAhead is about to increase, we're vulnerable to a Packet-
-			// Received-Too-Late error, if any system generates an event after
-			// this TIMING event, but before it executes.  So, record the
-			// period of vulnerability's frame start & end values, so we
-			// can reschedule these events to execute after it's over.
-			//
 			if (Data.Timing.MaxAhead > Session.MaxAhead || Data.Timing.FrameSendRate > Session.FrameSendRate) {
 				NewMaxAheadFrame1 = Frame;
 				NewMaxAheadFrame2 = Data.Timing.FrameSendRate * ((Data.Timing.FrameSendRate + Data.Timing.MaxAhead + Frame - 1) / Data.Timing.FrameSendRate);
@@ -1259,14 +1327,11 @@ void EventClass::Execute(void)
 				NewMaxAheadFrame1 = 0;
 				NewMaxAheadFrame2 = 0;
 			}
-#endif
-
-			ul = Session.MaxMaxAhead;
 
 			Session.DesiredFrameRate = Data.Timing.DesiredFrameRate;
 			Session.MaxAhead = Data.Timing.MaxAhead;
 
-			if (ul <= Session.MaxAhead) {
+			if ((unsigned int)Session.MaxMaxAhead <= Session.MaxAhead) { // RA2: an unsigned compare
 				Session.MaxMaxAhead = Session.MaxAhead;
 			}
 

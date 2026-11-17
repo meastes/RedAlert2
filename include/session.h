@@ -766,7 +766,7 @@ class SessionClass
 		int SlowestResponse; // RA2: +0x3034, the largest response time seen
 		bool UseRouter; // RA2: +0x3038, cleared by -NOROUTER (Parse_Command_Line); the Internet game tests it
 		int LastTimingID; // RA2: +0x303C, the id of the last timing report (-1 none)
-		bool unknown_3098;
+		bool AboutToExitActive; // RA2: +0x3040, set while an ABOUT_TO_EXIT event is processed (Execute)
 		unsigned int RouterResponse; // RA2: +0x3044, the router response time (default 20), shown as "Rout resp"
 		int ExitEventPending; // RA2: +0x3048, an EXIT event waits to be moved to ExitEventFrame (Queue)
 		int ExitEventFrame; // RA2: +0x304C, the frame the EXIT event moves to

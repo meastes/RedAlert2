@@ -60,4 +60,4 @@ class EgoClass {
 		TextPrintType 	Flags;
 };
 
-void Show_Who_Was_Responsible(void);
+void Show_Credits(void); // RA2: RA2 scrolls the credits text here (was Show_Who_Was_Responsible)

@@ -378,7 +378,7 @@ SessionClass::SessionClass(void) : // RA2: RA2's signature
 	SlowestResponse = 0; // RA2: as above
 	UseRouter = true; // RA2: as above
 	LastTimingID = -1; // RA2: as above
-	unknown_3098 = false; // RA2: as above
+	AboutToExitActive = false; // RA2: as above
 	RouterResponse = 20; // RA2: as above
 	ExitEventPending = 0; // RA2: as above
 	ExitEventFrame = 0; // RA2: as above

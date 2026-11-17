@@ -59,6 +59,7 @@
 #include "misc.h"
 #include "ownrdraw.h"
 #include "scheme.h"
+#include "stringtable.h" // RA2: StringTable::LoadString for {LABEL} in credits lines
 #include "theme.h"
 #include "vector.h"
 #include "windlg.h"
@@ -92,13 +93,9 @@ DynamicVectorClass<EgoClass *> EgoList;
 */
 #define FADE_DELAY		37
 
-/*
-**	Original copy of slide (pref in video mem) that we use to undraw the text
-*/
-Surface *BackgroundSurface;
+Surface * CreditsSurface; // RA2: the credits' surface (0x853118), set by Show_Credits (TibSun: CreditsSurface, the copy the text is undrawn from)
 
-
-Surface * CreditsSurface; // RA2: the credits' surface (0x853118), set by Show_Who_Was_Responsible
+wchar_t CreditsText[5120]; // RA2: 0x85311C, the current credits line as wide text; its size is not shown, the next variable lies 10260 bytes on
 
 
 /***********************************************************************************************
@@ -237,8 +234,60 @@ void EgoClass::Wipe (Surface *background)
 }
 
 
+/*
+**	RA2: converts one credits line to wide text in CreditsText; {LABEL} is looked up in the string table.
+**	The executable has no copy of this function, it is expanded into Show_Credits.
+*/
+inline wchar_t * Credits_Wide_Text (const char *strstart) // RA2: lines are wide text and {LABEL}s are looked up in the string table
+{
+	const char *src = strstart; // RA2: as above
+	wchar_t *dst = CreditsText; // RA2: as above
+	*dst = 0; // RA2: as above
+	while (*src) { // RA2: as above
+		if (*src == '{') { // RA2: as above
+			unsigned len = 0; // RA2: as above
+			src++; // RA2: as above
+			const char *label = src; // RA2: as above
+			while (*src && *src != '}') { // RA2: as above
+				len++; // RA2: as above
+				src++; // RA2: as above
+			} // RA2: as above
+			const wchar_t *text; // RA2: as above
+			if (len == 0) { // RA2: as above
+				text = L"{Missing Label}"; // RA2: as above
+			} else if (len > 31) { // RA2: as above
+				text = L"{Bad Label}"; // RA2: as above
+			} else { // RA2: as above
+				char name[32]; // RA2: as above
+				src = label; // RA2: as above
+				char *np = name; // RA2: as above
+				while (*src && *src != '}') { // RA2: as above
+					if (*src == ' ' || *src == '\t') { // RA2: as above
+						src++; // RA2: as above
+						continue; // RA2: as above
+					} // RA2: as above
+					*np++ = *src++; // RA2: as above
+				} // RA2: as above
+				*np = 0; // RA2: as above
+				if (*src == '}') src++; // RA2: as above
+				text = StringTable::LoadString(name, NULL, "D:\\Ra2\\Egos.CPP", 284); // RA2: as above
+			} // RA2: as above
+			if (text) { // RA2: as above
+				wcscpy(dst, text); // RA2: as above
+				dst += wcslen(text); // RA2: as above
+			} // RA2: as above
+		} else { // RA2: as above
+			*dst++ = *src & 0xFF; // RA2: as above
+			src++; // RA2: as above
+		} // RA2: as above
+	} // RA2: as above
+	*dst = 0; // RA2: as above
+	return CreditsText; // RA2: as above
+}
+
+
 /***********************************************************************************************
- * Show_Who_Was_Responsible -- Main function to print the credits.                             *
+ * Show_Credits -- Main function to print the credits.                             *
  *                                                                                             *
  *                                                                                             *
  *                                                                                             *
@@ -251,18 +300,15 @@ void EgoClass::Wipe (Surface *background)
  * HISTORY:                                                                                    *
  *    9/10/96 0:20AM ST : Created                                                              *
  *=============================================================================================*/
-void Show_Who_Was_Responsible (void)
+void Show_Credits (void) // RA2: 0x4B37C0 (TibSun: Show_Who_Was_Responsible)
 {
 
 	int	i;
-	int	key = KN_NONE;
 
 	/*
 	**	Deault speed of credits scolling. This is the frame delay between pixel scrolls.
 	*/
 	static int speed = 2;
-
-	if (Addon_Enabled(ADDON_FIRESTORM) == true) return;
 
 	LogicalSurface = AlternateSurface;
 
@@ -275,8 +321,8 @@ void Show_Who_Was_Responsible (void)
 	**	If the text starts before column 40 and ends after it then it will be centered.
 	**	If the text starts after column 40 it will be right justified.
 	*/
-	CCFileClass creditsfile ("TSCREDIT.txt");
-	if ( !creditsfile.Is_Available()) return;
+	CCFileClass creditsfile ("CREDITS.TXT"); // RA2: file name
+	if (creditsfile.Is_Available()) { // RA2: the exe jumps to the common cleanup instead of returning here
 	char *credits = new char [creditsfile.Size()+1];
 	creditsfile.Read (credits, creditsfile.Size());
 
@@ -284,8 +330,8 @@ void Show_Who_Was_Responsible (void)
 	**	Initialise the text printing system.
 	*/
 	GadgetClass::Set_Color_Scheme("Green");
-	Fancy_Text_Print(TXT_NONE, *LogicalSurface, LogicalSurface->Get_Rect(), Point2D(0, 0), Fetch_Scheme_By_Name("LightGold"),
-		TBLACK, TextPrintType(TPF_CENTER|TPF_METAL12|TPF_FULLSHADOW));
+	Fancy_Text_Print(L" ", *LogicalSurface, LogicalSurface->Get_Rect(), Point2D(0, 0), Fetch_Scheme_By_Name("LightGold"), // RA2: as above
+		TBLACK, TextPrintType(TPF_CENTER|TPF_METAL12|TPF_FULLSHADOW)); // RA2: wide text " " (TibSun: TXT_NONE)
 
 
 	/*
@@ -298,7 +344,7 @@ void Show_Who_Was_Responsible (void)
 	char				ch, lastchar, oldchar;
 	char				*strstart, *strparse;
 	bool				gotendstr;
-	int				startcolumn, endcolumn, x;
+	int				startcolumn, endcolumn; // RA2: no x, the exe stores 0
 	int				y=HiddenSurface->Get_Height()+2;
 	int 				lastline = -2;
 	EgoClass 		*ego;
@@ -408,17 +454,12 @@ void Show_Who_Was_Responsible (void)
 
 				if (startcolumn > 3 && endcolumn < 8){
 					flags = TextPrintType(flags | TPF_CENTER);
-					x = HiddenSurface->Get_Width() / 2;
 				}else{
-					if (startcolumn <3){
+					if (startcolumn > 8){ // RA2: the exe tests > 8 here (TibSun: < 3)
 						flags = TextPrintType(flags | TPF_RIGHT);
-						//x = endcolumn *HiddenSurface->Get_Width() /80;
-						x = (HiddenSurface->Get_Width() /2) - (HiddenSurface->Get_Width() /12);
-					}else{
-						//x = startcolumn * HiddenSurface->Get_Width() / 2;
-						x = HiddenSurface->Get_Width() / 2;
 					}
 				}
+	// RA2: no x is computed, the exe stores 0 (the column is placed by Render)
 
 				if (startcolumn > 3 && endcolumn < 8 && line - lastline > 1) {
 					flags = TextPrintType(flags | TPF_LIGHTSHADOW);
@@ -436,9 +477,7 @@ void Show_Who_Was_Responsible (void)
 				/*
 				**	Create the new class and add it to our list.
 				*/
-				wchar_t wide[256]; // RA2: EgoClass holds wide text
-				MultiByteToWideChar(CP_ACP, 0, strstart, -1, wide, 256); // RA2: as above
-				ego = new EgoClass (x, y, (unsigned short *)wide, flags); // RA2: as above
+				ego = new EgoClass (0, y, (unsigned short *)Credits_Wide_Text(strstart), flags); // RA2: x is 0, the text is wide
 
 				EgoList.Add (ego);
 
@@ -475,13 +514,6 @@ void Show_Who_Was_Responsible (void)
 	Theme.Stop();
 
 	/*
-	**	Fade to black.
-	*/
-	if (!HicolorFlag) {
-		Set_Palette(BlackPalette, TIMER_SECOND*2, Call_Back);
-	}
-
-	/*
 	**	Clear the Seen Page since we will not be blitting to all of it.
 	*/
 	HiddenSurface->Fill(TBLACK);
@@ -491,8 +523,8 @@ void Show_Who_Was_Responsible (void)
 	**	Create a new graphic buffer to restore the background from. Initialise it to black so
 	**	we can start scrolling before the first slideshow picture is blitted.
 	*/
-	BackgroundSurface = new DSurface(VisibleRect.Width, VisibleRect.Height);
-	BackgroundSurface->Blit_From(*HiddenSurface);
+	CreditsSurface = new DSurface(VisibleRect.Width, VisibleRect.Height); // RA2: the credits surface (0x853118) takes the place of TibSun's BackgroundSurface
+	CreditsSurface->Blit_From(*HiddenSurface); // RA2: as above
 
 	/*
 	**	Go away nasty keyboard.
@@ -508,7 +540,7 @@ void Show_Who_Was_Responsible (void)
 	if ((double)oldvolume == 0) {
 		Options.Set_Score_Volume(0.4f, false);
 	}
-	Theme.Queue_Song(Theme.From_Name("MADRAP"));
+	Theme.Queue_Song(Theme.From_Name("CREDITS")); // RA2: the credits theme (TibSun: MADRAP)
 
 	/*
 	**	Init misc timing variables.
@@ -534,7 +566,7 @@ void Show_Who_Was_Responsible (void)
 			fresh = true;
 			if (!WindowedMode) {
 				VisibleSurface->Fill(TBLACK);
-				BackgroundSurface->Fill(TBLACK);
+				CreditsSurface->Fill(TBLACK); // RA2: as above
 			}
 			Show_Mouse();
 			Hide_Mouse();
@@ -559,7 +591,7 @@ void Show_Who_Was_Responsible (void)
 		**	Scroll the text. If any text goes off the top then delete that object.
 		*/
 		for (i=EgoList.Count()-1 ; i>=0 ; i--){
-			//EgoList[i]->Wipe(BackgroundSurface);
+			//EgoList[i]->Wipe(CreditsSurface);
 			if ( EgoList[i]->Scroll(2) ){
 				delete EgoList[i];
 				EgoList.Delete_Index(i);
@@ -576,8 +608,8 @@ void Show_Who_Was_Responsible (void)
 		Rect scroll_source(0, 34, VideoModeWidth, VideoModeHeight - 66);
 		Rect top_band(0, 0, VideoModeWidth, 34);
 		Rect bottom_band(0, VideoModeHeight - 34, VideoModeWidth, 34);
-		BackgroundSurface->Fill_Rect(top_band, TBLACK);
-		BackgroundSurface->Fill_Rect(bottom_band, TBLACK);
+		CreditsSurface->Fill_Rect(top_band, TBLACK); // RA2: as above
+		CreditsSurface->Fill_Rect(bottom_band, TBLACK); // RA2: as above
 
 		/*
 		**	Render all the text strings in their new positions.
@@ -586,41 +618,36 @@ void Show_Who_Was_Responsible (void)
 			EgoList[i]->Render(fresh);
 		}
 
-		int step = 0;
-		unsigned short *bsurf = (unsigned short *)BackgroundSurface->Lock();
+		unsigned short *bsurf = (unsigned short *)CreditsSurface->Lock(); // RA2: as above
 		if (bsurf) {
-			step = BackgroundSurface->Stride() / 2;
+			int step = CreditsSurface->Stride() / 2; // RA2: step is local to the locked block
 			int fade_x;
-			int fade_y = 0;
+			int fade_y; // RA2: the fade runs over 32 rows
 			int xidx;
 			int yidx;
-			for (int raw_alpha = 256; raw_alpha > 0; raw_alpha -= 8) {
-				int alpha = min(raw_alpha, 255);
+			for (fade_y = 0; fade_y < 32; fade_y++) { // RA2: the fade has 32 rows (TibSun: none)
+				int alpha = min(256 - fade_y * 8, 255); // RA2: alpha falls 8 per row from 256, at most 255
 				xidx = step * fade_y;
 				yidx = step * (VideoModeHeight - fade_y - 1);
 				for (fade_x = 0; fade_x < VideoModeWidth; fade_x++) {
 					(bsurf + xidx)[fade_x] = OD_Blend_Color((bsurf + xidx)[fade_x], 0, alpha);
 					(bsurf + yidx)[fade_x] = OD_Blend_Color((bsurf + yidx)[fade_x], 0, alpha);
 				}
-				fade_y++;
 			}
-			BackgroundSurface->Unlock();
+			CreditsSurface->Unlock(); // RA2: as above
 		}
 
 		if (GameInFocus) {
 			if (fresh) {
-				VisibleSurface->Blit_From(*BackgroundSurface);
+				VisibleSurface->Blit_From(*CreditsSurface); // RA2: as above
 			} else {
-				VisibleSurface->Blit_From(top_band, *BackgroundSurface, top_band);
+				VisibleSurface->Blit_From(top_band, *CreditsSurface, top_band); // RA2: as above
 				VisibleSurface->Blit_From(scroll_dest, *VisibleSurface, scroll_source);
-				VisibleSurface->Blit_From(bottom_band, *BackgroundSurface, bottom_band);
+				VisibleSurface->Blit_From(bottom_band, *CreditsSurface, bottom_band); // RA2: as above
 			}
 		}
 
 		fresh = false;
-		if (frame > 1000 && !Theme.Still_Playing()){
-			Theme.Queue_Song(THEME_NONE);
-		}
 
 		/*
 		**	Stop calling Theme.AI after a while so a different song doesnt start playing
@@ -635,54 +662,31 @@ void Show_Who_Was_Responsible (void)
 		/*
 		**	If user hits escape then break.
 		*/
-		key = KN_NONE;
-		if (Keyboard->Check()){
-			key = Keyboard->Get();
-			if (key == KN_ESC){
+		if (Keyboard->Check()){ // RA2: no key variable, no Theme.Fade_Out/palette fade after escape
+			if (Keyboard->Get() == KN_ESC){ // RA2: the key is not kept, the exe compares the Get result
 				break;
 			}
-#if (0)
-			if (key == KN_Z){
-				speed--;
-				if (speed <1 ) speed=1;
-				time = TickCount;
-				frame = 0;
-			}
-			if (key == KN_X){
-				speed++;
-				time = TickCount;
-				frame = 0;
-			}
-#endif	//(0)
-
 		}
 
 	}
 
-	if (key == KN_ESC){
-		Theme.Fade_Out();
-		if (!HicolorFlag) {
-			Set_Palette(BlackPalette, TIMER_SECOND*2, Call_Back);
+	/*
+	**	Wait for the picture to fade down
+	*/
+	while (picture_frame <= FADE_DELAY+FRAME_DELAY){ // RA2: runs after escape too
+		if (picture_frame < FRAME_DELAY && picture_frame > 10+FADE_DELAY){ // RA2: as above
+			picture_frame = FRAME_DELAY; // RA2: as above
 		}
-	}else{
+		frame++; // RA2: as above
+		picture_frame++; // RA2: as above
+
+		Call_Back(); // RA2: as above
+
 		/*
-		**	Wait for the picture to fade down
+		**	Kill any spare time
 		*/
-		while (picture_frame <= FADE_DELAY+FRAME_DELAY){
-			if (picture_frame < FRAME_DELAY && picture_frame > 10+FADE_DELAY){
-				picture_frame = FRAME_DELAY;
-			}
-			frame++;
-			picture_frame++;
+		while (TickCount - time < frame * speed && !Keyboard->Check()) {} // RA2: as above
 
-			Call_Back();
-
-			/*
-			**	Kill any spare time
-			*/
-			while (TickCount - time < frame * speed && !Keyboard->Check()) {}
-
-		}
 	}
 
 	/*
@@ -698,7 +702,7 @@ void Show_Who_Was_Responsible (void)
 	Theme.Stop();
 	Options.Set_Score_Volume(oldvolume, false);
 
-	delete BackgroundSurface;
+	delete CreditsSurface; // RA2: as above
 
 	delete [] credits;
 
@@ -707,5 +711,6 @@ void Show_Who_Was_Responsible (void)
 		EgoList.Delete_Index(0);
 	}
 	EgoList.Clear();
+	} // RA2: as above
 }
 
