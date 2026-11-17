@@ -431,7 +431,7 @@ HRESULT MouseClass::Load(IStream * stream)
 			SubzoneTracking[i].Clear();
 		}
 
-		for (i = 0; i < MZONE_COUNT; i++) {
+		for (i = 0; i < MZONE_CRUSHER_ALL; i++) { // RA2: 12 zone layers (Zones[MZONE_CRUSHER_ALL] at +0x18), the loop ends at 12
 			delete Zones[i];
 			Zones[i] = NULL;
 		}
@@ -503,7 +503,7 @@ HRESULT MouseClass::Load(IStream * stream)
 			return(result);
 		}
 
-		for (i = 0; i < MZONE_COUNT; i++) {
+		for (i = 0; i < MZONE_CRUSHER_ALL; i++) { // RA2: as above
 			Zones[i] = new unsigned short[ZoneCount];
 			result = stream->Read(Zones[i], sizeof(unsigned short) * ZoneCount, NULL);
 			if (FAILED(result)) {
@@ -618,7 +618,7 @@ HRESULT MouseClass::Save(IStream * stream)
 			return(result);
 		}
 
-		for (i = 0; i < MZONE_COUNT; i++) {
+		for (i = 0; i < MZONE_CRUSHER_ALL; i++) { // RA2: as above
 			result = stream->Write(Zones[i], sizeof(unsigned short) * ZoneCount, NULL);
 			if (FAILED(result)) {
 				return(result);
