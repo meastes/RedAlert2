@@ -467,7 +467,7 @@ power,0x0061C450,0x0061D220,tibsun,"functions compiled from src/power.cpp, match
 unk_0061D220,0x0061D220,0x0061D440,unknown,code not assigned to a module
 preview,0x0061D440,0x0061EA80,tibsun,"functions compiled from src/preview.cpp, matched, without gaps; ??0MapPreviewClass@@QAE@XZ not placed"
 unk_0061EA80,0x0061EA80,0x0061ED00,unknown,code not assigned to a module
-progress,0x0061ED00,0x00620410,tibsun,"functions compiled from src/progress.cpp, without gaps; matched except ?Player_Scheme@ProgressScreenClass@@QAEPAVColorScheme@@H@Z and ?Draw_Player@ProgressScreenClass@@QAEXPAVColorScheme@@PBGAAVPoint2D@@H_N@Z and ?Display_Progress@ProgressScreenClass@@QAEXVPoint2D@@@Z; one placed by the gap; ?Draw_Player@ProgressScreenClass@@QAEXPAVColorScheme@@PBGAAVPoint2D@@H_N@Z to ?Display_Progress@ProgressScreenClass@@QAEXVPoint2D@@@Z share the room between their neighbours"
+progress,0x0061ED00,0x00620410,tibsun,"functions compiled from src/progress.cpp, matched, without gaps; one placed by the gap"
 unk_00620410,0x00620410,0x00620600,unknown,code not assigned to a module
 psystype,0x00620600,0x00620EA0,tibsun,"functions compiled from src/psystype.cpp, matched, without gaps; five placed by the gap; ?Create_And_Place@ParticleSystemTypeClass@@UBE_NABVCell@@PAVHouseClass@@@Z not placed; ?Create_One_Of@ParticleSystemTypeClass@@UBEPAVObjectClass@@PAVHouseClass@@@Z not placed"
 unk_00620EA0,0x00620EA0,0x00621120,unknown,code not assigned to a module
