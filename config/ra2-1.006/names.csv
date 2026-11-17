@@ -2034,7 +2034,7 @@ address,symbol,evidence
 0x004A6B50,?Get_Allowable_Index@DropshipLoadoutClass@@CIHPAVTechnoTypeClass@@@Z,"compiled from src/dropship.cpp, matched"
 0x004A6B90,?Dropship_Screen@@YIXXZ,"inferred: referenced by matched src/scenario.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x004A9AF0,??0RGBClass@@QAE@XZ,"inferred: referenced by matched src/rules.cpp (1 reference); across all matched code never at another address, and no other symbol here"
-0x004AA4A0,??0DSurface@@QAE@HH_N@Z,"inferred: referenced by matched src/ddraw.cpp (8 references); across all matched code never at another address, and no other symbol here"
+0x004AA4A0,??0DSurface@@QAE@HH_N@Z,"compiled from src/dsurface.cpp, matched"
 0x004AA5A0,??1DSurface@@UAE@XZ,"compiled from src/dsurface.cpp, matched"
 0x004AA610,??0DSurface@@QAE@XZ,"compiled from src/dsurface.cpp, matched"
 0x004AA660,?Create_Primary@DSurface@@SIPAV1@PAPAV1@@Z,"compiled from src/dsurface.cpp, matched"
