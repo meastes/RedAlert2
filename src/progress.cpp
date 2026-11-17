@@ -178,16 +178,23 @@ ColorScheme * ProgressScreenClass::Text_Scheme(void)
 /// </summary>
 ColorScheme * ProgressScreenClass::Player_Scheme(int index)
 {
-	ColorScheme * scheme = NULL;
-	if ((Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) && Session.Players[index]->Slot.SpectatorFlag == -1) {
-		scheme = ColorSchemes[Session.Color_Index_To_Scheme(-2)];
-		return(scheme);
+	ColorScheme * scheme = NULL; // RA2: the structure of meastes' body: named locals for the team, colour and scheme index
+	if (Session.Type == GAME_IPX || Session.Type == GAME_INTERNET) { // RA2: as above
+		int team = Session.Players[index]->Slot.SpectatorFlag; // RA2: as above
+		if (team == -1) { // RA2: as above
+			int scheme_index = Session.Color_Index_To_Scheme(-2); // RA2: as above
+			scheme = ColorSchemes[scheme_index]; // RA2: as above
+			return(scheme); // RA2: as above
+		} // RA2: as above
 	}
 	if (index >= 0 && index < MAX_PLAYERS) {
-		scheme = ColorSchemes[Session.Color_Index_To_Scheme(Session.Players[index]->Get_Color())];
+		int color = Session.Players[index]->Get_Color(); // RA2: as above
+		int scheme_index = Session.Color_Index_To_Scheme(color); // RA2: as above
+		scheme = ColorSchemes[scheme_index]; // RA2: as above
 	}
 	return(scheme);
 }
+
 
 
 /// <summary>
@@ -470,8 +477,9 @@ void ProgressScreenClass::Draw_Player(ColorScheme * scheme, wchar_t const * name
 	int barheight = 0;
 	Bar_Size(&barwidth, &barheight);
 	Point2D barpt = pt;
+	int baroffset = Bar_Offset(flags); // RA2: the bar offset in a named local before the bar point is moved (meastes' order)
 	barpt.X += 5;
-	barpt.Y = y + Bar_Offset(flags);
+	barpt.Y = y + baroffset; // RA2: as above
 	Point2D itempt = pt;
 	itempt.X += barwidth + 15;
 	Point2D flagpt = itempt;
@@ -502,6 +510,7 @@ void ProgressScreenClass::Draw_Player(ColorScheme * scheme, wchar_t const * name
 }
 
 
+
 /// <summary>
 /// RA2: draws the progress: into the dialog's bar frame when there is a dialog, else a row per player from the
 /// point (the layout position for -1,-1) - a single player shows its name in the side's colours in a single
@@ -509,7 +518,7 @@ void ProgressScreenClass::Draw_Player(ColorScheme * scheme, wchar_t const * name
 /// </summary>
 void ProgressScreenClass::Display_Progress(Point2D xpt)
 {
-	if (IsActive && Shape != NULL) { // RA2: Display_Progress rewritten as RA2's 0x620050 (a row per player; TibSun's form cannot be placed: with Draw_Player beside it the two must fill RA2's room)
+	if (IsActive && Shape != NULL) { // RA2: Display_Progress rewritten as RA2's 0x620050 (a row per player)
 		Point2D pt; // RA2: as above
 		if (Dialog != NULL) { // RA2: as above
 			RECT crect; // RA2: as above
@@ -540,12 +549,14 @@ void ProgressScreenClass::Display_Progress(Point2D xpt)
 			Draw_Player(scheme, name, pt, 0, ShowFlags); // RA2: as above
 		} else {
 			for (int i = 0; i < PlayerCount; i++) { // RA2: as above
-				Draw_Player(Player_Scheme(i), Session.Players[i]->Name, pt, i, ShowFlags); // RA2: as above
+				ColorScheme * scheme = Player_Scheme(i); // RA2: the scheme first, in a named local (the exe calls Player_Scheme before it loads the name)
+				Draw_Player(scheme, Session.Players[i]->Name, pt, i, ShowFlags); // RA2: as above
 			}
 		}
 		Update_Visible_Surface(); // RA2: as above (TibSun's loading messages and per-player drawing are gone)
 	}
 }
+
 
 
 /// <summary>
@@ -636,8 +647,12 @@ void ProgressScreenClass::Unknown_Virtual_0(int callback)
 /// </summary>
 double ProgressScreenClass::Get_Current_Progress(int index) const
 {
+	double result; // RA2: a named result: the exe's inlined copies keep it in a double temporary, copying the job's total in two dwords
 	if (index >= PlayerCount) { // RA2: as above
-		return(MainProgress); // RA2: as above
-	}
-	return(PlayerProgress[index] / MainProgress); // RA2: as above
+		result = MainProgress; // RA2: as above
+	} else { // RA2: as above
+		result = PlayerProgress[index] / MainProgress; // RA2: as above
+	} // RA2: as above
+	return(result); // RA2: as above
 }
+

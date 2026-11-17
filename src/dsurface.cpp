@@ -63,6 +63,7 @@ namespace DirectDrawWrap { extern bool DoSmth; extern LPDIRECTDRAW lpDD; }
 
 extern bool WindowedMode;
 extern bool GameInFocus;
+extern bool UseDirect3D; // RA2: 0x00852FD7, read by the surface constructor
 
 extern	LPDIRECTDRAW	DirectDrawObject;	//pointer to direct draw object
 extern	LPDIRECTDRAWSURFACE	PaletteSurface;
@@ -151,6 +152,10 @@ DSurface::DSurface(int width, int height, bool system_memory) :
 			Description->ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
 		}
 
+		if (UseDirect3D) { // RA2: reads the Direct3D flag
+			Description->ddsCaps.dwCaps = DDSCAPS_3DDEVICE | DDSCAPS_OFFSCREENPLAIN; // RA2: a Direct3D device makes the surface a 3D-device offscreen plain one (0x2040), replacing the flags above
+		}
+
 
 		DirectDrawObject->CreateSurface(Description, &SurfacePtr, NULL);
 
@@ -166,6 +171,8 @@ DSurface::DSurface(int width, int height, bool system_memory) :
 		}
 	}
 }
+
+
 
 
 /***********************************************************************************************
@@ -283,7 +290,11 @@ DSurface * DSurface::Create_Primary(DSurface ** backsurface1)
 	**	dimensions.
 	*/
 	surface->Description->dwFlags = DDSD_CAPS;
-	surface->Description->ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+	if (UseDirect3D) { // RA2: reads the Direct3D flag
+		surface->Description->ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE | DDSCAPS_3DDEVICE; // RA2: with a Direct3D device the primary surface also gets 3DDEVICE (0x2200)
+	} else { // RA2: as above
+		surface->Description->ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE; // RA2: as above
+	}
 	if (backcount > 0) {
 		surface->Description->ddsCaps.dwCaps |= DDSCAPS_FLIP | DDSCAPS_COMPLEX;
 		surface->Description->dwFlags |= DDSD_BACKBUFFERCOUNT;
@@ -428,6 +439,9 @@ DSurface * DSurface::Create_Primary(DSurface ** backsurface1)
 
 	return(surface);
 }
+
+
+
 
 
 /***********************************************************************************************

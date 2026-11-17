@@ -140,7 +140,13 @@ ObjectTypeClass::ObjectTypeClass(NoInitClass const & x) :
 ObjectTypeClass::~ObjectTypeClass(void)
 {
 	ObjectTypes.Delete(this);
+	if (ImageAllocated && ImageData != NULL) { // RA2: 0x5D5B83 frees the loaded image (+0xA4) when the flag at +0xA8 is set
+		operator delete((void *)ImageData); // RA2: as above
+		ImageData = NULL; // RA2: as above
+		ImageAllocated = false; // RA2: as above
+	}
 }
+
 
 
 /***********************************************************************************************
@@ -852,6 +858,9 @@ void ObjectTypeClass::Fetch_Aux_Voxel_Image(void)
 }
 
 
+void Theater_Name_Fixup(char * name, TheaterType theater); // RA2: defined below at 0x5D7BD0
+
+
 /// <summary>
 /// Fetches the shape artwork for this object type.
 /// This routine will work out the artwork name that suits the current theater and then
@@ -861,46 +870,40 @@ void ObjectTypeClass::Fetch_Aux_Voxel_Image(void)
 void ObjectTypeClass::Fetch_Normal_Image(void)
 {
 	char fullname[260];
+	if (AlternateArcticArt && Scen->Theater == THEATER_SNOW && !ImageAllocated) { // RA2: snow maps use the "A" art variant of the graphic name (flag +0x1E1, state +0x1E2)
+		if (!ArcticArtInUse) { // RA2: as above
+			char buffer[256]; // RA2: as above
+			sprintf(buffer, "%sA", (char const *)GraphicName); // RA2: as above
+			GraphicName = buffer; // RA2: as above
+			ArcticArtInUse = true; // RA2: as above
+		}
+	} else {
+		ArcticArtInUse = false; // RA2: as above
+	}
+
 	_makepath(fullname, NULL, NULL, GraphicName, ".SHP");
 
 	if (IsTheater) {
 		_makepath(fullname, NULL, NULL, GraphicName, Theaters[Scen->Theater].Suffix);
 	} else if (IsNewTheater) {
-		TheaterType theater = Scen->Theater;
-		char prefix[4];
-
-		if (theater != THEATER_NONE) {
-			strncpy(prefix, fullname, 2);
-			prefix[2] = 0;
-			if (stricmp(prefix, "ga") == 0 ||
-				stricmp(prefix, "na") == 0 ||
-				stricmp(prefix, "gt") == 0 ||
-				stricmp(prefix, "nt") == 0 ||
-				stricmp(prefix, "ca") == 0 ||
-				stricmp(prefix, "ct") == 0)
-			{
-				switch (theater) {
-					case THEATER_TEMPERATE:
-						fullname[1] = 'T';
-						break;
-					case THEATER_SNOW:
-						fullname[1] = 'A';
-						break;
-					default:
-						break;
-				}
-			}
-		}
+		Theater_Name_Fixup(fullname, Scen->Theater); // RA2: the free function at 0x5D7BD0, expanded here
 	}
 
+	if (ImageAllocated && ImageData != NULL) { // RA2: frees the previous image first
+		operator delete((void *)ImageData); // RA2: as above
+	}
+	ImageData = NULL; // RA2: as above
+	ImageAllocated = false; // RA2: as above
+
 	ShapeSet const * image = (ShapeSet const *)MFCD::Retrieve(fullname);
+	ImageData = image; // RA2: stored before the test
 	if (image) {
-		ImageData = image;
 		int maxsize = MAX(image->Get_Width(), image->Get_Height());
 		maxsize = MAX(maxsize, 8);
 		MaxSize = maxsize;
 	}
 }
+
 
 
 /// <summary>
@@ -1020,7 +1023,10 @@ HRESULT STDMETHODCALLTYPE ObjectTypeClass::Load(IStream *stream)
 {
 	char filename[260];
 
-	Clear_Voxel_Index();
+	VoxelIndex.Clear(); // RA2: the four index tables are destroyed in place (the first Clear is expanded, the rest are calls to 0x5D8070)
+	AuxVoxelIndex.~VoxelIndexClass(); // RA2: as above
+	ShadowVoxelIndex.~VoxelIndexClass(); // RA2: as above
+	AuxVoxel2Index.~VoxelIndexClass(); // RA2: as above
 
 	delete Voxel.VoxLib;
 	Voxel.VoxLib = NULL;
@@ -1040,9 +1046,12 @@ HRESULT STDMETHODCALLTYPE ObjectTypeClass::Load(IStream *stream)
 	delete AuxVoxel2.MotLib;
 	AuxVoxel2.MotLib = NULL;
 
+	Free_Charger_Voxels(); // RA2: 0x5D66A0 frees the charger voxels as well
+
 	HRESULT result = BASECLASS::Load(stream);
 	if (SUCCEEDED(result)) {
 		ImageData = NULL;
+		ImageAllocated = false; // RA2: the flag at +0xA8 is cleared too
 		AlphaImageData = NULL;
 
 		new (&VoxelIndex) VoxelIndexClass;
@@ -1056,6 +1065,12 @@ HRESULT STDMETHODCALLTYPE ObjectTypeClass::Load(IStream *stream)
 		AuxVoxel.MotLib = NULL;
 		AuxVoxel2.VoxLib = NULL;
 		AuxVoxel2.MotLib = NULL;
+		for (int index = 0; index < ARRAY_SIZE(ChargerTurrets); index++) { // RA2: the charger voxel pointers are cleared as well
+			ChargerTurrets[index].VoxLib = NULL; // RA2: as above
+			ChargerTurrets[index].MotLib = NULL; // RA2: as above
+			ChargerBarrels[index].VoxLib = NULL; // RA2: as above
+			ChargerBarrels[index].MotLib = NULL; // RA2: as above
+		}
 
 		if (*AlphaGraphicName != NULL) {
 			_makepath(filename, NULL, NULL, AlphaGraphicName, ".SHP");
@@ -1066,6 +1081,7 @@ HRESULT STDMETHODCALLTYPE ObjectTypeClass::Load(IStream *stream)
 	}
 	return(result);
 }
+
 
 
 /// <summary>
