@@ -171,7 +171,14 @@ public: // RA2: as above
  *=============================================================================================*/
 ObjectClass::ObjectClass(void) : // RA2: at 0x005D22E0
 	BASECLASS(),
-	IsActive(true),
+	Riser(0,0,0), // RA2: as above
+	Next(NULL), // RA2: as above
+	Tag(NULL), // RA2: as above
+	AttachedBomb(NULL), // RA2: +0x38, cleared
+	CustomSound(-1), // RA2: +0x64, none
+	BombVisible(false), // RA2: +0x68
+	Strength(255), // RA2: as above
+	EstimatedHealth(255), // RA2: +0x70, starts at full as Strength
 	IsDown(false),
 	IsToDisplay(false),
 	IsInLimbo(true),
@@ -179,19 +186,22 @@ ObjectClass::ObjectClass(void) : // RA2: at 0x005D22E0
 	IsAnimAttached(false),
 	IsOnBridge(false),
 	IsFalling(false),
+	IsABomb(false), // RA2: +0x7B
 	IsToExplode(false),
+	IsActive(true), // RA2: as above
 	Layer(LAYER_NONE),
 	IsSubmittedToLayer(false),
-	Riser(0,0,0),
-	Next(NULL),
-	Tag(NULL),
-	Strength(255),
-	Position(COORD_NONE)
+	IsVisible(true), // RA2: +0x85
+	Position(COORD_NONE), // RA2: as above
+	LineTrailer(NULL) // RA2: +0x94
 {
+	AmbientSoundController.Init(); // RA2: both sound handles start empty, 0x00405BF0
+	CustomSoundController.Init(); // RA2: as above
 	Objects.Add(this);
 	ObjectPtrTracker.Add(this);
 	AbstractTypePtrTracker.Add(this);
 	TagPtrTracker.Add(this);
+	AbstractFlags |= 2; // RA2: marks the abstract as an object, bit 1 of byte +0x14
 }
 
 
@@ -222,6 +232,28 @@ ObjectClass::~ObjectClass(void)
 
 	Next = NULL;
 	IsActive = false;
+	AmbientSoundController.Stop(); // RA2: both sound handles are stopped, then released (0x00405D50, 0x00405C10)
+	CustomSoundController.Stop(); // RA2: as above
+	AmbientSoundController.Release(); // RA2: as above
+	CustomSoundController.Release(); // RA2: as above
+	if (LineTrailer != NULL) { // RA2: the line trail lets go of the object (Clear_Line_Trail 0x005D2710 inline)
+		LineTrailer->Release_Owner(); // RA2: as above
+		LineTrailer = NULL; // RA2: as above
+	}
+}
+
+
+struct ObjectLineTrail : public ObjectClass { // RA2: file-local data-free class that carries ObjectClass::Clear_Line_Trail (0x005D2710), so object.h gets no new declaration
+	void Clear_Line_Trail(void); // RA2: as above
+}; // RA2: as above
+
+
+void ObjectLineTrail::Clear_Line_Trail(void) // RA2: at 0x005D2710, not in TibSun; lets go of the line trail (YR: Clear_Line_Trail)
+{
+	if (LineTrailer != NULL) { // RA2: tests the line trail member +0x94
+		LineTrailer->Release_Owner(); // RA2: as above, 0x005394F0
+		LineTrailer = NULL; // RA2: as above
+	}
 }
 
 
