@@ -329,7 +329,9 @@ unk_00538670,0x00538670,0x00538860,unknown,code not assigned to a module
 lightcon,0x00538860,0x00538F20,tibsun,"functions compiled from src/lightcon.cpp, matched, without gaps; ??1LightConvertClass@@UAE@XZ not placed"
 unk_00538F20,0x00538F20,0x00538F60,unknown,code not assigned to a module
 link,0x00538F60,0x00539170,tibsun,"functions compiled from src/link.cpp, matched, without gaps; three placed by the gap"
-unk_00539170,0x00539170,0x00539BF0,unknown,code not assigned to a module
+unk_00539170,0x00539170,0x005393E0,unknown,code not assigned to a module
+link2,0x005393E0,0x00539870,source,"functions compiled from src/link2.cpp, matched, without gaps"
+unk_00539870,0x00539870,0x00539BF0,unknown,code not assigned to a module
 list,0x00539BF0,0x0053AA20,tibsun,"functions compiled from src/list.cpp, matched, without gaps; three placed by the gap"
 unk_0053AA20,0x0053AA20,0x0053AEB0,unknown,code not assigned to a module
 load,0x0053AEB0,0x0053AEF0,tibsun,"functions compiled from src/load.cpp, matched, without gaps"
