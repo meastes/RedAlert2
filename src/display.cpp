@@ -171,6 +171,15 @@ void const * DisplayClass::PlacementShapes;
 DisplayClass::TacticalClass DisplayClass::TacButton;
 
 void Bandbox_Selection_Callback(ObjectClass *object);
+bool Is_Type_Select_Key_Held(void); // RA2: 0x6F76B0 (uicmnds.cpp); reads the flag the type select key sets
+void __fastcall Select_Type(char const * name); // RA2: 0x6F71E0 (uicmnds.cpp)
+void __fastcall Unselect_Type(char const * name); // RA2: 0x006F7020, takes every object of the kind out of the selection (uicmnds.cpp)
+void __cdecl Clear_Attack_Move_Flag(void); // RA2: 0x006F6770 (uicmnds.cpp)
+bool Is_Planning_Selection_Valid(void); // RA2: 0x00615DE0, planning mode accepts the selected objects (planmgr, model name)
+bool __fastcall Planning_Can_Add(void); // RA2: 0x00615ED0 (planmgr.cpp)
+void __fastcall Clear_Sidebar_Tab_Object(TechnoClass * techno); // RA2: 0x006F8A20 (scenario.cpp)
+extern int MuteSWLaunches; // RA2: 0x00A3D548, nonzero while the launch announcements are muted
+void Queue_Speech(char const * name, int priority, int expire); // RA2: 0x715B40, an EVA line by name
 
 
 /***********************************************************************************************
@@ -2266,184 +2275,162 @@ void Bandbox_Selection_Callback(ObjectClass *object);
  *=============================================================================================*/
 void DisplayClass::Mouse_Left_Release(Coord const & coord, Cell const & cell, ObjectClass * object, ActionType action, bool wsmall)
 {
-	if (object != NULL && ScenarioActive && GameActive && !Debug_Map && object->Visual_Character() == VISUAL_HIDDEN) {
+	if (object && ScenarioActive && GameActive && !Debug_Map && object->Visual_Character() == VISUAL_HIDDEN) { // RA2: as meastes; a hidden object is not clicked
 		object = NULL;
 	}
-
 	if (PendingObjectPtr) {
-
 		if (PendingObject->RTTI == RTTI_BUILDINGTYPE) {
-			ProximityCheck = Passes_Proximity_Check(PendingObject, PendingHouse, CursorSize, ZoneCell+ZoneOffset);
+			TPoint2D<short> const * placement = &cell; // RA2: meastes adds through a pointer to the click cell
+			Cell const where = placement->operator+(ZoneOffset); // RA2: the click cell plus the zone offset
+			ProximityCheck = Passes_Proximity_Check(PendingObject, PendingHouse, CursorSize, where); // RA2: as above
 		}
-
-		if (PendingObject->RTTI == RTTI_BUILDINGTYPE && object != NULL && object->RTTI == RTTI_BUILDING) {
-			BuildingClass *building = (BuildingClass *)object;
-			if (building->Can_Upgrade((const BuildingTypeClass *)PendingObject, PlayerPtr)) {
-				ProximityCheck = true;
-			}
+		if (PendingObject->RTTI == RTTI_BUILDINGTYPE && object && object->RTTI == RTTI_BUILDING && ((BuildingClass *)object)->Can_Upgrade((BuildingTypeClass const *)PendingObject, PlayerPtr)) { // RA2: as above
+			ProximityCheck = true; // RA2: as above
 		}
-
-		/*
-		**	Try to place the pending object onto the map.
-		*/
 		if (ProximityCheck && ShroudCheck) {
-			OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::PLACE, PendingObjectPtr->RTTI, cell + ZoneOffset));
+			TechnoTypeClass const * techno_type = dynamic_cast<TechnoTypeClass const *>(PendingObject); // RA2: the event carries the naval flag
+			bool naval = techno_type && techno_type->Naval; // RA2: as above
+			ObjectClass * pending = PendingObjectPtr; // RA2: as above
+			OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::PLACE, pending->RTTI, PendingObject->Fetch_Heap_ID(), naval, cell + ZoneOffset)); // RA2: as above
+			pending = PendingObjectPtr; // RA2: forgets the placed building in the sidebar tabs
+			BuildingClass * placed; // RA2: as above
+			if (!pending) { // RA2: as above
+				placed = NULL; // RA2: as above
+			} else {
+				placed = pending->RTTI == RTTI_BUILDING ? (BuildingClass *)pending : NULL; // RA2: as above
+			}
+			Clear_Sidebar_Tab_Object(placed); // RA2: as above
+			if (!Debug_Map) { // RA2: as above
+				CopyPendingObject = PendingObject; // RA2: the placed object is kept for the copy cursor
+				CopyPendingObjectPtr = PendingObjectPtr; // RA2: as above
+				CopyZoneCell = cell; // RA2: as above
+				CopyZoneOffset = ZoneOffset; // RA2: as above
+				CopyCursorSize = CursorSize; // RA2: as above
+				CopyPendingHouse = PendingHouse; // RA2: as above
+				if (PendingObject) { // RA2: as above
+					Map.Set_Copy_Cursor_Shape(PendingObject->Occupy_List(true)); // RA2: 0x499070, the copy footprint (the exe calls it before the plain Set_Cursor_Shape)
+				}
+				Map.Set_Cursor_Shape(NULL); // RA2: as above
+				Map.PendingObjectPtr = NULL; // RA2: as above
+				Map.PendingObject = NULL; // RA2: as above
+				Map.PendingHouse = HOUSE_NONE; // RA2: as above
+			}
 		} else {
-			Speak(VOX_DEPLOY);
+			Queue_Speech("EVA_CannotDeployHere", -1, -1); // RA2: the EVA line by name
 		}
-
 	} else {
-
+		int continue_select = 0; // RA2: a rubber band that selected nothing falls through to the click
 		if (IsRubberBand) {
 			TacticalMap->IsToRedraw = true;
-
 			if (!Keyboard->Down(KN_LSHIFT)) {
-				Unselect_All();
-			}
-
-			TacticalMap->Select_Rubber_Band(Bandbox_Selection_Callback);
-			TechnoClass::Reset_Action_Line_Timer();
-
-			IsRubberBand = false;
-			Set_Default_Mouse(MOUSE_NORMAL, wsmall);
-			IsTentative = false;
-			drag_select_aborted = true;
-
-		} else {
-
-			/*
-			**	Toggle the select state of the object.
-			*/
-			if (action == ACTION_TOGGLE_SELECT) {
-				if (!object || !CurrentObject.Count() || !CurrentObject[0]->Owner_HouseClass()->Is_Player_Control()) {
-					action = ACTION_SELECT;
+				if (TacticalMap->Rubber_Band_Contains_Selectable()) { // RA2: as above
+					Unselect_All(); // RA2: as above
 				} else {
-					if (object->IsSelected) {
-						object->Unselect();
-					} else {
-						object->Select();
-					}
+					continue_select = 1; // RA2: as above
 				}
 			}
-
-			/*
-			**	Selection of other object action.
-			*/
-			if ((action == ACTION_SELECT && object != NULL) || (action == ACTION_NONE && object && object->Class_Of()->IsSelectable && !object->IsSelected)) {
-				BuildingClass *building = (BuildingClass *)object;
-				if (building->RTTI != RTTI_BUILDING || building->House->Is_Player_Control() || building->TranslucencyLevel != 15 || building->Is_Sensed_By_Player()) {
-					Unselect_All();
-					object->Select();
-					Set_Default_Mouse(MOUSE_NORMAL, wsmall);
-					TechnoClass::Reset_Action_Line_Timer();
+			TacticalMap->Select_Rubber_Band(Bandbox_Selection_Callback);
+			TechnoClass::Reset_Action_Line_Timer(); // RA2: as above
+			IsRubberBand = false;
+			Set_Default_Mouse(MOUSE_NORMAL, wsmall); // RA2: as above
+			IsTentative = false; // RA2: as above
+			drag_select_aborted = true;
+			if (!continue_select) { // RA2: as above
+				Clear_Attack_Move_Flag(); // RA2: as above
+				return; // RA2: as above
+			}
+		}
+		if (action == ACTION_TOGGLE_SELECT) { // RA2: as above
+			if (!object || !CurrentObject.Count() || !CurrentObject[0]->Owner_HouseClass()->Is_Player_Control()) { // RA2: as above
+				action = ACTION_SELECT; // RA2: as above
+			} else if (object->IsSelected) { // RA2: as above
+				if (Is_Type_Select_Key_Held()) { // RA2: with the type select key the whole type is toggled
+					Unselect_Type(object->Class_Of()->IniName); // RA2: as above
+				} else {
+					object->Unselect(); // RA2: as above
+				}
+			} else {
+				if (Is_Type_Select_Key_Held()) { // RA2: as above
+					Select_Type(object->Class_Of()->IniName); // RA2: as above
+				} else {
+					object->Select(); // RA2: as above
 				}
 			}
-
-			/*
-			**	If an action was detected as possible, then pass this action event
-			**	to all selected objects.
-			*/
-			if (action != ACTION_NONE && action != ACTION_SELECT) {
-
-				/*
-				**	Pass the action to all the selected objects. But first, redetermine
-				**	what action that object should perform. This, seemingly redundant
-				**	process, is necessary since multiple objects could be selected and each
-				**	might perform a different action when the click occurs.
-				*/
+		}
+		if ((action == ACTION_SELECT && object) || (action == ACTION_NONE && object && object->CanBeSelected() && !object->IsSelected)) { // RA2: as above
+			if (object->RTTI != RTTI_BUILDING || ((BuildingClass *)object)->House->Is_Player_Control() || ((BuildingClass *)object)->TranslucencyLevel != 15 || ((TechnoClass *)object)->Is_Sensed_By_Player()) { // RA2: as above
+				Unselect_All(); // RA2: as above
+				if (Is_Type_Select_Key_Held()) { // RA2: as above
+					Select_Type(object->Class_Of()->IniName); // RA2: as above
+				} else {
+					object->Select(); // RA2: as above
+				}
+				Set_Default_Mouse(MOUSE_NORMAL, wsmall); // RA2: as above
+				TechnoClass::Reset_Action_Line_Timer(); // RA2: as above
+			}
+		}
+		if (action == ACTION_SELECT_BEACON) { // RA2: beacons
+			Coord point = cell.As_Coord(Map[cell].Height * LEVEL_LEPTON_H); // RA2: as above
+			BeaconManager.Select_Beacon(point); // RA2: as above
+		} else if (action != ACTION_NONE && action != ACTION_SELECT) { // RA2: as above
+			bool allowed = true; // RA2: planning mode may refuse the action
+			if (action != ACTION_TOGGLE_SELECT && action != ACTION_REPAIR && action != ACTION_SELL && action != ACTION_SELL_UNIT && action != ACTION_NO_SELL && action != ACTION_NO_REPAIR && action != ACTION_TOGGLE_POWER && action != ACTION_NO_TOGGLE_POWER && action != ACTION_NUKE_BOMB && action != ACTION_IRON_CURTAIN && action != ACTION_LIGHTNING_STORM && action != ACTION_CHRONOSPHERE && action != ACTION_CHRONO_WARP && action != ACTION_PARA_DROP && action != ACTION_AMER_PARA_DROP && action != ACTION_SELECT_NODE && action != ACTION_PLACE_BEACON) { // RA2: as above
+				bool execute = Is_Planning_Selection_Valid(); // RA2: as above
+				bool add = Planning_Can_Add(); // RA2: as above
+				allowed = execute && add; // RA2: as above
+			}
+			if (allowed) { // RA2: as above
 				Active_Click(object, cell, action);
-				TechnoClass::Reset_Action_Line_Timer();
-
+				TechnoClass::Reset_Action_Line_Timer(); // RA2: as above
 				if (action == ACTION_TOGGLE_POWER) {
-					if (object->RTTI == RTTI_BUILDING) {
-						BuildingClass *building = ((BuildingClass *)object);
-						if (building->IsOn) {
-							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::POWEROFF, TargetClass(building)));
+					if (object->RTTI == RTTI_BUILDING) { // RA2: as above
+						if (((BuildingClass *)object)->IsOn) { // RA2: as above
+							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::POWEROFF, TargetClass(object))); // RA2: as above
 						} else {
-							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::POWERON, TargetClass(building)));
+							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::POWERON, TargetClass(object))); // RA2: as above
 						}
 					}
-				}
-
-				if (action == ACTION_LOOP_WAYPOINT_PATH) {
-					Coord coord = cell.As_Coord();
-					coord.Z = (Map[cell].IsUnderBridge ? BRIDGE_LEPTON_HEIGHT : 0) + Map.Get_Height_GL(coord);
-					PlayerPtr->Select_Waypoint(coord);
-				}
-
-				if (action == ACTION_DRAG_WAYPOINT) {
-					if (DraggedWaypoint != NULL) {
-						if (!PlayerPtr->Waypoint_At(cell) && Map.In_Local_Radar(cell)) {
-							DraggedWaypoint->Location = cell;
-							DraggedWaypoint->Location.Z = (Map[cell].IsUnderBridge ? BRIDGE_LEPTON_HEIGHT : 0) + Map.Get_Height_GL(DraggedWaypoint->Location);
-						}
-						DraggedWaypoint = NULL;
-						Show_Mouse();
+				} else if (action == ACTION_PLACE_BEACON) { // RA2: as above
+					if (MuteSWLaunches == 0) { // RA2: as above
+						Coord point = cell.As_Coord(Map[cell].Height * LEVEL_LEPTON_H); // RA2: as above
+						BeaconManager.Place_Beacon(PlayerPtr->HeapID, point, -1); // RA2: as above
 					}
-				}
-
-				if (action == ACTION_PLACE_WAYPOINT) {
-					if (PlayerPtr->SelectedPath != PATH_NONE) {
-						Coord coord = cell.As_Coord();
-						coord.Z = (Map[cell].IsUnderBridge ? BRIDGE_LEPTON_HEIGHT : 0) + Map.Get_Height_GL(coord);
-						PlayerPtr->Place_Waypoint(coord);
-						if (!PlayerPtr->Can_Add_Waypoint_To_Path()) {
-							Waypoint_Mode_Control(0, false);
-						}
+					Map.Place_Beacon_Mode_Control(0); // RA2: as above
+					Set_Default_Mouse(MOUSE_NORMAL, wsmall); // RA2: as above
+				} else if (action == ACTION_REPAIR) { // RA2: as above
+					if (object->RTTI == RTTI_BUILDING) { // RA2: as above
+						OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::REPAIR, TargetClass(object))); // RA2: as above
 					}
-				}
-
-				if (action == ACTION_ENTER_WAYPOINT_MODE) {
-					char dummy;
-					WaypointClass * wp = PlayerPtr->Waypoint_At(cell);
-					PlayerPtr->Fetch_Waypoint_Data(wp, PlayerPtr->SelectedPath, dummy);
-					Waypoint_Mode_Control(1, true);
-				}
-
-				if (action == ACTION_SELECT_WAYPOINT) {
-					char dummy;
-					WaypointClass * wp = PlayerPtr->Waypoint_At(cell);
-					PlayerPtr->Fetch_Waypoint_Data(wp, PlayerPtr->SelectedPath, dummy);
-					Update_Waypoint_Color(PlayerPtr->SelectedPath);
-					DraggedWaypoint = wp;
-					DraggedWaypointCoord = wp->Location;
-					Hide_Mouse();
-				}
-
-				if (action == ACTION_REPAIR && object->RTTI == RTTI_BUILDING) {
-					OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::REPAIR, TargetClass(object)));
-				}
-
-				if (action == ACTION_SELL_UNIT && object) {
-					switch ((RTTIType)object->RTTI) {
-						case RTTI_AIRCRAFT:
-						case RTTI_UNIT:
+				} else if (action == ACTION_SELL_UNIT) { // RA2: as above
+					if (object) { // RA2: as above
+						RTTIType kind = object->RTTI; // RA2: as above
+						if (kind > RTTI_NONE && kind <= RTTI_AIRCRAFT) { // RA2: as above
 							OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::SELL, TargetClass(object)));
-							break;
-
-						default:
-							break;
+						}
 					}
-
-				}
-				if (action == ACTION_SELL) {
-					if (object) {
+				} else if (action == ACTION_SELL) { // RA2: as above
+					if (object) { // RA2: as above
 						OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::SELL, TargetClass(object)));
 					} else {
 						OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::SELLCELL, cell));
 					}
 				}
-
-				SuperWeaponTypeClass *stype = SuperWeaponTypeClass::From_Action(action);
-				if (stype != NULL) {
+				SuperWeaponTypeClass * stype = SuperWeaponTypeClass::From_Action(action); // RA2: as above
+				if (stype) { // RA2: as above
 					OutList.Add(EventClass(PlayerPtr->HeapID, EventClass::SPECIAL_PLACE, stype->HeapID, cell));
 				}
 			}
-
-			IsTentative = false;
 		}
+		IsTentative = false; // RA2: as above
 	}
+	Clear_Attack_Move_Flag(); // RA2: every path ends by clearing the attack move flag
 }
+
+
+
+
+
+
 
 
 /// <summary>
@@ -3859,13 +3846,14 @@ char const * DisplayClass::Help_Text(int id)
 	if (object != NULL) {
 		wchar_t const * text = object->Full_Name(); // RA2: as above
 		if (techno == NULL) { // RA2: as above
-			text = (*this)[cell].Tiberium_Name(); // RA2: as above
+			text = (wchar_t const *)(*this)[cell].Tiberium_Name(); // RA2: as above
 		}
 		return((char const *)text); // RA2: as above
 	}
 
 	return(NULL);
 }
+
 
 
 

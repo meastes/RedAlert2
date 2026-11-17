@@ -22,7 +22,7 @@ class TeleportLocomotionClass : public LocomotionClass, public IPiggyback // RA2
 
 	public:
 		TeleportLocomotionClass(void);
-		TeleportLocomotionClass(const NoInitClass & x) : BASECLASS(x), Timer(x), Piggybacker(NULL) {}
+		TeleportLocomotionClass(const NoInitClass & x) : BASECLASS(x), Timer(), Piggybacker(NULL) {} // RA2: Timer() (Started = Frame, DelayTime = 0): 0x6E1770 stores Frame and 0 there
 
 		virtual HRESULT STDMETHODCALLTYPE GetClassID(CLSID * retval) override;
 		virtual HRESULT STDMETHODCALLTYPE Load(IStream * stream) override;

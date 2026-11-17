@@ -97,11 +97,13 @@
 #include "building.h"
 #include "builtype.h"
 #include "capmgr.h"
+#include "bomb.h" // RA2: Active_Click_With reads the attached bomb's owner
 #include "ccrand.h"
 #include "cell.h"
 #include "convert.h"
 #include "ddist.h"
 #include "dsurface.h" // RA2: Build_Hicolor_Pixel
+#include "event.h" // RA2: Active_Click_With sends a detonate event
 #include "goptions.h"
 #include "house.h"
 #include "incdec.h"
@@ -113,6 +115,7 @@
 #include "loco.h"
 #include "mono.h"
 #include "partsys.h"
+#include "queue.h" // RA2: as above
 #include "warhead.h" // RA2: Take_Damage reads WarheadTypeClass::Sonic
 #include "parasite.h" // RA2: Detach tells the parasite that is eating this object (ParasiteImUsing->Detach)
 #include "revent.h"
@@ -396,7 +399,7 @@ bool FootClass::Basic_Path(Cell cell, int path_offset, int avoidance)
 	**	EXCEPT when that cell is very close -- then just bail.
 	*/
 	int dist = Distance(cell);
-	int checkdist = Team != NULL ? Rule->StrayDistance : Rule->CloseEnoughDistance;
+	int checkdist = Team != NULL ? Team->Stray_Distance() : Rule->CloseEnoughDistance; // RA2: the stray distance is the team's call (0x6BE6A0)
 	int maxdist = 0;
 
 	bool istrain = TClass->IsTrain;
@@ -485,7 +488,7 @@ bool FootClass::Basic_Path(Cell cell, int path_offset, int avoidance)
 					ncell = cptr->Adjacent_Cell(FacingType((workpath[length] + FACING_180) % FACING_COUNT)).Fetch_CellID();
 					AbstractClass *nav = follower->NavCom;
 					if (nav == NULL || nav->Destination_Coord().As_Cell() != ncell) {
-						follower->Assign_Mission(MISSION_MOVE);
+						follower->QueueMission(MISSION_MOVE, false); // RA2: QueueMission, not Assign_Mission
 						follower->Assign_Destination(&Map[ncell]);
 						follower->Basic_Path(ncell);
 					}
@@ -520,7 +523,7 @@ bool FootClass::Basic_Path(Cell cell, int path_offset, int avoidance)
 		Assign_Target(NULL);
 
 		if (!House->Is_Human_Player()) {
-			Assign_Mission(MISSION_GUARD_AREA);
+			QueueMission(MISSION_GUARD_AREA, false); // RA2: as above
 			if (Session.Type != GAME_NORMAL) {
 				Cell where = House->Where_To_Go(this);
 				if (where != CELL_NONE) {
@@ -528,12 +531,13 @@ bool FootClass::Basic_Path(Cell cell, int path_offset, int avoidance)
 				}
 			}
 		} else {
-			Assign_Mission(MISSION_GUARD);
+			QueueMission(MISSION_GUARD, false); // RA2: as above
 		}
 	}
 
 	return(false);
 }
+
 
 
 /***********************************************************************************************
@@ -603,7 +607,7 @@ int FootClass::Do_MISSION_PATROL(void)
 
 		case PATROL_FIND_TARGET: {
 			AbstractClass * target = Greatest_Threat(THREAT_AREA, Get_Coord(), false);
-			ObjectClass * optr = target->As_ObjectClass();
+			ObjectClass * optr = (target == NULL) ? NULL : ((target->AbstractFlags & 2) ? (ObjectClass *)target : NULL); // RA2: the object flag test of the abstract, not a call
 			int primary = What_Weapon_Should_I_Use(optr);
 
 			if (optr != NULL && (In_Range(optr, primary) || Search.Test_Cell_Walk(Cell(Destination_Coord()), Cell(optr->Destination_Coord()), this, Is_Moving_Onto_Bridge(), optr->Is_Moving_Onto_Bridge(), MZONE_NONE) < dist)) {
@@ -650,7 +654,7 @@ int FootClass::Do_MISSION_PATROL(void)
 		}
 
 		case PATROL_ENGAGE_TARGET: {
-			ObjectClass * optr = TarCom->As_ObjectClass();
+			ObjectClass * optr = (TarCom == NULL) ? NULL : ((TarCom->AbstractFlags & 2) ? (ObjectClass *)TarCom : NULL); // RA2: as above
 			int primary = What_Weapon_Should_I_Use(optr);
 
 			/*
@@ -677,7 +681,7 @@ int FootClass::Do_MISSION_PATROL(void)
 			 */
 			if (TarCom == NULL) {
 				AbstractClass * target = Greatest_Threat(THREAT_AREA, PatrolCell->Center_Coord(), false);
-				ObjectClass * scanptr = target->As_ObjectClass();
+				ObjectClass * scanptr = (target == NULL) ? NULL : ((target->AbstractFlags & 2) ? (ObjectClass *)target : NULL); // RA2: as above
 				int scanweapon = What_Weapon_Should_I_Use(scanptr);
 				if (scanptr != NULL && (In_Range(scanptr, scanweapon) || Search.Test_Cell_Walk(PatrolCell->CellID, Cell(scanptr->Destination_Coord()), this, PatrolCell->IsUnderBridge, scanptr->Is_Moving_Onto_Bridge(), MZONE_NONE) < dist)) {
 					Assign_Target(target);
@@ -712,7 +716,7 @@ int FootClass::Do_MISSION_PATROL(void)
 
 		case PATROL_RETURN: {
 			AbstractClass * target = Greatest_Threat(THREAT_AREA, PatrolCell->Center_Coord(), false);
-			ObjectClass * optr = target->As_ObjectClass();
+			ObjectClass * optr = (target == NULL) ? NULL : ((target->AbstractFlags & 2) ? (ObjectClass *)target : NULL); // RA2: the object flag test of the abstract, not a call
 			int primary = What_Weapon_Should_I_Use(optr);
 
 			if (optr != NULL && (In_Range(optr, primary) || Search.Test_Cell_Walk(PatrolCell->CellID, Cell(optr->Destination_Coord()), this, PatrolCell->IsUnderBridge, optr->Is_Moving_Onto_Bridge(), MZONE_NONE) < dist)) {
@@ -745,6 +749,7 @@ int FootClass::Do_MISSION_PATROL(void)
 
 	return(Current_Mission_Control().Normal_Delay() + Random_Pick(0, 2));
 }
+
 
 
 /***********************************************************************************************
@@ -1161,6 +1166,26 @@ static inline int Flat_Distance(Point2D const & a, Point2D const & b)
 }
 
 
+/// <summary>
+/// RA2
+/// </summary>
+static inline int Approach_Distance(Coord const & a, Coord const & b) // RA2: the distance between two coordinates
+{
+	Coord diff = a - b; // RA2: as above
+	return(diff.Length()); // RA2: as above
+}
+
+
+/// <summary>
+/// RA2
+/// </summary>
+static inline Coord Approach_Move_Coord(Coord const & start, DirType const & dir, double distance) // RA2: Move_Coord with a double distance
+{
+	double radians = dir.As_Radian(); // RA2: as above
+	return(Coord((int)(start.X + fastmath::cos(radians) * distance), (int)(start.Y - fastmath::sin(radians) * distance), start.Z)); // RA2: as above
+}
+
+
 /***********************************************************************************************
  * FootClass::Approach_Target -- Sets the navigation computer to approach target object.       *
  *                                                                                             *
@@ -1182,35 +1207,33 @@ static inline int Flat_Distance(Point2D const & a, Point2D const & b)
  *=============================================================================================*/
 void FootClass::Approach_Target(void)
 {
-
-	/*
-	**	Determine that if there is an existing target it is still legal
-	**	and within range.
-	*/
 	if (TarCom != NULL) { // RA2: no IsJellyfish (not in RA2's layout)
 		int primary = What_Weapon_Should_I_Use(TarCom);
 
-		/*
-		**	If the target is too far away then head toward it.
-		*/
 		int maxrange = Weapon_Range(primary);
+		if (maxrange >= 512) { // RA2: a long range weapon keeps half a cell in hand
+			maxrange -= 128; // RA2: as above
+		}
 		bool inrange = In_Range(TarCom, primary);
 
-		/*
-		 * A unit on a sticky mission that finds its target out of range will
-		 * just forget about the target rather than give chase.
-		 */
-		if (!inrange && CurrentMission == MISSION_STICKY) {
-			Assign_Target(NULL);
-			Assign_Destination(NULL);
-			return;
+		if (!inrange) { // RA2: an out-of-range target is only chased by units that may approach
+			if (CurrentMission == MISSION_STICKY) { // RA2: as above
+				Assign_Target(NULL); // RA2: as above
+				Assign_Destination(NULL); // RA2: as above
+				return; // RA2: as above
+			}
+			if (!TClass->CanApproachTarget) { // RA2: as above
+				bool pursue = false; // RA2: as above
+				if (CurrentMission == MISSION_ATTACK) pursue = true; // RA2: as above
+				if (CurrentMission == MISSION_GUARD_AREA && House->Is_Human_Player()) pursue = true; // RA2: as above
+				if ((CurrentMission != MISSION_HUNT || House->Is_Human_Player()) && !pursue) { // RA2: as above
+					Assign_Target(NULL); // RA2: as above
+					Assign_Destination(NULL); // RA2: as above
+					return; // RA2: as above
+				}
+			}
 		}
 
-		/*
-		 * A unit that must deploy to fire, and is sitting on ground that it
-		 * cannot deploy upon, must restrict the search to deployable ground
-		 * within a reasonable distance of the target.
-		 */
 		bool checkbuild = false;
 		if (RTTI == RTTI_UNIT && ((UnitClass *)this)->Class->IsDeployToFire) {
 			if (!Map[(Coord const &)PositionCoord].Can_Build_Here()) {
@@ -1222,10 +1245,6 @@ void FootClass::Approach_Target(void)
 			}
 		}
 
-		/*
-		 * Flying objects need no path validation when looking for a location
-		 * to attack from.
-		 */
 		bool flyer = (RTTI == RTTI_AIRCRAFT);
 
 		CLSID clsid;
@@ -1235,25 +1254,24 @@ void FootClass::Approach_Target(void)
 			flyer = true;
 		}
 
-		/*
-		 * If the unit is not heading somewhere on the ground, and the weapon
-		 * cannot already bear on the target, then scan for a better location.
-		 */
+		if (NavCom != NULL) { // RA2: a navigation target that is too far from the target is dropped and found again
+			if (TarCom != NULL && TClass->CanRecalcApproachTarget && !inrange) { // RA2: as above
+				int separation = Approach_Distance(NavCom->Center_Coord(), TarCom->Center_Coord()); // RA2: as above
+				if (separation > Rule->ApproachTargetResetMultiplier * maxrange) { // RA2: as above
+					FollowTarget = NULL; // RA2: as above
+					NavCom = NULL; // RA2: as above
+				}
+			}
+		}
+
 		if ((NavCom == NULL || In_Air()) && (!inrange || !IsLocked || checkbuild)) {
 
-			/*
-			 * If a queued route exists, then advance to the next location on it.
-			 */
 			if (RouteQueue.Count() > 0) {
 				Assign_Destination(RouteQueue[0], false);
 				RouteQueue.Delete_Index(0);
 				return;
 			}
 
-			/*
-			 * When attacking a destroyable cliff, retarget to the closest passable
-			 * cell so that the cliff can actually be approached.
-			 */
 			if (TarCom->RTTI == RTTI_CELL) {
 				CellClass * cellptr = (CellClass *)TarCom;
 				if (cellptr->Is_Tile_Destroyable_Cliff()) {
@@ -1262,11 +1280,6 @@ void FootClass::Approach_Target(void)
 				}
 			}
 
-			/*
-			**	If the object that we are attacking is a building adjust the unit's
-			**	max range so that people can stand far away from the buildings and
-			**	hit them.
-			*/
 			if (TarCom->RTTI == RTTI_BUILDING) {
 				BuildingClass * obj = (BuildingClass *)TarCom;
 				if (obj != NULL) {
@@ -1274,10 +1287,6 @@ void FootClass::Approach_Target(void)
 				}
 			}
 
-			/*
-			**	Adjust the max range of an infantry unit for where he is standing
-			**	in the room.
-			*/
 			double adjust;
 			if (RTTI == RTTI_INFANTRY) {
 				adjust = (double)maxrange - 281.6;
@@ -1295,85 +1304,82 @@ void FootClass::Approach_Target(void)
 			Cell tcell = tcoord.As_Cell();
 			Cell trycell = tcell;
 
-			Dir256 dir = DirType().Direction(tcoord, Center_Coord()).As_Dir256();
+			int dir = ::Direction(tcoord, Center_Coord()).As_Dir256(); // RA2: the direction from the target to this object
 
-			/*
-			 * Determine if the target is sitting upon a bridge.
-			 */
 			bool tarbridge = false;
 			if (TarCom->RTTI == RTTI_CELL) {
 				tarbridge = ((CellClass *)TarCom)->IsUnderBridge;
 			} else {
-				ObjectClass * obj = dynamic_cast<ObjectClass *>(TarCom);
-				if (obj != NULL) {
-					tarbridge = obj->IsOnBridge;
+				AbstractClass * target = TarCom; // RA2: the object test is the abstract's flag
+				if (target && (target->AbstractFlags & 2)) { // RA2: as above
+					tarbridge = ((ObjectClass *)target)->IsOnBridge; // RA2: as above
 				}
 			}
 
 			MZoneType mzone = TClass->MZone;
 			bool found = false;
+			double floating_radius; // RA2: the search radius is a double
+			int range = maxrange; // RA2: as above
+			if ((double)range > 204.8) { // RA2: the sweep only runs for a radius above one cell
+				floating_radius = (double)range; // RA2: as above
+				do { // RA2: as above
+					for (int index = 0; index < 25; index++) { // RA2: 25 angles in the table at 0x7D8178
+						static const int _approach_angles[25] = {0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 8, -8, 16, -16, 24, -24, 32, -32, 48, -48, 64, -64}; // RA2: as above
+						DirType angle((Dir256)(dir + _approach_angles[index])); // RA2: as above
+						trycoord = Coord(Approach_Move_Coord(tcoord, angle.Snap_To_256(), floating_radius).As_Cell(), 0); // RA2: as above
 
-			/*
-			**	Sweep through the cells between the target and the unit, looking for
-			**	a cell that the unit can enter but which is also within weapon range
-			**	of the target. If after a reasonable search, no appropriate cell could
-			**	be found, then the target will be assigned as the movement destination
-			**	and let "the chips fall where they may."
-			*/
-			for (int range = maxrange; (double)range > CELL_LEPTON / 1.25; range -= CELL_LEPTON) {
-				static int _angles[] = {
-					DIR_MIN,
-					DIR_STEP_32, -DIR_STEP_32,
-					DIR_STEP_16, -DIR_STEP_16,
-					DIR_STEP_16 + DIR_STEP_32, -(DIR_STEP_16 + DIR_STEP_32),
-					DIR_STEP_8, -DIR_STEP_8,
-					DIR_STEP_8 + DIR_STEP_16, -(DIR_STEP_8 + DIR_STEP_16),
-					DIR_STEP_4, -DIR_STEP_4
-				};
+						if (checkbuild && !Map[trycoord].Can_Build_Here()) continue; // RA2: as above
 
-				for (int index = 0; index < ARRAY_SIZE(_angles); index++) {
-					trycoord = Coord(Move_Coord(tcoord, DirType((Dir256)(dir + _angles[index])).Snap_To_256(), range).As_Cell(), 0);
+						trycoord.Z = Map.Get_Height_GL(trycoord); // RA2: as above
+						if (Map[trycoord].IsUnderBridge) { // RA2: as above
+							trycoord.Z += BRIDGE_LEPTON_HEIGHT; // RA2: as above
+						}
 
-					if (checkbuild && !Map[trycoord].Can_Build_Here()) continue;
+						if (!In_Range(&trycoord, TarCom, Get_Class_Weapon_Data(primary)->Weapon)) continue; // RA2: the member test, not the type's
 
-					trycoord.Z = Map.Get_Height_GL(trycoord);
-					if (Map[trycoord].IsUnderBridge) {
-						trycoord.Z += BRIDGE_LEPTON_HEIGHT;
-					}
-
-					if (TClass->In_Range(trycoord, TarCom, Get_Class_Weapon_Data(primary)->Weapon)) {
 						trycell = trycoord.As_Cell();
-						if (Map.In_Local_Radar(trycell) && Map[trycell].Is_Clear_To_Move(TClass->Speed, false, false, Map.Get_Cell_Zone(Destination_Coord().As_Cell(), mzone, IsOnBridge), mzone)) {
+						if (!Map.In_Local_Radar(trycell, true)) continue; // RA2: as above
 
-							int maxdist = MAX(abs(trycell.X - tcell.X), abs(trycell.Y - tcell.Y));
-							CellClass * cellptr = &Map[trycell];
-
-							if (flyer) {
-								found = true;
-								break;
+						bool clear = Map[trycell].Is_Clear_To_Move(TClass->Speed, false, false, Map.Get_Cell_Zone(Destination_Coord().As_Cell(), mzone, IsOnBridge), mzone, -1, true); // RA2: as above
+						if (!clear) { // RA2: a blocked cell is retried around its neighbors
+							if (RTTI == RTTI_INFANTRY) continue; // RA2: as above
+							Coord savedcoord = trycoord; // RA2: as above
+							Cell savedcell = trycell; // RA2: as above
+							for (int adjacent = 0; adjacent < 8; adjacent++) { // RA2: as above
+								trycell = AdjacentCell[adjacent & 7] + trycell; // RA2: as above
+								trycoord = Coord(trycell); // RA2: as above
+								if (In_Range(&trycoord, TarCom, Get_Class_Weapon_Data(primary)->Weapon) && Map[trycell].Is_Clear_To_Move(TClass->Speed, false, false, Map.Get_Cell_Zone(Destination_Coord().As_Cell(), mzone, IsOnBridge), mzone, -1, true)) { // RA2: as above
+									clear = true; // RA2: as above
+									break; // RA2: as above
+								}
 							}
-
-							if (Search.Test_Cell_Walk(trycell, tcell, this, cellptr->IsUnderBridge, tarbridge, MZONE_NONE) <= maxdist + 8) {
-								found = true;
-								break;
-							}
-
-							Cell destcell = Destination_Coord().As_Cell();
-							int destdist = MAX(abs(destcell.X - trycell.X), abs(destcell.Y - trycell.Y));
-							if (Search.Test_Cell_Walk(destcell, trycell, this, Is_Moving_Onto_Bridge(), cellptr->IsUnderBridge, MZONE_NONE) <= destdist + 8) {
-								found = true;
-								break;
+							if (!clear) { // RA2: as above
+								trycoord = savedcoord; // RA2: as above
+								trycell = savedcell; // RA2: as above
+								continue; // RA2: as above
 							}
 						}
+
+						int dy = abs((int)trycell.Y - tcell.Y); // RA2: as above
+						int dx = abs((int)trycell.X - tcell.X); // RA2: as above
+						int maxdist = dx > dy ? dx : dy; // RA2: as above
+						CellClass * cellptr = &Map[trycell]; // RA2: as above
+						if (!flyer && Search.Test_Cell_Walk(trycell, tcell, this, cellptr->IsUnderBridge, tarbridge, MZONE_NONE) > maxdist + 8) { // RA2: as above
+							Cell destcell = Destination_Coord().As_Cell(); // RA2: as above
+							int destdy = abs((int)destcell.Y - trycell.Y); // RA2: as above
+							int destdx = abs((int)destcell.X - trycell.X); // RA2: as above
+							int destdist = destdx > destdy ? destdx : destdy; // RA2: as above
+							if (Search.Test_Cell_Walk(destcell, trycell, this, Is_Moving_Onto_Bridge(), cellptr->IsUnderBridge, MZONE_NONE) > destdist + 8) continue; // RA2: as above
+						}
+						found = true; // RA2: as above
+						break; // RA2: as above
 					}
-				}
-				if (found) break;
+					if (found) break; // RA2: as above
+					range -= 256; // RA2: as above
+					floating_radius = (double)range; // RA2: as above
+				} while (floating_radius > 204.8); // RA2: as above
 			}
 
-			/*
-			**	If a suitable intermediate location was found, then head toward it.
-			**	Otherwise, head toward the enemy unit directly.
-			*/
 			if (found) {
 				Assign_Destination(&Map[trycell]);
 			} else if (TClass->IsHunterSeeker || (RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->IsVehicleThief)) {
@@ -1400,6 +1406,7 @@ void FootClass::Approach_Target(void)
 		}
 	}
 }
+
 
 
 /// <summary>
@@ -1758,8 +1765,6 @@ ResultType FootClass::Take_Damage(int & damage, int distance, WarheadTypeClass c
  *=============================================================================================*/
 bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool is_waypoint)
 {
-	assert(object != NULL);
-
 	switch (action) {
 		case ACTION_GUARD_AREA:
 			if (Can_Player_Fire() && Can_Player_Move()) {
@@ -1777,10 +1782,18 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 			break;
 
 		case ACTION_SELF:
+		case ACTION_AREA_ATTACK: // RA2: the area attack and detonate-all orders unload like the self order
+		case ACTION_DETONATE_ALL: // RA2: as above
 			Player_Assign_Mission(MISSION_UNLOAD);
 			return(true);
 
+		case ACTION_DETONATE: // RA2: a detonate click sends the event for the bomb this object carries
+			return(OutList.Add(EventClass(AttachedBomb->OwnerHouse->HeapID, EventClass::DETONATE, TargetClass(this))), true); // RA2: as above
+
 		case ACTION_ATTACK:
+		case ACTION_IVAN_BOMB: // RA2: the bomb, attack-move target and demolish orders attack like the attack order
+		case ACTION_ATTACK_MOVE_TAR: // RA2: as above
+		case ACTION_DEMOLISH: // RA2: as above
 			if (Can_Player_Fire()) {
 				Player_Assign_Mission(MISSION_ATTACK, object);
 				return(true);
@@ -1788,7 +1801,7 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 			break;
 
 		case ACTION_ENTER:
-			if (Can_Player_Move() && object && Dynamic_Cast<TechnoClass *>(object) /*&& !((RadioClass *)object)->In_Radio_Contact()*/) {
+			if (Can_Player_Move() && object && Dynamic_Cast<TechnoClass *>(object)) { // RA2: as above
 				Player_Assign_Mission(MISSION_ENTER, NULL, object);
 				return(true);
 			}
@@ -1800,6 +1813,13 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 				return(true);
 			}
 			break;
+
+		case ACTION_EATEN: // RA2: being eaten is a move order of its own, between the capture and the sabotage order
+			if (Can_Player_Move()) { // RA2: as above
+				Player_Assign_Mission(MISSION_EATEN, NULL, object); // RA2: as above
+				return(true); // RA2: as above
+			}
+			break; // RA2: as above
 
 		case ACTION_SABOTAGE:
 			if (Can_Player_Move()) {
@@ -1814,6 +1834,7 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 			}
 			/// intentional fallthrough
 		case ACTION_MOVE:
+		case ACTION_ATTACK_MOVE_NAV: // RA2: the attack-move order shares the move handling
 			if (Can_Player_Move()) {
 
 				AbstractClass * targ = object;
@@ -1827,28 +1848,47 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 
 				MZoneType mzone = TClass->MZone;
 				Cell cell = object->Destination_Coord().As_Cell();
-				bool in_radar = Map.In_Local_Radar(cell);
+				bool in_radar = Map.In_Local_Radar(cell, true); // RA2: as above
 				CellClass * cptr = &Map[Destination_Coord()];
 
 				if (mzone == MZONE_SUBTERANNEAN) mzone = MZONE_NORMAL;
 				else if (mzone == MZONE_FLYER) mzone = MZONE_INFANTRY;
 
+				bool moveanywhere = In_Air() || TClass->IsSubterranean || (RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->JumpJet) || RTTI == RTTI_AIRCRAFT; // RA2: objects that ignore the zone test
 
-				bool ontobridge = Is_Moving_Onto_Bridge(); // RA2: no IsJumpJet, moveanywhere (not in RA2's layout)
-				Coord coord = cell.As_Coord();
+				bool ontobridge = Is_Moving_Onto_Bridge(); // RA2: as above
+				Coord coord(cell.X * 256 + 128, cell.Y * 256 + 128, 0); // RA2: the coordinate is built out of line from the cell's center
 				coord.Z = Map.Get_Height_GL(coord);
 				bool shrouded = Map.Is_Shrouded(coord);
 				bool forcemove = !is_waypoint && (Keyboard->Down(Options.KeyForceMove1) || Keyboard->Down(Options.KeyForceMove2));
 
+				if (moveanywhere && action == ACTION_NOMOVE) { // RA2: a mover that ignores zones takes the nearest cell it can use
+					Cell nearby = Map.Nearby_Location(cell, TClass->Speed, -1, mzone, Map[cell].IsUnderBridge, Point2D(1, 1), false, true, TClass->IsSubterranean && HeightAGL < 0, true, Cell(0, 0), false); // RA2: as above
+					if (nearby != CELL_NONE) { // RA2: as above
+						targ = &Map[nearby]; // RA2: as above
+					}
+				} else { // RA2: as above
+					if (!in_radar || !moveanywhere && (shrouded || action == ACTION_NOMOVE || forcemove && RTTI == RTTI_INFANTRY || !Map.Is_Same_Cell_Zone(cptr->CellID, cell, mzone, ontobridge, Map[cell].IsUnderBridge, false))) { // RA2: as above
+						Cell nearby = Map.Nearby_Location(cell, TClass->Speed, Map.Get_Cell_Zone(cptr->CellID, mzone, ontobridge), mzone, Map[cell].IsUnderBridge, Point2D(1, 1), false, true, false, true, Cell(0, 0), false); // RA2: as above
+						if (nearby != CELL_NONE) { // RA2: as above
+							targ = &Map[nearby]; // RA2: as above
+						}
+					}
+				}
 
-				if (targ != NULL) { // RA2: no moveanywhere (not in RA2's layout)
-					Player_Assign_Mission(MISSION_MOVE, NULL, targ);
+				if (targ != NULL) { // RA2: as above
+					CellClass * from = NULL; // RA2: the cell the move starts from, unless the target is the object itself
+					if (targ != object && object != NULL) { // RA2: as above
+						from = &Map[object->Center_Coord().As_Cell()]; // RA2: as above
+					}
+					Player_Assign_Mission(MISSION_MOVE, NULL, targ, from); // RA2: the fourth argument is the start cell
 				}
 				return(true);
 			}
 			break;
 
 		case ACTION_PATROL_WAYPOINT:
+		case ACTION_NO_IVAN_BOMB: // RA2: the no-bomb order is refused like the patrol waypoint order
 			return(false);
 
 		case ACTION_ATTACK_SUPPORT: {
@@ -1863,6 +1903,7 @@ bool FootClass::Active_Click_With(ActionType action, ObjectClass * object, bool 
 	}
 	return(false);
 }
+
 
 
 
@@ -2054,7 +2095,7 @@ void FootClass::Debug_Dump(MonoClass * mono) const
  * HISTORY:                                                                                    *
  *   01/19/1995 JLB : Created.                                                                 *
  *=============================================================================================*/
-bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell const &, bool is_waypoint) // RA2: a second cell
+bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell const & from, bool is_waypoint) // RA2: a second cell, handed on as the source of the move
 {
 	action = What_Action(cell, false, is_waypoint);
 
@@ -2085,7 +2126,7 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 		case ACTION_MOVE:
 		case ACTION_ATTACK_MOVE_NAV: // RA2: the attack-move order shares the move handling
 			if (AllowVoice) {
-				Coord coord = cell;
+				Coord coord(cell.X * 256 + 128, cell.Y * 256 + 128, 0); // RA2: the coordinate is built out of line from the cell's center
 				coord.Z = Map.Get_Height_GL(coord);
 				if (Map[coord].IsUnderBridge) {
 					coord.Z += BRIDGE_LEPTON_HEIGHT;
@@ -2107,7 +2148,7 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 		case ACTION_NOMOVE: {
 			Cell moveto = Move_Order(cell, false);
 			if (moveto != CELL_NONE) {
-				Player_Assign_Mission(MISSION_MOVE, NULL, &Map[moveto]);
+				Player_Assign_Mission(MISSION_MOVE, NULL, &Map[moveto], &Map[from]); // RA2: the fourth argument is the second cell's map cell
 				break;
 			}
 		}
@@ -2157,6 +2198,7 @@ bool FootClass::Active_Click_With(ActionType action, Cell const & cell, Cell con
 	}
 	return(true);
 }
+
 
 
 
@@ -2265,8 +2307,6 @@ Coord FootClass::GetAttackCoordinates(void) const // RA2: not in TibSun, at 0x4C
  *=============================================================================================*/
 void FootClass::Per_Cell_Process(PCPType why)
 {
-	Cell cell;
-
 	if (why == PCP_END) {
 
 		IsScattering = false;
@@ -2276,12 +2316,15 @@ void FootClass::Per_Cell_Process(PCPType why)
 		*/
 		IsUnloading = false;
 
+		if (TClass->SensorsSight != 0) { // RA2: a sensor unit moves its sensed cells
+			RemoveSensorsAt(LastAdjacencyCell); // RA2: as above
+			AddSensorsAt(CELL_NONE); // RA2: as above
+		}
+
 		if (LastAdjacencyCell != Cell(0, 0)) {
 			if (Map.Cell_Region(LastAdjacencyCell) != Map.Cell_Region(PositionCell)) {
-				int risk = Risk();
-				HousesType owner = Owner();
-				Get_Cell_Ptr()->Adjust_Threat(owner, risk);
-				Map[LastAdjacencyCell].Adjust_Threat(owner, -risk);
+				Remove_Cell_Threat(&Map[LastAdjacencyCell]); // RA2: the threat moves with two out-of-line calls (0x6D95D0, 0x6D95A0)
+				Add_Cell_Threat(Get_Cell_Ptr()); // RA2: as above
 			}
 			int face;
 			for (face = FACING_FIRST; face < FACING_COUNT; face++) {
@@ -2303,10 +2346,10 @@ void FootClass::Per_Cell_Process(PCPType why)
 		*/
 		if (Cloak == CLOAKED) {
 			for (FacingType face = FACING_N; face < FACING_COUNT; face++) {
-				cell = Adjacent_Cell(PositionCell, (FacingType)face);
+				Cell cell = Adjacent_Cell(PositionCell, (FacingType)face); // RA2: the loop's cell is its own local
 
-				if (Map.In_Local_Radar(cell)) {
-					TechnoClass const * techno = Map[cell].Cell_Techno();
+				if (Map.In_Local_Radar(cell, true)) { // RA2: as above
+					TechnoClass * techno = Map[cell].Cell_Techno(Point2D(0, 0), false, NULL); // RA2: as above
 
 					if (techno && !techno->House->Is_Ally(this) && (techno->TClass->IsScanner || techno->Has_Ability(ABILITY_SENSORS))) {
 						Do_Shimmer();
@@ -2322,9 +2365,8 @@ void FootClass::Per_Cell_Process(PCPType why)
 		*/
 		int primary = What_Weapon_Should_I_Use(TarCom);
 		bool inrange = false;
-		FootClass const * foot = dynamic_cast<FootClass *>(TarCom);
-		if (foot != NULL) {
-			inrange = In_Range(foot->Likely_Coord(), primary);
+		if (TarCom != NULL && (TarCom->AbstractFlags & 4)) { // RA2: the foot flag test of the abstract, not a dynamic_cast
+			inrange = In_Range(((FootClass *)TarCom)->Likely_Coord(), primary); // RA2: as above
 		}
 
 		if ((Mission == MISSION_RESCUE || Mission == MISSION_GUARD_AREA || Mission == MISSION_ATTACK || Mission == MISSION_HUNT) && inrange && RouteQueue.Count() == 0) {
@@ -2332,7 +2374,7 @@ void FootClass::Per_Cell_Process(PCPType why)
 			Path[0] = FACING_NONE;
 		}
 
-		cell = PositionCell;
+		Cell cell = PositionCell; // RA2: a second cell local, declared after the loop
 		CellClass * cellptr = &Map[cell];
 
 		/*
@@ -2344,6 +2386,10 @@ void FootClass::Per_Cell_Process(PCPType why)
 			int y = cell.Y;
 			if (((!cellptr->IsUnderBridge && !cellptr->WasUnderBridge) || IsOnBridge) && tag != NULL) {
 				tag->Spring(TEVENT_PLAYER_ENTERED, this, PositionCell);
+				if (RTTI == RTTI_INFANTRY && ((InfantryClass *)this)->Class->IsAgent) { // RA2: an agent also springs two more events
+					tag->Spring(TEVENT_PARALYZED, this, PositionCell); // RA2: as above (event 0x35)
+					tag->Spring(TEVENT_ENEMY_IN_SPOTLIGHT_REPEATING, this, PositionCell); // RA2: as above (event 0x36)
+				}
 			}
 
 			/*
@@ -2410,14 +2456,7 @@ void FootClass::Per_Cell_Process(PCPType why)
 		*/
 		if (!IsActive) return;
 
-		if (!Map.In_Local_Radar((Cell const &)PositionCell) && Should_Delete_Off_Map()) {
-			if (RTTI == RTTI_UNIT && TClass->IsHunterSeeker && TarCom != NULL) {
-				TechnoClass * techno = Dynamic_Cast<TechnoClass *>(TarCom);
-				WeaponTypeClass * weap = PrimaryWeapon;
-				WarheadTypeClass const * wh = weap->WarheadPtr;
-				int damage = weap->Attack;
-				techno->Take_Damage(damage, 0, wh, this, true, true);
-			}
+		if (!Map.In_Local_Radar((Cell const &)PositionCell, true) && Should_Delete_Off_Map()) { // RA2: as above
 			Delete_Me();
 			return;
 		}
@@ -2448,6 +2487,7 @@ void FootClass::Per_Cell_Process(PCPType why)
 
 	BASECLASS::Per_Cell_Process(why);
 }
+
 
 
 /***************************************************************************
@@ -3179,10 +3219,15 @@ bool FootClass::Can_Demolish(void) const
 		case RTTI_AIRCRAFT:
 			if (HasAnyLink() && // RA2: the link test is HasAnyLink and the partner comes from Radio_Link(0), not the inline accessors
 				Radio_Link(0)->RTTI == RTTI_BUILDING && // RA2: as above
-				((BuildingClass *)Radio_Link(0))->Class->IsCanUnitRepair && // RA2: as above
-				(Center_Coord() - Radio_Link(0)->Center_Coord()).Length() < CELL_LEPTON / 2) { // RA2: as above
+				((BuildingClass *)Radio_Link(0))->Class->IsCanUnitRepair) { // RA2: as above
 
-				return(true);
+				Coord diff = Center_Coord() - Radio_Link(0)->Center_Coord(); // RA2: the difference is a named local
+				double z = diff.Z; // RA2: the length loads z, y, x in this order
+				double y = diff.Y; // RA2: as above
+				double x = diff.X; // RA2: as above
+				if ((int)fastmath::sqrt(x * x + y * y + z * z) < CELL_LEPTON / 2) { // RA2: as above
+					return(true); // RA2: as above
+				}
 			}
 			break;
 
@@ -3191,6 +3236,7 @@ bool FootClass::Can_Demolish(void) const
 	}
 	return(BASECLASS::Can_Demolish());
 }
+
 
 
 
@@ -3623,60 +3669,125 @@ void FootClass::AI(void)
 {
 	BASECLASS::AI();
 
-	if (IsActive) {
-		IsIdle = false;
+	if (!IsActive) { // RA2: the early exit replaces the nested block
+		return; // RA2: as above
+	}
+	IsIdle = false; // RA2: as above
 
-		if (TClass->IsTiberiumHeal || Has_Ability(ABILITY_TIBERIUM_HEAL)) {
-			if (Strength > 0 && HealthRatio < Rule->ConditionGreen) {
-				if (Map[Center_Coord()].Land_Type() == LAND_TIBERIUM) {
-					if ((Frame % int(Rule->TiberiumHeal * TICKS_PER_MINUTE)) == 0) {
-						int step = TClass->Repair_Step();
-						step = max(step, 1);
-						Strength += step;
-						if (HealthRatio > Rule->ConditionGreen) {
-							Strength = Techno_Type_Class()->MaxStrength;
-						}
-					}
-				}
+	if (Frame % Rule->RadApplicationDelay == 0 && !TClass->ImmuneToRadiation && !In_Air()) { // RA2: radiation damages ground units
+		Cell cell = Center_Coord().As_Cell(); // RA2: as above
+		int amount = Map[cell].GetRadLevel(); // RA2: as above
+		if (amount > 0) { // RA2: as above
+			int damage = (int)(amount * Rule->RadLevelFactor); // RA2: as above
+			Take_Damage(damage, 0, Rule->RadSiteWarhead, NULL, false, true); // RA2: as above
+			if (!IsActive) { // RA2: as above
+				return; // RA2: as above
 			}
 		}
-
-		if (Locomotion != NULL && !IsSinking && !IsFalling) {
-			Locomotion->Process();
-			if (!IsActive) {
-				return;
-			}
-			if (Locomotion->Is_Moving_Now() && (Frame % TClass->WalkRate) == 0) {
-				TotalFramesWalked++;
-			}
-		}
-
-
-		if ((Frame & 63) == 63 && NavCom == NULL && !IsOnBridge && Get_Cell_Ptr()->Ramp == 0 && Is_On_Elevation() && HeightAGL == 0) {
-			Scatter(Coord(0,0,0), true);
-		}
-
-		IPiggybackPtr piggy(Locomotion);
-		if (piggy != NULL) {
-			if (piggy->Is_Ok_To_End()) {
-				piggy->End_Piggyback(&Locomotion);
-			}
-		}
-
-		IonBlastYDrawOffset = 0;
-
-		Enter_Object_Nearby();
 	}
 
-// FootClass::Per_Cell_Process does this function already.
-#ifdef OBSOLETE
-	if (IsActive) {
-		if (!IsScattering && !IsTethered && !IsInLimbo && RTTI != RTTI_AIRCRAFT && TarCom != NULL && In_Range(TarCom)) {
-			Assign_Destination(NULL);
+	if (!IsLocked && TClass->BalloonHover && Map.In_Local_Radar(Get_Cell_Ptr(), true)) { // RA2: a balloon-hovering object locks as soon as it is on the radar map
+		IsLocked = true; // RA2: as above
+	}
+
+	if (Locomotion->Is_Moving_Now() && In_Air() && House->Is_Ally(PlayerPtr) && SightTimer.Value() == 0) { // RA2: an airborne mover reveals a ring around it as it moves
+		RemoveSight(false, false, false, NULL); // RA2: as above
+		UpdateSight(false, false, false, NULL); // RA2: as above
+		if (LastSightHeight != HeightAGL) { // RA2: as above
+			Map.RevealArea3(Coord(PositionCoord), 0, LastSightRange + 3, 0); // RA2: as above
+		} else { // RA2: as above
+			Map.RevealArea3(Coord(PositionCoord), LastSightRange - 3, LastSightRange + 3, 0); // RA2: as above
+		}
+		LastSightHeight = HeightAGL; // RA2: as above
+		SightTimer = CDTimerClass<FrameTimerClass>(15); // RA2: as above
+	}
+
+	int frame = TotalFramesWalked; // RA2: the walk frame before the locomotion runs
+	if (Locomotion != NULL && !IsSinking && !IsFalling) { // RA2: as above
+		Locomotion->Process(); // RA2: as above
+		if (!IsActive) { // RA2: as above
+			return; // RA2: as above
+		}
+		if (((Locomotion->Is_Moving_Now() && !IsWarpingIn()) || (TarCom != NULL && TClass->HoverAttack)) && Frame % TClass->WalkRate == 0 && !IsBeingWarpedOut() && !IsWarpingIn() || // RA2: the walk and idle frame rates
+			TClass->IdleRate != 0 && !Locomotion->Is_Moving_Now() && Frame % TClass->IdleRate == 0 && !IsBeingWarpedOut() && !IsWarpingIn()) { // RA2: as above
+			TotalFramesWalked++; // RA2: as above
 		}
 	}
-#endif
+
+	if ((frame != TotalFramesWalked || Locomotion->Is_Moving_Now()) && !IsFalling && !IsRocking) { // RA2: the move sound plays while the object walks
+		if (!IsMoveSoundPlaying && TClass->MoveSound.Count() > 0) { // RA2: as above
+			MoveSoundAudioController.Stop(); // RA2: as above
+			VocClass::PlayAt(TClass->MoveSound[NonCriticalRandomNumber() % (unsigned)TClass->MoveSound.Count()], Coord(PositionCoord), &MoveSoundAudioController); // RA2: a move sound picked with the noncritical generator
+			IsMoveSoundPlaying = true; // RA2: as above
+		}
+		MoveSoundDelay = 3; // RA2: as above
+	} else if (IsMoveSoundPlaying) { // RA2: as above
+		if (MoveSoundDelay != 0 && !IsFalling && !IsRocking) { // RA2: as above
+			MoveSoundDelay--; // RA2: as above
+		} else { // RA2: as above
+			MoveSoundAudioController.EndLooping(); // RA2: as above
+			IsMoveSoundPlaying = false; // RA2: as above
+			MoveSoundDelay = 0; // RA2: as above
+		}
+	}
+
+	if (IsFalling != IsABomb) { // RA2: the falling voice plays when the fall begins
+		if (IsFalling && TClass->VoiceFalling != -1 && IsToExplode) { // RA2: as above
+			VocClass::PlayAt(TClass->VoiceFalling, Coord(PositionCoord), NULL); // RA2: as above
+		}
+		IsABomb = IsFalling; // RA2: as above
+	}
+	if (IsSinking != WasSinkingAlready) { // RA2: the sinking voice and sound play when the sinking begins
+		if (IsSinking) { // RA2: as above
+			if (TClass->VoiceSinking != -1) { // RA2: as above
+				VocClass::PlayAt(TClass->VoiceSinking, Coord(PositionCoord), NULL); // RA2: as above
+			}
+			if (TClass->SinkingSound != -1) { // RA2: as above
+				VocClass::PlayAt(TClass->SinkingSound, Coord(PositionCoord), &MoveSoundAudioController); // RA2: as above
+			} else if (Rule->SinkingSound != -1) { // RA2: as above
+				VocClass::PlayAt(Rule->SinkingSound, Coord(PositionCoord), &MoveSoundAudioController); // RA2: as above
+			}
+		} else if (!IsMoveSoundPlaying) { // RA2: as above
+			MoveSoundAudioController.EndLooping(); // RA2: as above
+		}
+		WasSinkingAlready = IsSinking; // RA2: as above
+	}
+	if (IsRocking != WasCrashingAlready) { // RA2: the crashing voice and sound play when the crash begins
+		if (IsRocking) { // RA2: as above
+			MoveSoundAudioController.EndLooping(); // RA2: as above
+			if (TClass->VoiceCrashing != -1 && House->Is_Player_Control()) { // RA2: as above
+				VocClass::PlayAt(TClass->VoiceCrashing, Coord(PositionCoord), NULL); // RA2: as above
+			}
+			if (TClass->CrashingSound != -1) { // RA2: as above
+				VocClass::PlayAt(TClass->CrashingSound, Coord(PositionCoord), &MoveSoundAudioController); // RA2: as above
+			}
+		} else if (!IsMoveSoundPlaying) { // RA2: as above
+			MoveSoundAudioController.EndLooping(); // RA2: as above
+		}
+		WasCrashingAlready = IsRocking; // RA2: as above
+	}
+	VocClass::UpdateAt(Coord(PositionCoord), &MoveSoundAudioController); // RA2: the kept sound event follows the object
+
+	if ((Frame & 63) == 63 && NavCom == NULL && !IsOnBridge && Get_Cell_Ptr()->Ramp == 0 && Is_On_Elevation() && HeightAGL == 0) { // RA2: as above
+		Scatter(Coord(0,0,0), true); // RA2: as above
+	}
+
+	IPiggybackPtr piggy(Locomotion); // RA2: as above
+	if (piggy != NULL) { // RA2: as above
+		if (piggy->Is_Ok_To_End()) { // RA2: as above
+			piggy->End_Piggyback(&Locomotion); // RA2: as above
+		}
+	}
+
+	IonBlastYDrawOffset = 0; // RA2: as above
+
+	Enter_Object_Nearby(); // RA2: as above
+
+	if (ParasiteEatingMe != NULL) { // RA2: the parasite eating this object runs its own AI
+		ParasiteEatingMe->ParasiteImUsing->AI(); // RA2: as above
+	}
 }
+
 
 
 /// <summary>
@@ -3752,16 +3863,17 @@ ZGradientType FootClass::Get_Z_Gradient(void) const
 /// The locomotor has the final say over whether a shadow is appropriate at all -- a burrowed
 /// or submerged object casts none -- and over where the shadow should be offset to.
 /// </summary>
-void FootClass::Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache, Surface *, unsigned, unsigned) const // RA2: three more arguments
+void FootClass::Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache, Surface * surface, unsigned shadow_x, unsigned shadow_y) const // RA2: three more arguments
 {
 	if (Locomotion != NULL && Locomotion->Is_To_Have_Shadow() == (boolean)true) {
 		Point2D drawpoint = point;
 		if (Locomotion != NULL) {
 			drawpoint = Point2D(Locomotion->Shadow_Point()) + point;
 		}
-		Techno_Draw_Voxel_Shadow(voxeldata, layer_index, key, cache, cliprect, drawpoint, matrix, force_cache);
+		Techno_Draw_Voxel_Shadow(voxeldata, layer_index, key, cache, cliprect, drawpoint, matrix, force_cache, surface, shadow_x, shadow_y); // RA2: the callee takes the surface and the two shadow offsets (0x6D21E0)
 	}
 }
+
 
 
 /// <summary>
@@ -4494,9 +4606,8 @@ bool FootClass::Execute_Waypoint_Path(WaypointClass * waypoint) // RA2: returns 
 			CellClass * waypoint_map_cell = &Map[waypoint_cell]; // RA2: as above
 			ActionType adjusted_action = What_Action(adjusted_waypoint, false, true); // RA2: as above
 
-			int adjusted_zone; // RA2: declared first, the exe keeps the adjusted zone in the lower slot
-			int waypoint_zone = Map.Get_Cell_Zone(waypoint_cell, TClass->MZone, waypoint_map_cell->IsUnderBridge); // RA2: as above
-			adjusted_zone = Map.Get_Cell_Zone(adjusted_waypoint, TClass->MZone, adjusted_cell->IsUnderBridge);
+			int waypoint_zone = Map.Get_Cell_Zone(waypoint_cell, TClass->MZone, waypoint_map_cell->IsUnderBridge); // RA2: the waypoint zone comes first
+			int adjusted_zone = Map.Get_Cell_Zone(adjusted_waypoint, TClass->MZone, adjusted_cell->IsUnderBridge); // RA2: as above
 			int destination_zone = Map.Get_Cell_Zone(Destination_Coord().As_Cell(), TClass->MZone, Is_Moving_Onto_Bridge()); // RA2: as above
 			MoveType entry_result = Can_Enter_Cell(adjusted_cell, FACING_NONE, // RA2: as above
 				adjusted_cell->Height + (BRIDGE_CELL_HEIGHT * adjusted_cell->IsUnderBridge), 0, true);
@@ -4504,17 +4615,17 @@ bool FootClass::Execute_Waypoint_Path(WaypointClass * waypoint) // RA2: returns 
 			int walk_distance_limit = MAX(abs((int)waypoint_offset.X), abs((int)waypoint_offset.Y)); // RA2: as above
 			walk_distance_limit = MIN(5, walk_distance_limit + 3);
 
-			if (action != adjusted_action && is_direct_waypoint || // RA2: as above
-				entry_result != MOVE_OK ||
-				adjusted_zone != waypoint_zone ||
-				destination_zone != adjusted_zone ||
-				is_direct_waypoint && Search.Test_Cell_Walk(adjusted_waypoint, waypoint_cell, this,
-					adjusted_cell->IsUnderBridge, waypoint_map_cell->IsUnderBridge, MZONE_NONE) > walk_distance_limit) {
-				action_succeeded = Active_Click_With(action, waypoint_cell, Cell(-1, -1), true); // RA2: a second cell, (-1, -1) at 0x4CB110
-				WaypointOffsetCell = Cell(0, 0);
-			} else {
-				action_succeeded = Active_Click_With(action, adjusted_waypoint, Cell(-1, -1), true); // RA2: as above
+			if ((action == adjusted_action || !is_direct_waypoint) && // RA2: the positive test with the adjusted click first, as the original
+				entry_result == MOVE_OK && // RA2: as above
+				waypoint_zone == adjusted_zone && // RA2: as above
+				destination_zone == waypoint_zone && // RA2: as above
+				(!is_direct_waypoint || Search.Test_Cell_Walk(adjusted_waypoint, waypoint_cell, this, // RA2: as above
+					adjusted_cell->IsUnderBridge, waypoint_map_cell->IsUnderBridge, MZONE_NONE) <= walk_distance_limit)) { // RA2: as above
+				action_succeeded = Active_Click_With(action, adjusted_waypoint, Cell(-1, -1), true); // RA2: a second cell, (-1, -1) at 0x4CB110
 				WaypointTargetCell = adjusted_waypoint;
+			} else { // RA2: as above
+				action_succeeded = Active_Click_With(action, waypoint_cell, Cell(-1, -1), true); // RA2: as above
+				WaypointOffsetCell = Cell(0, 0); // RA2: as above
 			}
 		}
 
@@ -4533,6 +4644,7 @@ bool FootClass::Execute_Waypoint_Path(WaypointClass * waypoint) // RA2: returns 
 	IsOnWaypointPatrol = false;
 	return(action_succeeded); // RA2: the success flag is the return value
 }
+
 
 
 
@@ -4691,7 +4803,7 @@ Cell FootClass::Search_For_Tiberium_Weighted(int rad)
 		return(center);
 	}
 
-	int numharv = House->AUQuantity.Value(Rule->HarvesterUnit[0]->HeapID);
+	int numharv = House->AUQuantity.Value(House->Get_First_Ownable(Rule->HarvesterUnit)->HeapID); // RA2: the first harvester this house may own, not the list's first
 	if (numharv < 1) {
 		numharv = 1;
 	}
@@ -4701,7 +4813,7 @@ Cell FootClass::Search_For_Tiberium_Weighted(int rad)
 	**	Perform a ring search outward from the center.
 	*/
 	for (int radius = 1; radius < rad; radius++) {
-		int ringspan = radius * 2;
+		int ringspan = radius * 3; // RA2: three cells per ring step
 		int share = ringspan / numharv;
 		bool northrun = false;
 		bool southrun = false;
@@ -4769,8 +4881,14 @@ Cell FootClass::Search_For_Tiberium_Weighted(int rad)
 			if (Tiberium_Check(cell)) {
 				if (!eastrun) {
 					CellClass *cptr = &Map[cell];
-					celldist.Add(cptr, cptr->Tiberium_Value() * scale < 1.0 ? 1.0 : cptr->Tiberium_Value() * scale);
-					eastrun = true;
+					if (cptr->Tiberium_Value() * scale < 1.0) { // RA2: the east run weighs like the others
+						weight = 1.0; // RA2: as above
+					} else { // RA2: as above
+						weight = cptr->Tiberium_Value() * scale; // RA2: as above
+					}
+					int intweight = (int)weight; // RA2: as above
+					eastrun = true; // RA2: as above
+					celldist.Add(cptr, intweight); // RA2: as above
 				}
 			} else {
 				eastrun = false;
@@ -4784,6 +4902,7 @@ Cell FootClass::Search_For_Tiberium_Weighted(int rad)
 	}
 	return(CELL_NONE);
 }
+
 
 
 
@@ -5200,6 +5319,63 @@ void FootClass::Delete_Me(void)
 bool FootClass::In_Air(void) const
 {
 	return(BASECLASS::In_Air()); // RA2: no IPersistPtr, Locomotion, CLSID and 1 more (not in RA2's layout)
+}
+
+
+/// <summary>
+/// RA2
+/// Takes a passenger into this transport.
+/// The type's enter sound plays at the transport, and a gunner type that has just taken its first
+/// passenger receives its gunner.
+/// </summary>
+/// <param name="passenger">The object that enters this transport.</param>
+void FootClass::Load_Passenger(FootClass * passenger) // RA2: 0x4CCE80
+{
+	Cargo.Attach(passenger); // RA2: the passenger joins the cargo
+	if (passenger != NULL && TClass->EnterTransportSound != -1) { // RA2: as above
+		VocClass::PlayIndexAtPos(TClass->EnterTransportSound, Coord(PositionCoord), 0); // RA2: as above
+	}
+	if (TClass->Gunner && Cargo.How_Many() == 1) { // RA2: as above
+		ReceiveGunner(passenger); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2
+/// Takes a given passenger out of this transport.
+/// The type's leave sound plays at the transport, and a gunner type that has just lost its last
+/// passenger loses its gunner.
+/// </summary>
+/// <param name="passenger">The object that leaves this transport.</param>
+void FootClass::Remove_Passenger(FootClass * passenger) // RA2: 0x4CCF20
+{
+	Cargo.Detach(passenger); // RA2: the passenger leaves the cargo
+	if (passenger != NULL && TClass->LeaveTransportSound != -1) { // RA2: as above
+		VocClass::PlayIndexAtPos(TClass->LeaveTransportSound, Coord(PositionCoord), 0); // RA2: as above
+	}
+	if (TClass->Gunner && Cargo.How_Many() == 0) { // RA2: as above
+		RemoveGunner(passenger); // RA2: as above
+	}
+}
+
+
+/// <summary>
+/// RA2
+/// Lets the first passenger out of this transport.
+/// A gunner type left empty loses its gunner, and the type's leave sound plays when a passenger came out.
+/// </summary>
+/// <returns>Returns with the passenger that left, or NULL if there was none.</returns>
+FootClass * FootClass::Unload_Passenger(void) // RA2: 0x4CCFC0
+{
+	FootClass * passenger = Cargo.Detach_Object(); // RA2: the first passenger leaves the cargo
+	if (TClass->Gunner && Cargo.How_Many() == 0) { // RA2: as above
+		RemoveGunner(passenger); // RA2: as above
+	}
+	if (passenger != NULL && TClass->LeaveTransportSound != -1) { // RA2: as above
+		VocClass::PlayIndexAtPos(TClass->LeaveTransportSound, Coord(PositionCoord), 0); // RA2: as above
+	}
+	return(passenger); // RA2: as above
 }
 
 

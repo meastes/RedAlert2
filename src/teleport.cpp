@@ -172,8 +172,8 @@ bool TeleportLocomotionClass::Clear_Arrival(Coord to, bool arrive)
 			}
 		}
 
-		CellClass * cptr = &Map[LinkedTo->Center_Coord()];
-		bool bridge = cptr->Is_Bridge_Here();
+		CellClass * cptr = &Map[LinkedTo->Center_Coord().As_Cell()]; // RA2: the Cell form of the operator
+		bool bridge = cptr->Is_Bridge_Here; // RA2: the member function's address is tested, always true (0x4788D0)
 		if ((overlay != -1 && !OverlayTypes[overlay]->IsTiberium && !bridge) || skip) {
 			MZoneType mzone = LinkedTo->Techno_Type_Class()->MZone;
 			if (mzone == MZONE_FLYER) {
@@ -185,7 +185,8 @@ bool TeleportLocomotionClass::Clear_Arrival(Coord to, bool arrive)
 			}
 			Cell nearby = Map.Nearby_Location(to.As_Cell(), SPEED_TRACK, Map.Get_Cell_Zone(cptr->CellID, mzone, bridge), mzone, Map[to.As_Cell()].IsUnderBridge, Point2D(1, 1), false, false, false, true, Cell(0, 0));
 			Coord offset = to - Map[to].Center_Coord();
-			LinkedTo->ChronoDestCoords = Map[nearby].Center_Coord() + offset;
+			Coord target = Map[nearby].Center_Coord() + offset; // RA2: a named local, as meastes
+			LinkedTo->ChronoDestCoords = target; // RA2: as above
 			return(false);
 		}
 	} else {
@@ -211,6 +212,7 @@ bool TeleportLocomotionClass::Clear_Arrival(Coord to, bool arrive)
 	}
 	return(true);
 }
+
 
 
 /// <summary>
@@ -354,16 +356,175 @@ void STDMETHODCALLTYPE TeleportLocomotionClass::Do_Turn(DirStruct coord)
 /// <returns>bool; Is there more movement still to process? A teleport never leaves any.</returns>
 boolean STDMETHODCALLTYPE TeleportLocomotionClass::Process(void)
 {
-	if (Is_Moving()) {
-		LinkedTo->Mark(MARK_UP);
-		LinkedTo->PositionCoord = DestinationCoord;
-		LinkedTo->Mark(MARK_DOWN);
-		Stop_Moving();
-		LinkedTo->Per_Cell_Process(PCP_END);
-		LinkedTo->Look();
+	int distance = 0; // RA2: RA2's staged form (meastes TeleportLocomotionClass_Process_006e0e10)
+	if (LinkedTo->WarpingOut && State == 0 && LinkedTo->TeleportState == 0) { // RA2: as above
+		Process_Delay(); // RA2: as above
+		return(false); // RA2: as above
 	}
-	return(VARIANT_FALSE);
+	if (State == 0 && LinkedTo->TeleportState != 0) { // RA2: as above
+		State = LinkedTo->TeleportState; // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (!LinkedTo->IsImmobilized) { // RA2: as above
+		if (State <= 0) { // RA2: as above
+			if (Is_Moving()) { // RA2: as above
+				if (LinkedTo->PositionCoord != LastCoords && LastCoords != COORD_NONE) { // RA2: as above
+					TechnoClass::Remove_Target(LinkedTo); // RA2: as above
+					for (int index = Bullets.Count() - 1; index >= 0; index--) { // RA2: as above
+						BulletClass * bullet = Bullets[index]; // RA2: as above
+						if (bullet->TarCom == LinkedTo) { // RA2: as above
+							bullet->LoseTarget(); // RA2: as above
+						}
+					}
+					new AnimClass(Rule->WarpOut, LinkedTo->PositionCoord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
+					distance = LinkedTo->Center_Coord().Distance_YZX(LastCoords); // RA2: the 3-D length, summed y, z, x
+					Timer = 0; // RA2: as above
+					if (Rule->ChronoTrigger) { // RA2: as above
+						Timer = distance / Rule->ChronoDistanceFactor; // RA2: as above
+					}
+					Timer = Timer > Rule->ChronoMinimumDelay ? Timer : CDTimerClass<FrameTimerClass>(Rule->ChronoMinimumDelay); // RA2: as above
+					if (distance < Rule->ChronoRangeMinimum) { // RA2: as above
+						Timer = Rule->ChronoMinimumDelay; // RA2: as above
+					}
+					LinkedTo->WarpingOut = true; // RA2: as above
+					if (LinkedTo->Fetch_RTTI() == RTTI_UNIT && ((UnitClass *)LinkedTo)->Class->IsToHarvest) { // RA2: as above
+						Timer = 0; // RA2: as above
+						LinkedTo->WarpingOut = false; // RA2: as above
+					}
+					if (LinkedTo->ParasiteEatingMe != NULL) { // RA2: as above
+						LinkedTo->ParasiteEatingMe->ParasiteImUsing->ExitUnit(); // RA2: as above
+					}
+					LinkedTo->Mark(MARK_UP); // RA2: as above
+					{
+						FootClass * linked = LinkedTo; // RA2: as above
+						int sound = linked->Techno_Type_Class()->ChronoOutSound; // RA2: as above
+						if (sound != -1 || (sound = Rule->ChronoOutSound) != -1) { // RA2: as above
+							VocClass::PlayAt(sound, linked->PositionCoord, NULL); // RA2: as above
+						}
+					}
+					LinkedTo->Set_Coord(LastCoords); // RA2: as above
+					Cell where = LastCoords.As_Cell(); // RA2: as above
+					CellClass * cell = &Map[where]; // RA2: as above
+					LinkedTo->Set_Coord(LastCoords); // RA2: as above
+					if (cell->IsUnderBridge) { // RA2: as above
+						LinkedTo->IsOnBridge = true; // RA2: as above
+					} else {
+						LinkedTo->IsOnBridge = false; // RA2: as above
+					}
+					LinkedTo->Set_Height_AGL(0); // RA2: as above
+					LinkedTo->Mark(MARK_DOWN); // RA2: as above
+					{
+						FootClass * linked = LinkedTo; // RA2: as above
+						int sound = linked->Techno_Type_Class()->ChronoInSound; // RA2: as above
+						if (sound != -1 || (sound = Rule->ChronoInSound) != -1) { // RA2: as above
+							VocClass::PlayAt(sound, linked->PositionCoord, NULL); // RA2: as above
+						}
+					}
+					LinkedTo->Per_Cell_Process(PCP_END); // RA2: as above
+					Stop_Moving(); // RA2: as above
+					cell->Goodie_Check(LinkedTo); // RA2: as above
+					LinkedTo->Assign_Destination(0, true); // RA2: as above
+					new AnimClass(Rule->WarpOut, LinkedTo->PositionCoord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
+					LinkedTo->TeleportState = 0; // RA2: as above
+					return(false); // RA2: as above
+				}
+				LinkedTo->Assign_Destination(0, true); // RA2: as above
+				Stop_Moving(); // RA2: as above
+				return(false); // RA2: as above
+			}
+			return(false); // RA2: as above
+		}
+	} else if (State == 0) { // RA2: as above
+		LinkedTo->BeingWarpedOut = true; // RA2: as above
+		Timer = 60; // RA2: as above
+		State++; // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (State == 1) { // RA2: as above
+		Process_Delay(); // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (State == 2) { // RA2: as above
+		new AnimClass(Rule->WarpOut, LinkedTo->PositionCoord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
+		LinkedTo->Mark(MARK_UP); // RA2: as above
+		{
+			FootClass * linked = LinkedTo; // RA2: as above
+			int sound = linked->Techno_Type_Class()->ChronoOutSound; // RA2: as above
+			if (sound != -1 || (sound = Rule->ChronoOutSound) != -1) { // RA2: as above
+				VocClass::PlayAt(sound, linked->PositionCoord, NULL); // RA2: as above
+			}
+		}
+		LinkedTo->WarpingOut = true; // RA2: as above
+		LinkedTo->IsImmobilized = false; // RA2: as above
+		LinkedTo->BeingWarpedOut = false; // RA2: as above
+		LinkedTo->IsOnBridge = false; // RA2: as above
+		bool ok = Clear_Arrival(LinkedTo->ChronoDestCoords, false); // RA2: as above
+		State++; // RA2: as above
+		if (ok) { // RA2: as above
+			State++; // RA2: as above
+			return(false); // RA2: as above
+		}
+		return(false); // RA2: as above
+	}
+	if (State == 3) { // RA2: as above
+		if (Clear_Arrival(LinkedTo->ChronoDestCoords, false)) { // RA2: as above
+			State++; // RA2: as above
+		}
+		LinkedTo->ChronoLockRemaining = Rule->ChronoDelay; // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (State == 4) { // RA2: as above
+		Clear_Arrival(LinkedTo->ChronoDestCoords, true); // RA2: as above
+		LinkedTo->Set_Coord(LastCoords); // RA2: as above
+		LinkedTo->Set_Height_AGL(0); // RA2: as above
+		LinkedTo->Mark(MARK_DOWN); // RA2: as above
+		State++; // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (State == 5) { // RA2: as above
+		LinkedTo->Set_Coord(LastCoords); // RA2: as above
+		LinkedTo->Set_Height_AGL(0); // RA2: as above
+		LinkedTo->Mark(MARK_DOWN); // RA2: as above
+		{
+			FootClass * linked = LinkedTo; // RA2: as above
+			int sound = linked->Techno_Type_Class()->ChronoInSound; // RA2: as above
+			if (sound != -1 || (sound = Rule->ChronoInSound) != -1) { // RA2: as above
+				VocClass::PlayAt(sound, linked->PositionCoord, NULL); // RA2: as above
+			}
+		}
+		if (!Map.In_Local_Radar(LinkedTo->Get_Cell(), true)) { // RA2: as above
+			LinkedTo->IsLocked = false; // RA2: as above
+		}
+		if (LinkedTo->TeleportState == 0) { // RA2: as above
+			Check_Landing(LastCoords); // RA2: as above
+		}
+		if (LinkedTo->IsActive) { // RA2: as above
+			LinkedTo->Per_Cell_Process(PCP_END); // RA2: as above
+			Stop_Moving(); // RA2: as above
+			LinkedTo->Assign_Archive_Target(0); // RA2: as above
+			LinkedTo->Assign_Destination(0, true); // RA2: as above
+			Timer = LinkedTo->ChronoLockRemaining; // RA2: as above
+			new AnimClass(Rule->WarpOut, LinkedTo->PositionCoord, 0, 1, ShapeFlags_Type(0x600), 0); // RA2: as above
+			State++; // RA2: as above
+			return(false); // RA2: as above
+		}
+		return(false); // RA2: as above
+	}
+	if (State == 6) { // RA2: as above
+		Process_Delay(); // RA2: as above
+		return(false); // RA2: as above
+	}
+	if (State == 7) { // RA2: as above
+		LinkedTo->WarpingOut = false; // RA2: as above
+		LinkedTo->Assign_Archive_Target(0); // RA2: as above
+		LinkedTo->Assign_Destination(0, true); // RA2: as above
+		IsMoving = false; // RA2: as above
+		LinkedTo->TeleportState = 0; // RA2: as above
+		State = 0; // RA2: as above
+	}
+	return(false); // RA2: as above
 }
+
 
 
 /// <summary>
@@ -409,9 +570,17 @@ HRESULT STDMETHODCALLTYPE TeleportLocomotionClass::Load(IStream * stream)
 	HRESULT result = BASECLASS::Load(stream);
 	if (SUCCEEDED(result)) {
 		new (this) TeleportLocomotionClass(NoInitClass());
+
+		bool haspiggy; // RA2: the piggyback flag follows the base data, then the piggybacked locomotor
+		stream->Read(&haspiggy, sizeof(haspiggy), NULL); // RA2: as above
+
+		if (haspiggy) { // RA2: as above
+			result = OleLoadFromStream(stream, IID_ILocomotion, (void**)&Piggybacker); // RA2: as above
+		}
 	}
 	return(result);
 }
+
 
 
 /// <summary>
@@ -534,11 +703,13 @@ HRESULT STDMETHODCALLTYPE TeleportLocomotionClass::End_Piggyback(ILocomotion ** 
 		return(E_POINTER);
 	}
 	if (Piggybacker != NULL) {
-		*pointer = Piggybacker.Detach();
+		*pointer = Piggybacker; // RA2: the pointer is stored first, then the member is cleared without Release
+		Piggybacker.Detach(); // RA2: as above
 		return(S_OK);
 	}
 	return(S_FALSE);
 }
+
 
 
 /// <summary>

@@ -576,6 +576,8 @@ class FootClass : public TechnoClass
 		Cell Search_For_Tiberium(int rad, bool allow_weighted = false);
 		Cell Search_For_Tiberium_Weighted(int rad);
 
+		void Load_Passenger(FootClass * passenger); // RA2: 0x4CCE80; the passenger joins the cargo (the type's enter sound plays, a gunner type's first passenger becomes its gunner)
+		void Remove_Passenger(FootClass * passenger); // RA2: 0x4CCF20; the given passenger leaves the cargo (the type's leave sound plays, an emptied gunner type loses its gunner)
 		FootClass * Unload_Passenger(void); // RA2: 0x4CCFC0; the first passenger leaves this transport (a gunner type left empty loses its gunner, the type's leave sound plays)
 
 		bool Weed_Check(Cell & center, int x, int y);

@@ -42,6 +42,12 @@
 #include "voc.h"
 #include "voxdrsys.h"
 
+static inline Cell Vanim_Adjacent_Cell(Coord const & coord, FacingType dir) // RA2: an adjacent cell by value, the table entry first
+{
+	return(AdjacentCell[(int)dir & 0x07] + coord.As_Cell()); // RA2: as above
+}
+
+
 /// <summary>
 /// Creates a voxel animation at the coordinate specified.
 /// This routine sets the animation tumbling with a randomized velocity and spin drawn
@@ -63,6 +69,8 @@ VoxelAnimClass::VoxelAnimClass(VoxelAnimTypeClass const * type, Coord const & co
 	ECCounter(0)
 {
 	Create_ID();
+	StartSoundAudioController.Init(); // RA2: both sound handles are initialized after Create_ID
+	StopSoundAudioController.Init(); // RA2: as above
 	ECCounter = Class->Duration;
 	VoxelAnims.Add(this);
 
@@ -100,9 +108,12 @@ VoxelAnimClass::VoxelAnimClass(VoxelAnimTypeClass const * type, Coord const & co
 		BounceClass::Init(Center_Coord(), Class->Elasticity, 1.4f, 0.0, velocity, (abs(rnd) % int(Class->MaxAngularVelocity - Class->MinAngularVelocity + 1.0)) + Class->MinAngularVelocity);
 	}
 
-	if ((unsigned char)Class->StartSound != (unsigned char)VOC_NONE) {
-		Sound_Effect(Class->StartSound, coord);
+	if (Class->StartSound != VOC_NONE) { // RA2: the start sound plays through its handle
+		VocClass::PlayAt(Class->StartSound, coord, &StartSoundAudioController); // RA2: as above
+	} else {
+		StartSoundAudioController.EndLooping(); // RA2: without a start sound the handle's loop is ended
 	}
+	StopSoundAudioController.End(); // RA2: the stop sound's handle is ended
 
 	if (Class->AttachedSystem) {
 		AttachedParticleSys = new ParticleSystemClass(Class->AttachedSystem, coord, &Map[coord], this);
@@ -126,6 +137,8 @@ VoxelAnimClass::VoxelAnimClass(void) :
 	ECCounter(0)
 {
 	Create_ID();
+	StartSoundAudioController.Init(); // RA2: both sound handles are initialized before the registration
+	StopSoundAudioController.Init(); // RA2: as above
 	VoxelAnims.Add(this);
 }
 
@@ -146,6 +159,10 @@ VoxelAnimClass::~VoxelAnimClass(void)
 	if (GameActive) {
 		Limbo();
 	}
+	StartSoundAudioController.EndLooping(); // RA2: the sound handles are stopped and released
+	StopSoundAudioController.EndLooping(); // RA2: as above
+	StartSoundAudioController.Release(); // RA2: as above
+	StopSoundAudioController.Release(); // RA2: as above
 	AbstractTypePtrTracker.Delete(this);
 	Class = NULL;
 }
@@ -178,85 +195,90 @@ bool VoxelAnimClass::Render(Rect &cliprect, bool forced, bool extras_only) const
 /// <param name="cliprect">The clipping rectangle to draw within.</param>
 void VoxelAnimClass::Draw_It(Point2D const & xpoint, Rect const & cliprect) const
 {
-	if (!Scen->Special.IsFogOfWar || !Map.Is_Fogged(Coord(Position))) {
-		Point2D point = xpoint;
-		Coord pos = Position;
-		pos.Z = Map.Get_Height_GL(pos);
-
-		Point2D pixel;
-		int z;
-
-		/*
-		 * If the animation is hovering above a bridge, then draw it relative
-		 * to the bridge deck rather than the ground beneath the bridge.
-		 */
-		{
-			Coord coord;
-			if (Map[pos].IsUnderBridge && (coord = Position).Z >= pos.Z + BRIDGE_LEPTON_HEIGHT) {
-				z = pos.Z + BRIDGE_LEPTON_HEIGHT;
-				coord = pos + Coord(0, 0, BRIDGE_LEPTON_HEIGHT + 1);
-				TacticalMap->Coord_To_Pixel(coord, pixel);
-			} else {
-				z = pos.Z;
-				TacticalMap->Coord_To_Pixel(pos, pixel);
-			}
+	if (Scen->Special.IsFogOfWar) { // RA2: the fog test first, then return
+		Coord fogcoord = Position; // RA2: as above
+		if (Map.Is_Fogged(fogcoord)) { // RA2: the fog test returns early instead of nesting the body (0x70CFC0)
+			return; // RA2: as above
 		}
+	}
 
-		if (!IsInvisible) {
-			VoxelLibrary * voxlib = Class->Voxel.VoxLib;
-			if (voxlib != NULL) {
+	Point2D pixel; // RA2: the locals are declared at function level, the body is not nested
+	Point2D point = xpoint; // RA2: as above
+	int z; // RA2: as above
+	Coord pos = Position; // RA2: as above
+	pos.Z = Map.Get_Height_GL(pos); // RA2: as above
+	CellClass & cell = Map[pos]; // RA2: the cell kept in a reference
 
-				Matrix3D matrix;
-				Rect fromrect;
-				int x, y;
-
-				matrix = BounceClass::Get_Matrix();
-				VoxelDrawSystem::Reset();
-				VoxelDrawSystem::Prep_For_Shadow(voxlib, Class->VoxelIndex, 0, VoxelCameraMatrix, matrix, VoxelShadowLightVector, NULL, 0, 0); // RA2: NULL, 0, 0
-
-				VoxelDrawSystem::Render(fromrect, x, y);
-
-				{
-					Point2D drawpoint;
-					drawpoint.X = pixel.X + x;
-					drawpoint.Y = y + pixel.Y;
-
-					Blit_Block(*LogicalSurface, *VoxelDrawer, *VoxelDrawSystem::Get_Surface(), fromrect, drawpoint, cliprect, 0, VoxelDrawer->Blitter_From_Flags(ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD)), -4 - TacticalMap->Z_Lepton_To_Pixel(z));
-				}
-
-				matrix = BounceClass::Get_Matrix();
-				VoxelDrawSystem::Precalculate_Light(voxlib, 0, 0, matrix, VoxelLightSource);
-				VoxelDrawSystem::Reset();
-				VoxelDrawSystem::Prep_For_Object(voxlib, Class->VoxelIndex, 0, VoxelCameraMatrix * matrix);
-
-				VoxelDrawSystem::Render(fromrect, x, y);
-
-				ShapeFlags_Type flags = ShapeFlags_Type(SHAPE_ALPHA|SHAPE_ZGRAD);
-				if (Class->IsTranslucent) {
-					flags = ShapeFlags_Type(SHAPE_TRANSLUCENT50|SHAPE_ALPHA|SHAPE_ZGRAD);
-				}
-
-				int brightness = Map[Coord(Position)].Brightness;
-
-				ConvertClass * drawer;
-				if (House != NULL) {
-					drawer = ColorSchemes[House->Scheme]->Converter;
-				} else if (Class->IsTiberium) {
-					drawer = TiberiumDrawer;
-				} else {
-					drawer = VoxelDrawer;
-					brightness = NORMAL_LIGHT;
-				}
-
-				{
-					Point2D drawpoint;
-					drawpoint.X = x + point.X;
-					drawpoint.Y = y + point.Y;
-
-					Blit_Block(*LogicalSurface, *drawer, *VoxelDrawSystem::Get_Surface(), fromrect, drawpoint, cliprect, 0, drawer->Blitter_From_Flags(flags), -2 - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, brightness);
-				}
-			}
+	{ // RA2: the bridge deck test reads IsUnderBridge from the cell reference and adds the deck height first
+		if (cell.IsUnderBridge && Coord(Position).Z >= BRIDGE_LEPTON_HEIGHT + pos.Z) { // RA2: as above
+			z = pos.Z + BRIDGE_LEPTON_HEIGHT; // RA2: as above
+			Coord coord = pos + Coord(0, 0, BRIDGE_LEPTON_HEIGHT + 1); // RA2: as above
+			TacticalMap->Coord_To_Pixel(coord, pixel); // RA2: as above
+		} else { // RA2: as above
+			z = pos.Z; // RA2: as above
+			TacticalMap->Coord_To_Pixel(pos, pixel); // RA2: as above
 		}
+	}
+
+	if (IsInvisible) { // RA2: an invisible animation returns early
+		return; // RA2: as above
+	}
+	VoxelLibrary * voxlib = Class->Voxel.VoxLib; // RA2: a missing voxel library returns early
+	if (voxlib == NULL) { // RA2: as above
+		return; // RA2: as above
+	}
+
+	Matrix3D matrix; // RA2: as the executable shows (see above)
+	matrix = BounceClass::Get_Matrix(); // RA2: as above
+	VoxelDrawSystem::Reset(); // RA2: as above
+	VoxelDrawSystem::Prep_For_Shadow(voxlib, Class->VoxelIndex, 0, VoxelCameraMatrix, matrix, VoxelShadowLightVector, NULL, 0, 0); // RA2: NULL, 0, 0
+
+	Rect fromrect; // RA2: as the executable shows (see above)
+	int x, y; // RA2: as above
+	VoxelDrawSystem::Render(fromrect, x, y); // RA2: as above
+
+	{ // RA2: as the executable shows (see above)
+		Point2D drawpoint; // RA2: as above
+		drawpoint.X = pixel.X + x; // RA2: as above
+		drawpoint.Y = y + pixel.Y; // RA2: as above
+
+		Blit_Block(*LogicalSurface, *VoxelDrawer, *VoxelDrawSystem::Get_Surface(), fromrect, drawpoint, cliprect, 0, VoxelDrawer->Blitter_From_Flags(ShapeFlags_Type(SHAPE_DARKEN|SHAPE_ZGRAD)), -4 - TacticalMap->Z_Lepton_To_Pixel(z)); // RA2: as the executable shows (see above)
+	}
+
+	matrix = BounceClass::Get_Matrix(); // RA2: as the executable shows (see above)
+	VoxelDrawSystem::Precalculate_Light(voxlib, 0, 0, matrix, VoxelLightSource); // RA2: as above
+	VoxelDrawSystem::Reset(); // RA2: as above
+	VoxelDrawSystem::Prep_For_Object(voxlib, Class->VoxelIndex, 0, VoxelCameraMatrix * matrix); // RA2: as above
+
+	VoxelDrawSystem::Render(fromrect, x, y); // RA2: as the executable shows (see above)
+
+	ShapeFlags_Type flags = ShapeFlags_Type(SHAPE_ALPHA|SHAPE_ZGRAD); // RA2: as the executable shows (see above)
+	if (Class->IsTranslucent) { // RA2: as above
+		flags = ShapeFlags_Type(SHAPE_TRANSLUCENT50|SHAPE_ALPHA|SHAPE_ZGRAD); // RA2: as above
+	}
+
+	int brightness; // RA2: the brightness is read through a local Coord copy
+	{ // RA2: as above
+		Coord coord = Position; // RA2: as above
+		brightness = Map[coord].Brightness; // RA2: as above
+	}
+
+	ConvertClass * drawer; // RA2: as the executable shows (see above)
+	if (House != NULL) { // RA2: as above
+		drawer = ColorSchemes[House->Scheme]->Converter; // RA2: as above
+	} else if (Class->IsTiberium) { // RA2: as above
+		drawer = TiberiumDrawer; // RA2: as above
+	} else { // RA2: as above
+		drawer = VoxelDrawer; // RA2: as above
+		brightness = NORMAL_LIGHT; // RA2: as above
+	}
+
+	{ // RA2: as the executable shows (see above)
+		Point2D drawpoint; // RA2: as above
+		drawpoint.X = x + point.X; // RA2: as above
+		drawpoint.Y = y + point.Y; // RA2: as above
+
+		Blit_Block(*LogicalSurface, *drawer, *VoxelDrawSystem::Get_Surface(), fromrect, drawpoint, cliprect, 0, drawer->Blitter_From_Flags(flags), -2 - TacticalMap->Z_Lepton_To_Pixel(Height), ZGRAD_GROUND, brightness); // RA2: as the executable shows (see above)
 	}
 }
 
@@ -285,6 +307,10 @@ void VoxelAnimClass::Init_Clear(void)
 /// <remarks>Only call this routine once per animation per game logic loop.</remarks>
 void VoxelAnimClass::AI(void)
 {
+	if (Class->StartSound != VOC_NONE) { // RA2: the start sound's position is kept up to date first
+		VocClass::UpdateAt(Center_Coord(), &StartSoundAudioController); // RA2: as above
+	}
+
 	/*
 	 * An anim flagged for death is removed immediately.
 	 */
@@ -304,31 +330,29 @@ void VoxelAnimClass::AI(void)
 	 * When the timer expires, perform the impact effects and remove the anim.
 	 */
 	if (ECCounter <= 0) {
-		Coord coord = Position;
-		bool is_water = (Map[coord].Land_Type() == LAND_WATER);
-		coord = Position;
-		bool is_above_bridge = (Position.Z >= Map.Get_Height_GL(coord) + BRIDGE_LEPTON_HEIGHT);
-
-		/*
-		 * On solid ground (or on top of a bridge), play the expiration animation,
-		 * deal the blast damage, and play the expiration sound.
-		 */
-		if (!is_water || is_above_bridge) {
-			if (Class->ExpireAnim != NULL) {
-				new AnimClass(Class->ExpireAnim, Coord(MyCoord.X, MyCoord.Y, MyCoord.Z), 0, 1, ShapeFlags_Type(SHAPE_ZGRAD|SHAPE_WIN_REL|SHAPE_CENTER), -30);
-				Explosion_Damage(Get_Bounce_Coord(), Class->Damage, 0, Class->Warhead, 1);
-				Combat_Lighting(Get_Bounce_Coord(), Class->Damage, Class->Warhead, 0);
-			} // RA2: no ExpireSound (not in RA2's layout)
+		bool is_water = (Map[Coord(Position)].Land_Type() == LAND_WATER); // RA2: Position is read again for each Land_Type and height lookup, no Coord local
+		bool is_above_bridge = (Coord(Position).Z >= Map.Get_Height_GL(Coord(Position)) + BRIDGE_LEPTON_HEIGHT); // RA2: both Coord(Position) copies are temporaries, not a named local
 
 		/*
 		 * Splashing into water: a meteor makes the biggest splash, anything else
 		 * makes a wake plus a small splash.
 		 */
-		} else if (Class->IsMeteor) {
-			new AnimClass(*(&Rule->SplashList[0] + Rule->SplashList.Count() - 1), Coord(Position) + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
-		} else {
-			new AnimClass(Rule->Wake, Coord(Position), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
-			new AnimClass(Rule->SplashList[0], Position + Coord(0, 0, 10), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
+		if (is_water && !is_above_bridge) { // RA2: the water case comes first, the expiration animation is its else branch
+			if (Class->IsMeteor) { // RA2: the nesting level follows the executable's branch layout
+				new AnimClass(*(&Rule->SplashList[0] + Rule->SplashList.Count() - 1), Coord(Position) + Coord(0, 0, 5), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0); // RA2: the water case comes first, the expiration animation is its else branch (0x70D400..)
+			} else {
+				new AnimClass(Rule->Wake, Coord(Position), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0); // RA2: as the executable shows (see above)
+				new AnimClass(Rule->SplashList[0], Position + Coord(0, 0, 10), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0); // RA2: as above
+			}
+
+		/*
+		 * On solid ground (or on top of a bridge), play the expiration animation
+		 * and deal the blast damage.
+		 */
+		} else if (Class->ExpireAnim != NULL) { // RA2: the expiration animation is the else branch of the water case
+			new AnimClass(Class->ExpireAnim, Coord(MyCoord.X, MyCoord.Y, MyCoord.Z), 0, 1, ShapeFlags_Type(SHAPE_ZGRAD|SHAPE_WIN_REL|SHAPE_CENTER), -30); // RA2: as above
+			Explosion_Damage(Get_Bounce_Coord(), Class->Damage, 0, Class->Warhead, 1); // RA2: as above
+			Combat_Lighting(Get_Bounce_Coord(), Class->Damage, Class->Warhead, 0, 0); // RA2: the five argument form
 		}
 
 		if (!is_water || is_above_bridge) {
@@ -338,42 +362,33 @@ void VoxelAnimClass::AI(void)
 			 */
 			Rect dirty(0, 0, 0, 0);
 
-			if (Class->IsMeteor) {
+			if (Class->IsMeteor) { // RA2: the nesting level follows the executable's branch layout
 				Coord impact = Get_Bounce_Coord();
 
 				/*
 				 * A meteor may spawn a random number of child voxel anims on impact.
 				 */
-				if (Class->Spawns != NULL) {
-					int maxspawn = Class->SpawnCount;
-					if (maxspawn > 0) {
-						int count = Scen->RandomNumber(0, maxspawn) + Scen->RandomNumber(0, maxspawn);
-						while (count > 0) {
-							new VoxelAnimClass(Class->Spawns, impact, NULL);
-							count--;
-						}
+				if (Class->Spawns != NULL && Class->SpawnCount > 0) { // RA2: one condition
+					int count = Random_Pick(0, Class->SpawnCount) + Random_Pick(0, Class->SpawnCount); // RA2: Random_Pick, both draws read SpawnCount
+					for (int index = 0; index < count; index++) { // RA2: the spawn loop is a for loop over the drawn count
+						new VoxelAnimClass(Class->Spawns, impact, NULL); // RA2: as above
 					}
 				}
-
-				/*
-				 * Gouge a crater into the terrain around the impact cell.
-				 */
 
 				/*
 				 * A tiberium meteor seeds tiberium into the ring of cells around the
 				 * impact, accumulating each affected cell into the dirty rectangle.
 				 */
-				if (Class->IsTiberium && !is_above_bridge) { // RA2: no CraterLevel (not in RA2's layout)
-					int i = FACING_FIRST;
-					do {
-						Cell cell = Adjacent_Cell(impact.As_Cell(), (FacingType)i);
-						CellClass * cellptr = &Map[cell];
+				if (Class->IsTiberium && !is_above_bridge) { // RA2: the nesting level follows the executable's branch layout
+					for (int i = FACING_FIRST; i < FACING_COUNT; i++) { // RA2: the ring is walked with a for loop over the facings, the table entry is the left operand of the sum (Vanim_Adjacent_Cell)
+						CellClass & cellref = Map[Vanim_Adjacent_Cell(impact, (FacingType)i)]; // RA2: as above
+						CellClass * cellptr = &cellref; // RA2: as above
 						if (cellptr->Can_Tiberium_Germinate(NULL)) {
 							TiberiumClass * tiberium = Tiberiums[Which_Tiberium_Type(OVERLAY_TIBERIUM2_01)];
 							if (cellptr->Ramp) {
-								new OverlayClass(Scen->RandomNumber(0, 1) + *(&OverlayTypes[2 * cellptr->Ramp - 2] + tiberium->Variety + tiberium->Overlay->HeapID), cellptr->CellID, HOUSE_NONE);
+								new OverlayClass(OverlayTypes[tiberium->Overlay->HeapID + cellptr->Ramp * 2 + tiberium->Variety + Random_Pick(0, 1) - 2], Cell(cellptr->CellID), HOUSE_NONE); // RA2: the type index adds Ramp * 2 and Variety to HeapID, then the draw and -2, the cell is passed as a copy
 							} else {
-								new OverlayClass(*(&OverlayTypes[Scen->RandomNumber(0, 11)] + tiberium->Overlay->HeapID), cellptr->CellID, HOUSE_NONE);
+								new OverlayClass(OverlayTypes[tiberium->Overlay->HeapID + Random_Pick(0, 11)], Cell(cellptr->CellID), HOUSE_NONE); // RA2: as above
 							}
 							tiberium->Queue_Growth(cellptr->CellID);
 							cellptr->OverlayData = 0;
@@ -386,30 +401,27 @@ void VoxelAnimClass::AI(void)
 							dirty = Union(dirty, render);
 							Map.Radar_Background(cellptr->CellID);
 						}
-						i++;
-					} while (i < FACING_COUNT);
+					}
 
 					TacticalMap->Register_Dirty_Area(dirty, false);
-					Delete_Me();
-					return;
 				}
 
 			/*
 			 * A non-meteor tiberium anim seeds a single cell of tiberium.
 			 */
 			} else if (Class->IsTiberium && !is_above_bridge) {
-				CellClass * cellptr = &Map[Get_Bounce_Coord()];
-				if (cellptr->Can_Tiberium_Germinate(NULL)) {
+				CellClass & cell = Map[Get_Bounce_Coord()]; // RA2: the cell is a reference here
+				if (cell.Can_Tiberium_Germinate(NULL)) { // RA2: the single-cell case holds the cell as a reference
 					TiberiumClass * tiberium = Tiberiums[Which_Tiberium_Type(OVERLAY_TIBERIUM2_01)];
-					if (cellptr->Ramp) {
-						new OverlayClass(Scen->RandomNumber(0, 1) + *(&OverlayTypes[2 * cellptr->Ramp - 2] + tiberium->Variety + tiberium->Overlay->HeapID), cellptr->CellID, HOUSE_NONE);
+					if (cell.Ramp) { // RA2: as the executable shows (see above)
+						new OverlayClass(OverlayTypes[tiberium->Overlay->HeapID + cell.Ramp * 2 + tiberium->Variety + Random_Pick(0, 1) - 2], Cell(cell.CellID), HOUSE_NONE); // RA2: the type index adds Ramp * 2 and Variety to HeapID, then the draw and -2, the cell is passed as a copy
 					} else {
-						new OverlayClass(*(&OverlayTypes[Scen->RandomNumber(0, 11)] + tiberium->Overlay->HeapID), cellptr->CellID, HOUSE_NONE);
+						new OverlayClass(OverlayTypes[tiberium->Overlay->HeapID + Random_Pick(0, 11)], Cell(cell.CellID), HOUSE_NONE); // RA2: as above
 					}
-					tiberium->Queue_Growth(cellptr->CellID);
-					cellptr->OverlayData = 0;
-					cellptr->Overlay_Render_Rect();
-					Map.Radar_Background(cellptr->CellID);
+					tiberium->Queue_Growth(cell.CellID); // RA2: as the executable shows (see above)
+					cell.OverlayData = 0; // RA2: as above
+					dirty = cell.Overlay_Render_Rect(); // RA2: the rectangle is stored into dirty
+					Map.Radar_Background(cell.CellID); // RA2: as the executable shows (see above)
 				}
 			}
 		}
@@ -420,10 +432,8 @@ void VoxelAnimClass::AI(void)
 	/*
 	 * Emit the trailer animation every other frame.
 	 */
-	if (Class->TrailerAnim != NULL) {
-		if ((Frame % 2) == 0) {
-			new AnimClass(Class->TrailerAnim, Coord(MyCoord.X, MyCoord.Y, (MyCoord.Z * CELL_LEPTON_DIAG / (ISO_TILE_PIXEL_W * 0.8660254037844) + 0.5)), 1, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
-		}
+	if (Class->TrailerAnim != NULL && (Frame % 2) == 0) { // RA2: the trailer test is one condition
+		new AnimClass(Class->TrailerAnim, Coord(MyCoord.X, MyCoord.Y, (MyCoord.Z * CELL_LEPTON_DIAG / (ISO_TILE_PIXEL_W * 0.8660254037844) + 0.5)), 1, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0); // RA2: as above
 	}
 
 	/*
@@ -431,35 +441,32 @@ void VoxelAnimClass::AI(void)
 	 * this frame; BOUNCE_SETTLED means it has come to rest.
 	 */
 	BounceResultType bounce_result = BounceClass::AI();
-	if (Class->IsMeteor) {
+	if (Class->IsMeteor) { // RA2: the nesting level follows the executable's branch layout
 		Velocity.Z = Velocity.Z + Gravity;
 	}
 
 	switch (bounce_result) {
-		case BOUNCE_IMPACT: {
+		case BOUNCE_IMPACT: // RA2: the cases are not braced
 
 			/*
 			 * Struck the ground. If it landed in water it simply expires; otherwise it
 			 * plays the bounce effects and damages whatever it landed on.
 			 */
-			Coord coord = Position;
-			if (Map[coord].Land_Type() == LAND_WATER) {
+			if (Map[Coord(Position)].Land_Type() == LAND_WATER) { // RA2: Position is read again for the Land_Type lookup
 				ECCounter = 0;
 			} else {
 				if (Class->BounceAnim != NULL) {
 					new AnimClass(Class->BounceAnim, Coord(Position), 0, 1, ShapeFlags_Type(SHAPE_WIN_REL|SHAPE_CENTER), 0);
 				}
-				for (ObjectClass * occupier = Map[Get_Bounce_Coord()].Cell_Occupier(); occupier != NULL; occupier = occupier->Next) { // RA2: no BounceSound (not in RA2's layout)
-					Coord occoord = occupier->PositionCoord;
-					Coord mycoord = Get_Bounce_Coord();
-					int lepton = abs(mycoord.X - occoord.X) + abs(mycoord.Y - occoord.Y);
+				for (ObjectClass * occupier = Map[Get_Bounce_Coord()].Cell_Occupier(); occupier != NULL; occupier = occupier->Next) { // RA2: as above
+					Coord delta = Get_Bounce_Coord() - Coord(occupier->PositionCoord); // RA2: the occupier distance is taken from a Coord difference
+					int lepton = abs(delta.Y) + abs(delta.X); // RA2: as above
 					if (lepton <= Class->DamageRadius) {
 						occupier->Take_Damage(Class->Damage, Tactical::Z_Lepton_To_Pixel(lepton), Class->Warhead, 0, 0, 0);
 					}
 				}
 			}
 			break;
-		}
 
 		case BOUNCE_SETTLED:
 			ECCounter = 0;
@@ -494,6 +501,8 @@ HRESULT STDMETHODCALLTYPE VoxelAnimClass::Load(IStream * stream)
 	if (SUCCEEDED(result)) {
 		new (this) VoxelAnimClass(NoInitClass());
 
+		StartSoundAudioController.Init(); // RA2: the sound handles are reset after the in-place construction
+		StopSoundAudioController.Init(); // RA2: as above
 		Swizzle_Pointer(&Class);
 		Swizzle_Pointer(&AttachedParticleSys);
 		Swizzle_Pointer(&House);
@@ -591,7 +600,5 @@ Cell const * VoxelAnimClass::Occupy_List(bool placement) const
 {
 	return(NULL);
 }
-
-
 
 

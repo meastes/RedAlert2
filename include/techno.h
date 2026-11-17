@@ -633,6 +633,8 @@ class TechnoClass :	public RadioClass,
 		virtual int Pip_Count(void) const;
 		virtual int Refund_Amount(void) const;
 		virtual int Risk(void) const;
+		void Add_Cell_Threat(CellClass * cell); // RA2: 0x6D95A0, stores Risk() in ThreatPosed and adds it to the cell for Owner()
+		void Remove_Cell_Threat(CellClass * cell); // RA2: 0x6D95D0, takes ThreatPosed off the cell again and clears it
 		virtual bool Is_In_Same_Zone_As(ObjectClass const * object) const;
 		virtual DirType Barrel_Pitch(AbstractClass * target) const;
 		virtual bool Is_In_Same_Zone(Coord const & coord) const;
@@ -903,6 +905,7 @@ class TechnoClass :	public RadioClass,
 
 		void Techno_Blit_Voxel(StaticBufferClass::Entry const & cache, Point2D const & point, Rect const & cliprect, ShapeFlags_Type flags, int brightness) const;
 		void Techno_Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache) const;
+		void Techno_Draw_Voxel_Shadow(VoxelDataStruct const & voxeldata, int layer_index, int key, VoxelIndexClass * cache, Rect const & cliprect, Point2D const & point, Matrix3D const & matrix, bool force_cache, Surface * surface, unsigned shadow_x, unsigned shadow_y) const; // RA2: 0x6D21E0 takes three more arguments (ret 44); FootClass::Draw_Voxel_Shadow calls it
 		SurfaceRegion Techno_Render_Voxel_Object(VoxelDataStruct const & voxeldata, Matrix3D const & matrix, Point2D const & point, Rect const & cliprect, int frame, ShapeFlags_Type flags, int brightness) const;
 		SurfaceRegion Techno_Render_Voxel_Shadow(VoxelDataStruct const & voxeldata, Matrix3D const & matrix, Point2D const & point, Rect const & cliprect, int layer_index, ShapeFlags_Type flags, bool cached) const;
 
