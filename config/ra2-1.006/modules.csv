@@ -420,9 +420,9 @@ unk_005B8E10,0x005B8E10,0x005B9B20,unknown,code not assigned to a module
 multiplayerteam,0x005B9B20,0x005B9C20,source,"functions compiled from src/multiplayerteam.cpp, matched, without gaps"
 unk_005B9C20,0x005B9C20,0x005B9E60,unknown,code not assigned to a module
 firewall,0x005B9E60,0x005BB350,source,"functions compiled from src/firewall.cpp, matched, without gaps; one placed by the gap"
-unk_005BB350,0x005BB350,0x005BB9D0,unknown,code not assigned to a module
-unk_005BB9D0,0x005BB9D0,0x005BBA50,tibsun,matched functions of one source file of the Tiberian Sun reconstruction
-unk_005BBA50,0x005BBA50,0x005BBD10,unknown,code not assigned to a module
+unk_005BB350,0x005BB350,0x005BB540,unknown,code not assigned to a module
+netdlg,0x005BB540,0x005BBB20,tibsun,"functions compiled from src/netdlg.cpp, matched, without gaps"
+unk_005BBB20,0x005BBB20,0x005BBD10,unknown,code not assigned to a module
 netdlg2,0x005BBD10,0x005C2970,tibsun,"functions compiled from src/netdlg2.cpp, without gaps; matched except ?Net2SetHouseAndColor@@YIHPBDHH@Z and ?MPlayer_Game_List_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?MPlayer_Host_Dialog_Proc@@YGJPAUHWND__@@IIJ@Z and ?Request_To_Join@@YIHH_N@Z"
 unk_005C2970,0x005C2970,0x005C2BA0,unknown,code not assigned to a module
 netshare,0x005C2BA0,0x005CD590,tibsun,"functions compiled from src/netshare.cpp, without gaps; matched except ?Net2DecodeGameopt@@YI_NPBD0@Z and ?LBSaveSelections@@YIXPAUHWND__@@AAV?$Dictionary@VWideWstring@@_N@@@Z and ?Scenario_DlgProc@@YGHPAUHWND__@@IIJ@Z and ?Send_Map_Preview@@YIXPAVMapPreviewClass@@@Z and ?Set_Slot_Names@@YIXPBG@Z and ?Is_Observer_Slot_Occupied@@YI_NXZ and ?Is_Channel_Full@@YI_NXZ and ?Show_Slot_Controls@@YIXPAUHWND__@@HH@Z and ?Hide_Slot_Controls@@YIXPAUHWND__@@H@Z and ?Change_Scenario_Slots@@YIXPAUHWND__@@HH@Z and ?Change_Slot_Type@@YIXPAUHWND__@@HHH@Z and ?Load_Lobby_Options@@YIXPAUHWND__@@PAUSessionOptionsClass@@@Z; one placed by the gap; ?Net2DecodeGameopt@@YI_NPBD0@Z to ?LBSaveSelections@@YIXPAUHWND__@@AAV?$Dictionary@VWideWstring@@_N@@@Z share the room between their neighbours; ?Is_Observer_Slot_Occupied@@YI_NXZ to ?Is_Channel_Full@@YI_NXZ share the room between their neighbours"
