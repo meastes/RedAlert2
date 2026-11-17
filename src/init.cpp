@@ -246,7 +246,7 @@ extern void * MouseShapes; // RA2: 0x00ABD488, MOUSE.SHP as Init_Mouse loaded it
 extern bool MouseShapesAllocated; // RA2: 0x00ABD48C (startup.cpp)
 extern TimeStamp LoadingScreenHoldUntil; // RA2: 0x00A41668, as below
 bool Init_Rules(void); // RA2: 0x005129C0, defined below
-BOOL CALLBACK Rules_Choice_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00513080, not in this file yet
+BOOL CALLBACK Rules_Choice_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00513080, defined below
 
 static bool Bootstrap(void); // RA2: Bootstrap, Init_Mouse and Init_CDROM_Access are expanded inline in Init_Game (0x005116A0), as in TibSun
 static void Init_Mouse(void); // RA2: as above
@@ -806,6 +806,107 @@ bool __fastcall Init_Rules(void) // RA2: 0x005129C0
 	CCFileClass aifile("AI.INI"); // RA2: as above
 	AIINI.Load(aifile, true, false); // RA2: as above
 	return(true); // RA2: as above
+}
+
+
+/***********************************************************************************************
+ * Rules_Choice_Dialog_Proc -- Message handler of the dialog that chooses among RULE*.INI files.*
+ *                                                                                             *
+ *    Init_Rules opens this dialog when more than one rules file was found. The dialog's list  *
+ *    shows each file's [General] Name; the position of the chosen entry is the result.        *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   RA2 has this dialog; it is not in TibSun.                                                 *
+ *=============================================================================================*/
+BOOL CALLBACK Rules_Choice_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) // RA2: 0x00513080, not in TibSun
+{
+	char buffer[128]; // RA2: the executable reserves 128 bytes of locals
+
+	switch (message) { // RA2: as above
+		case WM_CONTEXTMENU: // RA2: as above
+			On_WM_CONTEXTMENU(wparam); // RA2: as above
+			return(0); // RA2: as above
+
+		case WM_HELP: // RA2: as above
+			On_WM_HELP(lparam); // RA2: as above
+			return(0); // RA2: as above
+
+		case WM_INITDIALOG: // RA2: as above
+		{
+			Center_Window_Within_Window(window); // RA2: as above
+			HWND list = GetDlgItem(window, 0x4A3); // RA2: the list box
+			DynamicVectorClass<CCINIClass *> * files = (DynamicVectorClass<CCINIClass *> *)lparam; // RA2: Init_Rules passes its file list as the dialog parameter
+			for (int index = 0; index < files->Count(); index++) { // RA2: as above
+				(*files)[index]->Get_String("General", "Name", "", buffer, sizeof(buffer)); // RA2: as above
+				SendMessage(list, LB_ADDSTRING, 0, (LPARAM)buffer); // RA2: as above
+			}
+			SendMessage(list, LB_SETCURSEL, 0, 0); // RA2: as above
+			return(0); // RA2: as above
+		}
+
+		case WM_MOVING: // RA2: as above
+			return(On_WM_MOVING(window, wparam, lparam)); // RA2: as above
+
+		case WM_COMMAND: // RA2: as above
+			switch (LOWORD(wparam)) { // RA2: as above
+				case IDCANCEL: // RA2: as above
+				case 0x4A4: // RA2: the OK button
+					if (HIWORD(wparam) == 0) { // RA2: as above
+						HWND list = GetDlgItem(window, 0x4A3); // RA2: as above
+						EndDialog(window, SendMessage(list, LB_GETCURSEL, 0, 0)); // RA2: as above
+						DestroyWindow(window); // RA2: as above
+					}
+					break; // RA2: as above
+			}
+			break; // RA2: as above
+	}
+	return(0); // RA2: as above
+}
+
+
+/***********************************************************************************************
+ * Two_Button_Dialog_Proc -- Message handler of a dialog with two result buttons.              *
+ *                                                                                             *
+ *    The executable never references this procedure. Cancel ends the dialog with 0, control   *
+ *    0x53A with 1 and control 0x53B with 2.                                                   *
+ *                                                                                             *
+ * HISTORY:                                                                                    *
+ *   RA2 has this procedure; it is not in TibSun.                                              *
+ *=============================================================================================*/
+BOOL CALLBACK Two_Button_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM) // RA2: 0x00513200, not in TibSun
+{
+	if (message == WM_COMMAND) { // RA2: as above
+		switch (wparam) { // RA2: as above
+			case IDCANCEL: // RA2: as above
+				EndDialog(window, 0); // RA2: as above
+				return(0); // RA2: as above
+
+			case 0x53A: // RA2: as above
+				EndDialog(window, 1); // RA2: as above
+				return(0); // RA2: as above
+
+			case 0x53B: // RA2: as above
+				EndDialog(window, 2); // RA2: as above
+				return(0); // RA2: as above
+		}
+	}
+	return(0); // RA2: as above
+}
+
+
+/*
+**	RA2: three empty functions that nothing in the executable references (0x00513260, 0x00513270 and 0x00513280).
+*/
+void Init_Unused_Stub_1(void) // RA2: 0x00513260, not in TibSun
+{
+}
+
+void Init_Unused_Stub_2(void) // RA2: 0x00513270, not in TibSun
+{
+}
+
+void Init_Unused_Stub_3(void) // RA2: 0x00513280, not in TibSun
+{
 }
 
 
