@@ -3438,7 +3438,7 @@ address,symbol,evidence
 0x005383C0,?Adjust_Tile_RGB@@YIXAAH0000@Z,"compiled from src/lightcalc.cpp, matched"
 0x005385A0,?Clamp_Tile_RGB@@YIXAAH00@Z,"compiled from src/lightcalc.cpp, matched"
 0x00538860,??0LightConvertClass@@QAE@ABVPaletteClass@@0ABVSurface@@HHH_NPA_NH@Z,"compiled from src/lightcon.cpp, matched"
-0x00538AA0,?Apply_Tint@LightConvertClass@@UAEXHHH_N@Z,"inferred: referenced by matched src/lightcon.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00538AA0,?Apply_Tint@LightConvertClass@@UAEXHHH_N@Z,"compiled from src/lightcon.cpp, matched"
 0x00538F60,??0LinkClass@@QAE@ABV0@@Z,"compiled from src/link.cpp, matched"
 0x00538FA0,??1LinkClass@@UAE@XZ,"compiled from src/link.cpp, matched"
 0x00538FF0,?Zap@LinkClass@@UAEXXZ,"compiled from src/link.cpp, matched; code at 2 addresses, placed by the gap"
@@ -9495,6 +9495,10 @@ address,symbol,evidence
 0x0079729C,__towlower_lk,symbol of VC6 LIBCMT.LIB towlower.obj
 0x0079734F,___termcon,symbol of VC6 LIBCMT.LIB initcon.obj
 0x0079739D,__putch_lk,symbol of VC6 LIBCMT.LIB putch.obj
+0x00797440,_Adjust_Color_565,"inferred: referenced by matched src/lightcon.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x0079777A,_Adjust_Color_555,"inferred: referenced by matched src/lightcon.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00797ABA,_Adjust_Color_556,"inferred: referenced by matched src/lightcon.cpp (1 reference); across all matched code never at another address, and no other symbol here"
+0x00797DFA,_Adjust_Color_655,"inferred: referenced by matched src/lightcon.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x0079813A,_Brighten_Color_565,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00798217,_Brighten_Color_655,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x007982F4,_Brighten_Color_556,"inferred: referenced by matched src/ovrlight.cpp (1 reference); across all matched code never at another address, and no other symbol here"
