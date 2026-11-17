@@ -257,8 +257,8 @@ unk_004DF7B0,0x004DF7B0,0x004DF810,unknown,code not assigned to a module
 grphmimg,0x004DF810,0x004DFF10,tibsun,"functions compiled from src/grphmimg.cpp, matched, without gaps"
 unk_004DFF10,0x004DFF10,0x004DFF80,unknown,code not assigned to a module
 grphmitm,0x004DFF80,0x004E01F0,tibsun,"functions compiled from src/grphmitm.cpp, matched, without gaps; four placed by the gap"
-unk_004E01F0,0x004E01F0,0x004E0310,unknown,code not assigned to a module
-grphmsct,0x004E0310,0x004E0630,tibsun,"functions compiled from src/grphmsct.cpp, matched, without gaps; ?GM_Read_Shortcut_Item@@YIPAVGraphicMenuItem@@ABVWstring@@ABVINIClass@@@Z not placed"
+unk_004E01F0,0x004E01F0,0x004E0250,unknown,code not assigned to a module
+grphmsct,0x004E0250,0x004E0630,tibsun,"functions compiled from src/grphmsct.cpp, matched, without gaps"
 unk_004E0630,0x004E0630,0x004E08D0,unknown,code not assigned to a module
 gscreen,0x004E08D0,0x004E1110,tibsun,"functions compiled from src/gscreen.cpp, matched, without gaps; three placed by the gap"
 unk_004E1110,0x004E1110,0x004E12B0,unknown,code not assigned to a module
