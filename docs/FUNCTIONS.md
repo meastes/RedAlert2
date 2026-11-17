@@ -105,12 +105,23 @@ since nothing bounds it on one side, except at the end of a file as below. The
 evidence of such a function and its name says that it is placed by the gap.
 
 Code the compiler copies into every object that uses it (an inline function, a
-scalar deleting destructor) follows that object's own functions. Where such a
-copy compiled from the same file matches at exactly one address after the
-file's placed functions, it bounds the end of the file as a placed function
+template instance, a scalar deleting destructor) follows that object's own
+functions; the linker keeps one copy, in the first object that has it. Where
+such a copy compiled from the same file matches at exactly one address after
+the file's placed functions, it bounds the end of the file as a placed function
 would: the functions after the last placed one are placed by the gap up to it.
-The copy itself is not placed this way, since another object may hold the same
-code.
+
+Copies at the end of a file are placed too, where the executable has them
+directly after the file's last function: the copies must be compiled from the
+same file, lie one after the other without a gap from the end of the last
+placed function, and not reach into the next module. The run is taken up to
+the last copy that meets the match rule (its code at exactly one address);
+copies before it whose code occurs at several addresses, or is too short for
+the rule, are placed by the gap the run leaves, as functions are. Copies after
+the last one that meets the rule are not placed. The evidence of such a
+function and its name says that it is a copy the compiler emitted after the
+functions of the file, and the module's evidence counts them. A file whose
+last functions are not placed has no such run.
 
 A function whose code RA2 changed matches nowhere. It is placed only where
 its address is known otherwise:
