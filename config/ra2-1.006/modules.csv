@@ -13,8 +13,7 @@ audlevel,0x00407030,0x004071F0,source,"functions compiled from src/audlevel.cpp,
 audlists,0x004071F0,0x00407400,source,"functions compiled from src/audlists.cpp, matched, without gaps; three placed by the gap"
 audmpool,0x00407400,0x00407480,source,"functions compiled from src/audmpool.cpp, matched, without gaps; one placed by the gap"
 audplay,0x00407480,0x00408380,source,"functions compiled from src/audplay.cpp, matched, without gaps; two placed by the gap"
-audsrc,0x00408380,0x00408530,source,"functions compiled from src/audsrc.cpp, matched, without gaps; two placed by the gap; ?AudioFormatReadWaveFile@@YIHPAVFileClass@@PAUAudioFormat@@PAH@Z not placed"
-unk_00408530,0x00408530,0x00408710,unknown,code not assigned to a module
+audsrc,0x00408380,0x00408710,source,"functions compiled from src/audsrc.cpp, matched, without gaps; two placed by the gap"
 audstrm,0x00408710,0x00409280,source,"functions compiled from src/audstrm.cpp, matched, without gaps; five placed by the gap"
 audtimer,0x00409280,0x00409390,source,"functions compiled from src/audtimer.cpp, matched, without gaps"
 drv_dsnd,0x00409390,0x0040AC80,source,"functions compiled from src/drv_dsnd.cpp, matched, without gaps; five placed by the gap"

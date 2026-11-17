@@ -263,7 +263,7 @@ address,size,evidence
 0x004084D0,48,"code of src/audsrc.cpp, matched"
 0x00408500,32,"code of src/audsrc.cpp, matched"
 0x00408520,16,"code of src/audsrc.cpp, matched: too short for the match rule"
-0x00408530,,"inferred: target of the call at 0x00401837 in matched src/audbag.cpp; size not known"
+0x00408530,480,"code of src/audsrc.cpp, matched"
 0x00408710,80,"code of src/audstrm.cpp, matched"
 0x00408760,240,"code of src/audstrm.cpp, matched"
 0x00408850,64,"code of src/audstrm.cpp, matched"

@@ -262,7 +262,7 @@ address,symbol,evidence
 0x004084D0,?AudioFormatUpdate@@YIXPAUAudioFormat@@@Z,"compiled from src/audsrc.cpp, matched"
 0x00408500,?AudioFrameInit@@YIXPAUAudioFrame@@PAXH@Z,"compiled from src/audsrc.cpp, matched"
 0x00408520,?AudioFrameDeinit@@YIXPAUAudioFrame@@@Z,"compiled from src/audsrc.cpp, matched"
-0x00408530,?AudioFormatReadWaveFile@@YIHPAVFileClass@@PAUAudioFormat@@PAH@Z,"inferred: referenced by matched src/audbag.cpp (3 references); across all matched code never at another address, and no other symbol here"
+0x00408530,?AudioFormatReadWaveFile@@YIHPAVFileClass@@PAUAudioFormat@@PAH@Z,"compiled from src/audsrc.cpp, matched"
 0x00408710,?STM_StreamCreate@@YIPAUSTM_STREAM@@XZ,"compiled from src/audstrm.cpp, matched"
 0x00408760,?STM_StreamDestroy@@YIXPAUSTM_STREAM@@@Z,"compiled from src/audstrm.cpp, matched"
 0x00408850,?STM_access_return_to_start@@YIXPAUSTM_ACCESS@@@Z,"compiled from src/audstrm.cpp, matched"
@@ -9186,7 +9186,7 @@ address,symbol,evidence
 0x007824D0,__alldiv,symbol of VC6 LIBCMT.LIB lldiv.obj / MSVCRTD.LIB lldiv.obj
 0x00782580,__aulldiv,symbol of VC6 LIBCMT.LIB ulldiv.obj / MSVCRTD.LIB ulldiv.obj
 0x007825E8,_free,symbol of VC6 LIBCMT.LIB free.obj
-0x00782630,_malloc,"inferred: referenced by matched src/bitfont.cpp (8 references); across all matched code never at another address, and no other symbol here"
+0x00782630,_malloc,"inferred: referenced by matched src/bitfont.cpp (10 references); across all matched code never at another address, and no other symbol here"
 0x00782642,__nh_malloc,symbol of VC6 LIBCMT.LIB malloc.obj
 0x0078266E,__heap_alloc,symbol of VC6 LIBCMT.LIB malloc.obj
 0x007826BC,_fread,"inferred: referenced by matched src/audstrm.cpp (1 reference); across all matched code never at another address, and no other symbol here"
