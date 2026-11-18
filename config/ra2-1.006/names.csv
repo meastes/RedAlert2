@@ -9542,7 +9542,6 @@ address,symbol,evidence
 0x00742E30,?Find_Server_Suffix@@YIHABVWstring@@@Z,"compiled from src/wonline.cpp, matched"
 0x00742EB0,?Handle_Connection_Error@@YI_NXZ,"compiled from src/wonline.cpp, matched"
 0x00742FD0,?Login_Wonline@@YIHXZ,"compiled from src/wonline.cpp, matched"
-0x00743720,?Run_Lobby_Session@@YIHH_N@Z,"inferred: referenced by matched src/wolstart.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00745320,?Save_Nickname@@YIHPBD0_NH@Z,"inferred: referenced by matched src/wonline.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00746240,?Parse_Online_Command@@YIHPBG@Z,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
 0x00746480,?Parse_Page_Command@@YIHPBG@Z,"inferred: referenced by matched src/mainloop.cpp (1 reference); across all matched code never at another address, and no other symbol here"
