@@ -7571,18 +7571,18 @@ void TechnoClass::Techno_Blit_Voxel(StaticBufferClass::Entry const & entry, Poin
 	if (RTTI == RTTI_UNIT && ((UnitClass const *)this)->IsCompositingToEightBitSurface) {
 		converter = EightBitDrawer;
 	} else {
-		converter = ColorSchemes[House->Scheme]->Converter;
+		converter = (ConvertClass *)GetRemapColour(); // RA2: the virtual call at +460, not the scheme table read
 	}
 
 	RLEBlitter const * blitter = converter->RLEBlitter_From_Flags(flags);
 
 	int predoffset = 0;
 	if (flags & SHAPE_PREDATOR) {
-		predoffset = Get_Predator_Offset();
+		predoffset = (Fetch_ID() + (int)PredatorOffset) % 400; // RA2: written out in the body, not a call to Get_Predator_Offset
 	}
 
 	if (RTTI == RTTI_UNIT) {
-		Rect r = Rect(Point2D(entry.X, entry.Y) + point, entry.Width, entry.Height);
+		Rect r(entry.X + point.X, entry.Y + point.Y, entry.Width, entry.Height); // RA2: int arithmetic on the members, no Point2D temporary
 		UnitCompositeDirtyRect = Union(UnitCompositeDirtyRect, r);
 	}
 
