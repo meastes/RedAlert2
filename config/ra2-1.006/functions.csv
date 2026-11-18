@@ -7591,7 +7591,7 @@ address,size,evidence
 0x006A2020,144,"code of src/tab.cpp, matched"
 0x006A20B0,16,"code of src/tab.cpp, matched: its code occurs at 31 addresses; placed by the gap the other functions of the file leave, up to the copy of ??0ToolTip@@QAE@XZ at 0x006A20C0"
 0x006A20C0,,"inferred: target of the call at 0x006A1B0C in matched src/tab.cpp; size not known"
-0x006A24B0,,"inferred: target of the call at 0x0065F2C9 in matched src/scenario.cpp; size not known"
+0x006A24B0,528,"code of src/tactical.cpp, matched"
 0x006A26C0,80,"code of src/tactical.cpp, matched"
 0x006A2710,48,"code of src/tactical.cpp, matched: too few unmasked bytes for the match rule"
 0x006A2740,96,"code of src/tactical.cpp, matched"
