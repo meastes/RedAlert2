@@ -16308,7 +16308,6 @@ address,symbol,evidence
 0x00A3D548,?MuteSWLaunches@@3HA,"inferred: referenced by matched src/radar.cpp (14 references); across all matched code never at another address, and no other symbol here"
 0x00A3F118,?DiplomacyChatFlags@@3PA_NA,"inferred: referenced by matched src/radar.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00A3F616,?Session_Busy@@3_NA,"inferred: referenced by matched src/ownrdraw.cpp (5 references); across all matched code never at another address, and no other symbol here"
-0x00A3FABC,?Counter@@3HA,"inferred: referenced by matched src/ownrdraw.cpp (5 references); across all matched code never at another address, and no other symbol here"
 0x00A4031C,?SpareTicks@@3HA,"inferred: referenced by matched src/mainloop.cpp (2 references); across all matched code never at another address, and no other symbol here"
 0x00A40320,?TerrainTypes@@3V?$DynamicVectorClass@PAVTerrainTypeClass@@@@A,"inferred: referenced by matched src/terrtype.cpp (38 references); across all matched code never at another address, and no other symbol here"
 0x00A40338,?SuperWeaponTypes@@3V?$DynamicVectorClass@PAVSuperWeaponTypeClass@@@@A,"inferred: referenced by matched src/suprtype.cpp (43 references); across all matched code never at another address, and no other symbol here"
