@@ -3341,6 +3341,209 @@ int Join_Selected_Lobby(bool join) // RA2: 0x00744930, not in TibSun: joins the 
 	return(-1); // RA2: as above
 }
 
+namespace OwnerDraw { void __fastcall Slide_Dialog(HWND dialog, bool reverse); } // RA2: 0x005E5150, defined in ownrdraw.cpp
+extern int g_NewNickResult; // RA2: 0x00B2AC08, the result OnNewNick stores
+extern int g_AgeCheckResult; // RA2: 0x00B2AC0C, the result OnAgeCheck stores (0x80040100 when a field was missing)
+extern Wstring g_BirthdateEmail; // RA2: 0x00B29CE4, the email the birthdate dialog (0xE7) stores
+extern int g_BirthdateMonth; // RA2: 0x00B26894, the month the birthdate dialog stores (the list's index, from 0)
+extern int g_BirthdateDay; // RA2: 0x00B26930, the day the birthdate dialog stores
+extern int g_BirthdateYear; // RA2: 0x00B2A6D4, the year the birthdate dialog stores
+extern int g_BirthdateNewsletter; // RA2: 0x00B29098, the newsletter box of the birthdate dialog
+extern Wstring g_AccountName; // RA2: 0x00B2A640, the nickname the account dialog (0xE6, 0xF3, 0xF4) stores
+extern Wstring g_AccountPassword; // RA2: 0x00B2A71C, the password the account dialog stores
+extern Wstring g_AccountPasswordCheck; // RA2: 0x00B2A724, the repeated password the account dialog stores
+extern Wstring g_AccountParentEmail; // RA2: 0x00B2945C, the parent's email the account dialog (0xF3) stores
+extern int g_AccountShareInfo; // RA2: 0x00B29AD0, the information sharing box of the account dialog (0xF4)
+LRESULT CALLBACK Birthdate_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x007494D0, the dialog proc of the birthdate dialog (0xE7)
+LRESULT CALLBACK Account_Details_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x007498E0, the dialog proc of the account dialogs (0xE6, 0xF3, 0xF4)
+void __fastcall Show_Dialog(HWND dialog, int id); // RA2: 0x005FF7E0, defined in ownrdraw.cpp
+
+void __fastcall Create_Wonline_Account(HWND parent) // RA2: 0x00744A00, not in TibSun: asks the birthdate, checks the age with the server, asks the nickname, password and emails and requests the new nickname
+{
+	OwnerDraw::Slide_Dialog(parent, false); // RA2: as above
+	Darken_Surface(NULL, true); // RA2: as above
+	char nickname[32]; // RA2: as above
+	char password[32]; // RA2: as above
+	char confirmation[32]; // RA2: as above
+	char email[128]; // RA2: as above
+	char parent_email[128]; // RA2: as above
+	int newsletter = 1; // RA2: as above
+	int month = 1; // RA2: as above
+	int day = 0; // RA2: as above
+	int year = 0; // RA2: as above
+	int share_info; // RA2: as above
+	HWND dialog; // RA2: as above
+	for (int index = 0; index < 18; ++index) ResetEvent(g_WaitEventHandles[index]); // RA2: as above
+	memset(nickname, 0, sizeof(nickname)); // RA2: as above
+	memset(password, 0, sizeof(password)); // RA2: as above
+	memset(confirmation, 0, sizeof(confirmation)); // RA2: as above
+	memset(email, 0, sizeof(email)); // RA2: as above
+	memset(parent_email, 0, sizeof(parent_email)); // RA2: as above
+	{
+		WideWstring message(StringTable::LoadString("WOL:NewAccountFetch", NULL, "D:\\Ra2\\wonline.cpp", 9501)); // RA2: the wait text of the server list request
+		Show_Wait_Window(0x80, message, false); // RA2: as above
+	}
+	DebugString("Newnick update check\n"); // RA2: as above
+	g_pChat->RequestServerList(g_GameSKU, 0x10006, "TibSun", "TibPass99", 35); // RA2: the login of the account server list request
+	DWORD event; // RA2: as above
+	do { // RA2: as above
+		event = WaitForMultipleObjects(18, g_WaitEventHandles, false, 100); // RA2: as above
+		while (event == WAIT_TIMEOUT) { // RA2: as above
+			WOL_Wait_Callback(); // RA2: as above
+			event = WaitForMultipleObjects(18, g_WaitEventHandles, false, 100); // RA2: as above
+		}
+		ResetEvent(g_WaitEventHandles[event]); // RA2: as above
+	} while (event != 0 && event != 1); // RA2: as above
+	Close_Wait_Window(0xFFFFFFFF); // RA2: as above
+	if (event == 0) { // RA2: the server list request failed
+		ShowWindow(parent, SW_SHOW); // RA2: as above
+		OwnerDraw::Set_Paint_Disabled(parent, 0); // RA2: as above
+		return; // RA2: as above
+	}
+	if (event == 8) { // RA2: the game was left meanwhile, the event stays set
+		SetEvent(g_WaitEventHandles[8]); // RA2: as above
+		ShowWindow(parent, SW_SHOW); // RA2: as above
+		OwnerDraw::Set_Paint_Disabled(parent, 0); // RA2: as above
+		return; // RA2: as above
+	}
+birthdate_retry: // RA2: the retry is written as a jump, as in the reference body; a loop form has not been tried yet
+	Darken_Surface(NULL, true); // RA2: as above
+	dialog = WS_Create_Dialog(ProgramInstance, 0xE7, MainWindow, (DLGPROC)Birthdate_Dialog_Proc, 0); // RA2: the birthdate dialog
+	Show_Dialog(dialog, 0xE7); // RA2: as above
+	SendDlgItemMessage(dialog, 0x62E, CB_SETCURSEL, month - 1, 0); // RA2: the month list
+	if (day > 0) { // RA2: the day edit
+		Wstring text = Wstring_FromInt(day); // RA2: as above
+		char const * number = text.get(); // RA2: as above
+		HWND edit = GetDlgItem(dialog, 0x62F); // RA2: as above
+		SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)number); // RA2: as above
+	} else {
+		HWND edit = GetDlgItem(dialog, 0x62F); // RA2: as above
+		SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+	}
+	if (year > 0) { // RA2: the year edit
+		Wstring text = Wstring_FromInt(year); // RA2: as above
+		char const * number = text.get(); // RA2: as above
+		HWND edit = GetDlgItem(dialog, 0x630); // RA2: as above
+		SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)number); // RA2: as above
+	} else {
+		HWND edit = GetDlgItem(dialog, 0x630); // RA2: as above
+		SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+	}
+	SendDlgItemMessage(dialog, 0x626, WM_USER + 0xB4, 0, (LPARAM)email); // RA2: the email edit
+	SendDlgItemMessage(dialog, 0x631, BM_SETCHECK, newsletter, 0); // RA2: the newsletter box
+	ShowWindow(parent, SW_HIDE); // RA2: as above
+	ShowWindow(dialog, SW_SHOWNORMAL); // RA2: as above
+	if (WS_Wait_Dialog(dialog, Wait_Callback_Thunk, false, true, true) == 1) { // RA2: the birthdate was entered
+		email[0] = 0; // RA2: the answers of the birthdate dialog
+		strcpy(email, g_BirthdateEmail.get()); // RA2: as above
+		month = g_BirthdateMonth + 1; // RA2: as above
+		day = g_BirthdateDay; // RA2: as above
+		year = g_BirthdateYear; // RA2: as above
+		newsletter = g_BirthdateNewsletter; // RA2: as above
+		if (month <= 0 || day <= 0 || year <= 0 || strlen(email) < 6) { // RA2: a field is missing
+			ODMessageBox(StringTable::LoadString("TXT_REQUIRED_FIELD", NULL, "D:\\Ra2\\wonline.cpp", 9595), 0, Wait_Callback_Thunk, false); // RA2: as above
+			goto birthdate_retry; // RA2: as above
+		}
+		g_UserConsent = 0; // RA2: the age check fills both
+		g_UserAge = -1; // RA2: as above
+		if (g_pNetUtil->RequestAgeCheck(month, day, year, email) != 0) { // RA2: as above
+			ODMessageBox(StringTable::LoadString("TXT_CANT_CONNECT", NULL, "D:\\Ra2\\wonline.cpp", 9603), 0, Wait_Callback_Thunk, false); // RA2: as above
+			goto account_retry; // RA2: as above
+		}
+		{
+			WideWstring message(StringTable::LoadString("WOL:RequestingNickname", NULL, "D:\\Ra2\\wonline.cpp", 9606)); // RA2: the wait text of the age check
+			Show_Wait_Window(0x100, message, true); // RA2: as above
+		}
+		if (g_UserAge < 0) { // RA2: the age check failed
+			if (g_AgeCheckResult == (int)0x80040100) { // RA2: a field was missing
+				ODMessageBox(StringTable::LoadString("TXT_REQUIRED_FIELD", NULL, "D:\\Ra2\\wonline.cpp", 9610), 0, Wait_Callback_Thunk, false); // RA2: as above
+			} else {
+				ODMessageBox(StringTable::LoadString("TXT_CANT_CONNECT", NULL, "D:\\Ra2\\wonline.cpp", 9612), 0, Wait_Callback_Thunk, false); // RA2: as above
+			}
+			goto birthdate_retry; // RA2: as above
+		}
+		if (g_UserAge < 13 && !g_UserConsent) { // RA2: a child needs the consent of the parents
+			if (ODMessageBox(StringTable::LoadString("TXT_CONSENT_REQUIRED", NULL, "D:\\Ra2\\wonline.cpp", 9621), MB_YESNO, Wait_Callback_Thunk, false) == IDYES) { // RA2: as above
+				char url[256]; // RA2: as above
+				sprintf(url, "http://apiregister.westwood.com/consent_form/index_%d.html", g_LanguageCode); // RA2: as above
+				ViewHTML(url, 1); // RA2: as above
+			}
+			goto birthdate_retry; // RA2: as above
+		}
+account_retry: // RA2: the retry is written as a jump, as in the reference body; a loop form has not been tried yet
+		int resource; // RA2: the account dialog of the age group
+		if (g_UserAge < 13) resource = 0xE6; // RA2: as above
+		else resource = g_UserAge >= 18 ? 0xF4 : 0xF3; // RA2: as above
+		dialog = WS_Create_Dialog(ProgramInstance, resource, MainWindow, (DLGPROC)Account_Details_Dialog_Proc, 0); // RA2: as above
+		Show_Dialog(dialog, resource); // RA2: as above
+		if (nickname && strlen(nickname) > 0) { // RA2: the nickname edit
+			HWND edit = GetDlgItem(dialog, 0x628); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)nickname); // RA2: as above
+		} else {
+			HWND edit = GetDlgItem(dialog, 0x628); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+		}
+		if (parent_email && strlen(parent_email) > 0) { // RA2: the parent's email edit
+			HWND edit = GetDlgItem(dialog, 0x5E5); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)parent_email); // RA2: as above
+		} else {
+			HWND edit = GetDlgItem(dialog, 0x5E5); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+		}
+		if (password && strlen(password) > 0) { // RA2: the password edit
+			HWND edit = GetDlgItem(dialog, 0x72C); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)password); // RA2: as above
+		} else {
+			HWND edit = GetDlgItem(dialog, 0x72C); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+		}
+		if (confirmation && strlen(confirmation) > 0) { // RA2: the repeated password edit
+			HWND edit = GetDlgItem(dialog, 0x627); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)confirmation); // RA2: as above
+		} else {
+			HWND edit = GetDlgItem(dialog, 0x627); // RA2: as above
+			SendMessage(edit, WM_USER + 0xB4, 0, (LPARAM)""); // RA2: as above
+		}
+		ShowWindow(dialog, SW_SHOWNORMAL); // RA2: as above
+		SendMessage(dialog, WM_USER + 0xA9, 0, 1); // RA2: as above
+		if (WS_Wait_Dialog(dialog, Wait_Callback_Thunk, false, true, true) != 1) goto birthdate_retry; // RA2: cancelled, back to the birthdate
+		nickname[0] = 0; // RA2: the answers of the account dialog
+		strcpy(nickname, g_AccountName.get()); // RA2: as above
+		password[0] = 0; // RA2: as above
+		strcpy(password, g_AccountPassword.get()); // RA2: as above
+		confirmation[0] = 0; // RA2: as above
+		strcpy(confirmation, g_AccountPasswordCheck.get()); // RA2: as above
+		parent_email[0] = 0; // RA2: as above
+		if (resource == 0xF3) strcpy(parent_email, g_AccountParentEmail.get()); // RA2: only the teenagers' dialog asks for it
+		share_info = 0; // RA2: as above
+		if (resource == 0xF4) share_info = g_AccountShareInfo; // RA2: only the adults' dialog asks for it
+		if (strcmp(password, confirmation)) { // RA2: as above
+			ODMessageBox(StringTable::LoadString("TXT_PASSWORD_VERIFY", NULL, "D:\\Ra2\\wonline.cpp", 9727), 0, Wait_Callback_Thunk, false); // RA2: as above
+			goto account_retry; // RA2: as above
+		}
+		if (strlen(password) != 8) { // RA2: as above
+			ODMessageBox(StringTable::LoadString("TXT_PASSWORD_TOO_SHORT", NULL, "D:\\Ra2\\wonline.cpp", 9732), 0, Wait_Callback_Thunk, false); // RA2: as above
+			goto account_retry; // RA2: as above
+		}
+		if (g_pNetUtil->RequestNewNick(nickname, password, email, parent_email, newsletter, share_info) != 0) { // RA2: as above
+			ODMessageBox(StringTable::LoadString("TXT_CANT_CONNECT", NULL, "D:\\Ra2\\wonline.cpp", 9737), 0, Wait_Callback_Thunk, false); // RA2: as above
+		} else {
+			{
+				WideWstring message(StringTable::LoadString("TXT_REQ_NICK", NULL, "D:\\Ra2\\wonline.cpp", 9739)); // RA2: the wait text of the nickname request
+				Show_Wait_Window(0x100, message, true); // RA2: as above
+			}
+			if (g_NewNickResult < 0) goto account_retry; // RA2: the nickname was refused
+		}
+		ShowWindow(parent, SW_SHOW); // RA2: as above
+		OwnerDraw::Set_Paint_Disabled(parent, 0); // RA2: as above
+		return; // RA2: as above
+	} else {
+		ShowWindow(parent, SW_SHOWNORMAL); // RA2: the dialog was cancelled
+	}
+	ShowWindow(parent, SW_SHOW); // RA2: as above
+	OwnerDraw::Set_Paint_Disabled(parent, 0); // RA2: as above
+}
+
 int Save_Nickname(char const * name, char const * password, bool mangle, int locale) // RA2: 0x00745320, not in TibSun: stores the persona in the chat API's list of 32 logins (the slot it already has, else an empty one, else the next of a round robin) and its locale; the slot
 {
 	int slot = 0; // RA2: as above
@@ -3634,7 +3837,6 @@ void __fastcall Leave_Channel_With_Message(HWND dialog) // RA2: 0x0074C5F0, not 
 	}
 }
 
-void __fastcall Show_Dialog(HWND dialog, int id); // RA2: 0x005FF7E0, defined in ownrdraw.cpp
 LRESULT CALLBACK Wonline_Wait_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x0074D5E0, the dialog proc of the wait dialog (0xC4)
 #define OD_SETLABEL (WM_USER + 178) // RA2: 0x4B2, sets the wide text of the control (name guessed from its use)
 
