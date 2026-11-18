@@ -3713,6 +3713,189 @@ bool __fastcall Join_Game_Channel(Channel const * channel, bool observer) // RA2
 	return(Request_Channel_Join((Channel *)channel, password, WideWstring(StringTable::LoadString("TXT_JOINLOB", NULL, "D:\\Ra2\\wonline.cpp", 10199))) == 0); // RA2: as above
 }
 
+class CreateGameDialogControl : public WonlineStringDialogControl { // RA2: vtable 0x007AF94C, the control of the create game dialog (0xC3); its base constructor 0x00765AA0 is called out of line from Host_Game, the four flags are set where it is used
+public: // RA2: as above
+	CreateGameDialogControl(bool limit_resolution, bool observer) : IsTournament(false), IsPrivate(false), LimitResolution(limit_resolution), Observer(observer) {} // RA2: the executable stores +0x10 and +0x11 as 0, +0x12 and +0x13 from the arguments
+	virtual ~CreateGameDialogControl(void) {} // RA2: expanded where it is used
+	bool IsTournament; // RA2: +0x10, the dialog's radio button 0x629 sets it (Host_Game copies it to the channel's tournament member)
+	bool IsPrivate; // RA2: +0x11, the radio button 0x66C sets it (the game gets a password and the flag 0x100)
+	bool LimitResolution; // RA2: +0x12, the game limits the screen size (flag 0x200 or 0x400)
+	bool Observer; // RA2: +0x13, the host is an observer
+};
+LRESULT CALLBACK Create_Game_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x00748E10, the dialog proc of the create game dialog (0xC3); not yet defined
+BOOL CALLBACK Game_Options_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x0074A710, the dialog proc of the game options dialog (0xC2); not yet defined
+void __fastcall Seat_First_Player(int slot); // RA2: 0x005C8CD0, defined in netshare.cpp
+void Clear_Vector(DynamicVectorClass<NodeNameType *> * vector); // RA2: 0x005A7480, defined in mplayer.cpp
+MultiplayerGameMode * First_Game_Mode(void); // RA2: 0x005B6EC0, defined in multiplayer.cpp
+extern int LobbyObserverSlot; // RA2: 0x007E6D90, the slot of the observer (7 when none), as in netshare.cpp
+namespace OwnerDraw { // RA2: as above
+void __fastcall Slide_Dialog(HWND dialog, bool reverse); // RA2: 0x005E5150, defined in ownrdraw.cpp
+}
+
+static inline void Reset_Session_Players(void) // RA2: the players of the session are cleared (expanded in Host_Game)
+{
+	MultiplayerGameMode * mode = First_Game_Mode(); // RA2: as above
+	Session.MPGameMode = mode; // RA2: as above
+	Session.Options.MPModeIndex = mode->MPModeIndex; // RA2: as above
+	mode->vt_entry_20(); // RA2: as above
+	Set_Scenario_Info_From_Index(0); // RA2: as above
+	Clear_Vector(&Session.Players); // RA2: as above
+	Clear_Slot_Lists(); // RA2: as above
+	Reset_Slots(); // RA2: as above
+}
+
+static inline void Show_Game_Options(void) // RA2: opens the game options dialog (0xC2) of a game the player hosts (expanded in Host_Game)
+{
+	if (!Is_Tournament_Session_Inline()) { // RA2: as above
+		HWND top = WS_Top_Window(); // RA2: as above
+		if (top) { // RA2: as above
+			OwnerDraw::Slide_Dialog(top, false); // RA2: as above
+			Darken_Surface(NULL, true); // RA2: as above
+		}
+		Darken_Surface(NULL, true); // RA2: as above
+		HWND dialog = OwnerDraw::Begin_Dialog(0xC2, (DLGPROC)Game_Options_Dialog_Proc, 0); // RA2: as above
+		Session.MPGameMode->vt_entry_84(); // RA2: as above
+		Session.MPGameMode->vt_entry_20(); // RA2: as above
+		Session.MPGameMode->AssignTeamsAtStart(); // RA2: as above
+		Session.MPGameMode->UnfixAlliances(); // RA2: as above
+		ShowWindow(dialog, SW_SHOWNORMAL); // RA2: as above
+		if (top) { // RA2: as above
+			ShowWindow(top, SW_HIDE); // RA2: as above
+		}
+	}
+}
+
+/*
+**	RA2: this unit's Add of the player list holds the new length in a variable (the executable forms it in the register
+**	that held Length(): 0x007459A0 + 1204), as link2.cpp and objtype.cpp have it for their vectors.
+*/
+template<> inline bool DynamicVectorClass<NodeNameType *>::Add(NodeNameType * const & object) // RA2: as above
+{
+	if (ActiveCount >= Length()) { // RA2: as above
+		if ((IsAllocated || !VectorMax) && GrowthStep > 0) { // RA2: as above
+			int new_length = Length(); // RA2: as above
+			new_length += GrowthStep; // RA2: as above
+			if (!Resize(new_length)) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		} else {
+			return(false); // RA2: as above
+		}
+	}
+	(*this)[ActiveCount++] = object; // RA2: as above
+	return(true); // RA2: as above
+}
+
+bool __fastcall Host_Game(void) // RA2: 0x007459A0, not in TibSun: hosts a game: asks for the game's settings (the create game dialog 0xC3, unless it is an Internet tournament game), makes the host the first player of the lobby, asks the chat service for the game channel and opens the game options dialog (0xC2); true when the channel was created
+{
+	Wstring password; // RA2: the key of the game channel
+	if (VideoModeWidth >= 1024) { // RA2: as above
+		Session.WOLLimitResolution = false; // RA2: as above
+	}
+	CreateGameDialogControl control(Session.WOLLimitResolution, ObserverMode == 1); // RA2: as above
+	g_GameStartRequested = false; // RA2: as above
+	if (Is_Tournament_Session_Inline()) { // RA2: a tournament game has two players and no dialog
+		g_MaxPlayers = 2; // RA2: as above
+	} else {
+		Darken_Surface(NULL, true); // RA2: as above
+		if (OwnerDraw::Controlled_Dialog(0xC3, (DLGPROC)Create_Game_Dialog_Proc, &control) == 2) { // RA2: cancelled
+			return(false); // RA2: as above
+		}
+		password = control.Text; // RA2: as above
+		password.replace(" ", "_"); // RA2: spaces are not allowed in the key
+	}
+	g_pChat->RequestChannelLeave(); // RA2: virtual 0x24
+	Channel channel; // RA2: the game channel
+	memset(&channel, 0, sizeof(channel)); // RA2: as above
+	sprintf((char *)channel.name, "%s's_game", *(char **)&g_NickName); // RA2: the executable reads the string pointer of the Wstring itself (no accessor call)
+	channel.type = 0x21; // RA2: a game channel
+	channel.minUsers = 1; // RA2: as above
+	if (g_MaxPlayers < 2) { // RA2: as above
+		g_MaxPlayers = 4; // RA2: as above
+	}
+	strcpy((char *)channel.key, password.get()); // RA2: as above
+	channel.maxUsers = g_MaxPlayers; // RA2: as above
+	char info[80]; // RA2: the info text of the channel
+	memset(info, 0, sizeof(info)); // RA2: as above
+	Encode_Channel_ExInfo(info); // RA2: as above
+	info[40] = 0; // RA2: the info member holds 40 characters
+	strcpy((char *)channel.exInfo, info); // RA2: as above
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: an Internet tournament game
+		channel.tournament = 1; // RA2: as above
+		channel.reserved |= 0x1000; // RA2: as above
+	} else if (Is_Tournament_Session_Inline()) { // RA2: as above
+		channel.tournament = 1; // RA2: as above
+		channel.reserved |= 0x800; // RA2: as above
+	} else {
+		channel.tournament = control.IsTournament; // RA2: as above
+		if (control.IsPrivate) { // RA2: as above
+			channel.reserved |= 0x100; // RA2: as above
+		}
+		Session.WOLLimitResolution = control.LimitResolution; // RA2: as above
+		if (control.LimitResolution) { // RA2: as above
+			channel.reserved |= (VideoModeWidth == 800) ? 0x400 : 0x200; // RA2: as above
+		}
+	}
+	channel.reserved = channel.reserved + g_LobbyNumber; // RA2: the lobby the host came from
+	Leave_Current_Channel(0xC0, false); // RA2: expanded here
+	Reset_Session_Players(); // RA2: expanded here
+	NodeNameType * host = new NodeNameType; // RA2: the entry of the host
+	memset(host, 0, sizeof(NodeNameType)); // RA2: as above
+	WideWstring name = Wstring_ToWide(g_NickName); // RA2: as above
+	wcscpy(host->Name, name.get()); // RA2: as above
+	WOLOptionsClass options; // RA2: as above
+	options.Load(); // RA2: as above
+	rc_ptr<PlayerProfile> profile; // RA2: as above
+	if (options.Is_Bit1_Clear()) { // RA2: as above
+		profile = PlayerProfile::Load(g_NickName); // RA2: as above
+	} else {
+		profile = g_PlayerProfile.Get(); // RA2: as above
+	}
+	if (profile.Get()) { // RA2: the side and color of the persona
+		Session.Set_Side(profile->Country, false); // RA2: as above
+		Session.Set_Color(profile->Color, false); // RA2: as above
+	}
+	host->Set_Country(Session.Chosen_House()); // RA2: as above
+	host->Set_Color(Session.Chosen_Color()); // RA2: as above
+	host->Slot.Unknown77 = 1; // RA2: as above
+	host->Slot.SpectatorFlag = 0; // RA2: as above
+	LobbyObserverSlot = 7; // RA2: as above
+	ObserverMode = control.Observer; // RA2: as above
+	Update_Observer_Buttons(0); // RA2: as above
+	if (ObserverMode) { // RA2: the host observes: the first slot, team -1, house -3
+		LobbyObserverSlot = 0; // RA2: as above
+		host->Slot.SpectatorFlag = -1; // RA2: as above
+		host->Set_Country(-3); // RA2: as above
+	}
+	Session.Players.Add(host); // RA2: as above
+	Seat_First_Player(0); // RA2: as above
+	wcscpy(Session.GameName, name.get()); // RA2: as above
+	HRESULT result = g_pChat->RequestChannelCreate(&channel); // RA2: virtual 0x1C
+	if (result == 0x800401F8) { // RA2: the key was refused
+		ODMessageBox(StringTable::LoadString("TXT_BAD_CHANKEY", NULL, "D:\\Ra2\\wonline.cpp", 10434), 0, Wait_Callback_Thunk, false); // RA2: as above
+		Close_Wait_Window(0x80); // RA2: expanded here
+		return(false); // RA2: as above
+	}
+	if (result != 0) { // RA2: as above
+		ODMessageBox(StringTable::LoadString("TXT_CANTCREATE_CHAN", NULL, "D:\\Ra2\\wonline.cpp", 10440), 0, Wait_Callback_Thunk, false); // RA2: as above
+		Close_Wait_Window(0x80); // RA2: expanded here
+		return(false); // RA2: as above
+	}
+	WideWstring title(StringTable::LoadString("GUI:CreatingChannel", NULL, "D:\\Ra2\\wonline.cpp", 10448)); // RA2: the wait dialog takes a wide text
+	Show_Wait_Window(4, title, false); // RA2: as above
+	Close_Wait_Window(0x80); // RA2: expanded here
+	Show_Wait_Window(4, title, true); // RA2: as above
+	int index = Player_Name_To_Index(g_NickName); // RA2: expanded here
+	if (index < 0) { // RA2: the host is not in the list of users
+		return(false); // RA2: as above
+	}
+	User * user = NULL; // RA2: as above
+	g_UserList.getPointer(&user, index); // RA2: as above
+	host->Address = User_To_IPX_Address(user); // RA2: expanded here
+	Show_Game_Options(); // RA2: expanded here
+	return(true); // RA2: as above
+}
+
 bool __fastcall Is_AI_Entry(NodeNameType * entry); // RA2: 0x005C9370, defined in netshare.cpp
 int __fastcall Get_Scenario_Slot_Limit(int index); // RA2: 0x005C65A0, defined in netshare.cpp
 extern NodeNameType * LobbyEntries[]; // RA2: 0x00A72D2C, the fixed entries of the lobby (open, closed, ...), as in netshare.cpp
