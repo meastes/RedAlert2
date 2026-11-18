@@ -713,7 +713,7 @@ class SessionClass
 		NodeNameType * Slots[8];
 		bool IsStartReminded;	// RA2: +0x2878, set while the host's start reminder stands (0x005C3C20 sets, 0x005C3C40 clears)
 
-		int Suspended;
+		int Suspended; // RA2: +0x2824, counted up while a modal box is open (queue.cpp, ownrdraw.cpp)
 
 		unsigned ModemService		: 1;
 		int CurPhoneIdx;

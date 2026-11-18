@@ -3454,7 +3454,15 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 				if (Frame > DoList[j].Frame && DoList[j].Type !=
 					EventClass::FRAMEINFO && Session.Type != GAME_NORMAL &&
 					Session.Type != GAME_SKIRMISH) {
-					Dump_Packet_Too_Late_Stuff(&DoList[j]);
+					EventClass *event = &DoList[j]; // RA2: the packet dump is written out here, as in Dump_Packet_Too_Late_Stuff (0x0062E520)
+					DebugString("Packet received too late!\n"); // RA2: as above
+					DebugString("--------- Event data: -------------------\n"); // RA2: as above
+					DebugString("Type:       %s\n", EventClass::EventNames[event->Type]); // RA2: as above
+					DebugString("Frame:      %d\n", event->Frame); // RA2: as above
+					DebugString("ID:         %d\n", event->ID); // RA2: as above
+					DebugString("MaxAhead=%d\n", Session.MaxAhead); // RA2: as above
+					DebugString("Frame=%d\n", Frame); // RA2: as above
+					DebugString("FrameSendRate=%d\n", Session.FrameSendRate); // RA2: as above
 					net->Num_Connections(); // RA2: the packet is logged and skipped, the game goes on
 					continue; // RA2: as above
 				}
@@ -3510,7 +3518,8 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 					}
 
 					if (DoList[j].ID == PlayerPtr->HeapID) {
-						DebugTime = timeGetTime() - DoList.Timings[(DoList.Head + j) & (ARRAY_SIZE(DoList.Timings) - 1)]; // RA2: the time the event waited is shown
+						int stamp = DoList.Timings[(DoList.Head + j) & (ARRAY_SIZE(DoList.Timings) - 1)]; // RA2: the time the event waited is shown
+						DebugTime = timeGetTime() - stamp; // RA2: as above
 						DoList[j].Execute();
 					} else if (DoList[j].Type==EventClass::EXIT) {
 					//............................................................
@@ -3581,8 +3590,11 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 							} else {
 								Print_CRCs(&DoList[j]);
 							}
-							Session.Suspended++;
-							WWMessageBox().Process(WAIT_TEXT("TXT_OUT_OF_SYNC", 5717), WAIT_TEXT("TXT_STOP", 5718), NULL, NULL, false); // RA2: the game is always stopped
+							Session.Suspended++; // RA2: +0x2824 (0x00A3FABC), counted up while a modal box is open
+							if (WWMessageBox(L" ").Process(WAIT_TEXT("TXT_OUT_OF_SYNC", 5717), WAIT_TEXT("TXT_STOP", 5718), NULL, NULL, false) == 0) { // RA2: the result is tested, both ways end the same
+								Session.Suspended--; // RA2: as above
+								return(0); // RA2: as above
+							}
 							Session.Suspended--; // RA2: as above
 							return(0); // RA2: as above
 						}
@@ -3592,7 +3604,8 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 				// Execute other commands
 				//...............................................................
 				else {
-					DebugTime = timeGetTime() - DoList.Timings[(DoList.Head + j) & (ARRAY_SIZE(DoList.Timings) - 1)]; // RA2: as above
+					int stamp = DoList.Timings[(DoList.Head + j) & (ARRAY_SIZE(DoList.Timings) - 1)]; // RA2: as above
+					DebugTime = timeGetTime() - stamp; // RA2: as above
 					if (DoList[j].Type == EventClass::MEGAMISSION) { // RA2: missions are collected first
 						MegaMissionQueue.Add(DoList[j]); // RA2: as above
 					} else {
@@ -3623,8 +3636,10 @@ static int Execute_DoList(int max_houses, HousesType base_house,
 				if ((char)event.Data.MegaMission.Mission != (char)mission) {
 					differ = true;
 				}
-				if (!(*(xTargetClass *)&event.Data.MegaMission.Target == *(xTargetClass *)&target) ||
-					!(*(xTargetClass *)&event.Data.MegaMission.Destination == *(xTargetClass *)&destination)) {
+				if (((xTargetClass *)&event.Data.MegaMission.Target)->operator RTTIType() != target.operator RTTIType() || // RA2: the kinds and ids are compared one by one
+					((xTargetClass *)&event.Data.MegaMission.Target)->Value() != target.Value() || // RA2: as above
+					((xTargetClass *)&event.Data.MegaMission.Destination)->operator RTTIType() != destination.operator RTTIType() || // RA2: as above
+					((xTargetClass *)&event.Data.MegaMission.Destination)->Value() != destination.Value()) { // RA2: as above
 					differ = true;
 				}
 			}

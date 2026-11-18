@@ -369,7 +369,6 @@ extern int Mouse_Release_Depth; // RA2: as above
 extern int RedLeft; // RA2: as above
 extern int RedRight; // RA2: as above
 extern int const ScreenHeights[]; // RA2: {480, 600, 768} at 0x007ADD74
-extern int Counter; // RA2: as above
 extern bool Session_Busy; // RA2: as above
 extern int IMEComposing; // RA2: as above
 extern int IMECompositionCursorPos; // RA2: as above
@@ -10067,7 +10066,7 @@ bool Dialog_Message_Handler() // RA2: as above
 {
     Windows_Message_Handler();
     if (Session.Type == GAME_NORMAL || Session.Type == GAME_SKIRMISH || Session_Busy || // RA2: as above
-        Counter != 0) { // RA2: as above
+        Session.Suspended != 0) { // RA2: +0x2824 (0x00A3FABC), a modal box is open
         Call_Back();
         return false; // RA2: as above
     }
@@ -10498,7 +10497,7 @@ bool __fastcall Prompt_Dialog(unsigned short const *text) // RA2: as above
         while (result < 0) { // RA2: as above
             Windows_Message_Handler();
             if (Session.Type != GAME_NORMAL && Session.Type != GAME_SKIRMISH && !Session_Busy && // RA2: as above
-                Counter == 0 && !Is_In_Main_Loop() && Main_Loop()) { // RA2: as above
+                Session.Suspended == 0 && !Is_In_Main_Loop() && Main_Loop()) { // RA2: +0x2824 (0x00A3FABC), no modal box is open
                 break;
             }
         }
