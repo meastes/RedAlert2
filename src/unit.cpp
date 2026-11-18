@@ -5399,6 +5399,27 @@ AbstractClass * UnitClass::Greatest_Threat(ThreatType threat, Coord const & coor
 
 
 
+/*
+**	RA2: the list of followers is extended with the new length held in a variable (the executable forms it in the
+**	register that held Length(): UnitClass::Read_INI, 0x00706AE0), as link2.cpp, objtype.cpp and wonline.cpp have it.
+*/
+template<> inline bool DynamicVectorClass<int>::Add(int const & object) // RA2: as above
+{
+	if (ActiveCount >= Length()) { // RA2: as above
+		if ((IsAllocated || !VectorMax) && GrowthStep > 0) { // RA2: as above
+			int new_length = Length(); // RA2: as above
+			new_length += GrowthStep; // RA2: as above
+			if (!Resize(new_length)) { // RA2: as above
+				return(false); // RA2: as above
+			}
+		} else {
+			return(false); // RA2: as above
+		}
+	}
+	(*this)[ActiveCount++] = object; // RA2: as above
+	return(true); // RA2: as above
+}
+
 /***********************************************************************************************
  * UnitClass::Read_INI -- Reads units from scenario INI file.                                  *
  *                                                                                             *
