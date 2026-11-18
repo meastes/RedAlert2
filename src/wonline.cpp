@@ -971,12 +971,11 @@ enum {
 /// <returns>True if the request was sent.</returns>
 bool Request_Channel_List(int channel_type, unsigned char autoping) // RA2: 0x0073D760, not in TibSun: the request and its queue entry in one place
 {
+	unsigned int type = channel_type; // RA2: the queue entry is made before the request, where Run_Lobby_Session expands this (0x00743BA4 stores it on the stack before the debug text)
 	DebugString("Requesting channel list type = %d, ping = %d\n", channel_type, autoping); // RA2: as above
-	if (g_pChat->RequestChannelList(channel_type, autoping) != S_OK) { // RA2: as above
+	if (g_pChat->RequestChannelList(type, autoping) != S_OK) { // RA2: as above
 		return(false);
 	}
-	/// Not found -- use the first empty slot instead.
-	unsigned int type = channel_type; // RA2: as above
 	g_ChanListQueue.addTail(type);
 	return(true);
 }
@@ -2980,13 +2979,6 @@ int __fastcall Login_Wonline(void) // RA2: 0x00742FD0, not in TibSun: logs in to
 	return(result); // RA2: as above
 }
 
-void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wait event
-{
-	for (int i = 0; i < EV_COUNT; i++) { // RA2: as above
-		ResetEvent(g_WaitEventHandles[i]); // RA2: as above
-	}
-}
-
 // RA2: declarations for the functions below (placed after Draw_Player_List: declarations above it change its code)
 #include "ccfile.h" // RA2: WDTMAP.INI is read through the game's file system by Pick_Lobby
 #include "mixfile.h" // RA2: and WDT.MIX is opened
@@ -2995,6 +2987,198 @@ void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wai
 extern int g_LobbyNumber; // RA2: 0x00B2ABEC, the number of the lobby channel ("Lob_33_<number>") joined last
 extern wchar_t * g_TerritoryName; // RA2: 0x00B28CC8, the name of the WDT territory of this player ("A territory" when the map INI has none), a copy made by _wcsdup
 rc_ptr<WDTState> const & __fastcall Current_WDT_State(void); // RA2: 0x00769510, defined in worlddom.cpp
+
+// RA2: declarations for Run_Lobby_Session (before Pick_Lobby: the number of declarations in front of it decides how Pick_Lobby is compiled, see allmatch)
+extern bool g_HasJoinedLobby; // RA2: 0x007FD354, a lobby was joined before (the next join asks for a lobby with room)
+extern bool g_WDTSoundsInitialized; // RA2: 0x00B2AC28, Initialize_WDT_Sounds ran
+extern ArrayList<Wstring> g_WDTWinSounds0; // RA2: 0x00B26570, the sounds "00-W022.V00", "00-W024.V00", "00-W026.V00" (Initialize_WDT_Sounds 0x00752210 fills it with the seventh to ninth name)
+extern ArrayList<Wstring> g_WDTWinSounds1; // RA2: 0x00B26A50, the sounds "01-W024.V01", "01-W026.V01", "01-W028.V01" (the first to third name)
+extern ArrayList<Wstring> g_WDTLoseSounds0; // RA2: 0x00B29380, the sounds "00-W017.V00", "00-W018.V00", "00-W020.V00" (the tenth to twelfth name)
+void Initialize_WDT_Sounds(void); // RA2: 0x00752210, fills the lists of the tour's sounds, once
+void Discard_WDT_Sound_List(ArrayList<Wstring> sounds); // RA2: 0x00752890, takes a list of sounds by value and does nothing with it
+int Join_Selected_Lobby(bool join); // RA2: 0x00744930, defined below
+int CALLBACK Wonline_Main_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam); // RA2: 0x007469C0, the dialog proc of the lobby (0x113)
+void Set_Wait_Window_Text(LPARAM text); // RA2: 0x0074D750, defined below
+bool Start_Network_Session(void); // RA2: 0x00514EE0, defined in init.cpp
+inline Wstring Narrow_Text(wchar_t const * text) // RA2: the executable narrows the text through a named wide string that dies before the result is used (0x00743720, 0x00743A40 below)
+{
+	WideWstring wide(text); // RA2: as above
+	return Wstring_Narrow(wide); // RA2: as above
+}
+inline WideWstring Wide_Text(char const * text) // RA2: the counterpart: a named narrow string that dies after the widening
+{
+	Wstring narrow(text); // RA2: as above
+	return Wstring_ToWide(narrow); // RA2: as above
+}
+
+inline void Print_Message_Of_The_Day(void) // RA2: the message of the day
+{
+	if (g_Motd.length() > 0) { // RA2: the message of the day, printed line by line
+		char * text = new char[g_Motd.length() + 1]; // RA2: as above
+		if (text) { // RA2: as above
+			strcpy(text, g_Motd.get()); // RA2: as above
+			char * token = strtok(text, "\n"); // RA2: as above
+			while (token != NULL) { // RA2: as above
+				WideWstring wide_line = Wide_Text(token); // RA2: as above
+				Lobby_Chat_Printf(ColorSystem, wide_line.get()); // RA2: as above
+				token = strtok(NULL, "\n"); // RA2: the next token is taken before the wide line is destroyed
+			}
+			Lobby_Chat_Printf(ColorSystem, L"\n"); // RA2: as above
+			g_Motd.clear(); // RA2: as above
+			delete text; // RA2: as above
+		}
+	}
+}
+
+int __fastcall Run_Lobby_Session(HWND window, bool first_time) // RA2: 0x00743720, not in TibSun: the lobby session of Westwood Online: ends the finished game (the tour's victory and defeat sounds), logs in again when the connection was lost, opens the lobby dialog (0x113) with the message of the day, requests the channel list, joins a lobby and waits for the events of the chat: 1 when a game starts, 2 when the skirmish event ended it, 0 otherwise (the dialog, the chat and the wait dialogs are closed again)
+{
+	int result = 0; // RA2: as above
+	if (g_PlayingNetGame && Session.Type == GAME_INTERNET && Online_Session_State == 2 && Session.Winner != -1 && Session.Winner < 8) { // RA2: a tour game just ended
+		Wstring winner = Narrow_Text(Session.Score[Session.Winner].Name); // RA2: the name of the winner
+		if (_strnicmp(winner.get(), Session.Handle, 20) == 0) { // RA2: the local player won
+			if (Session.House == 0) { // RA2: as above
+				Discard_WDT_Sound_List(g_WDTWinSounds0); // RA2: as above
+			} else if (Session.House == 1) { // RA2: as above
+				Discard_WDT_Sound_List(g_WDTWinSounds1); // RA2: as above
+			}
+		} else if (Session.House == 0) { // RA2: the local player lost
+			Discard_WDT_Sound_List(g_WDTLoseSounds0); // RA2: as above
+		}
+	}
+	g_PlayingNetGame = false; // RA2: as above
+	WolOptionsLocked = 0; // RA2: as above
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: a tour game
+		g_pChat->RequestSetTeam(Session.House); // RA2: virtual 0xB4
+		if (!g_WDTSoundsInitialized) { // RA2: as above
+			Initialize_WDT_Sounds(); // RA2: as above
+		}
+	}
+	Start_Network_Session(); // RA2: as above
+	if (g_ConnectionLost) { // RA2: as above
+		int login = Login_Wonline(); // RA2: as above
+		if (login != 1) { // RA2: as above
+			return(login); // RA2: as above
+		}
+	}
+	for (int i = 0; i < EV_COUNT; i++) { // RA2: as above
+		ResetEvent(g_WaitEventHandles[i]); // RA2: as above
+	}
+	if (window == NULL) { // RA2: as above
+		Darken_Surface(NULL, true); // RA2: as above
+		window = OwnerDraw::Begin_Dialog(0x113, (DLGPROC)Wonline_Main_Dialog_Proc, 0); // RA2: the lobby dialog
+		Print_Message_Of_The_Day(); // RA2: as above
+		{
+			WideWstring title(StringTable::LoadString("GUI:LoginComplete", NULL, "D:\\Ra2\\wonline.cpp", 9075)); // RA2: the wait text is wide
+			Show_Wait_Window(0x10, title, false); // RA2: as above
+		}
+	}
+	g_SquadInfoRequests++; // RA2: as above
+	g_RequestingOwnSquadInfo = 1; // RA2: as above
+	g_pChat->RequestSquadInfo(0); // RA2: virtual 0xB0
+	g_ServerType = 0x21; // RA2: as above
+	Set_Wait_Window_Text((LPARAM)StringTable::LoadString("TXT_REQ_CHANLIST", NULL, "D:\\Ra2\\wonline.cpp", 9092)); // RA2: expanded here
+	if (!Request_Chat_Channel_List(true)) { // RA2: expanded here
+		goto cleanup; // RA2: as above
+	}
+	Set_Wait_Window_Text((LPARAM)StringTable::LoadString("TXT_JOINLOB", NULL, "D:\\Ra2\\wonline.cpp", 9099)); // RA2: as above
+	{
+		int joined = Join_Selected_Lobby(g_HasJoinedLobby && !first_time); // RA2: as above
+		g_HasJoinedLobby = true; // RA2: as above
+		if (joined == -1) { // RA2: as above
+			goto cleanup; // RA2: as above
+		}
+	}
+	{
+		DWORD event; // RA2: as above
+		while ((event = WaitForMultipleObjects(EV_COUNT, g_WaitEventHandles, FALSE, 100)) == WAIT_TIMEOUT) { // RA2: as above
+			WOL_Wait_Callback(); // RA2: as above
+		}
+		ResetEvent(g_WaitEventHandles[event]); // RA2: as above
+		if (event == EV_ABORT || event == EV_ERROR) { // RA2: as above
+			goto logout; // RA2: as above
+		}
+	}
+	g_JoinLobbyNow = 0; // RA2: as above
+	PostMessage(window, 0x593, 0, 0); // RA2: as above
+	Close_Wait_Window(0xFFFFFFFF); // RA2: expanded here
+	SetFocus(MainWindow); // RA2: as above
+	ShowWindow(window, SW_SHOWNORMAL); // RA2: as above
+	SetFocus(window); // RA2: as above
+	SetFocus(GetDlgItem(window, 0x540)); // RA2: as above
+	g_LastGameListTime = 0; // RA2: as above
+	g_LastChatListTime = time(0); // RA2: as above
+	for (;;) { // RA2: as above
+		DWORD event; // RA2: as above
+		while ((event = WaitForMultipleObjects(EV_COUNT, g_WaitEventHandles, FALSE, 20)) == WAIT_TIMEOUT) { // RA2: as above
+			WOL_Wait_Callback(); // RA2: as above
+			if (g_JoinLobbyNow) { // RA2: the lobby is to be left and another one joined
+				EnableWindow(GetDlgItem(window, 0x53D), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x6EE), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x62D), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x62B), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x689), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x558), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x61F), FALSE); // RA2: as above
+				EnableWindow(GetDlgItem(window, 0x686), FALSE); // RA2: as above
+				if (Join_Selected_Lobby(false) == -1) { // RA2: as above
+					EnableWindow(GetDlgItem(window, 0x686), TRUE); // RA2: as above
+					SetEvent(g_WaitEventHandles[EV_ERROR]); // RA2: as above
+				} else {
+					PostMessage(window, 0x593, 0, 0); // RA2: as above
+				}
+				g_JoinLobbyNow = 0; // RA2: as above
+			}
+		}
+		ResetEvent(g_WaitEventHandles[event]); // RA2: as above
+		if (event == EV_ABORT) { // RA2: as above
+			goto cleanup; // RA2: as above
+		}
+		if (event != EV_EXIT) { // RA2: as above
+			if (event == EV_SKIRMISH) { // RA2: as above
+				result = 2; // RA2: as above
+				break; // RA2: as above
+			}
+			if (event == EV_ERROR) { // RA2: as above
+				goto cleanup; // RA2: as above
+			}
+			if (event == EV_STARTGAME) { // RA2: the game starts
+				goto started; // RA2: as above
+			}
+		} else {
+			break; // RA2: as above
+		}
+	}
+	g_LastErrorMessage[0] = 0; // RA2: as above
+logout: // RA2: as above
+	WS_Destroy_Dialog(window, 0); // RA2: as above
+	WOL_Wait_Callback(); // RA2: as above
+	window = NULL; // RA2: as above
+	if (g_pChat) { // RA2: as above
+		g_pChat->RequestChannelLeave(); // RA2: virtual 0x24
+	}
+cleanup: // RA2: as above
+	Close_Wait_Window(0xFFFFFFFF); // RA2: expanded here
+	ODMessageBox(g_LastErrorMessage, 0, Wait_Callback_Thunk, false); // RA2: as above
+	if (window) { // RA2: as above
+		WS_Destroy_Dialog(window, 0); // RA2: as above
+	}
+	while (WS_Destroy_Dialog(NULL, 0)) { // RA2: as above
+	}
+	if (result == 1) { // RA2: as above
+		g_PlayingNetGame = true; // RA2: as above
+	}
+	if (Session.Type == GAME_INTERNET && Online_Session_State == 2) { // RA2: as above
+		g_WDTTeams.clear(); // RA2: as above
+	}
+	return(result); // RA2: as above
+started: // RA2: as above
+	result = 1; // RA2: as above
+	g_pChat->RequestChannelLeave(); // RA2: virtual 0x24
+	g_GameStartRequested = false; // RA2: as above
+	g_LastErrorMessage[0] = 0; // RA2: as above
+	goto cleanup; // RA2: as above
+}
+
 
 int Pick_Lobby(bool require_room) // RA2: 0x00744090, not in TibSun: chooses the lobby channel to join. In a World Domination Tour game it is the one that carries the player's territory; else the lobby that was joined last, else the lobby with the fewest players that still has room; the index in the channel list, -1 when there is none
 {
@@ -4118,6 +4302,14 @@ void Add_Test_Player_Potato_Too(void) // RA2: 0x007515B0, not in TibSun: a test 
 	++Session.NumPlayers; // RA2: as above
 	Session.HostAddress = player->Address; // RA2: the host
 }
+
+void Reset_Wait_Events(void) // RA2: 0x00752930, not in TibSun: resets every wait event
+{
+	for (int i = 0; i < EV_COUNT; i++) { // RA2: as above
+		ResetEvent(g_WaitEventHandles[i]); // RA2: as above
+	}
+}
+
 
 #pragma auto_inline(off) // RA2: as above
 template<> char Dictionary<Wstring, int>::add(Wstring const & key, int & value) // RA2: as above

@@ -36,7 +36,7 @@ void __fastcall Reset_Channel_State(void); // RA2: 0x00753F10, clears the channe
 int __fastcall Login_Wonline(void); // RA2: 0x00742FD0, the login dialogs; 1 once logged in, 0 to go back
 int __fastcall Run_Wonline_Selection_Dialog(void); // RA2: 0x00753110, the game selection dialog of the Internet menu; 1 once a game is ready
 void __fastcall Open_Buddy_Dialog(void); // RA2: 0x0075CBA0, offers to add the buddies of the last match
-int __fastcall Run_Lobby_Session(int unused, bool first_time); // RA2: 0x00743720, the lobby session
+int __fastcall Run_Lobby_Session(HWND window, bool first_time); // RA2: 0x00743720, the lobby session (the first argument is the lobby dialog when one is open, 0 opens it); defined in wonline.cpp
 int __fastcall Run_Online_Menu(bool first_time); // RA2: 0x00759370, the online menu
 int __fastcall Run_Wonline_Lobby(void); // RA2: 0x00753F70, the lobby; -2 or -1 to leave
 void __fastcall Close_All_Dialogs(void); // RA2: 0x00753F50, destroys the dialogs that are still open
