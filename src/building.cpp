@@ -8363,8 +8363,7 @@ void BuildingClass::Set_Anim_Coords(void)
 	for (int i = 0; i < 18; i++) { // RA2: eighteen animations
 		ObjectClass * anim = Anims[i]; // RA2: an object
 		if (anim != NULL) {
-			Coord coord = TacticalMap->Pixel_To_Coord_Absolute(Class->AnimData[i].Location) + render; // RA2: the offset first
-			anim->Set_Coord(coord); // RA2: as above
+			anim->Set_Coord(TacticalMap->Pixel_To_Coord_Absolute(Class->AnimData[i].Location) + render); // RA2: the offset first, no named temporary
 		}
 	}
 }
