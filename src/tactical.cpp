@@ -148,8 +148,6 @@ static double ZLeptonsPerPixel = CELL_LEPTON_DIAG / (fastmath::sin(RAD_60) * ISO
 /// </summary>
 Tactical::Tactical(void) :
 	LastAIFrame(-1),
-	field_58(0),
-	field_59(0),
 	TacPixelX(0),
 	TacPixelY(0),
 	LastTacPixelX(0),
@@ -184,7 +182,7 @@ Tactical::Tactical(void) :
 	CoordToPixelMatrix.Make_Identity();
 	CoordToPixelMatrix.Rotate_X(RAD_60);
 	CoordToPixelMatrix.Rotate_Z(RAD_45);
-	CoordToPixelMatrix.Scale(ISO_TILE_PIXEL_W / CELL_LEPTON_DIAG);
+	CoordToPixelMatrix.Scale((float)ISO_TILE_PIXEL_W / (float)CELL_LEPTON_DIAG); // RA2: a float division, the constant 60.0f over the diagonal
 
 	/*
 	 * PixelToCoordMatrix is the inverse isometric projection: it maps a screen-pixel offset
@@ -192,8 +190,8 @@ Tactical::Tactical(void) :
 	 * cell-height ratio and pixel Y by the cell-width ratio; the first row sums the two terms
 	 * (world X) and the second row takes their difference (world Y).
 	 */
-	float x_scale = (float)(CELL_LEPTON_W / CELL_PIXEL_W) + 0.6667f;
-	float y_scale = (float)(CELL_LEPTON_H / CELL_PIXEL_H) + 0.3333302f;
+	float x_scale = 8.5334f; // RA2: the constant for 60 pixel wide cells
+	float y_scale = 4.2667f; // RA2: as above
 	PixelToCoordMatrix.Set(
 		 y_scale, x_scale, 0.0f, 0.0f,
 		-y_scale, x_scale, 0.0f, 0.0f,
@@ -209,7 +207,8 @@ Tactical::Tactical(void) :
 /// game rather than letting them be built up here.
 /// </summary>
 Tactical::Tactical(const NoInitClass &x) :
-	BASECLASS(x)
+	BASECLASS(x),
+	Unused(x) // RA2: the two flags are left as loaded
 {
 
 }

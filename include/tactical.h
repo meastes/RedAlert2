@@ -287,8 +287,12 @@ class Tactical : public AbstractClass
 		int LastAIFrame;
 
 		/// Unused
-		bool field_58;
-		bool field_59;
+		struct UnusedFlags { // RA2: one two-byte member: the constructor at 0x6A24B0 clears +0xAC and +0xAD before the members after them, and the load constructor at 0x6A26C0 leaves both alone
+			UnusedFlags(void) : field_58(false), field_59(false) {} // RA2: as above
+			UnusedFlags(const NoInitClass &) {} // RA2: as above
+			bool field_58;
+			bool field_59;
+		} Unused; // RA2: as above
 
 		/*
 		**	This is the pixel offset for the upper left corner of the tactical map.
