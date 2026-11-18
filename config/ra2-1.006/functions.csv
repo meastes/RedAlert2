@@ -1049,6 +1049,7 @@ address,size,evidence
 0x0043BCE0,96,"code of src/building.cpp, matched"
 0x0043BD40,224,"code of src/building.cpp, matched"
 0x0043BE20,416,"code of src/building.cpp, matched"
+0x0043BFC0,2416,"code of src/building.cpp, matched"
 0x0043C930,2672,"code of src/building.cpp, matched"
 0x0043D3A0,3792,"code of src/building.cpp, matched"
 0x0043EBA0,720,"code of src/building.cpp, matched"
