@@ -8843,7 +8843,7 @@ address,size,evidence
 0x00705070,240,"code of src/unit.cpp, matched"
 0x00705160,656,"code of src/unit.cpp, matched"
 0x00706A10,208,"code of src/unit.cpp, matched"
-0x00706AE0,,"inferred: target of the call at 0x0065F768 in matched src/scenario.cpp; size not known"
+0x00706AE0,1152,"code of src/unit.cpp, matched"
 0x00706F60,464,"code of src/unit.cpp, matched"
 0x00707130,64,"code of src/unit.cpp, matched"
 0x00707170,352,"code of src/unit.cpp, matched"
